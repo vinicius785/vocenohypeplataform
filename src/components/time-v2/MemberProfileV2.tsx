@@ -1,5 +1,20 @@
-import { useMemo, useState } from "react";
-import { MoreHorizontal, Pencil, ShieldCheck } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  AlertTriangle,
+  ArrowUpDown,
+  BarChart3,
+  Check,
+  CheckCircle2,
+  ClipboardList,
+  Clock,
+  Eye,
+  Gauge,
+  History,
+  MessageSquare,
+  MoreHorizontal,
+  Pencil,
+  ShieldCheck,
+} from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -7,7 +22,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,16 +41,29 @@ import type { PerformanceOpenTask } from "@/lib/score";
 import type { PerformanceSettings } from "@/lib/performance-engine";
 import type { Meeting } from "@/lib/reunioes-store";
 import { STATUS_LABEL } from "@/lib/chat-store";
+import { formatResponseDuration } from "@/lib/member-response-time";
 import { todayIsoInBrasilia } from "@/lib/timezone";
 import { useTeamTimeEntries } from "@/lib/time-entries";
 import { ProfileCommunication } from "./ProfileCommunication";
 import {
+  MemberInfoSection,
+  ProfileActivity,
   ProfileHistory,
   ProfileJourney,
-  ProfileOverview,
   ProfilePerformance,
-  ProfileTasks,
+  ProfileScoreSummary,
+  ProfileSection,
+  ProfileSummary,
+  type SummaryItem,
 } from "./profile-sections";
+import {
+  orderSections,
+  SECTION_LABEL,
+  SORT_LABEL,
+  type ProfileSort,
+  type SectionId,
+} from "./profile-order";
+import { useMemberResponseTimeData } from "./use-response-time";
 import {
   canSeeField,
   entrySeconds,
@@ -46,29 +73,26 @@ import {
   type ProfilePeriod,
 } from "./time-v2-utils";
 
-export type ProfileTab =
-  | "visao"
-  | "score"
-  | "tarefas"
-  | "jornada"
-  | "desempenho"
-  | "comunicacao"
-  | "historico";
-
-const TABS: { value: ProfileTab; label: string }[] = [
-  { value: "visao", label: "Visão geral" },
-  { value: "score", label: "Score" },
-  { value: "tarefas", label: "Tarefas" },
-  { value: "jornada", label: "Jornada" },
-  { value: "desempenho", label: "Desempenho" },
-  { value: "comunicacao", label: "Comunicação" },
-  { value: "historico", label: "Histórico" },
-];
-
 const PERIOD_OPTIONS = (Object.keys(PROFILE_PERIOD_LABELS) as ProfilePeriod[]).map((value) => ({
   value,
   label: PROFILE_PERIOD_LABELS[value],
 }));
+
+const SECTION_ICON: Record<SectionId, ReactNode> = {
+  atividade: <ClipboardList className="h-4 w-4" />,
+  jornada: <Clock className="h-4 w-4" />,
+  desempenho: <BarChart3 className="h-4 w-4" />,
+  comunicacao: <MessageSquare className="h-4 w-4" />,
+  historico: <History className="h-4 w-4" />,
+};
+
+const SECTION_TITLE: Record<SectionId, string> = {
+  atividade: "Atividade",
+  jornada: "Jornada",
+  desempenho: "Desempenho",
+  comunicacao: "Comunicação",
+  historico: "Histórico",
+};
 
 type Viewer = { isAdmin: boolean; meId: string | null };
 
@@ -79,7 +103,6 @@ type Props = {
   openTasksForMember: PerformanceOpenTask[];
   performanceSettings: PerformanceSettings;
   meetingsById: Map<string, Meeting>;
-  initialTab?: ProfileTab;
   onOpenTask: (t: DashTask) => void;
   onClose: () => void;
   onEdit: (m: Member) => void;
@@ -88,13 +111,13 @@ type Props = {
 };
 
 /**
- * PERFIL CENTRAL do membro — o único lugar da aba Time (e, a partir dela,
- * da plataforma) que representa uma pessoa. Toda linha/gráfico/insight que
- * mostra alguém abre este mesmo painel; Score, Tarefas, Jornada,
- * Desempenho, Comunicação e Histórico são abas dele, nunca telas ou modais
- * separados. Um único seletor de período (Hoje/Semana/Mês/Personalizado)
- * vale para todas as abas. Só a aba ativa é montada — a RPC de tempo de
- * resposta e os eventos do Score só buscam quando a aba é aberta.
+ * PERFIL CENTRAL do membro — uma única experiência contínua (sem abas):
+ * cabeçalho → faixa de resumo → filtros/âncoras + ordenação → seções
+ * (Atividade, Jornada, Desempenho com Score, Comunicação, Histórico) →
+ * informações cadastrais. Os chips apenas rolam até a seção e a destacam;
+ * "Ordenar" só reorganiza as mesmas seções. Um único seletor de período
+ * vale para tudo. Dados buscados uma vez no topo (eventos do Score, horas,
+ * tempo de resposta agregado) e compartilhados entre resumo e seções.
  */
 export function MemberProfileV2({ member, onClose, ...rest }: Props) {
   return (
@@ -103,7 +126,7 @@ export function MemberProfileV2({ member, onClose, ...rest }: Props) {
         side="right"
         className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:w-[92vw] sm:max-w-[880px]"
       >
-        {member && <ProfileBody key={member.id} member={member} onClose={onClose} {...rest} />}
+        {member && <ProfileBody key={member.id} member={member} {...rest} />}
       </SheetContent>
     </Sheet>
   );
@@ -116,19 +139,20 @@ function ProfileBody({
   openTasksForMember,
   performanceSettings,
   meetingsById,
-  initialTab = "visao",
   onOpenTask,
   onEdit,
   onDelete,
   onReset,
-}: Omit<Props, "member"> & { member: Member }) {
-  const [tab, setTab] = useState<ProfileTab>(initialTab);
+}: Omit<Props, "member" | "onClose"> & { member: Member }) {
   const [period, setPeriod] = useState<ProfilePeriod>("mes");
   const [custom, setCustom] = useState<{ from: string; to: string }>(() => {
     const t = todayIsoInBrasilia();
     return { from: t.slice(0, 8) + "01", to: t };
   });
-  const [openComposition, setOpenComposition] = useState(false);
+  const [sort, setSort] = useState<ProfileSort>("padrao");
+  const [activeChip, setActiveChip] = useState<SectionId | "tudo">("tudo");
+  const [highlight, setHighlight] = useState<SectionId | null>(null);
+  const [scoreExpanded, setScoreExpanded] = useState(false);
 
   const range = useMemo(() => rangeForProfilePeriod(period, custom), [period, custom]);
 
@@ -139,6 +163,7 @@ function ProfileBody({
     performanceSettings.deadlineCutoffHour,
   );
   const { entries, loading: entriesLoading } = useTeamTimeEntries(range, member.id);
+  const rt = useMemberResponseTimeData(member.id, range);
 
   const status = getStatus(member.id);
   const showName = canSeeField(member, "name", viewer);
@@ -146,10 +171,6 @@ function ProfileBody({
   const isSelf = viewer.meId === member.id;
   const totalSeconds = useMemo(() => entries.reduce((s, e) => s + entrySeconds(e), 0), [entries]);
   const stats = useMemo(() => memberTaskStats(tasksForMember), [tasksForMember]);
-  const overdueTasks = useMemo(
-    () => tasksForMember.filter((t) => t.bucket === "atrasada" && t.status !== "Concluído"),
-    [tasksForMember],
-  );
   const projectNames = useMemo(
     () => Array.from(new Set(tasksForMember.map((t) => t.projectName))),
     [tasksForMember],
@@ -160,6 +181,188 @@ function ProfileBody({
     if (t) onOpenTask(t);
   };
   const displayName = showName ? member.name || "(sem nome)" : "Membro";
+
+  // Seções que pedem atenção (alimenta "Ordenar → Maior atenção").
+  const order = useMemo(
+    () =>
+      orderSections(sort, {
+        atividade: stats.atrasadas > 0,
+        jornada: false,
+        desempenho: perf.score.dataState !== "sem_dados" && (perf.score.score ?? 100) < 60,
+        comunicacao: (rt.data?.all.unanswered ?? 0) > 0,
+      }),
+    [sort, stats.atrasadas, perf.score.dataState, perf.score.score, rt.data],
+  );
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const sectionRefs = useRef<Partial<Record<SectionId, HTMLElement | null>>>({});
+  const highlightTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(highlightTimer.current), []);
+
+  const goTo = useCallback((id: SectionId) => {
+    setActiveChip(id);
+    const el = sectionRefs.current[id];
+    if (!el) return;
+    el.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      block: "start",
+    });
+    setHighlight(id);
+    window.clearTimeout(highlightTimer.current);
+    highlightTimer.current = window.setTimeout(() => setHighlight(null), 1600);
+  }, []);
+
+  const goTop = () => {
+    setActiveChip("tudo");
+    scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const rtAvg = rt.data?.all.averageSeconds ?? null;
+  const summary: SummaryItem[] = [
+    {
+      key: "concluidas",
+      icon: <CheckCircle2 className="h-3 w-3" />,
+      label: "Concluídas",
+      value: perf.completions.length,
+      onClick: () => goTo("atividade"),
+    },
+    {
+      key: "atrasadas",
+      icon: <AlertTriangle className="h-3 w-3" />,
+      label: "Atrasadas",
+      value: stats.atrasadas,
+      hint: "agora",
+      tone: stats.atrasadas > 0 ? "danger" : undefined,
+      onClick: () => goTo("atividade"),
+    },
+    {
+      key: "horas",
+      icon: <Clock className="h-3 w-3" />,
+      label: "Horas",
+      value: totalSeconds > 0 ? `${(totalSeconds / 3600).toFixed(1).replace(".", ",")}h` : "—",
+      onClick: () => goTo("jornada"),
+    },
+    {
+      key: "resposta",
+      icon: <MessageSquare className="h-3 w-3" />,
+      label: "Resposta média",
+      value:
+        rt.state === "loading"
+          ? "…"
+          : rt.state === "error" || rtAvg == null
+            ? "—"
+            : formatResponseDuration(rtAvg),
+      hint:
+        rt.state === "ready" && rtAvg == null
+          ? "Sem dados suficientes"
+          : rt.state === "error"
+            ? "Indisponível"
+            : undefined,
+      onClick: () => goTo("comunicacao"),
+    },
+    {
+      key: "score",
+      icon: <Gauge className="h-3 w-3" />,
+      label: "Score",
+      value: perf.score.score == null ? "—" : perf.score.score,
+      hint: perf.score.dataState === "sem_dados" ? "Sem dados suficientes" : undefined,
+      onClick: () => goTo("desempenho"),
+    },
+  ];
+
+  const chips: { id: SectionId | "tudo"; label: string; icon: ReactNode }[] = [
+    { id: "tudo", label: "Tudo", icon: <Eye className="h-3.5 w-3.5" /> },
+    ...(["atividade", "jornada", "desempenho", "comunicacao", "historico"] as SectionId[]).map(
+      (id) => ({ id, label: SECTION_LABEL[id], icon: SECTION_ICON[id] }),
+    ),
+  ];
+
+  const renderSection = (id: SectionId) => {
+    const common = {
+      id,
+      icon: SECTION_ICON[id],
+      title: SECTION_TITLE[id],
+      highlighted: highlight === id,
+    };
+    const setRef = (el: HTMLElement | null) => {
+      sectionRefs.current[id] = el;
+    };
+    switch (id) {
+      case "atividade":
+        return (
+          <ProfileSection key={id} ref={setRef} {...common}>
+            <ProfileActivity tasks={tasksForMember} onOpenTask={onOpenTask} />
+          </ProfileSection>
+        );
+      case "jornada":
+        return (
+          <ProfileSection key={id} ref={setRef} {...common}>
+            <ProfileJourney
+              member={member}
+              entries={entries}
+              loading={entriesLoading}
+              statusLabel={STATUS_LABEL[status]}
+              canSeeStart={canSeeField(member, "startOfDay", viewer)}
+            />
+          </ProfileSection>
+        );
+      case "desempenho":
+        return (
+          <ProfileSection key={id} ref={setRef} {...common}>
+            <div className="space-y-3">
+              <ProfileScoreSummary
+                score={perf.score}
+                trendLabel={perf.trendLabel}
+                expanded={scoreExpanded}
+                onToggle={() => setScoreExpanded((e) => !e)}
+              />
+              {scoreExpanded && (
+                <ScoreOperacionalPanel
+                  score={perf.score}
+                  trendLabel={perf.trendLabel}
+                  completions={perf.completions}
+                  deadlineChanges={perf.deadlineChanges}
+                  attendance={perf.attendance}
+                  meetingsById={meetingsById}
+                  performanceSettings={performanceSettings}
+                  tasksForMember={tasksForMember}
+                  openById={openById}
+                  initialShowComposition
+                />
+              )}
+              <ProfilePerformance
+                completed={perf.completions.length}
+                previousCompleted={perf.previousCompletions.length}
+                agg={perf.aggCurrent}
+                previousAgg={perf.aggPrevious}
+                overdueNow={perf.overdueNow.length}
+                meetingsAttended={perf.attendance.length - missed}
+                meetingsExpected={perf.attendance.length}
+                totalSeconds={totalSeconds}
+              />
+            </div>
+          </ProfileSection>
+        );
+      case "comunicacao":
+        return (
+          <ProfileSection key={id} ref={setRef} {...common} title="Comunicação · Tempo de resposta">
+            <ProfileCommunication data={rt.data} state={rt.state} />
+          </ProfileSection>
+        );
+      case "historico":
+        return (
+          <ProfileSection key={id} ref={setRef} {...common}>
+            <ProfileHistory
+              completions={perf.completions}
+              deadlineChanges={perf.deadlineChanges}
+              attendance={perf.attendance}
+              meetingsById={meetingsById}
+              projectNames={projectNames}
+            />
+          </ProfileSection>
+        );
+    }
+  };
 
   return (
     <>
@@ -195,7 +398,8 @@ function ProfileBody({
                 className="gap-1.5"
                 onClick={() => onEdit(member)}
               >
-                <Pencil className="h-3.5 w-3.5" /> Editar membro
+                <Pencil className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Editar membro</span>
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -255,96 +459,60 @@ function ProfileBody({
         </div>
       </SheetHeader>
 
-      <Tabs
-        value={tab}
-        onValueChange={(v) => setTab(v as ProfileTab)}
-        className="flex min-h-0 flex-1 flex-col"
-      >
-        <div className="border-b border-border px-5 py-2 sm:px-7">
-          <TabsList className="h-9">
-            {TABS.map((t) => (
-              <TabsTrigger key={t.value} value={t.value} className="text-xs">
-                {t.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
+        <div className="space-y-4 px-5 pb-8 pt-4 sm:px-7">
+          <ProfileSummary items={summary} />
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-7">
-          <TabsContent value="visao" className="mt-0">
-            <ProfileOverview
-              member={member}
-              viewer={viewer}
-              stats={stats}
-              completedCount={perf.completions.length}
-              scoreValue={perf.score.score}
-              totalSeconds={totalSeconds}
-              overdueTasks={overdueTasks}
-              onOpenTask={onOpenTask}
-              startOfDayToday={member.startTimes?.[todayIsoInBrasilia()] ?? null}
-            />
-            <button
-              type="button"
-              onClick={() => {
-                setOpenComposition(true);
-                setTab("score");
-              }}
-              className="mt-4 text-[11px] font-medium text-text-secondary underline underline-offset-2 hover:text-foreground"
-            >
-              Ver composição do Score →
-            </button>
-          </TabsContent>
-          <TabsContent value="score" className="mt-0">
-            <ScoreOperacionalPanel
-              score={perf.score}
-              trendLabel={perf.trendLabel}
-              completions={perf.completions}
-              deadlineChanges={perf.deadlineChanges}
-              attendance={perf.attendance}
-              meetingsById={meetingsById}
-              performanceSettings={performanceSettings}
-              tasksForMember={tasksForMember}
-              openById={openById}
-              initialShowComposition={openComposition}
-            />
-          </TabsContent>
-          <TabsContent value="tarefas" className="mt-0">
-            <ProfileTasks tasks={tasksForMember} onOpenTask={onOpenTask} />
-          </TabsContent>
-          <TabsContent value="jornada" className="mt-0">
-            <ProfileJourney
-              member={member}
-              entries={entries}
-              loading={entriesLoading}
-              statusLabel={STATUS_LABEL[status]}
-              canSeeStart={canSeeField(member, "startOfDay", viewer)}
-            />
-          </TabsContent>
-          <TabsContent value="desempenho" className="mt-0">
-            <ProfilePerformance
-              completed={perf.completions.length}
-              previousCompleted={perf.previousCompletions.length}
-              agg={perf.aggCurrent}
-              previousAgg={perf.aggPrevious}
-              overdueNow={perf.overdueNow.length}
-              meetingsAttended={perf.attendance.length - missed}
-              meetingsExpected={perf.attendance.length}
-              totalSeconds={totalSeconds}
-            />
-          </TabsContent>
-          <TabsContent value="comunicacao" className="mt-0">
-            <ProfileCommunication memberId={member.id} range={range} />
-          </TabsContent>
-          <TabsContent value="historico" className="mt-0">
-            <ProfileHistory
-              completions={perf.completions}
-              deadlineChanges={perf.deadlineChanges}
-              attendance={perf.attendance}
-              meetingsById={meetingsById}
-              projectNames={projectNames}
-            />
-          </TabsContent>
+
+        <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-y border-border bg-background/95 px-5 py-2 backdrop-blur sm:px-7">
+          <div
+            role="toolbar"
+            aria-label="Seções do perfil"
+            className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
+            {chips.map((c) => {
+              const active = activeChip === c.id;
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => (c.id === "tudo" ? goTop() : goTo(c.id))}
+                  className={`inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${active ? "border-primary bg-primary/10 text-foreground" : "border-border text-text-secondary hover:bg-muted/50 hover:text-foreground"}`}
+                >
+                  {c.icon}
+                  {c.label}
+                </button>
+              );
+            })}
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="shrink-0 gap-1.5 text-xs">
+                <ArrowUpDown className="h-3.5 w-3.5" />
+                Ordenar
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[200px]">
+              {(Object.keys(SORT_LABEL) as ProfileSort[]).map((key) => (
+                <DropdownMenuItem key={key} onSelect={() => setSort(key)} className="gap-2">
+                  <Check className={`h-3.5 w-3.5 ${sort === key ? "opacity-100" : "opacity-0"}`} />
+                  {SORT_LABEL[key]}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-      </Tabs>
+
+        <div className="space-y-4 px-5 pb-10 pt-4 sm:px-7">
+          {order.map(renderSection)}
+          <MemberInfoSection
+            member={member}
+            viewer={viewer}
+            startOfDayToday={member.startTimes?.[todayIsoInBrasilia()] ?? null}
+          />
+        </div>
+      </div>
     </>
   );
 }

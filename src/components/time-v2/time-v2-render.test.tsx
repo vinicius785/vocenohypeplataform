@@ -27,7 +27,9 @@ vi.mock("@/components/tasks/TaskBoard", () => ({
 
 const { TimeMembersTable } = await import("./TimeMembersTable");
 const { TimeSummaryStrip } = await import("./TimeSummaryStrip");
-const { ProfileTasks, ProfilePerformance, ProfileHistory } = await import("./profile-sections");
+const { ProfileActivity, ProfilePerformance, ProfileHistory, ProfileSummary, ProfileScoreSummary } =
+  await import("./profile-sections");
+const { ProfileCommunication } = await import("./ProfileCommunication");
 
 const LONG_NAME = "Gustavo Rogério de Souza de Freitas da Silva Albuquerque Vasconcelos Neto";
 const LONG_ROLE = "Head de Estratégia, Operações e Relacionamento com Influenciadores e Parceiros";
@@ -173,12 +175,12 @@ describe("TimeSummaryStrip", () => {
 });
 
 describe("seções do perfil central", () => {
-  it("ProfileTasks: pessoa sem tarefas mostra estado vazio; título longo trunca", () => {
-    expect(renderToStaticMarkup(<ProfileTasks tasks={[]} onOpenTask={() => {}} />)).toContain(
+  it("ProfileActivity: pessoa sem tarefas mostra estado vazio; título longo trunca", () => {
+    expect(renderToStaticMarkup(<ProfileActivity tasks={[]} onOpenTask={() => {}} />)).toContain(
       "Nenhuma tarefa vinculada",
     );
     const html = renderToStaticMarkup(
-      <ProfileTasks
+      <ProfileActivity
         tasks={[task({ title: LONG_NAME, bucket: "atrasada", due: "Atrasada 2d" })]}
         onOpenTask={() => {}}
       />,
@@ -227,5 +229,77 @@ describe("seções do perfil central", () => {
     );
     expect(html).toContain("Sem atividade registrada");
     expect(html).toContain("Nenhum projeto ou campanha");
+  });
+});
+
+describe("perfil contínuo", () => {
+  it("resumo: cada indicador é um atalho acessível pra sua seção", () => {
+    const html = renderToStaticMarkup(
+      <ProfileSummary
+        items={[
+          { key: "a", icon: null, label: "Atrasadas", value: 3, tone: "danger", onClick: () => {} },
+          {
+            key: "b",
+            icon: null,
+            label: "Resposta média",
+            value: "—",
+            hint: "Sem dados suficientes",
+            onClick: () => {},
+          },
+        ]}
+      />,
+    );
+    expect(html).toContain("Atrasadas: 3. Ir para a seção");
+    expect(html).toContain("Sem dados suficientes");
+  });
+
+  it("Score sem dados mostra 'Sem dados suficientes' e a ação 'Ver composição do Score'", () => {
+    const html = renderToStaticMarkup(
+      <ProfileScoreSummary
+        score={{ score: null, dataState: "sem_dados" } as never}
+        trendLabel={null}
+        expanded={false}
+        onToggle={() => {}}
+      />,
+    );
+    expect(html).toContain("Sem dados suficientes");
+    expect(html).toContain("Ver composição do Score");
+  });
+
+  it("Comunicação: estado de erro e sem dados nunca inventam número; aviso de privacidade sempre presente", () => {
+    const err = renderToStaticMarkup(<ProfileCommunication data={null} state="error" />);
+    expect(err).toContain("Ainda não disponível");
+    expect(err).toContain(
+      "O conteúdo das mensagens e as conversas utilizadas no cálculo não são exibidos",
+    );
+    const empty = renderToStaticMarkup(
+      <ProfileCommunication
+        data={{
+          direct: { answered: 0, unanswered: 0, averageSeconds: null, medianSeconds: null },
+          mention: { answered: 0, unanswered: 0, averageSeconds: null, medianSeconds: null },
+          all: { answered: 0, unanswered: 0, averageSeconds: null, medianSeconds: null },
+        }}
+        state="ready"
+      />,
+    );
+    expect(empty).toContain("Sem dados suficientes");
+  });
+
+  it("Comunicação com dados mostra média, mediana, analisadas e sem resposta — e nada de conversa", () => {
+    const seg = { answered: 4, unanswered: 1, averageSeconds: 1080, medianSeconds: 600 };
+    const html = renderToStaticMarkup(
+      <ProfileCommunication
+        data={{
+          direct: { ...seg, averageSeconds: 900 },
+          mention: { ...seg, averageSeconds: 1440 },
+          all: { answered: 8, unanswered: 2, averageSeconds: 1080, medianSeconds: 600 },
+        }}
+        state="ready"
+      />,
+    );
+    expect(html).toContain("18 min");
+    expect(html).toContain("10 min");
+    expect(html).toContain("15 min");
+    expect(html).toContain("24 min");
   });
 });

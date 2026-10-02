@@ -1,16 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { Info } from "lucide-react";
-import { useServerFn } from "@tanstack/react-start";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getMemberResponseTime } from "@/lib/member-response-time.functions";
 import {
   formatResponseDuration,
   segmentOf,
   type MemberResponseTime,
   type ResponseTimeFilter,
 } from "@/lib/member-response-time";
-import { isoRangeToTimestamps, type IsoRange } from "./time-v2-utils";
+import type { ResponseTimeState } from "./use-response-time";
 
 const FILTER_OPTIONS = [
   { value: "all", label: "Todas" },
@@ -35,47 +33,26 @@ function Stat({ label, value, hint }: { label: string; value: string | number; h
  * os agregados de `getMemberResponseTime` (média, mediana, contagens) — o
  * tipo `MemberResponseTime` nem tem campo para mensagem, remetente,
  * destinatário, conversa ou link. Não há, nesta tela, nenhum caminho para
- * abrir uma conversa ou listar interações.
+ * abrir uma conversa ou listar interações. Os dados vêm do perfil (uma
+ * única busca compartilhada com a faixa de resumo).
  */
-export function ProfileCommunication({ memberId, range }: { memberId: string; range: IsoRange }) {
-  const fetchRt = useServerFn(getMemberResponseTime);
+export function ProfileCommunication({
+  data,
+  state,
+}: {
+  data: MemberResponseTime | null;
+  state: ResponseTimeState;
+}) {
   const [filter, setFilter] = useState<ResponseTimeFilter>("all");
-  const [data, setData] = useState<MemberResponseTime | null>(null);
-  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
-
-  const { from, to } = useMemo(() => isoRangeToTimestamps(range), [range]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setState("loading");
-    fetchRt({ data: { userId: memberId, from, to } })
-      .then((res) => {
-        if (cancelled) return;
-        setData(res);
-        setState("ready");
-      })
-      .catch(() => {
-        if (!cancelled) setState("error");
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchRt (useServerFn) não é estável entre renders
-  }, [memberId, from, to]);
-
   const seg = data ? segmentOf(data, filter) : null;
-  const analyzed = seg ? seg.answered : 0;
-  const noData = state === "ready" && seg != null && analyzed === 0 && seg.unanswered === 0;
+  const noData = state === "ready" && seg != null && seg.answered === 0 && seg.unanswered === 0;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-foreground">Tempo médio de resposta</h3>
-          <p className="text-xs text-text-secondary">
-            Quanto o membro leva, em média, para responder a quem fala com ele.
-          </p>
-        </div>
+        <p className="min-w-0 text-xs text-text-secondary">
+          Quanto o membro leva, em média, para responder a quem fala com ele.
+        </p>
         <SegmentedControl
           aria-label="Tipo de comunicação"
           size="sm"
@@ -95,7 +72,7 @@ export function ProfileCommunication({ memberId, range }: { memberId: string; ra
 
       {state === "error" && (
         <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-text-secondary">
-          Não foi possível carregar o tempo de resposta agora.
+          Ainda não disponível — não foi possível carregar o tempo de resposta agora.
         </p>
       )}
 
@@ -103,7 +80,7 @@ export function ProfileCommunication({ memberId, range }: { memberId: string; ra
         <>
           {noData ? (
             <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-text-secondary">
-              Sem interações a analisar neste período.
+              Sem dados suficientes neste período.
             </p>
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -113,7 +90,7 @@ export function ProfileCommunication({ memberId, range }: { memberId: string; ra
                 value={formatResponseDuration(seg.medianSeconds)}
                 hint="Valor típico, sem distorção de casos extremos"
               />
-              <Stat label="Respostas analisadas" value={analyzed} />
+              <Stat label="Respostas analisadas" value={seg.answered} />
               <Stat
                 label="Sem resposta"
                 value={seg.unanswered}
@@ -142,10 +119,10 @@ export function ProfileCommunication({ memberId, range }: { memberId: string; ra
       <div className="flex items-start gap-2 rounded-lg bg-muted/30 px-3 py-2.5 text-[11px] leading-relaxed text-text-secondary">
         <Info className="mt-0.5 h-3 w-3 shrink-0" />
         <p>
-          Métrica agregada: o conteúdo, os participantes e as conversas usados no cálculo nunca são
+          Métrica agregada. O conteúdo das mensagens e as conversas utilizadas no cálculo não são
           exibidos. Mensagens seguidas da mesma pessoa contam como uma única demanda, medida desde a
-          primeira. O tempo é corrido (a plataforma ainda não tem horário de trabalho configurado,
-          então noites e fins de semana entram na conta). Não faz parte do Score.
+          primeira. O tempo é corrido (a plataforma ainda não tem horário de trabalho configurado) e
+          não faz parte do Score.
         </p>
       </div>
     </div>

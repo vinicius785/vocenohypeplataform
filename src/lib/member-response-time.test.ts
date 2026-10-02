@@ -86,6 +86,7 @@ describe("guarda de privacidade — Comunicação só agregada", () => {
     "src/lib/member-response-time.ts",
     "src/lib/member-response-time.functions.ts",
     "src/components/time-v2/ProfileCommunication.tsx",
+    "src/components/time-v2/use-response-time.ts",
   ];
   const FORBIDDEN = [
     /chat_messages/,
