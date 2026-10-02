@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { matchScore } from "@/lib/mention-kinds";
 import { useTaskDirectory, type TaskDirectoryEntry } from "@/lib/task-directory";
-import { TASK_STATUS_DOT, type TaskStatus } from "@/lib/task-status";
+import { TaskStatusIcon, isTaskStatus } from "@/components/tasks/task-ui";
 
 const MAX_RESULTS = 30;
 
@@ -51,8 +51,9 @@ function TaskPickerRow({
         highlighted ? "bg-muted" : "hover:bg-muted/60"
       } ${completed ? "opacity-60" : ""}`}
     >
-      <span
-        className={`mt-1 h-2 w-2 shrink-0 rounded-full ${TASK_STATUS_DOT[(entry.status as TaskStatus) ?? "Aberto"] ?? "bg-muted-foreground/50"}`}
+      <TaskStatusIcon
+        status={isTaskStatus(entry.status) ? entry.status : "Aberto"}
+        className="mt-0.5 h-3.5 w-3.5"
       />
       <span className="min-w-0 flex-1">
         <span

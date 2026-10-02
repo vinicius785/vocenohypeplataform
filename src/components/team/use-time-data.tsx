@@ -613,10 +613,9 @@ export function useTimeData() {
       const overdueHighPriorityCount = overdueTasks.filter(
         (t) => t.priority === "Alta" || t.priority === "Urgente",
       ).length;
-      const overdueOlderThanThresholdCount = overdueTasks.filter((t) => {
-        const match = /Atrasada (\d+)d/.exec(t.due);
-        return match ? Number(match[1]) >= INSIGHT_THRESHOLDS.atrasadasAntigasDias : false;
-      }).length;
+      const overdueOlderThanThresholdCount = overdueTasks.filter(
+        (t) => (t.overdueDays ?? 0) >= INSIGHT_THRESHOLDS.atrasadasAntigasDias,
+      ).length;
 
       const openTasksForMember = (tasksByMember.get(m.name) ?? []).filter((t) =>
         OPEN_STATUSES.has(t.status),

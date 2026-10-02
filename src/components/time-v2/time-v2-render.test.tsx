@@ -238,7 +238,7 @@ describe("seções do perfil central", () => {
     );
     const html = renderToStaticMarkup(
       <ProfileActivity
-        tasks={[task({ title: LONG_NAME, bucket: "atrasada", due: "Atrasada 2d" })]}
+        tasks={[task({ title: LONG_NAME, bucket: "atrasada", due: "Atrasada · 2d" })]}
         onOpenTask={() => {}}
       />,
     );

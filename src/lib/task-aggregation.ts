@@ -26,7 +26,7 @@ export type DashTask = {
   /** Mesma referência de data usada por `bucket`/`due`
    * (`performanceDueDate ?? dueDate`, "YYYY-MM-DD") — só pra ORDENAR por
    * prazo real dentro de uma lista (ex.: "Meu trabalho" no Início), já
-   * que `due` é só o texto formatado ("Seg 27/8"/"Atrasada 3d"), não
+   * que `due` é só o texto formatado ("Seg 27/8"/"Atrasada · 3d"), não
    * comparável diretamente. */
   dueISO?: string;
   priority?: ProjTask["priority"];
@@ -56,6 +56,11 @@ export type DashTask = {
    * RPCs de bloqueio) — ausente = não bloqueada. */
   blockCategory?: TaskBlockCategory;
   blockedSince?: string;
+  /** Bloqueio ativo pausa o prazo (`blockedState.pausesDeadline`). */
+  deadlinePaused?: boolean;
+  /** Dias de atraso (só quando `bucket === "atrasada"`), mesma conta do
+   * rótulo "Atrasada · Nd". */
+  overdueDays?: number;
 };
 
 /** Mais urgente primeiro — ordem de prioridade visual reaproveitada em
@@ -102,6 +107,14 @@ export function bucketFor(
   return "outro";
 }
 
+/** Dias de atraso a partir do prazo de referência (corte das 19h) — a
+ * mesma conta usada pelo rótulo "Atrasada · Nd" em toda a plataforma. */
+export function overdueDaysFor(refISO: string | undefined, cutoffHour?: number): number {
+  if (!refISO) return 0;
+  const diffMs = new Date().getTime() - deadlineCutoff(refISO, cutoffHour).getTime();
+  return Math.max(1, Math.ceil(diffMs / 86400000));
+}
+
 export function formatDue(
   dueISO: string | undefined,
   bucket: DashTask["bucket"],
@@ -112,11 +125,7 @@ export function formatDue(
   if (!ref) return "";
   if (bucket === "hoje") return "Hoje";
   if (bucket === "amanha") return "Amanhã";
-  if (bucket === "atrasada") {
-    const diffMs = new Date().getTime() - deadlineCutoff(ref, cutoffHour).getTime();
-    const d = Math.max(1, Math.ceil(diffMs / 86400000));
-    return `Atrasada ${d}d`;
-  }
+  if (bucket === "atrasada") return `Atrasada · ${overdueDaysFor(ref, cutoffHour)}d`;
   const due = new Date(ref + "T00:00:00");
   return `${WEEKDAYS[due.getDay()].slice(0, 3)} ${due.getDate()}/${due.getMonth() + 1}`;
 }
@@ -141,7 +150,11 @@ type CampanhaTaskLike = {
   completedAt?: string;
   activity?: { action: string; createdAt: string }[];
   createdAt?: string;
-  blockedState?: { category: TaskBlockCategory; blockedAt: string } | null;
+  blockedState?: {
+    category: TaskBlockCategory;
+    blockedAt: string;
+    pausesDeadline?: boolean;
+  } | null;
 };
 
 /** Campos operacionais derivados do PRÓPRIO registro da tarefa (nada
@@ -151,7 +164,10 @@ type CampanhaTaskLike = {
  * `loadAllTasksFlat`). */
 function operationalFields(
   t: CampanhaTaskLike,
-): Pick<DashTask, "completedAt" | "startedAt" | "createdAt" | "blockCategory" | "blockedSince"> {
+): Pick<
+  DashTask,
+  "completedAt" | "startedAt" | "createdAt" | "blockCategory" | "blockedSince" | "deadlinePaused"
+> {
   const started = (t.activity ?? []).find((a) => a.action === ACTIVITY_STATUS_IN_PROGRESS_ACTION);
   return {
     completedAt: resolvedCompletionTimestamp(t) ?? undefined,
@@ -159,6 +175,7 @@ function operationalFields(
     createdAt: t.createdAt,
     blockCategory: t.blockedState?.category,
     blockedSince: t.blockedState?.blockedAt,
+    deadlinePaused: !!t.blockedState?.pausesDeadline,
   };
 }
 
@@ -225,6 +242,10 @@ export function loadTasksByAssignee(
           title: t.title,
           bucket: b,
           due: formatDue(t.dueDate, b, t.performanceDueDate, cutoffHour),
+          overdueDays:
+            b === "atrasada"
+              ? overdueDaysFor(t.performanceDueDate ?? t.dueDate, cutoffHour)
+              : undefined,
           dueISO: t.performanceDueDate ?? t.dueDate,
           priority: t.priority,
           status: t.status,
@@ -247,6 +268,10 @@ export function loadTasksByAssignee(
           title: t.title,
           bucket: b,
           due: formatDue(t.dueDate, b, t.performanceDueDate, cutoffHour),
+          overdueDays:
+            b === "atrasada"
+              ? overdueDaysFor(t.performanceDueDate ?? t.dueDate, cutoffHour)
+              : undefined,
           dueISO: t.performanceDueDate ?? t.dueDate,
           priority: t.priority,
           status: t.status,
@@ -287,6 +312,10 @@ export function loadTasksByAssignee(
             title: t.title,
             bucket: b,
             due: formatDue(t.dueDate, b, t.performanceDueDate, cutoffHour),
+            overdueDays:
+              b === "atrasada"
+                ? overdueDaysFor(t.performanceDueDate ?? t.dueDate, cutoffHour)
+                : undefined,
             dueISO: t.performanceDueDate ?? t.dueDate,
             priority: t.priority,
             status: t.status,
@@ -361,6 +390,10 @@ export function loadAllTasksFlat(
           title: t.title,
           bucket: b,
           due: formatDue(t.dueDate, b, t.performanceDueDate, cutoffHour),
+          overdueDays:
+            b === "atrasada"
+              ? overdueDaysFor(t.performanceDueDate ?? t.dueDate, cutoffHour)
+              : undefined,
           dueISO: t.performanceDueDate ?? t.dueDate,
           priority: t.priority,
           status: t.status,
@@ -384,6 +417,10 @@ export function loadAllTasksFlat(
           title: t.title,
           bucket: b,
           due: formatDue(t.dueDate, b, t.performanceDueDate, cutoffHour),
+          overdueDays:
+            b === "atrasada"
+              ? overdueDaysFor(t.performanceDueDate ?? t.dueDate, cutoffHour)
+              : undefined,
           dueISO: t.performanceDueDate ?? t.dueDate,
           priority: t.priority,
           status: t.status,
@@ -415,6 +452,10 @@ export function loadAllTasksFlat(
             title: t.title,
             bucket: b,
             due: formatDue(t.dueDate, b, t.performanceDueDate, cutoffHour),
+            overdueDays:
+              b === "atrasada"
+                ? overdueDaysFor(t.performanceDueDate ?? t.dueDate, cutoffHour)
+                : undefined,
             dueISO: t.performanceDueDate ?? t.dueDate,
             priority: t.priority,
             status: t.status,

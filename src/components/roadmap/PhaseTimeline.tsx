@@ -26,8 +26,13 @@ import {
   type Task,
 } from "@/components/tasks/TaskBoard";
 import { formatIsoDate } from "@/lib/utils";
-import { todayIsoInBrasilia } from "@/lib/timezone";
-import { TASK_STATUS_DOT } from "@/lib/task-status";
+import {
+  TaskDeadlineBadge,
+  TaskPriorityFlag,
+  TaskStatusIcon,
+  deadlineViewFromTask,
+} from "@/components/tasks/task-ui";
+import { usePerformanceSettings } from "@/lib/performance-events-store";
 import {
   faseAtual,
   faseConcluidaComPendencias,
@@ -99,11 +104,7 @@ function TaskRow({
   onMove: (faseId?: string) => void;
 }) {
   const assignees = getTaskAssignees(task);
-  const atrasada =
-    task.status !== "Concluído" &&
-    task.status !== "Arquivado" &&
-    !!task.dueDate &&
-    task.dueDate < todayIsoInBrasilia();
+  const { settings: performanceSettings } = usePerformanceSettings();
   return (
     <div className="group flex w-full items-center gap-1 rounded-md px-2 py-1.5 hover:bg-muted/60">
       <button
@@ -113,18 +114,16 @@ function TaskRow({
         onClick={onOpen}
         className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left text-xs"
       >
-        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${TASK_STATUS_DOT[task.status]}`} />
+        <TaskStatusIcon status={task.status} className="h-3.5 w-3.5" />
         <span className="min-w-0 flex-1 truncate text-foreground">{task.title}</span>
-        {task.priority !== "Normal" && (
-          <span className="shrink-0 text-[10px] text-muted-foreground">{task.priority}</span>
-        )}
-        {task.dueDate && (
-          <span
-            className={`shrink-0 text-[10px] ${atrasada ? "text-destructive" : "text-muted-foreground"}`}
-          >
-            {atrasada && <AlertTriangle className="mr-0.5 inline h-2.5 w-2.5" />}
-            {formatIsoDate(task.dueDate)}
-          </span>
+        {task.priority !== "Normal" && <TaskPriorityFlag priority={task.priority} size="xs" />}
+        {(task.dueDate || task.performanceDueDate) && (
+          <TaskDeadlineBadge
+            size="xs"
+            view={deadlineViewFromTask(task, performanceSettings.deadlineCutoffHour, {
+              dateLabel: task.dueDate ? formatIsoDate(task.dueDate) : undefined,
+            })}
+          />
         )}
         {assignees.length > 0 && (
           <span className="flex shrink-0 items-center -space-x-1.5">

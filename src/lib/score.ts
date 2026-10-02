@@ -151,7 +151,7 @@ export type PerformanceOpenTask = {
  * com os campos crus que a Pendências do Score Operacional precisa
  * (`dueDate`/`performanceDueDate`, pra aplicar o corte de 19h) — não dá
  * pra reaproveitar `DashTask` (`task-aggregation.ts`) porque lá `due` já
- * vem formatado como texto ("Hoje"/"Atrasada 2d"), sem a data crua.
+ * vem formatado como texto ("Hoje"/"Atrasada · 2d"), sem a data crua.
  * `id`/`title` viajam junto pra permitir drill-down ("quais tarefas são
  * essas 2 atrasadas?") sem precisar de uma segunda consulta. Mesma
  * travessia de `computeMemberScores`, só devolvendo os objetos em vez de

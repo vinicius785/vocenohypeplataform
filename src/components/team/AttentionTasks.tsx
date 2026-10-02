@@ -1,7 +1,12 @@
 import { useMemo } from "react";
 import { AlertTriangle } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { TASK_STATUS_TONE, TASK_STATUS_DOT, PRIORITY_TONE } from "@/components/tasks/TaskBoard";
+import {
+  TaskDeadlineBadge,
+  TaskPriorityFlag,
+  TaskStatusBadge,
+  deadlineViewFromDashTask,
+} from "@/components/tasks/task-ui";
 import { OPEN_STATUSES } from "@/lib/score";
 import { BUCKET_ORDER, type DashTask, type DashTaskFlat } from "@/lib/task-aggregation";
 import type { Member } from "@/components/TimeSection";
@@ -134,28 +139,21 @@ export function AttentionTasks({
                       </p>
                     </div>
 
-                    {t.priority && (
-                      <span
-                        className={`hidden shrink-0 text-[11px] font-semibold sm:inline ${PRIORITY_TONE[t.priority]}`}
-                      >
-                        {t.priority}
-                      </span>
+                    {t.priority && t.priority !== "Normal" && (
+                      <TaskPriorityFlag
+                        priority={t.priority}
+                        size="xs"
+                        className="hidden sm:inline-flex"
+                      />
                     )}
 
-                    <span
-                      className={`hidden shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide md:inline-flex ${TASK_STATUS_TONE[t.status]}`}
-                    >
-                      <span className={`h-1.5 w-1.5 rounded-full ${TASK_STATUS_DOT[t.status]}`} />
-                      {t.status}
-                    </span>
+                    <TaskStatusBadge
+                      status={t.status}
+                      size="xs"
+                      className="hidden md:inline-flex"
+                    />
 
-                    <span
-                      className={`shrink-0 text-xs tabular-nums ${
-                        t.bucket === "atrasada" ? "text-destructive" : "text-text-secondary"
-                      }`}
-                    >
-                      {t.due}
-                    </span>
+                    <TaskDeadlineBadge view={deadlineViewFromDashTask(t)} size="xs" />
                   </button>
                 </li>
               );

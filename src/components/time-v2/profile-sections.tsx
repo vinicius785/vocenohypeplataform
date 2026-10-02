@@ -2,7 +2,12 @@ import { forwardRef, useMemo, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { MiniStat } from "@/components/team/member-ui";
 import { TASK_BLOCK_CATEGORY_LABEL } from "@/lib/task-blocks-rules";
-import { PRIORITY_TONE, TASK_STATUS_TONE } from "@/components/tasks/TaskBoard";
+import {
+  TaskDeadlineBadge,
+  TaskPriorityFlag,
+  TaskStatusBadge,
+  deadlineViewFromDashTask,
+} from "@/components/tasks/task-ui";
 import { OPEN_STATUSES } from "@/lib/score";
 import { BUCKET_ORDER, type DashTask } from "@/lib/task-aggregation";
 import {
@@ -256,7 +261,6 @@ export function MemberInfoSection({
 /** Linha de tarefa — lista enxuta (nome, contexto, prioridade, status,
  * prazo), nunca um card por tarefa. Clicável: abre a tarefa de verdade. */
 export function TaskRow({ task, onOpen }: { task: DashTask; onOpen: (t: DashTask) => void }) {
-  const overdue = task.bucket === "atrasada";
   return (
     <button
       type="button"
@@ -267,23 +271,15 @@ export function TaskRow({ task, onOpen }: { task: DashTask; onOpen: (t: DashTask
         <p className="truncate text-sm font-medium text-foreground">{task.title}</p>
         <p className="truncate text-xs text-text-secondary">{task.projectName}</p>
       </div>
-      {task.priority && (
-        <span
-          className={`hidden shrink-0 text-[11px] font-semibold sm:inline ${PRIORITY_TONE[task.priority]}`}
-        >
-          {task.priority}
-        </span>
+      {task.priority && task.priority !== "Normal" && (
+        <TaskPriorityFlag priority={task.priority} size="xs" className="hidden sm:inline-flex" />
       )}
-      <span
-        className={`hidden shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide md:inline-flex ${TASK_STATUS_TONE[task.status]}`}
-      >
-        {task.status}
-      </span>
-      <span
-        className={`w-20 shrink-0 text-right text-xs tabular-nums ${overdue ? "font-semibold text-destructive" : "text-text-secondary"}`}
-      >
-        {task.due || "—"}
-      </span>
+      <TaskStatusBadge status={task.status} size="xs" className="hidden md:inline-flex" />
+      <TaskDeadlineBadge
+        view={deadlineViewFromDashTask(task)}
+        size="xs"
+        className="w-28 justify-end"
+      />
     </button>
   );
 }

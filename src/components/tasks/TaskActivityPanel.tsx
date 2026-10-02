@@ -30,10 +30,10 @@ import {
   type BlockFormFields,
   type ResolveFormFields,
   type TaskStatus,
-  TASK_STATUSES,
 } from "@/components/tasks/TaskBoard";
 import { ACTIVITY_STATUS_COMPLETED_ACTION } from "@/lib/projetos";
-import { taskDeadlineHealth, type TaskDeadlineHealthLike } from "@/lib/performance-engine";
+import type { TaskDeadlineHealthLike } from "@/lib/performance-engine";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import {
   TASK_BLOCK_CATEGORIES,
   TASK_BLOCK_CATEGORY_LABEL,
@@ -41,6 +41,17 @@ import {
   isValidBlockReason,
 } from "@/lib/task-blocks-rules";
 import { TaskPicker } from "@/components/tasks/TaskPicker";
+import { TaskOptionPicker, TaskStatusSelect } from "@/components/tasks/task-ui";
+
+/** Classes únicas dos formulários inline da Activity (bloqueio,
+ * resolução, replanejamento) — mesmo campo em todos. */
+const FORM_LABEL = "text-[11px] font-medium text-muted-foreground";
+const FORM_INPUT =
+  "h-9 w-full rounded-md border border-input bg-background px-2.5 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring";
+const FORM_TEXTAREA =
+  "w-full resize-none rounded-md border border-input bg-background px-2.5 py-1.5 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring";
+const FORM_PICKER =
+  "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-2.5 text-left text-xs outline-none hover:bg-muted/40 focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring";
 import type { TaskDirectoryEntry } from "@/lib/task-directory";
 
 /** Janela de agrupamento pra eventos secundários consecutivos do mesmo
@@ -161,7 +172,6 @@ export function TaskActivityPanel({
   commentText,
   onCommentTextChange,
   onPostComment,
-  deadlineCutoffHour,
   pendingDeadlineChange,
   onConfirmDeadlineChange,
   onCancelDeadlineChange,
@@ -187,7 +197,6 @@ export function TaskActivityPanel({
   commentText: string;
   onCommentTextChange: (v: string) => void;
   onPostComment: () => void;
-  deadlineCutoffHour?: number;
   /** Mudança de prazo crítica aguardando confirmação (vence hoje/está
    * atrasada, sendo adiada) — enquanto presente, mostra o formulário
    * inline abaixo do feed (nunca modal/popup/drawer). */
@@ -302,8 +311,6 @@ export function TaskActivityPanel({
     return items.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
   }, [tab, activity, comments, task.deadlineHistory]);
 
-  const health = taskDeadlineHealth(task, undefined, deadlineCutoffHour);
-
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-col border-l border-border bg-background">
       <div className="border-b border-border px-5 py-3">
@@ -313,35 +320,25 @@ export function TaskActivityPanel({
             {activity.length + comments.length}
           </span>
         </div>
-        <div className="flex items-center gap-1 rounded-lg bg-muted p-0.5">
-          {TAB_DEFS.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => setTab(t.key)}
-              className={`flex-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                tab === t.key
-                  ? "bg-brand-subtle text-brand"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          aria-label="Filtrar atividade"
+          size="sm"
+          value={tab}
+          onChange={setTab}
+          options={TAB_DEFS.map((t) => ({ value: t.key, label: t.label }))}
+        />
       </div>
-
-      {health.health === "atrasada" && (
-        <div className="flex items-center gap-1.5 border-b border-border bg-red-500/10 px-4 py-1.5 text-[11px] font-medium text-red-700 dark:text-red-400">
-          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />
-          {health.label}
-        </div>
-      )}
 
       <div className="flex-1 overflow-y-auto px-5 py-3 [overscroll-behavior:contain]">
         <div className="space-y-3">
           {feed.length === 0 && (
-            <p className="py-6 text-center text-xs text-muted-foreground">Nada por aqui ainda.</p>
+            <p className="py-6 text-center text-xs text-muted-foreground">
+              {tab === "comentarios"
+                ? "Nenhum comentário ainda."
+                : tab === "historico"
+                  ? "Nenhum evento registrado."
+                  : "Nada por aqui ainda."}
+            </p>
           )}
           {feed.map((f) => {
             if (f.type === "comment") {
@@ -633,12 +630,12 @@ function DeadlinePendingForm({
         </p>
       </div>
       <label className="block space-y-1">
-        <span className="text-[11px] font-medium text-muted-foreground">Motivo</span>
+        <span className={FORM_LABEL}>Motivo</span>
         <select
           ref={selectRef}
           value={motivo}
           onChange={(e) => setMotivo(e.target.value as DeadlineChangeMotivo)}
-          className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+          className={FORM_INPUT}
         >
           {DEADLINE_CHANGE_MOTIVOS.map((m) => (
             <option key={m} value={m}>
@@ -648,15 +645,13 @@ function DeadlinePendingForm({
         </select>
       </label>
       <label className="block space-y-1">
-        <span className="text-[11px] font-medium text-muted-foreground">
-          Contexto{precisaObservacao ? "" : " (opcional)"}
-        </span>
+        <span className={FORM_LABEL}>Contexto{precisaObservacao ? "" : " (opcional)"}</span>
         <textarea
           value={observacao}
           onChange={(e) => setObservacao(e.target.value)}
           rows={2}
           placeholder="Explique brevemente o motivo da alteração..."
-          className="w-full resize-none rounded-md border border-input bg-background px-2 py-1.5 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+          className={FORM_TEXTAREA}
         />
       </label>
       <div className="flex justify-end gap-2 pt-0.5">
@@ -717,10 +712,10 @@ function BlockedPendingForm({
   const [requiredAction, setRequiredAction] = useState("");
   const [relatedEntityType, setRelatedEntityType] = useState("");
   const [expectedResolutionAt, setExpectedResolutionAt] = useState("");
-  const selectRef = useRef<HTMLSelectElement>(null);
+  const pickerTriggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    selectRef.current?.focus();
+    pickerTriggerRef.current?.focus();
   }, []);
 
   useEffect(() => {
@@ -760,195 +755,201 @@ function BlockedPendingForm({
       relatedTaskEntry: needsRelatedTask ? (relatedTaskEntry ?? undefined) : undefined,
       relatedEntityType: needsEntity ? relatedEntityType.trim() : undefined,
       requiredAction: requiredAction.trim() || undefined,
+      // Data local (meio-dia, pra nunca cair no dia anterior em UTC).
       expectedResolutionAt: expectedResolutionAt
-        ? new Date(expectedResolutionAt).toISOString()
+        ? new Date(`${expectedResolutionAt}T12:00:00`).toISOString()
         : undefined,
     });
   };
 
+  const memberOptions = members
+    .filter((m) => m.id)
+    .map((m) => ({ value: m.id!, label: m.name, icon: <Avatar member={m} size={18} /> }));
+  const actionPlaceholder: Partial<Record<TaskBlockCategory, string>> = {
+    aguardando_time: "Ex.: enviar o briefing aprovado",
+    aguardando_cliente: "Ex.: cliente aprovar o roteiro",
+    aguardando_fornecedor: "Ex.: fornecedor entregar o material",
+    aguardando_aprovacao: "O que está aguardando aprovação e de quem",
+    problema_tecnico: "Área/serviço afetado, ticket relacionado se existir",
+    dependencia_tarefa: "Ex.: concluir a tarefa anterior",
+  };
+  const hasInvolved = needsRelatedTask || needsMember || needsEntity;
+
   return (
-    <div className="space-y-2.5 rounded-lg border border-amber-500/30 bg-background p-3">
-      <div>
-        <p className="text-xs font-semibold text-foreground">Bloquear tarefa</p>
+    <div
+      role="form"
+      aria-label="Bloquear tarefa"
+      className="overflow-hidden rounded-lg border border-amber-500/40 bg-background"
+    >
+      <div className="border-b border-border/60 px-3 py-2.5">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground">
+          Bloquear tarefa
+        </p>
         <p className="mt-0.5 text-[11px] text-muted-foreground">
-          Informe o que está impedindo o avanço da tarefa. Essas informações serão registradas no
-          histórico e podem alterar a contagem do prazo.
+          Registre o que impede o avanço. Fica no histórico da tarefa.
         </p>
       </div>
 
-      <label className="block space-y-1">
-        <span className="text-[11px] font-medium text-muted-foreground">Categoria</span>
-        <select
-          ref={selectRef}
-          value={category}
-          onChange={(e) => {
-            setCategory(e.target.value as TaskBlockCategory);
-            setRelatedTaskEntry(null);
-            setMemberId("");
-            setRelatedEntityType("");
-          }}
-          className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-        >
-          {TASK_BLOCK_CATEGORIES.map((c) => (
-            <option key={c} value={c}>
-              {TASK_BLOCK_CATEGORY_LABEL[c]}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label className="block space-y-1">
-        <span className="text-[11px] font-medium text-muted-foreground">Motivo</span>
-        <textarea
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          rows={2}
-          placeholder="Explique o que está impedindo esta tarefa de avançar."
-          className="w-full resize-none rounded-md border border-input bg-background px-2 py-1.5 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-        />
-        {!reasonValid && reason.length > 0 && (
-          <span className="text-[10.5px] text-destructive">
-            Descreva com mais detalhe (mínimo 10 caracteres).
-          </span>
-        )}
-      </label>
-
-      {needsRelatedTask && (
+      <div className="space-y-3 px-3 py-3">
         <div className="space-y-1">
-          <span className="text-[11px] font-medium text-muted-foreground">
-            Qual tarefa precisa ser concluída primeiro?
-          </span>
-          {relatedTaskEntry && !showTaskPicker ? (
-            <button
-              type="button"
-              onClick={() => setShowTaskPicker(true)}
-              className="flex w-full items-center justify-between rounded-md border border-input bg-muted/40 px-2 py-1.5 text-left text-xs hover:bg-muted"
-            >
-              <span className="truncate">{relatedTaskEntry.label}</span>
-              <span className="shrink-0 text-[10.5px] text-muted-foreground">Trocar</span>
-            </button>
-          ) : (
-            <div className="rounded-md border border-input">
-              <TaskPicker
-                excludeTaskId={excludeTaskId ?? ""}
-                currentProjectId={currentProjectId}
-                currentCampanhaId={currentCampanhaId}
-                onSelect={(t) => {
-                  setRelatedTaskEntry(t);
-                  setShowTaskPicker(false);
-                }}
-              />
-            </div>
+          <span className={FORM_LABEL}>Motivo do bloqueio</span>
+          <TaskOptionPicker
+            value={category}
+            ariaLabel="Motivo do bloqueio"
+            widthClass="w-72"
+            options={TASK_BLOCK_CATEGORIES.map((c) => ({
+              value: c,
+              label: TASK_BLOCK_CATEGORY_LABEL[c],
+            }))}
+            onSelect={(c) => {
+              setCategory(c);
+              setRelatedTaskEntry(null);
+              setMemberId("");
+              setRelatedEntityType("");
+            }}
+            trigger={
+              <button type="button" ref={pickerTriggerRef} className={FORM_PICKER}>
+                <span className="truncate">{TASK_BLOCK_CATEGORY_LABEL[category]}</span>
+                <ChevronDown aria-hidden className="h-3.5 w-3.5 shrink-0 opacity-60" />
+              </button>
+            }
+          />
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            rows={2}
+            aria-label="Descrição do impedimento"
+            aria-invalid={!reasonValid && reason.length > 0}
+            placeholder="Explique o que está impedindo esta tarefa de avançar."
+            className={FORM_TEXTAREA}
+          />
+          {!reasonValid && reason.length > 0 && (
+            <span className="text-[10.5px] text-destructive">
+              Descreva com mais detalhe (mínimo 10 caracteres).
+            </span>
           )}
         </div>
-      )}
 
-      {needsMember && (
-        <>
-          <label className="block space-y-1">
-            <span className="text-[11px] font-medium text-muted-foreground">Quem do time?</span>
-            <select
-              value={memberId}
-              onChange={(e) => setMemberId(e.target.value)}
-              className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-            >
-              <option value="">— Selecionar —</option>
-              {members
-                .filter((m) => m.id)
-                .map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-            </select>
-          </label>
-          <label className="block space-y-1">
-            <span className="text-[11px] font-medium text-muted-foreground">
-              O que essa pessoa precisa fazer?
+        {hasInvolved && (
+          <div className="space-y-1">
+            <span className={FORM_LABEL}>
+              {needsRelatedTask ? "De qual tarefa depende?" : "Quem está envolvido?"}
             </span>
-            <textarea
-              value={requiredAction}
-              onChange={(e) => setRequiredAction(e.target.value)}
-              rows={2}
-              placeholder="Ex.: enviar o briefing aprovado"
-              className="w-full resize-none rounded-md border border-input bg-background px-2 py-1.5 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-            />
-          </label>
-        </>
-      )}
+            {needsRelatedTask &&
+              (relatedTaskEntry && !showTaskPicker ? (
+                <button
+                  type="button"
+                  onClick={() => setShowTaskPicker(true)}
+                  className={FORM_PICKER}
+                >
+                  <span className="truncate">{relatedTaskEntry.label}</span>
+                  <span className="shrink-0 text-[10.5px] text-muted-foreground">Trocar</span>
+                </button>
+              ) : (
+                <div className="rounded-md border border-input">
+                  <TaskPicker
+                    excludeTaskId={excludeTaskId ?? ""}
+                    currentProjectId={currentProjectId}
+                    currentCampanhaId={currentCampanhaId}
+                    onSelect={(t) => {
+                      setRelatedTaskEntry(t);
+                      setShowTaskPicker(false);
+                    }}
+                  />
+                </div>
+              ))}
+            {needsMember && (
+              <TaskOptionPicker
+                value={memberId || null}
+                ariaLabel="Pessoa do time envolvida"
+                searchPlaceholder="Buscar pessoa..."
+                emptyText="Ninguém encontrado."
+                searchable={memberOptions.length > 6}
+                widthClass="w-64"
+                options={memberOptions}
+                onSelect={setMemberId}
+                trigger={
+                  <button type="button" className={FORM_PICKER}>
+                    <span className={`truncate ${selectedMember ? "" : "text-muted-foreground"}`}>
+                      {selectedMember?.name ?? "Selecionar pessoa do time"}
+                    </span>
+                    <ChevronDown aria-hidden className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                  </button>
+                }
+              />
+            )}
+            {needsEntity && (
+              <input
+                value={relatedEntityType}
+                onChange={(e) => setRelatedEntityType(e.target.value)}
+                aria-label="Quem está envolvido"
+                placeholder={
+                  category === "aguardando_cliente"
+                    ? "Campanha, conteúdo ou aprovação relacionada"
+                    : "Fornecedor/parceiro e o que precisa ser entregue"
+                }
+                className={FORM_INPUT}
+              />
+            )}
+          </div>
+        )}
 
-      {needsEntity && (
         <label className="block space-y-1">
-          <span className="text-[11px] font-medium text-muted-foreground">
-            {category === "aguardando_cliente"
-              ? "Campanha, conteúdo ou aprovação relacionada"
-              : "Fornecedor/parceiro e o que precisa ser entregue"}
-          </span>
-          <input
-            value={relatedEntityType}
-            onChange={(e) => setRelatedEntityType(e.target.value)}
-            placeholder="Descreva livremente"
-            className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-          />
-        </label>
-      )}
-
-      {(category === "problema_tecnico" || category === "aguardando_aprovacao") && (
-        <label className="block space-y-1">
-          <span className="text-[11px] font-medium text-muted-foreground">Detalhes</span>
+          <span className={FORM_LABEL}>O que precisa acontecer?</span>
           <textarea
             value={requiredAction}
             onChange={(e) => setRequiredAction(e.target.value)}
             rows={2}
-            placeholder={
-              category === "problema_tecnico"
-                ? "Área/serviço afetado, ticket relacionado se existir"
-                : "O que está aguardando aprovação e de quem"
-            }
-            className="w-full resize-none rounded-md border border-input bg-background px-2 py-1.5 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+            placeholder={actionPlaceholder[category] ?? "Opcional"}
+            className={FORM_TEXTAREA}
           />
         </label>
-      )}
 
-      <label className="block space-y-1">
-        <span className="text-[11px] font-medium text-muted-foreground">
-          Previsão de resolução (opcional)
-        </span>
-        <input
-          type="datetime-local"
-          value={expectedResolutionAt}
-          onChange={(e) => setExpectedResolutionAt(e.target.value)}
-          className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-        />
-        {!expectedResolutionAt && (
-          <span className="text-[10.5px] text-muted-foreground">
-            Sem previsão, este bloqueio será sinalizado para acompanhamento.
-          </span>
-        )}
-      </label>
+        <label className="block space-y-1">
+          <span className={FORM_LABEL}>Previsão de resolução</span>
+          <input
+            type="date"
+            value={expectedResolutionAt}
+            onChange={(e) => setExpectedResolutionAt(e.target.value)}
+            className={FORM_INPUT}
+          />
+          {!expectedResolutionAt && (
+            <span className="text-[10.5px] text-muted-foreground">
+              Opcional. Sem previsão, o bloqueio é sinalizado para acompanhamento.
+            </span>
+          )}
+        </label>
 
-      <div className="rounded-md bg-muted/50 px-2.5 py-2 text-[11px] text-muted-foreground">
-        {pausesPreview
-          ? "Seu prazo será pausado a partir de agora. Atrasos anteriores permanecem contabilizados."
-          : "Este motivo não pausa automaticamente o prazo."}
-        {needsMember && selectedMember && (
-          <>
-            {" "}
-            {selectedMember.name} receberá uma pendência
-            {expectedResolutionAt
-              ? ` até ${new Date(expectedResolutionAt).toLocaleDateString("pt-BR")}`
-              : ""}
-            .
-          </>
-        )}
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300">
+            Impacto
+          </p>
+          <ul className="mt-1 space-y-0.5 text-[11px] text-foreground">
+            <li>
+              {pausesPreview
+                ? "O prazo será pausado enquanto o bloqueio estiver ativo. Atrasos anteriores continuam contabilizados."
+                : "Este motivo não pausa o prazo — a contagem continua normalmente."}
+            </li>
+            <li>A tarefa fica como "Bloqueada" até o bloqueio ser resolvido.</li>
+            {needsMember && selectedMember && (
+              <li>
+                {selectedMember.name} receberá uma pendência
+                {expectedResolutionAt
+                  ? ` até ${new Date(`${expectedResolutionAt}T12:00:00`).toLocaleDateString("pt-BR")}`
+                  : ""}
+                .
+              </li>
+            )}
+          </ul>
+        </div>
       </div>
 
-      <div className="flex justify-end gap-2 pt-0.5">
+      <div className="flex justify-end gap-2 border-t border-border/60 px-3 py-2.5">
         <button
           type="button"
           onClick={onCancel}
           disabled={busy}
-          className="rounded-md px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-50"
+          className="rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-50"
         >
           Cancelar
         </button>
@@ -956,7 +957,7 @@ function BlockedPendingForm({
           type="button"
           onClick={confirm}
           disabled={!fieldsValid || busy}
-          className="rounded-md bg-amber-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+          className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50"
         >
           {busy ? "Bloqueando..." : "Confirmar bloqueio"}
         </button>
@@ -984,7 +985,6 @@ function ResolveBlockForm({
   const [resolutionNote, setResolutionNote] = useState("");
   const [newStatus, setNewStatus] = useState<TaskStatus>("Em andamento");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const resolvableStatuses = TASK_STATUSES.filter((s) => s !== "Bloqueada");
 
   useEffect(() => {
     textareaRef.current?.focus();
@@ -1008,30 +1008,22 @@ function ResolveBlockForm({
         </p>
       </div>
       <label className="block space-y-1">
-        <span className="text-[11px] font-medium text-muted-foreground">Nota de resolução</span>
+        <span className={FORM_LABEL}>Nota de resolução</span>
         <textarea
           ref={textareaRef}
           value={resolutionNote}
           onChange={(e) => setResolutionNote(e.target.value)}
           rows={2}
           placeholder="Ex.: briefing enviado pelo cliente"
-          className="w-full resize-none rounded-md border border-input bg-background px-2 py-1.5 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+          className={FORM_TEXTAREA}
         />
       </label>
-      <label className="block space-y-1">
-        <span className="text-[11px] font-medium text-muted-foreground">Novo status</span>
-        <select
-          value={newStatus}
-          onChange={(e) => setNewStatus(e.target.value as TaskStatus)}
-          className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-        >
-          {resolvableStatuses.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="space-y-1">
+        <span className={FORM_LABEL}>Novo status</span>
+        <div>
+          <TaskStatusSelect value={newStatus} onChange={setNewStatus} exclude={["Bloqueada"]} />
+        </div>
+      </div>
       <div className="flex justify-end gap-2 pt-0.5">
         <button
           type="button"

@@ -64,7 +64,12 @@ import {
   declineMeetingFor,
   type Meeting,
 } from "@/lib/reunioes-store";
-import { TASK_STATUS_TONE, TASK_STATUS_DOT, useTeamMembers } from "@/components/tasks/TaskBoard";
+import { PRIORITY_TONE, useTeamMembers } from "@/components/tasks/TaskBoard";
+import {
+  TaskDeadlineBadge,
+  TaskStatusBadge,
+  deadlineViewFromDashTask,
+} from "@/components/tasks/task-ui";
 import { MeetingSummaryDialog } from "@/components/ReunioesSection";
 import { onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
 import { onStandaloneChange } from "@/lib/marketing-tasks";
@@ -975,7 +980,7 @@ export function InicioDashboard() {
                     }}
                     className="group flex w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset md:px-5"
                   >
-                    <PriorityFlag priority={t.priority} bucket={t.bucket} />
+                    <PriorityFlag priority={t.priority} />
                     <div className="min-w-0 flex-1">
                       <p
                         className="flex min-w-0 items-center gap-1.5 truncate text-sm text-foreground group-hover:underline"
@@ -992,22 +997,15 @@ export function InicioDashboard() {
                         <span className="truncate">{t.title}</span>
                       </p>
                     </div>
-                    <span
-                      className={`hidden shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide sm:inline-flex ${TASK_STATUS_TONE[t.status]}`}
-                    >
-                      <span className={`h-1.5 w-1.5 rounded-full ${TASK_STATUS_DOT[t.status]}`} />
-                      {t.status}
-                    </span>
+                    <TaskStatusBadge
+                      status={t.status}
+                      size="xs"
+                      className="hidden sm:inline-flex"
+                    />
                     <Badge variant="secondary" className="hidden shrink-0 sm:inline-flex">
                       {t.projectName}
                     </Badge>
-                    <span
-                      className={`shrink-0 text-xs tabular-nums ${
-                        t.bucket === "atrasada" ? "text-danger" : "text-muted-foreground"
-                      }`}
-                    >
-                      {t.due}
-                    </span>
+                    <TaskDeadlineBadge view={deadlineViewFromDashTask(t)} size="xs" />
                     <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                   </div>
                 ))}
@@ -1491,30 +1489,16 @@ function HeaderIndicatorCell({
   );
 }
 
-function PriorityFlag({
-  priority,
-  bucket,
-}: {
-  priority?: DashTask["priority"];
-  bucket: DashTask["bucket"];
-}) {
-  const color =
-    bucket === "atrasada"
-      ? "text-danger"
-      : priority === "Urgente"
-        ? "text-red-500"
-        : priority === "Alta"
-          ? "text-orange-500"
-          : priority === "Normal"
-            ? "text-yellow-500"
-            : "text-muted-foreground/40";
-
+/** Bandeira de prioridade (só ícone, texto no aria-label) — mesma cor de
+ * `PRIORITY_TONE` usada em toda a plataforma. Nunca muda de cor por
+ * atraso: prazo tem indicador próprio (`TaskDeadlineBadge`). */
+function PriorityFlag({ priority }: { priority?: DashTask["priority"] }) {
   return (
     <Flag
-      className={`h-3.5 w-3.5 shrink-0 ${color}`}
+      className={`h-3.5 w-3.5 shrink-0 ${priority ? PRIORITY_TONE[priority] : "text-muted-foreground/40"}`}
       fill="currentColor"
       strokeWidth={1.5}
-      aria-label={priority ?? "Sem prioridade"}
+      aria-label={`Prioridade: ${priority ?? "sem prioridade"}`}
     />
   );
 }

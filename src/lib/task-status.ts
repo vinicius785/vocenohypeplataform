@@ -71,22 +71,43 @@ export const TASK_STATUS_CATEGORY: Record<TaskStatus, TaskStatusCategory> = {
   Arquivado: "archived",
 };
 
-/** Rótulos dos 3 grupos do novo seletor de status das subtarefas —
- * "ATIVO" reúne `active` + `blocked` (bloqueada continua sendo um
- * trabalho em andamento, só impedido), "FINALIZADO" reúne `done` +
- * `archived`. */
-export const TASK_STATUS_GROUP_LABEL: Record<
-  "not_started" | "active_group" | "done_group",
-  string
-> = {
-  not_started: "NÃO INICIADO",
-  active_group: "ATIVO",
-  done_group: "FINALIZADO",
+/** Grupos do seletor de status (único em toda a plataforma): NÃO
+ * INICIADO, ATIVO (inclui Bloqueada — trabalho em andamento, só
+ * impedido), FINALIZADO (Aprovado/Concluído) e ARQUIVADO à parte. Só
+ * organiza a lista; nenhuma regra de negócio depende do grupo. */
+export type TaskStatusGroup = "not_started" | "active_group" | "done_group" | "archived_group";
+
+export const TASK_STATUS_GROUP_ORDER: TaskStatusGroup[] = [
+  "not_started",
+  "active_group",
+  "done_group",
+  "archived_group",
+];
+
+export const TASK_STATUS_GROUP_LABEL: Record<TaskStatusGroup, string> = {
+  not_started: "Não iniciado",
+  active_group: "Ativo",
+  done_group: "Finalizado",
+  archived_group: "Arquivado",
 };
 
-export function groupForStatus(status: TaskStatus): "not_started" | "active_group" | "done_group" {
+export function groupForStatus(status: TaskStatus): TaskStatusGroup {
   const cat = TASK_STATUS_CATEGORY[status];
   if (cat === "not_started") return "not_started";
   if (cat === "active" || cat === "blocked") return "active_group";
+  if (cat === "archived") return "archived_group";
   return "done_group";
 }
+
+/** Prioridade — importância, nunca estado: no vocabulário visual é só
+ * ícone de bandeira + texto colorido (sem fundo), pra nunca competir com
+ * o selo de status. "Urgente" continua existindo (regra do Score usa
+ * Alta/Urgente como "alta prioridade"). */
+export type TaskPriority = "Urgente" | "Alta" | "Normal" | "Baixa";
+export const TASK_PRIORITIES: TaskPriority[] = ["Urgente", "Alta", "Normal", "Baixa"];
+export const PRIORITY_TONE: Record<TaskPriority, string> = {
+  Urgente: "text-red-600 dark:text-red-400",
+  Alta: "text-amber-600 dark:text-amber-400",
+  Normal: "text-sky-600 dark:text-sky-400",
+  Baixa: "text-muted-foreground",
+};
