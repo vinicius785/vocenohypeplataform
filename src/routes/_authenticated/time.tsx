@@ -78,8 +78,8 @@ const ClientesSection = lazy(() =>
 const CampanhasSection = lazy(() =>
   import("@/components/CampanhasSection").then((m) => ({ default: m.CampanhasSection })),
 );
-const TimeSection = lazy(() =>
-  import("@/components/TimeSection").then((m) => ({ default: m.TimeSection })),
+const TimeV2Page = lazy(() =>
+  import("@/components/time-v2/TimeV2Page").then((m) => ({ default: m.TimeV2Page })),
 );
 const InfluencerBancoV2Page = lazy(() =>
   import("@/components/influenciadores-v2/InfluencerBancoV2Page").then((m) => ({
@@ -288,7 +288,7 @@ function TimePage() {
           ) : active === "campanhas" ? (
             <CampanhasSection />
           ) : active === "time" ? (
-            <TimeSection />
+            <TimeV2Page />
           ) : active === "influenciadores" ? (
             <InfluencerBancoV2Page />
           ) : active === "metas" ? (

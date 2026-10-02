@@ -1,7 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  Plus,
-  Search,
   Mail,
   Calendar,
   Briefcase,
@@ -9,15 +7,9 @@ import {
   KeyRound,
   User,
   Eye,
-  Copy,
   ChevronDown,
   Check,
 } from "lucide-react";
-import { PageContainer } from "@/components/shared/PageContainer";
-import { TeamDashboard } from "@/components/team/TeamDashboard";
-import type { AttentionTab } from "@/components/team/AttentionTasks";
-import { MemberProfileDialog } from "@/components/team/MemberProfileDialog";
-import { useTimeData, useOpenMemberDeepLink } from "@/components/team/use-time-data";
 
 import {
   type Permission,
@@ -41,7 +33,6 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { TooltipProvider } from "@/components/ui/tooltip";
 
 // Photos are always shown in the Time tab (not gated by timeView) — a profile
 // picture isn't sensitive the way birthday/salary/email are.
@@ -91,249 +82,6 @@ export type Member = {
   startTimes?: Record<string, string>;
   isAdmin?: boolean;
 };
-
-function DiretorioTab() {
-  const d = useTimeData();
-  const {
-    members,
-    loading,
-    error,
-    setError,
-    load,
-    isAdmin,
-    meId,
-    createdInfo,
-    setCreatedInfo,
-    onlineCount,
-    campanhaNames,
-    scorePeriod,
-    setScorePeriod,
-    performanceEvents,
-    performanceSettings,
-    openTasksByMemberId,
-    scoreByMemberId,
-    tasksByMember,
-    allTasksFlat,
-    weeklyData,
-    weekRange,
-    weekdayData,
-    weekdayTasksByDay,
-    weeklyTrendPct,
-    deliveryMemberRows,
-    meetingsById,
-    teamInsights,
-    membersById,
-    openTask,
-    handleSave: saveMember,
-    handleDelete,
-    handleReset,
-    confirmDialog,
-  } = d;
-  const [editing, setEditing] = useState<Member | null>(null);
-  const [viewing, setViewing] = useState<Member | null>(null);
-  // Clicar no Score (Performance do Time) abre o Perfil já com "Ver
-  // composição do score" expandida — clicar no nome/avatar abre normal.
-  const [viewingShowComposition, setViewingShowComposition] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [attentionTab, setAttentionTab] = useState<AttentionTab>("atrasadas");
-
-  useOpenMemberDeepLink(members, setViewing);
-
-  const filtered = useMemo(
-    () =>
-      members.filter(
-        (m) =>
-          m.name.toLowerCase().includes(query.toLowerCase()) ||
-          m.role.toLowerCase().includes(query.toLowerCase()) ||
-          m.email.toLowerCase().includes(query.toLowerCase()),
-      ),
-    [members, query],
-  );
-
-  const handleSave = async (payload: MemberFormPayload) => {
-    if (await saveMember(payload)) {
-      setOpen(false);
-      setEditing(null);
-    }
-  };
-
-  return (
-    <TooltipProvider delayDuration={200}>
-      {/* Canvas experimental (mesma correção do Financeiro/Comercial):
-       * `--background`/`--card` globais são idênticos no claro, então
-       * sem isso os cards do Time não se distinguiam do fundo. */}
-      <div className="-m-4 min-h-[calc(100vh-4rem)] space-y-6 bg-muted p-4 dark:bg-transparent md:-m-8 md:p-8">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-[36px] font-bold leading-[1.05] tracking-tight text-foreground md:text-[42px]">
-              Time
-            </p>
-            <p className="mt-1.5 text-sm text-text-secondary">
-              Visão geral da operação, produtividade e carga do time.
-            </p>
-          </div>
-          {isAdmin && (
-            <Button
-              variant="primary"
-              size="comfortable"
-              onClick={() => {
-                setEditing(null);
-                setOpen(true);
-              }}
-            >
-              <Plus className="h-4 w-4" />
-              Novo membro
-            </Button>
-          )}
-        </div>
-
-        {/* Toolbar compacta — único campo de busca por membro da página
-         * inteira (Performance do Time + Jornada e horas trabalhadas
-         * leem o mesmo `filtered`, nenhum bloco tem busca própria). */}
-        <div className="inline-flex w-fit max-w-full flex-wrap items-center gap-2 rounded-2xl bg-card p-2 dark:shadow-none">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-secondary" />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar membro"
-              className="h-9 w-40 border-0 bg-background pl-8 text-xs sm:w-56"
-            />
-          </div>
-        </div>
-
-        {error && (
-          <div className="flex items-start justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-xs text-destructive">
-            <span>{error}</span>
-            <div className="flex shrink-0 items-center gap-3">
-              <button
-                onClick={() => void load()}
-                disabled={loading}
-                className="font-medium underline underline-offset-2 disabled:opacity-50"
-              >
-                {loading ? "tentando..." : "tentar novamente"}
-              </button>
-              <button
-                onClick={() => setError(null)}
-                className="font-medium underline underline-offset-2"
-              >
-                fechar
-              </button>
-            </div>
-          </div>
-        )}
-
-        {createdInfo && (
-          <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-xs">
-            <div className="mb-1.5 font-medium text-foreground">
-              Membro criado! Envie estas credenciais:
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span>
-                Email: <b className="font-semibold">{createdInfo.email}</b>
-              </span>
-              <span className="text-muted-foreground">·</span>
-              <span>
-                Senha temporária: <b className="font-semibold">{createdInfo.tempPassword}</b>
-              </span>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-6 gap-1 px-2 text-[11px]"
-                onClick={() =>
-                  navigator.clipboard.writeText(
-                    `Email: ${createdInfo.email}\nSenha temporária: ${createdInfo.tempPassword}`,
-                  )
-                }
-              >
-                <Copy className="h-3 w-3" /> Copiar
-              </Button>
-              <button
-                onClick={() => setCreatedInfo(null)}
-                className="ml-auto font-medium text-muted-foreground underline underline-offset-2 hover:text-foreground"
-              >
-                fechar
-              </button>
-            </div>
-          </div>
-        )}
-
-        <TeamDashboard
-          allMembers={members}
-          filteredMembers={filtered}
-          scoreByMemberId={scoreByMemberId}
-          scorePeriod={scorePeriod}
-          onScorePeriodChange={setScorePeriod}
-          performanceEvents={performanceEvents}
-          performanceSettings={performanceSettings}
-          allTasksFlat={allTasksFlat}
-          tasksByMember={tasksByMember}
-          weeklyData={weeklyData}
-          weekRange={weekRange}
-          weekdayData={weekdayData}
-          weekdayTasksByDay={weekdayTasksByDay}
-          weeklyTrendPct={weeklyTrendPct}
-          deliveryMemberRows={deliveryMemberRows}
-          teamInsights={teamInsights}
-          membersById={membersById}
-          onlineCount={onlineCount}
-          campanhaNames={campanhaNames}
-          meId={meId}
-          isAdmin={isAdmin}
-          loading={loading}
-          attentionTab={attentionTab}
-          onAttentionTabChange={setAttentionTab}
-          onOpenTask={openTask}
-          onOpenMember={(m, opts) => {
-            setViewing(m);
-            setViewingShowComposition(!!opts?.showComposition);
-          }}
-          onEditMember={(m) => {
-            setEditing(m);
-            setOpen(true);
-          }}
-          onDeleteMember={(id) => void handleDelete(id)}
-          onResetMember={(id) => void handleReset(id)}
-        />
-
-        <MemberDialog
-          open={open}
-          initial={editing}
-          isSelf={!!editing && editing.id === meId}
-          onOpenChange={(v) => {
-            setOpen(v);
-            if (!v) setEditing(null);
-          }}
-          onSave={handleSave}
-        />
-
-        {viewing && (
-          <MemberProfileDialog
-            member={viewing}
-            isSelf={viewing.id === meId}
-            isAdmin={isAdmin}
-            tasksForMember={tasksByMember.get(viewing.name) ?? []}
-            openTasksForMember={openTasksByMemberId.get(viewing.id) ?? []}
-            performanceSettings={performanceSettings}
-            meetingsById={meetingsById}
-            initialShowComposition={viewingShowComposition}
-            onOpenTask={openTask}
-            onOpenChange={(v) => {
-              if (!v) setViewing(null);
-            }}
-            onEdit={(m) => {
-              setViewing(null);
-              setEditing(m);
-              setOpen(true);
-            }}
-          />
-        )}
-        {confirmDialog}
-      </div>
-    </TooltipProvider>
-  );
-}
 
 export type MemberFormPayload = {
   isNew: boolean;
@@ -861,25 +609,5 @@ function Field({
       </Label>
       {children}
     </div>
-  );
-}
-
-/**
- * "Time" é um cockpit operacional (inspirado conceitualmente no
- * ClickUp, sem copiar o visual): em poucos segundos mostra como a
- * operação está — tarefas que precisam de atenção, carga por pessoa,
- * produtividade por dia da semana, e um ranking de performance que é a
- * própria lista de membros ("Performance do Time"). A página IDENTIFICA
- * problemas; a ficha individual do membro (`MemberProfileDialog`)
- * EXPLICA, com o detalhamento completo do Score. Administração (senhas
- * esquecidas, bugs, configuração do Score) vive em Configurações, não
- * aqui. `DiretorioTab` continua sendo a única camada de dados; a grade
- * visual em si vive em `src/components/team/TeamDashboard.tsx`.
- */
-export function TimeSection() {
-  return (
-    <PageContainer variant="wide">
-      <DiretorioTab />
-    </PageContainer>
   );
 }
