@@ -55,7 +55,7 @@ Família: **pilha do sistema** (`font-sans`); `font-mono` somente para código, 
 | **Metadata** | `text-[11px]` | `text-secondary` |
 | **Label de campo** | `text-sm font-medium` | `foreground` |
 | **Label em caixa-alta** (cabeçalho de coluna, KPI) | `text-[11px] font-medium uppercase tracking-wide` | `text-secondary` |
-| **KPI** | valor `text-xl md:text-2xl font-semibold tabular-nums`; **lead** `text-3xl md:text-4xl font-bold tabular-nums` | `foreground` |
+| **KPI** | valor `text-lg sm:text-xl md:text-2xl font-semibold tabular-nums` (nunca truncado: valor monetário não pode ficar cortado); **lead** `text-3xl md:text-4xl font-bold tabular-nums` | `foreground` |
 | **Button** | `text-sm font-medium` (`sm`: `text-xs`) | |
 
 Tamanhos permitidos: 11 · 12 · 14 · 15 (só título de card/seção) · 16 (input no mobile) · 18 · 20 · 24 · 26 (só page title) · 30/36 (só KPI lead). **Proibidos:** `text-[9px]`, `text-[10px]` (exceto micro-rótulo caixa-alta dentro de faixa de KPI compacta), `text-[13px]` e qualquer outro tamanho arbitrário.

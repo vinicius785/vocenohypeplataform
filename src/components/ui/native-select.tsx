@@ -13,20 +13,23 @@ import { cn } from "@/lib/utils";
  *
  * `className` vai no contêiner (largura, margem); o `<select>` ocupa 100%.
  */
-export type NativeSelectProps = Omit<React.ComponentProps<"select">, "className"> & {
+export type NativeSelectProps = Omit<React.ComponentProps<"select">, "className" | "size"> & {
   className?: string;
   /** Classes extras do `<select>` em si, se algum caso realmente precisar. */
   selectClassName?: string;
+  /** `sm`: compacto (24px, 11px) para seletores embutidos em rótulos/KPIs. */
+  size?: "default" | "sm";
 };
 
 const NativeSelect = React.forwardRef<HTMLSelectElement, NativeSelectProps>(
-  ({ className, selectClassName, children, disabled, ...props }, ref) => (
-    <div className={cn("relative w-full", className)}>
+  ({ className, selectClassName, size = "default", children, disabled, ...props }, ref) => (
+    <div className={cn("relative", size === "sm" ? "w-auto" : "w-full", className)}>
       <select
         ref={ref}
         disabled={disabled}
         className={cn(
-          "h-9 w-full cursor-pointer appearance-none rounded-md border border-input bg-transparent pl-3 pr-8 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+          "w-full cursor-pointer appearance-none rounded-md border border-input bg-transparent text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+          size === "sm" ? "h-6 pl-1.5 pr-5 text-[11px]" : "h-9 pl-3 pr-8 text-sm",
           selectClassName,
         )}
         {...props}
@@ -34,7 +37,10 @@ const NativeSelect = React.forwardRef<HTMLSelectElement, NativeSelectProps>(
         {children}
       </select>
       <ChevronDown
-        className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+        className={cn(
+          "pointer-events-none absolute top-1/2 -translate-y-1/2 text-muted-foreground",
+          size === "sm" ? "right-1.5 h-3 w-3" : "right-2.5 h-4 w-4",
+        )}
         aria-hidden="true"
       />
     </div>

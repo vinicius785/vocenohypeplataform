@@ -48,7 +48,7 @@ export const TYPOGRAPHY = {
   /** Valor de KPI lead (um número dominante). */
   kpiLead: "text-3xl font-bold leading-tight tabular-nums tracking-tight md:text-4xl",
   /** Valor de KPI de strip. */
-  kpiValue: "text-xl font-semibold tabular-nums md:text-2xl",
+  kpiValue: "text-lg font-semibold tabular-nums sm:text-xl md:text-2xl",
   numberLarge: "text-3xl font-bold tabular-nums tracking-tight md:text-4xl",
   numberMedium: "text-xl font-semibold tabular-nums md:text-2xl",
 } as const;

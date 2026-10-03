@@ -69,8 +69,8 @@ export function KpiCell({
 }: {
   label: string;
   value: string | number;
-  /** Segunda linha em `text-[11px] text-secondary`. */
-  complement?: string;
+  /** Segunda linha em `text-[11px] text-secondary` (texto ou um pequeno elemento). */
+  complement?: ReactNode;
   tone?: KpiTone;
   labelExtra?: ReactNode;
   /** Barra presa a ESTA métrica (nunca solta, sem rótulo). */
@@ -80,11 +80,17 @@ export function KpiCell({
 }) {
   const body = (
     <>
-      <span className="flex items-center gap-1.5">
+      <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
         <span className={TYPOGRAPHY.labelCaps}>{label}</span>
         {labelExtra}
       </span>
-      <span className={cn("mt-0.5 block truncate", TYPOGRAPHY.kpiValue, valueClass(value, tone))}>
+      <span
+        className={cn(
+          "mt-0.5 block whitespace-nowrap",
+          TYPOGRAPHY.kpiValue,
+          valueClass(value, tone),
+        )}
+      >
         {value}
       </span>
       {complement && (

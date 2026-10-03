@@ -1,4 +1,6 @@
 import { useEffect, useMemo } from "react";
+import { Upload } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { LANCAMENTOS_SEGMENTS, type LancamentosSegment } from "@/lib/section-nav";
 import { DUE_BUCKET_LABEL, fmtBRL, groupByDueBucket } from "@/lib/financeiro-entries";
@@ -46,14 +48,19 @@ export function LancamentosTab({
 
   return (
     <div className="space-y-5">
-      <div className="-mx-4 max-w-full overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:px-0 [&::-webkit-scrollbar]:hidden">
-        <SegmentedControl
-          aria-label="Tipo de lançamento"
-          size="sm"
-          value={segment}
-          onChange={onSegmentChange}
-          options={LANCAMENTOS_SEGMENTS.map((s) => ({ value: s.key, label: s.label }))}
-        />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="-mx-4 max-w-full overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:px-0 [&::-webkit-scrollbar]:hidden">
+          <SegmentedControl
+            aria-label="Tipo de lançamento"
+            size="sm"
+            value={segment}
+            onChange={onSegmentChange}
+            options={LANCAMENTOS_SEGMENTS.map((s) => ({ value: s.key, label: s.label }))}
+          />
+        </div>
+        <Button variant="outline" size="sm" onClick={() => onImportOpenChange(true)}>
+          <Upload className="h-3.5 w-3.5" /> Importar
+        </Button>
       </div>
 
       {buckets && (

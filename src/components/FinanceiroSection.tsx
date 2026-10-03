@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { Plus, Upload } from "lucide-react";
+import { Plus } from "lucide-react";
 import { PageContainer } from "@/components/shared/PageContainer";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -108,103 +108,88 @@ export function FinanceiroSection() {
   };
 
   return (
-    // Canvas experimental (Etapa 5 — mesma correção do conceito visual em
-    // `/design-system-finance-concept`): `--background` e `--card` globais
-    // são idênticos no claro, então sem isso os cards do Financeiro não se
-    // distinguiam do fundo. Reaproveita `--muted` (token já existente) só
-    // dentro da área do Financeiro; no escuro `--background`/`--card` já
-    // são distintos, por isso `dark:bg-transparent` neutraliza o ajuste.
-    <>
-      <PageContainer className="space-y-6">
+    <PageContainer className="space-y-5 md:space-y-6">
+      {/* Topo = UMA unidade: título + ação primária, e logo abaixo uma única
+       * linha de contexto (navegação do Financeiro à esquerda, período à
+       * direita). Sem segundo cabeçalho, sem faixa só para o período. */}
+      <div className="space-y-4">
         <PageHeader
           title="Financeiro"
           description="Posição atual, lançamentos e análises financeiras."
           actionsSlot={
-            <>
-              {topTab !== "analises" && (
-                <div className="flex flex-wrap items-center gap-2">
-                  {topTab === "lancamentos" && (
-                    <Button
-                      variant="outline"
-                      size="comfortable"
-                      onClick={() => setImportOpen(true)}
-                    >
-                      <Upload className="h-4 w-4" /> Importar
-                    </Button>
-                  )}
-                  <Button variant="primary" size="comfortable" onClick={() => setNewOpen(true)}>
-                    <Plus className="h-4 w-4" /> Novo lançamento
-                  </Button>
-                </div>
-              )}
-            </>
+            topTab !== "analises" ? (
+              <Button variant="primary" size="comfortable" onClick={() => setNewOpen(true)}>
+                <Plus className="h-4 w-4" /> Novo lançamento
+              </Button>
+            ) : undefined
           }
         />
 
-        <div className="-mx-4 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:px-0 [&::-webkit-scrollbar]:hidden">
-          <SegmentedControl
-            aria-label="Seções do Financeiro"
-            value={topTab}
-            onChange={setTopTab}
-            options={FINANCEIRO_TABS.map((t) => ({ value: t.key, label: t.label }))}
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+          <div className="-mx-4 max-w-full overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:px-0 [&::-webkit-scrollbar]:hidden">
+            <SegmentedControl
+              aria-label="Seções do Financeiro"
+              size="sm"
+              value={topTab}
+              onChange={setTopTab}
+              options={FINANCEIRO_TABS.map((t) => ({ value: t.key, label: t.label }))}
+            />
+          </div>
+          {/* O período vale pro Resumo, pra lista de Lançamentos e pra visão "Por
+           * campanha"; Análises → Geral olha todo o histórico, então não o mostra. */}
+          {(topTab !== "analises" || analiseView === "campanhas") && (
+            <PeriodPicker filtered={filtered} />
+          )}
+        </div>
+      </div>
+
+      <div>
+        {topTab === "resumo" && (
+          <VisaoGeralTab
+            filtered={filtered}
+            onApplyFilter={(patch) => goToLancamentos(patch)}
+            onNavigateToAReceber={() => {
+              filtered.setPeriodMode("tudo");
+              goToLancamentos({ tipo: "receita", status: ["a_receber", "vencido"] });
+            }}
+            onNavigateToAPagar={() => {
+              filtered.setPeriodMode("tudo");
+              goToLancamentos({ tipo: "despesa", status: ["a_pagar", "vencido"] });
+            }}
           />
-        </div>
-
-        {/* Contexto global: o período vale pro Resumo, pra lista de Lançamentos e
-         * pra visão "Por campanha" — por isso aparece UMA vez, aqui, e não em
-         * cada bloco. Análises → Geral olha todo o histórico, então não o mostra. */}
-        {(topTab !== "analises" || analiseView === "campanhas") && (
-          <PeriodPicker filtered={filtered} />
         )}
+        {topTab === "lancamentos" && (
+          <LancamentosTab
+            filtered={filtered}
+            segment={segment}
+            onSegmentChange={setSegment}
+            importOpen={importOpen}
+            onImportOpenChange={setImportOpen}
+            syncError={syncError}
+            onSyncError={setSyncError}
+          />
+        )}
+        {topTab === "analises" && (
+          <AnalisesTab
+            filtered={filtered}
+            view={analiseView}
+            onViewChange={setAnaliseView}
+            onApplyFilter={(patch) => goToLancamentos(patch)}
+          />
+        )}
+      </div>
 
-        <div>
-          {topTab === "resumo" && (
-            <VisaoGeralTab
-              filtered={filtered}
-              onApplyFilter={(patch) => goToLancamentos(patch)}
-              onNavigateToAReceber={() => {
-                filtered.setPeriodMode("tudo");
-                goToLancamentos({ tipo: "receita", status: ["a_receber", "vencido"] });
-              }}
-              onNavigateToAPagar={() => {
-                filtered.setPeriodMode("tudo");
-                goToLancamentos({ tipo: "despesa", status: ["a_pagar", "vencido"] });
-              }}
-            />
-          )}
-          {topTab === "lancamentos" && (
-            <LancamentosTab
-              filtered={filtered}
-              segment={segment}
-              onSegmentChange={setSegment}
-              importOpen={importOpen}
-              onImportOpenChange={setImportOpen}
-              syncError={syncError}
-              onSyncError={setSyncError}
-            />
-          )}
-          {topTab === "analises" && (
-            <AnalisesTab
-              filtered={filtered}
-              view={analiseView}
-              onViewChange={setAnaliseView}
-              onApplyFilter={(patch) => goToLancamentos(patch)}
-            />
-          )}
-        </div>
-
-        <EntryDialog
-          open={newOpen}
-          initial={null}
-          clientes={clientes.map((c) => ({
-            id: c.id,
-            nome: c.empresa,
-            campanhas: (c.campanhas ?? []).map((k) => ({ id: k.id, nome: k.nome })),
-          }))}
-          onClose={() => setNewOpen(false)}
-          onSave={(m) => void handleCreate(m)}
-        />
-      </PageContainer>
-    </>
+      <EntryDialog
+        open={newOpen}
+        initial={null}
+        clientes={clientes.map((c) => ({
+          id: c.id,
+          nome: c.empresa,
+          campanhas: (c.campanhas ?? []).map((k) => ({ id: k.id, nome: k.nome })),
+        }))}
+        onClose={() => setNewOpen(false)}
+        onSave={(m) => void handleCreate(m)}
+      />
+    </PageContainer>
   );
 }
