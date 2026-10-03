@@ -216,7 +216,7 @@ export function ObjetivosView({
               <NativeSelect
                 value={donoFilter}
                 onChange={(e) => setDonoFilter(e.target.value)}
-                className="h-9 w-full rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                className="w-full"
               >
                 <option value="">Responsável</option>
                 {donosEmUso.map((d) => (
@@ -229,7 +229,7 @@ export function ObjetivosView({
             <NativeSelect
               value={areaFilter}
               onChange={(e) => setAreaFilter(e.target.value as typeof areaFilter)}
-              className="h-9 w-full rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              className="w-full"
             >
               <option value="">Área</option>
               {META_AREAS.map((a) => (
@@ -241,7 +241,7 @@ export function ObjetivosView({
             <NativeSelect
               value={saudeFilter}
               onChange={(e) => setSaudeFilter(e.target.value as typeof saudeFilter)}
-              className="h-9 w-full rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              className="w-full"
             >
               <option value="">Status</option>
               {(Object.keys(INDICADOR_SAUDE_LABEL) as IndicadorSaude[]).map((s) => (
@@ -254,7 +254,7 @@ export function ObjetivosView({
               <NativeSelect
                 value={periodoFilter}
                 onChange={(e) => setPeriodoFilter(e.target.value)}
-                className="h-9 w-full rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                className="w-full"
               >
                 <option value="">Período</option>
                 {periodosEmUso.map((p) => (

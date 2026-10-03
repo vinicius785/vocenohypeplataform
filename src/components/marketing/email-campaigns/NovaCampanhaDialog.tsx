@@ -80,7 +80,7 @@ export function NovaCampanhaDialog({
             <NativeSelect
               value={objetivo}
               onChange={(e) => setObjetivo(e.target.value as CampaignObjetivo)}
-              className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
+              className="w-full"
             >
               {CAMPAIGN_OBJETIVOS.map((o) => (
                 <option key={o} value={o}>

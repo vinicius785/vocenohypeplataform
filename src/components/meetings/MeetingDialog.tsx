@@ -588,7 +588,6 @@ export function MeetingDialog({
                       <NativeSelect
                         value={repeat}
                         onChange={(e) => setRepeat(e.target.value as typeof repeat)}
-                        className="h-8 rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-brand"
                       >
                         <option value="none">Não repete</option>
                         <option value="daily">Diariamente</option>

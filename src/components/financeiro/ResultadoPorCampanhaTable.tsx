@@ -49,11 +49,7 @@ export function ResultadoPorCampanhaTable({
               { value: "realizado", label: "Realizado" },
             ]}
           />
-          <NativeSelect
-            value={sortKey}
-            onChange={(e) => setSortKey(e.target.value as SortKey)}
-            className="h-7 cursor-pointer rounded-md border border-border bg-background px-1.5 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-brand"
-          >
+          <NativeSelect value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)}>
             {SORT_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}

@@ -1,23 +1,10 @@
-import { AlertTriangle, Clock, TrendingUp } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { KpiCell, KpiStrip } from "@/components/shared/Kpi";
 import { formatBRL } from "@/lib/comercial";
-import {
-  OPPORTUNITY_KANBAN_ORDER,
-  OPPORTUNITY_STAGE_COLOR,
-  OPPORTUNITY_STAGE_LABEL,
-} from "@/lib/comercial-engine";
+import { OPPORTUNITY_KANBAN_ORDER, OPPORTUNITY_STAGE_LABEL } from "@/lib/comercial-engine";
 import { groupPipelineByStage, type ComercialKpis } from "@/lib/comercial-metrics";
 import type { Lead } from "@/lib/comercial";
 import type { LeadFilters } from "@/lib/comercial-filters";
-
-/** Resumo comercial assimétrico (migração visual — mesma direção do
- * Resumo Financeiro): card protagonista azul (pipeline total + distância
- * por etapa) + 3 indicadores secundários com escala/tom semântico
- * diferentes. Mesmos `computeComercialKpis`/`groupPipelineByStage` de
- * antes — nenhum cálculo novo, só composição visual. Reaproveita
- * `--brand-foreground`/`--brand-foreground-secondary`/`--brand-border`
- * já validados (contraste AA) na rodada do Financeiro. */
-
-const SECONDARY_SURFACE = "bg-card border border-border/60 dark:border-0 dark:bg-[oklch(0.17_0_0)]";
 
 function isFilterActive(filters: LeadFilters, patch: Partial<LeadFilters>): boolean {
   return Object.entries(patch).every(([k, v]) => {
@@ -32,6 +19,12 @@ function isFilterActive(filters: LeadFilters, patch: Partial<LeadFilters>): bool
   });
 }
 
+/** Resumo comercial — KPI canônico (`KpiStrip`): pipeline total, ganho no
+ * período, sem próxima ação e paradas. Os três últimos filtram o Kanban (por
+ * isso são clicáveis); atenção/risco só ganham tom quando há valor real.
+ * Embaixo, o funil: etapas NEUTRAS (posição + contagem), sem uma cor por
+ * etapa — cor fica reservada para significado (ganho, atenção, risco).
+ * Mesmos `computeComercialKpis`/`groupPipelineByStage` de antes. */
 export function PipelineSummary({
   kpis,
   openLeads,
@@ -53,48 +46,55 @@ export function PipelineSummary({
   const paradasAtivo = isFilterActive(filters, { activity: ["parado_5d"] });
 
   return (
-    <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-      {/* Protagonista — pipeline total. Migração visual: container antes era
-       * `bg-brand` sólido preenchendo toda a área; agora usa a mesma
-       * superfície neutra do resto da página (`bg-card`) com acento azul só
-       * na borda lateral (padrão do `PageSummaryPanel`), mantendo o botão
-       * clicável que limpa o filtro do Kanban. As cores das barras do funil
-       * (`OPPORTUNITY_STAGE_COLOR`) foram mantidas como estão — são a mesma
-       * paleta categórica usada nos dots das colunas e nos badges do
-       * drawer, então recolorir aqui quebraria essa correspondência; só o
-       * fundo ao redor deixou de ser azul. */}
-      <button
-        type="button"
-        onClick={() => onFilter({})}
-        className="rounded-2xl border border-border/60 border-l-[3px] border-l-brand bg-card p-7 text-left dark:shadow-none md:p-8 lg:col-span-7"
-      >
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
-          Pipeline total
-        </span>
-        <p className="mt-5 whitespace-nowrap text-[40px] font-semibold leading-none tracking-tight text-foreground sm:text-[48px] md:text-[56px]">
-          {formatBRL(kpis.pipelineTotal)}
-        </p>
-        <p className="mt-3 text-sm text-text-secondary">
-          {kpis.oportunidadesAbertas} oportunidade{kpis.oportunidadesAbertas === 1 ? "" : "s"} em
-          aberto
-        </p>
+    <div className="space-y-4">
+      <KpiStrip aria-label="Resumo comercial">
+        <KpiCell
+          label="Pipeline total"
+          value={formatBRL(kpis.pipelineTotal)}
+          complement={`${kpis.oportunidadesAbertas} oportunidade${kpis.oportunidadesAbertas === 1 ? "" : "s"} em aberto`}
+          onClick={() => onFilter({})}
+        />
+        <KpiCell
+          label="Ganho no período"
+          value={formatBRL(kpis.valorGanhoNoPeriodo)}
+          complement={`${kpis.negociosGanhosNoPeriodo} negócio${kpis.negociosGanhosNoPeriodo === 1 ? "" : "s"}`}
+          active={ganhoAtivo}
+          onClick={() => onFilter(ganhoAtivo ? {} : { stages: ["GANHO"] })}
+        />
+        <KpiCell
+          label="Sem próxima ação"
+          value={kpis.oportunidadesSemProximaAcao}
+          tone="warning"
+          complement={formatBRL(kpis.valorSemProximaAcao)}
+          active={semAcaoAtivo}
+          onClick={() => onFilter(semAcaoAtivo ? {} : { activity: ["sem_proxima_acao"] })}
+        />
+        <KpiCell
+          label="Paradas 5+ dias"
+          value={kpis.oportunidadesParadas}
+          tone="danger"
+          complement={formatBRL(kpis.valorParadas)}
+          active={paradasAtivo}
+          onClick={() => onFilter(paradasAtivo ? {} : { activity: ["parado_5d"] })}
+        />
+      </KpiStrip>
 
-        {buckets.length > 0 && (
-          // Cada barra usa a cor categórica centralizada da própria etapa
-          // (`OPPORTUNITY_STAGE_COLOR`, mesma fonte do dot da coluna e do
-          // badge do drawer) — inalterada, ver comentário acima. Altura
-          // mínima de 18% garante que etapas com valor baixo continuam
-          // visíveis sem fingir que têm o mesmo peso das maiores.
-          <div className="mt-6 flex items-end gap-2">
+      {buckets.length > 0 && (
+        <Card className="p-4 md:p-5">
+          <p className="text-[15px] font-semibold text-foreground">Funil em aberto</p>
+          {/* Barras neutras: a altura mostra o valor, o número da etapa e a
+              contagem mostram a posição — nenhuma etapa ganha cor própria. */}
+          <div className="mt-4 flex items-end gap-2">
             {buckets.map((b) => (
               <div key={b.stage} className="flex flex-1 flex-col items-center gap-1.5">
                 <div className="flex h-16 w-full items-end">
                   <div
-                    className={`w-full rounded-md ${OPPORTUNITY_STAGE_COLOR[b.stage]}`}
+                    className="w-full rounded-md bg-muted-foreground/30"
                     style={{ height: `${Math.max(18, (b.value / maxValue) * 100)}%` }}
                   />
                 </div>
                 <span className="line-clamp-2 text-center text-[11px] leading-tight text-text-secondary">
+                  {OPPORTUNITY_KANBAN_ORDER.indexOf(b.stage) + 1}.{" "}
                   {OPPORTUNITY_STAGE_LABEL[b.stage]}
                 </span>
                 <span className="text-[11px] font-semibold tabular-nums text-foreground">
@@ -103,83 +103,8 @@ export function PipelineSummary({
               </div>
             ))}
           </div>
-        )}
-      </button>
-
-      {/* Secundários — escalas diferentes do protagonista, clicáveis pra
-       * filtrar o Kanban; estado ativo marcado com anel visível. */}
-      <div className="flex flex-col gap-4 lg:col-span-5">
-        <button
-          type="button"
-          onClick={() => onFilter(ganhoAtivo ? {} : { stages: ["GANHO"] })}
-          className={`rounded-2xl ${SECONDARY_SURFACE} p-5 text-left transition-colors hover:bg-muted/40 ${
-            ganhoAtivo ? "ring-2 ring-brand" : ""
-          }`}
-        >
-          <div className="flex items-center justify-between gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-success-soft text-success">
-              <TrendingUp className="h-4 w-4" />
-            </span>
-            {ganhoAtivo && (
-              <span className="rounded-full bg-brand-subtle px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-text-brand">
-                Filtrando
-              </span>
-            )}
-          </div>
-          <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-text-secondary">
-            Ganho no período
-          </p>
-          <p className="mt-1 whitespace-nowrap text-[22px] font-semibold tabular-nums leading-none text-foreground">
-            {formatBRL(kpis.valorGanhoNoPeriodo)}
-          </p>
-          <p className="mt-1 text-[11px] text-text-secondary">
-            {kpis.negociosGanhosNoPeriodo} negócio{kpis.negociosGanhosNoPeriodo === 1 ? "" : "s"}
-          </p>
-        </button>
-
-        <div className="grid grid-cols-2 gap-4">
-          <button
-            type="button"
-            onClick={() => onFilter(semAcaoAtivo ? {} : { activity: ["sem_proxima_acao"] })}
-            className={`rounded-2xl ${SECONDARY_SURFACE} p-4 text-left transition-colors hover:bg-muted/40 ${
-              semAcaoAtivo ? "ring-2 ring-brand" : ""
-            }`}
-          >
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-warning-soft text-warning">
-              <Clock className="h-3.5 w-3.5" />
-            </span>
-            <p className="mt-2.5 text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
-              Sem próxima ação
-            </p>
-            <p className="mt-1 whitespace-nowrap text-[19px] font-semibold tabular-nums leading-none text-foreground">
-              {kpis.oportunidadesSemProximaAcao}
-            </p>
-            <p className="mt-1 truncate text-[11px] text-text-secondary">
-              {formatBRL(kpis.valorSemProximaAcao)}
-            </p>
-          </button>
-          <button
-            type="button"
-            onClick={() => onFilter(paradasAtivo ? {} : { activity: ["parado_5d"] })}
-            className={`rounded-2xl ${SECONDARY_SURFACE} p-4 text-left transition-colors hover:bg-muted/40 ${
-              paradasAtivo ? "ring-2 ring-brand" : ""
-            }`}
-          >
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-danger-soft text-danger">
-              <AlertTriangle className="h-3.5 w-3.5" />
-            </span>
-            <p className="mt-2.5 text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
-              Paradas 5+ dias
-            </p>
-            <p className="mt-1 whitespace-nowrap text-[19px] font-semibold tabular-nums leading-none text-foreground">
-              {kpis.oportunidadesParadas}
-            </p>
-            <p className="mt-1 truncate text-[11px] text-text-secondary">
-              {formatBRL(kpis.valorParadas)}
-            </p>
-          </button>
-        </div>
-      </div>
+        </Card>
+      )}
     </div>
   );
 }

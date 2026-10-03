@@ -161,7 +161,6 @@ export function ImportDialog({
                             prev.map((r, idx) => (idx === i ? (e.target.value as ColRole) : r)),
                           )
                         }
-                        className="h-8 cursor-pointer rounded-md border border-input bg-background px-1.5 text-xs outline-none focus:ring-2 focus:ring-ring"
                       >
                         {(Object.keys(COL_ROLE_LABEL) as ColRole[]).map((r) => (
                           <option key={r} value={r}>
@@ -190,7 +189,7 @@ export function ImportDialog({
                   <NativeSelect
                     value={defaultKind}
                     onChange={(e) => setDefaultKind(e.target.value as Kind)}
-                    className="h-9 w-full cursor-pointer rounded-md border border-input bg-background px-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                    className="w-full"
                   >
                     <option value="despesa">Despesa</option>
                     <option value="receita">Receita</option>

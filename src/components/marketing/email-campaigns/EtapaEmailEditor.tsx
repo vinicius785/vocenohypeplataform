@@ -138,7 +138,7 @@ export function EtapaEmailEditor({
               <NativeSelect
                 value={templateId}
                 onChange={(e) => applyTemplate(e.target.value)}
-                className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
+                className="w-full"
               >
                 <option value="">Começar do zero</option>
                 {templates.map((t) => (
@@ -211,7 +211,7 @@ export function EtapaEmailEditor({
             <NativeSelect
               value={recipientRule}
               onChange={(e) => setRecipientRule(e.target.value as RecipientRule)}
-              className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
+              className="w-full"
             >
               {RECIPIENT_RULES.map((r) => (
                 <option key={r} value={r}>
@@ -226,7 +226,7 @@ export function EtapaEmailEditor({
             <NativeSelect
               value={sendMode}
               onChange={(e) => setSendMode(e.target.value as SendMode)}
-              className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
+              className="w-full"
             >
               {SEND_MODES.map((m) => (
                 <option key={m} value={m}>

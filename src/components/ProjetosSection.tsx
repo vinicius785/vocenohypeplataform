@@ -39,11 +39,7 @@ import {
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PageContainer } from "@/components/shared/PageContainer";
 import { PageHeader } from "@/components/shared/PageHeader";
-import {
-  PageSummaryPanel,
-  SummaryPrimaryMetric,
-  SummaryMetric,
-} from "@/components/shared/PageSummaryPanel";
+import { KpiLead, KpiLeadItem, KpiLeadValue } from "@/components/shared/Kpi";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -212,7 +208,7 @@ export function ProjetosSection() {
     // (--background e --card são idênticos no tema claro, então sem isso
     // os cards não se distinguiam do fundo).
     <>
-      <PageContainer className="space-y-6">
+      <PageContainer className="space-y-6 md:space-y-8">
         <PageHeader
           title="Projetos"
           description="Organize tarefas e entregas do time."
@@ -235,20 +231,11 @@ export function ProjetosSection() {
         />
 
         {hasAnyProject && (
-          <PageSummaryPanel title="Visão geral">
-            <SummaryPrimaryMetric value={String(ativosCount)} label="projetos ativos" />
-            <SummaryMetric label="Em risco" value={emRiscoCount} />
-            <SummaryMetric
-              label="Tarefas atrasadas"
-              value={
-                tarefasAtrasadasCount > 0 ? (
-                  <span className="text-destructive">{tarefasAtrasadasCount}</span>
-                ) : (
-                  tarefasAtrasadasCount
-                )
-              }
-            />
-          </PageSummaryPanel>
+          <KpiLead aria-label="Resumo de projetos">
+            <KpiLeadValue value={ativosCount} label="projetos ativos" />
+            <KpiLeadItem label="Em risco" value={emRiscoCount} tone="warning" />
+            <KpiLeadItem label="Tarefas atrasadas" value={tarefasAtrasadasCount} tone="danger" />
+          </KpiLead>
         )}
 
         {hasAnyProject && (
@@ -262,7 +249,7 @@ export function ProjetosSection() {
         )}
 
         {!loaded ? (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6 xl:grid-cols-3">
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="surface-card h-[124px] animate-pulse border-transparent" />
             ))}
@@ -294,7 +281,7 @@ export function ProjetosSection() {
             }
           />
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6 xl:grid-cols-3">
             {visibleRows.map((p) => (
               <ProjectCard
                 key={p.id}
@@ -323,7 +310,7 @@ export function ProjetosSection() {
             </button>
 
             {showEncerrados && (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6 xl:grid-cols-3">
                 {encerradosRows.map((p) => (
                   <ProjectCard
                     key={p.id}

@@ -149,7 +149,7 @@ export function IndicadorQuickUpdate({
                 value={marcoStatus}
                 onChange={(e) => setMarcoStatus(e.target.value as IndicadorMarcoStatus)}
                 autoFocus
-                className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                className="mt-1 w-full"
               >
                 {INDICADOR_MARCO_STATUSES.map((s) => (
                   <option key={s} value={s}>

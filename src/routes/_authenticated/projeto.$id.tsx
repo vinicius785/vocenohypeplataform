@@ -755,7 +755,7 @@ function DocLinkForm({
         <NativeSelect
           value={category}
           onChange={(e) => setCategory(e.target.value as DocCategory)}
-          className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+          className="w-full"
         >
           {DOC_CATEGORIES.map((c) => (
             <option key={c} value={c}>
@@ -979,7 +979,6 @@ function DocsPanel({
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value as DocCategory | "todas")}
             aria-label="Filtrar por categoria"
-            className="h-8 rounded-md border border-border bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-brand"
           >
             <option value="todas">Todas as categorias</option>
             {(Object.keys(DOC_CATEGORY_LABEL) as DocCategory[]).map((c) => (

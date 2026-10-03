@@ -172,7 +172,7 @@ export function FilterPanel({
             <NativeSelect
               value={responsavelAtual}
               onChange={(e) => setResponsavel(e.target.value)}
-              className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+              className="w-full"
             >
               <option value="todos">Todos</option>
               {team.map((m) => (
@@ -207,7 +207,7 @@ export function FilterPanel({
               onChange={(e) =>
                 setSituacao(e.target.value as (typeof SITUACAO_OPTIONS)[number]["key"])
               }
-              className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+              className="w-full"
             >
               {SITUACAO_OPTIONS.map((o) => (
                 <option key={o.key} value={o.key}>

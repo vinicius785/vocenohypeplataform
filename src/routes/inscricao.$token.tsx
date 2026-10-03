@@ -415,7 +415,7 @@ function InscricaoPage() {
                           value={nicho}
                           onChange={(e) => setNicho(e.target.value)}
                           required={page.fields.nicho.required}
-                          className="mt-1 h-9 w-full rounded-md border border-border bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+                          className="mt-1 w-full"
                         >
                           <option value="">Selecione</option>
                           {NICHOS.map((n) => (

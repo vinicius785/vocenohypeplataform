@@ -34,11 +34,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/shared/EmptyState";
-import {
-  PageSummaryPanel,
-  SummaryPrimaryMetric,
-  SummaryMetric,
-} from "@/components/shared/PageSummaryPanel";
+import { KpiLead, KpiLeadItem, KpiLeadValue } from "@/components/shared/Kpi";
 import { ClienteLogo } from "@/components/clientes/ClienteLogo";
 import { useClientes, clientesStore } from "@/lib/clientes-store";
 import {
@@ -319,16 +315,14 @@ export function CampanhasSection() {
     // --background e --card são idênticos no claro, então sem isso os
     // cards de Campanhas não se distinguiam do fundo.
     <>
-      <PageContainer className="space-y-6">
+      <PageContainer className="space-y-6 md:space-y-8">
         <PageHeader title="Campanhas" description="Todas as campanhas vinculadas aos clientes." />
 
         {hasAnyCampanha && (
-          <PageSummaryPanel title="Visão geral">
-            <SummaryPrimaryMetric value={String(ativas)} label="campanhas ativas" />
-            <SummaryMetric label="Total" value={totalCampanhas} />
-            <SummaryMetric label="Influenciadores" value={totalInflusReais} />
-            <SummaryMetric label="Em negociação" value={emNegociacao} />
-          </PageSummaryPanel>
+          <KpiLead aria-label="Resumo de campanhas">
+            <KpiLeadValue value={ativas} label="campanhas ativas" />
+            <KpiLeadItem label="Em negociação" value={emNegociacao} />
+          </KpiLead>
         )}
 
         {hasAnyCampanha && (
@@ -378,7 +372,7 @@ export function CampanhasSection() {
             }
           />
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6 xl:grid-cols-3">
             {visibleRows.map((row) => {
               const influs = aprovadosByCampanha.get(row.campanha.id) ?? [];
               const entregas = influs.flatMap((i) => i.entregas ?? []);
@@ -996,7 +990,6 @@ function CampanhaDetail({
                       value={monthFilter}
                       onChange={(e) => setMonthFilter(e.target.value)}
                       aria-label="Mês de referência"
-                      className="h-7 rounded-md border border-input bg-background px-2 text-xs font-medium capitalize outline-none focus-visible:ring-2 focus-visible:ring-brand"
                     >
                       {monthOptions.map((m) => (
                         <option key={m.value} value={m.value} className="capitalize">

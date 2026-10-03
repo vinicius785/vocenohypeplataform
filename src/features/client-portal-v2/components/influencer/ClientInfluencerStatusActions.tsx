@@ -63,7 +63,6 @@ export function ClientInfluencerStatusActions({
         <NativeSelect
           value={motivo}
           onChange={(e) => setMotivo(e.target.value as (typeof PERFIL_REJEICAO_MOTIVOS)[number])}
-          className="rounded-md border border-border bg-card px-2 py-1.5 text-sm"
         >
           <option value="">Selecione um motivo...</option>
           {PERFIL_REJEICAO_MOTIVOS.map((m) => (

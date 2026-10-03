@@ -188,7 +188,7 @@ export function IndicadoresView({
             <NativeSelect
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-              className="h-9 w-full rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              className="w-full"
             >
               <option value="">Status de atualização</option>
               {(Object.keys(STATUS_ATUALIZACAO_LABEL) as StatusAtualizacao[]).map((s) => (
@@ -200,7 +200,7 @@ export function IndicadoresView({
             <NativeSelect
               value={cadenciaFilter}
               onChange={(e) => setCadenciaFilter(e.target.value as typeof cadenciaFilter)}
-              className="h-9 w-full rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              className="w-full"
             >
               <option value="">Toda cadência</option>
               {CADENCE_OPTIONS.map((f) => (
@@ -212,7 +212,7 @@ export function IndicadoresView({
             <NativeSelect
               value={areaFilter}
               onChange={(e) => setAreaFilter(e.target.value as typeof areaFilter)}
-              className="h-9 w-full rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              className="w-full"
             >
               <option value="">Toda área</option>
               {META_AREAS.map((a) => (
@@ -225,7 +225,7 @@ export function IndicadoresView({
               <NativeSelect
                 value={objetivoFilter}
                 onChange={(e) => setObjetivoFilter(e.target.value)}
-                className="h-9 w-full rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                className="w-full"
               >
                 <option value="">Todo objetivo</option>
                 {objetivos.map((o) => (
@@ -241,7 +241,6 @@ export function IndicadoresView({
           value={sortKey}
           onChange={(e) => setSortKey(e.target.value as SortKey)}
           aria-label="Ordenar por"
-          className="h-9 rounded-md border border-input bg-background px-2 text-xs text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
         >
           {(Object.keys(SORT_LABEL) as SortKey[]).map((k) => (
             <option key={k} value={k}>

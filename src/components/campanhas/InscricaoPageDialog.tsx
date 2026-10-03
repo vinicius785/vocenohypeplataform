@@ -420,7 +420,6 @@ export function InscricaoPageDialog({
                     <NativeSelect
                       value={mesReferencia}
                       onChange={(e) => setMesReferencia(e.target.value)}
-                      className="h-7 rounded-md border border-border bg-background px-1.5 text-xs font-medium text-foreground outline-none focus:ring-1 focus:ring-ring"
                     >
                       {mesOptions.map((o) => (
                         <option key={o.value} value={o.value}>
@@ -789,7 +788,7 @@ export function InscricaoPageDialog({
                                       type: e.target.value as CustomQuestionType,
                                     })
                                   }
-                                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:w-44"
+                                  className="w-full sm:w-44"
                                 >
                                   {QUESTION_TYPES.map((t) => (
                                     <option key={t} value={t}>

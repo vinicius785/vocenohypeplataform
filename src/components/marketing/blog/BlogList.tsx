@@ -175,7 +175,6 @@ export function BlogPanel({
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as BlogStatus | "todos")}
           aria-label="Filtrar por status"
-          className="h-8 rounded-md border border-border bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-brand"
         >
           <option value="todos">Todos os status</option>
           {STATUS.map((s) => (
@@ -188,7 +187,6 @@ export function BlogPanel({
           value={destinoFilter}
           onChange={(e) => setDestinoFilter(e.target.value as DestinoFilter)}
           aria-label="Filtrar por destino"
-          className="h-8 rounded-md border border-border bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-brand"
         >
           <option value="todos">Todos os destinos</option>
           <option value="site">Site</option>
@@ -199,7 +197,7 @@ export function BlogPanel({
           value={sort}
           onChange={(e) => setSort(e.target.value as SortKey)}
           aria-label="Ordenar artigos"
-          className="ml-auto h-8 rounded-md border border-border bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-brand"
+          className="ml-auto"
         >
           <option value="recentes">Mais recentes</option>
           <option value="titulo">Título (A–Z)</option>

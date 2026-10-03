@@ -306,7 +306,7 @@ export function BankInfluWizard({
                     <NativeSelect
                       value={nicho}
                       onChange={(e) => setNicho(e.target.value)}
-                      className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                      className="mt-1 w-full"
                     >
                       <option value="">Selecione</option>
                       {NICHOS.map((n) => (
@@ -334,7 +334,7 @@ export function BankInfluWizard({
                     <NativeSelect
                       value={tier}
                       onChange={(e) => setTier(e.target.value)}
-                      className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                      className="mt-1 w-full"
                     >
                       <option value="">Sem tier</option>
                       {TIERS.map((t) => (
@@ -407,7 +407,6 @@ export function BankInfluWizard({
                               ),
                             )
                           }
-                          className="h-9 rounded-md border border-input bg-background px-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                         >
                           {REDES_OPTS.map((opt) => (
                             <option key={opt} value={opt}>

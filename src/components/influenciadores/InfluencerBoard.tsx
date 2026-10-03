@@ -4329,7 +4329,6 @@ function WorkspaceDetailHeader({
                 <NativeSelect
                   value={draft.nicho}
                   onChange={(e) => setDraft((d) => ({ ...d, nicho: e.target.value }))}
-                  className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
                 >
                   <option value="">Selecione um nicho</option>
                   {NICHOS.map((n) => (
@@ -4397,7 +4396,6 @@ function WorkspaceDetailHeader({
                     value={influ.cicloMes ?? ""}
                     onChange={(e) => onPatch({ cicloMes: e.target.value })}
                     aria-label="Mês de referência"
-                    className="h-6 rounded-md border border-border bg-background px-1.5 text-[11px] font-medium text-foreground outline-none focus:ring-1 focus:ring-ring"
                   >
                     {!influ.cicloMes && <option value="">Sem mês</option>}
                     {cicloMesOptions.map((o) => (
@@ -5727,7 +5725,7 @@ function InfluenciadorDialog({
               <NativeSelect
                 value={nicho}
                 onChange={(e) => setNicho(e.target.value)}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+                className="w-full"
               >
                 <option value="">Selecione um nicho</option>
                 {NICHOS.map((n) => (
@@ -6830,11 +6828,7 @@ function BankPickerDialog({
               className="w-full bg-transparent py-1.5 text-sm outline-none"
             />
           </div>
-          <NativeSelect
-            value={nicho}
-            onChange={(e) => setNicho(e.target.value)}
-            className="rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none"
-          >
+          <NativeSelect value={nicho} onChange={(e) => setNicho(e.target.value)}>
             <option value="">Todos os nichos</option>
             {nichos.map((n) => (
               <option key={n} value={n}>
@@ -7139,7 +7133,6 @@ function DownloadInflusDialog({
             <NativeSelect
               value={format}
               onChange={(e) => setFormat(e.target.value as "csv" | "json" | "pdf")}
-              className="h-8 rounded-md border border-border bg-background px-2 text-xs"
             >
               <option value="csv">CSV (Excel)</option>
               <option value="json">JSON</option>

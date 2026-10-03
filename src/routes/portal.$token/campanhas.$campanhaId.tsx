@@ -304,11 +304,7 @@ function PortalCampanhaPage() {
         }
         rightSlot={
           activeCampanha.isRecorrente ? (
-            <NativeSelect
-              value={portalMonth}
-              onChange={(e) => setPortalMonth(e.target.value)}
-              className="h-9 rounded-md border border-border bg-background px-2 text-xs font-medium text-foreground outline-none focus:ring-1 focus:ring-ring"
-            >
+            <NativeSelect value={portalMonth} onChange={(e) => setPortalMonth(e.target.value)}>
               {monthOptions.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}

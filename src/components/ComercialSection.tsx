@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { Plus, Search, X } from "lucide-react";
+import { CalendarDays, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { type Lead, type PropostaSnapshot } from "@/lib/comercial";
 import {
@@ -36,6 +36,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PipelineSummary } from "./comercial/PipelineSummary";
+import { FilterRow, FilterSearch, FilterToolbar } from "@/components/shared/FilterToolbar";
 import { SortSelect, FilterPanel, LeadFiltersSummary } from "./comercial/LeadFiltersBar";
 import { PipelineBoard } from "./comercial/PipelineBoard";
 import { LeadDrawer, type OpportunityActionInput } from "./comercial/LeadDrawer";
@@ -251,7 +252,7 @@ export function ComercialSection() {
 
   return (
     <>
-      <PageContainer variant="wide" className="space-y-6">
+      <PageContainer variant="wide" className="space-y-5 md:space-y-6">
         <PageHeader
           title="Comercial"
           description="Pipeline e acompanhamento de oportunidades."
@@ -264,14 +265,16 @@ export function ComercialSection() {
           }
         />
 
-        {/* Toolbar simplificada: Período · Busca · Filtros · Ordenar —
-         * "Novo lead" fica só no cabeçalho, "Visualizações" foi removido
-         * (correção pedida — a operação é pequena, não precisa disso). */}
-        <div className="surface-card flex flex-wrap items-center gap-2 p-2">
+        {/* Contexto global: o período vale para os KPIs e para o Kanban; fica
+         * uma vez, logo abaixo do cabeçalho, fora de Filtros. */}
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Período">
+          <CalendarDays className="h-4 w-4 text-text-secondary" aria-hidden="true" />
           <NativeSelect
             value={period}
             onChange={(e) => patchSearch({ cPeriod: e.target.value as ComercialPeriodMode })}
-            className="h-9 shrink-0 cursor-pointer rounded-md border border-border bg-background px-2.5 text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            aria-label="Período"
+            className="w-auto min-w-36"
+            selectClassName="font-medium"
           >
             {COMERCIAL_PERIOD_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -279,37 +282,7 @@ export function ComercialSection() {
               </option>
             ))}
           </NativeSelect>
-          <div className="relative min-w-40 flex-1 sm:max-w-72">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-text-secondary" />
-            <Input
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-              placeholder="Buscar por empresa, contato, e-mail, telefone, responsável..."
-              className="h-9 pl-8 pr-8 text-sm"
-            />
-            {searchText && (
-              <button
-                type="button"
-                onClick={() => setSearchText("")}
-                aria-label="Limpar busca"
-                className="absolute right-2 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full text-text-secondary hover:bg-muted hover:text-foreground"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-          <FilterPanel filters={filters} onApply={(f) => patchSearch({ cf: f })} team={team} />
-          <SortSelect
-            sort={sort}
-            direction={direction}
-            onChange={(s, d) => patchSearch({ cSort: s, cDir: d })}
-          />
         </div>
-        <LeadFiltersSummary
-          filters={filters}
-          onClear={() => patchSearch({ cf: EMPTY_LEAD_FILTERS })}
-          resultCount={leads.length}
-        />
 
         <PipelineSummary
           kpis={kpis}
@@ -317,6 +290,28 @@ export function ComercialSection() {
           filters={filters}
           onFilter={goToPipelineWithFilter}
         />
+
+        {/* Busca + Filtros + Ordenar; filtros ativos logo abaixo. */}
+        <FilterToolbar>
+          <FilterRow>
+            <FilterSearch
+              value={searchText}
+              onChange={setSearchText}
+              placeholder="Buscar por empresa, contato, e-mail, telefone, responsável..."
+            />
+            <FilterPanel filters={filters} onApply={(f) => patchSearch({ cf: f })} team={team} />
+            <SortSelect
+              sort={sort}
+              direction={direction}
+              onChange={(s, d) => patchSearch({ cSort: s, cDir: d })}
+            />
+          </FilterRow>
+          <LeadFiltersSummary
+            filters={filters}
+            onClear={() => patchSearch({ cf: EMPTY_LEAD_FILTERS })}
+            resultCount={leads.length}
+          />
+        </FilterToolbar>
 
         {isError ? (
           <div className="surface-card p-10 text-center">
