@@ -1,13 +1,17 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  Archive,
+  Check,
   CheckCircle2,
   ChevronDown,
+  CircleDot,
   FileText,
   Flag,
   Loader2,
   Lock,
   MoreHorizontal,
   Paperclip,
+  RotateCcw,
   Send,
   Trash2,
   User,
@@ -16,19 +20,25 @@ import {
 import { toast } from "sonner";
 import {
   Sheet,
+  SheetClose,
   SheetContent,
   SheetDescription,
-  SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useConfirm } from "@/hooks/use-confirm";
 import { TASK_CHIP, TaskOptionPicker } from "@/components/tasks/task-ui";
 import { loadMembers, type ChatMember } from "@/lib/chat-store";
 import {
@@ -43,13 +53,14 @@ import {
   PROBLEM_PRIORITIES,
   PROBLEM_PRIORITY_LABEL,
   PROBLEM_STATUS_LABEL,
-  PROBLEM_STATUSES,
+  PROBLEM_STATUS_OPTIONS,
   updateProblem,
   type Problem,
   type ProblemAttachment,
   type ProblemDetail,
   type ProblemEvent,
   type ProblemPatch,
+  type ProblemPriority,
   type ProblemStatus,
 } from "@/lib/problems";
 import {
@@ -66,9 +77,12 @@ type Props = {
   meId: string | null;
   canManage: boolean;
   isAdmin: boolean;
-  /** Banco ainda sem a migration da Central: só leitura do report. */
+  /** Banco ainda sem a migration da Central: só resolver/reabrir. */
   legacy?: boolean;
   onClose: () => void;
+  /** Aplica a mudança na lista/indicadores na hora (antes do recarregamento). */
+  onPatched: (id: string, patch: Partial<Problem>) => void;
+  onDeleted: (id: string) => void;
   onChanged: () => void;
 };
 
@@ -118,25 +132,63 @@ function renderMentions(text: string, members: ChatMember[]): ReactNode {
   return out;
 }
 
-function eventText(e: ProblemEvent): string {
-  const d = e.data as Record<string, string | null | undefined>;
+/** Frase do histórico — mudanças relevantes, com "de → para" quando ajuda. */
+function eventText(e: ProblemEvent): ReactNode {
+  const d = e.data as Record<string, unknown>;
+  const fromTo = (a?: string, b?: string) =>
+    a && b ? (
+      <>
+        {" "}
+        <span className="text-foreground">{a}</span> → <span className="text-foreground">{b}</span>
+      </>
+    ) : null;
   switch (e.type) {
     case "created":
-      return "criou o report";
-    case "status":
-      return `alterou o status para ${PROBLEM_STATUS_LABEL[(d.to as ProblemStatus) ?? "novo"] ?? d.to}`;
+      return "criou este problema";
+    case "status": {
+      const from = d.from as ProblemStatus | undefined;
+      const to = d.to as ProblemStatus | undefined;
+      if (to === "resolvido") return "marcou como resolvido";
+      if (to === "fechado") return "arquivou o problema";
+      if (from && FINISHED_STATUSES.has(from)) return "reabriu o problema";
+      return (
+        <>
+          alterou o status
+          {fromTo(from && PROBLEM_STATUS_LABEL[from], to && PROBLEM_STATUS_LABEL[to])}
+        </>
+      );
+    }
     case "priority":
-      return `alterou a prioridade para ${PROBLEM_PRIORITY_LABEL[d.to as keyof typeof PROBLEM_PRIORITY_LABEL] ?? d.to}`;
+      return (
+        <>
+          alterou a prioridade
+          {fromTo(
+            PROBLEM_PRIORITY_LABEL[d.from as ProblemPriority],
+            PROBLEM_PRIORITY_LABEL[d.to as ProblemPriority],
+          )}
+        </>
+      );
     case "assignee":
-      return d.to ? `atribuiu a ${d.to}` : "removeu o responsável";
+      return d.to ? (
+        <>
+          atribuiu o problema para <span className="text-foreground">{String(d.to)}</span>
+        </>
+      ) : (
+        "removeu o responsável"
+      );
     case "area":
-      return `mudou a área para ${d.to ?? "—"}`;
+      return (
+        <>
+          alterou a área
+          {fromTo(d.from ? String(d.from) : "—", d.to ? String(d.to) : "—")}
+        </>
+      );
     case "edit":
       return "editou o report";
     case "comment":
       return "comentou";
     case "attachment":
-      return `anexou ${d.name ?? "um arquivo"}`;
+      return `anexou ${typeof d.name === "string" ? d.name : "um arquivo"}`;
   }
 }
 
@@ -203,61 +255,69 @@ function AttachmentList({
 }
 
 /**
- * Detalhe do problema — painel lateral contínuo: informações → descrição →
- * anexos → (resolução) → histórico → comentários. Controles de triagem só
- * aparecem para quem pode usá-los (o banco aplica as mesmas regras).
+ * Detalhe do problema — painel lateral contínuo:
+ *   header [tipo .......... ⋯  X]
+ *   título · reportado por / data
+ *   [Status ▼] [✓ Marcar como resolvido | ↺ Reabrir]
+ *   propriedades (prioridade, área, responsável, reportado por, data)
+ *   descrição → anexos → histórico → comentários (composer fixo embaixo).
+ * Controles só aparecem para quem pode usá-los; o banco aplica as mesmas
+ * regras (RLS + trigger), e qualquer recusa vira mensagem de erro clara.
  */
-export function ProblemDetailSheet({
-  problem,
-  meId,
-  canManage,
-  isAdmin,
-  legacy,
-  onClose,
-  onChanged,
-}: Props) {
+export function ProblemDetailSheet({ problem, ...rest }: Props) {
   return (
-    <Sheet open={!!problem} onOpenChange={(o) => !o && onClose()}>
+    <Sheet open={!!problem} onOpenChange={(o) => !o && rest.onClose()}>
       <SheetContent
         side="right"
+        hideClose
         className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[640px]"
       >
-        {problem && (
-          <DetailBody
-            key={problem.id}
-            problem={problem}
-            meId={meId}
-            canManage={canManage}
-            isAdmin={isAdmin}
-            legacy={legacy}
-            onClose={onClose}
-            onChanged={onChanged}
-          />
-        )}
+        {problem && <DetailBody key={problem.id} problem={problem} {...rest} />}
       </SheetContent>
     </Sheet>
   );
 }
 
+function PropRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <>
+      <dt className="flex min-h-8 items-center text-xs text-muted-foreground">{label}</dt>
+      <dd className="flex min-h-8 min-w-0 items-center text-sm text-foreground">{children}</dd>
+    </>
+  );
+}
+
+const ICON_BTN =
+  "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand";
+
 function DetailBody({
   problem,
   meId,
-  canManage: canManageProp,
+  canManage,
   isAdmin,
   legacy,
-  onClose,
+  onPatched,
+  onDeleted,
   onChanged,
 }: Props & { problem: Problem }) {
-  const canManage = canManageProp && !legacy;
   const [detail, setDetail] = useState<ProblemDetail | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [urls, setUrls] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState(false);
-  const [resolving, setResolving] = useState<ProblemStatus | null>(null);
-  const [resolutionNote, setResolutionNote] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteDraft, setNoteDraft] = useState(problem.resolutionNote ?? "");
   const members = useMemo(() => loadMembers(), []);
+  const meName = useMemo(
+    () => (meId ? (members.find((m) => m.id === meId)?.name ?? null) : null),
+    [members, meId],
+  );
+  const { confirm, confirmDialog } = useConfirm();
+
   const isAssignee = !!meId && problem.assigneeId === meId;
-  const canChangeStatus = !legacy && (canManage || isAssignee);
+  // Banco legado só permite resolver/reabrir (coluna `resolved`, admin).
+  const canChangeStatus = legacy ? isAdmin : canManage || isAssignee;
+  const canTriage = canManage && !legacy;
+  const finished = FINISHED_STATUSES.has(problem.status);
 
   const reload = useCallback(async () => {
     try {
@@ -287,29 +347,111 @@ function DetailBody({
     void reload();
   }, [reload]);
 
-  const apply = async (patch: ProblemPatch, success: string) => {
-    setBusy(true);
+  /** Uma escrita: aplica na lista/indicadores na hora, salva, registra
+   * (o histórico é gravado pelo banco) e recarrega; se falhar, avisa e
+   * recarrega do banco (desfaz o otimista). */
+  const apply = async (
+    key: string,
+    patch: ProblemPatch,
+    local: Partial<Problem>,
+    success: string,
+    errorMsg: string,
+  ) => {
+    setBusy(key);
+    onPatched(problem.id, local);
     try {
       await updateProblem(problem.id, patch);
       toast.success(success);
-      onChanged();
       await reload();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Não foi possível atualizar.");
+      toast.error(err instanceof Error ? err.message : errorMsg);
     } finally {
-      setBusy(false);
+      setBusy(null);
+      onChanged();
     }
   };
 
-  const pickStatus = (s: ProblemStatus) => {
+  const setStatus = (s: ProblemStatus) => {
     if (s === problem.status) return;
-    // Resolver/fechar pede "Como foi resolvido?" antes de aplicar.
-    if (FINISHED_STATUSES.has(s)) {
-      setResolving(s);
-      setResolutionNote(problem.resolutionNote ?? "");
-      return;
+    const nowFinished = FINISHED_STATUSES.has(s);
+    const reopening = FINISHED_STATUSES.has(problem.status) && !nowFinished;
+    void apply(
+      s === "resolvido" ? "resolve" : reopening ? "reopen" : "status",
+      { status: s },
+      {
+        status: s,
+        resolvedAt: nowFinished ? new Date().toISOString() : null,
+        resolvedByName: nowFinished ? meName : null,
+        updatedAt: new Date().toISOString(),
+      },
+      s === "resolvido"
+        ? "Problema marcado como resolvido."
+        : reopening
+          ? "Problema reaberto."
+          : s === "fechado"
+            ? "Problema arquivado."
+            : `Status alterado para ${PROBLEM_STATUS_LABEL[s]}.`,
+      s === "resolvido"
+        ? "Não foi possível resolver o problema."
+        : "Não foi possível alterar o status.",
+    );
+  };
+
+  const setPriority = (p: ProblemPriority) =>
+    p !== problem.priority &&
+    void apply(
+      "priority",
+      { priority: p },
+      { priority: p },
+      `Prioridade alterada para ${PROBLEM_PRIORITY_LABEL[p]}.`,
+      "Não foi possível alterar a prioridade.",
+    );
+
+  const setArea = (a: string) =>
+    a !== problem.area &&
+    void apply(
+      "area",
+      { area: a },
+      { area: a },
+      "Área atualizada.",
+      "Não foi possível alterar a área.",
+    );
+
+  const setAssignee = (id: string) => {
+    if (id === (problem.assigneeId ?? "")) return;
+    const name = members.find((m) => m.id === id)?.name ?? null;
+    void apply(
+      "assignee",
+      { assigneeId: id || null },
+      { assigneeId: id || null, assigneeName: id ? name : null },
+      id ? `Atribuído a ${name ?? "responsável"}.` : "Responsável removido.",
+      "Não foi possível atribuir o responsável.",
+    );
+  };
+
+  const saveNote = async () => {
+    await apply(
+      "note",
+      { resolutionNote: noteDraft.trim() || null },
+      { resolutionNote: noteDraft.trim() || null },
+      "Nota de resolução salva.",
+      "Não foi possível salvar a nota.",
+    );
+    setNoteOpen(false);
+  };
+
+  const remove = async () => {
+    if (!(await confirm(`Excluir "${problem.title}"? Essa ação não pode ser desfeita.`))) return;
+    setBusy("delete");
+    try {
+      await deleteProblem(problem.id);
+      toast.success("Problema excluído.");
+      onDeleted(problem.id);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Não foi possível excluir.");
+    } finally {
+      setBusy(null);
     }
-    void apply({ status: s }, `Status alterado para ${PROBLEM_STATUS_LABEL[s]}.`);
   };
 
   const reportAttachments = (detail?.attachments ?? []).filter((a) => !a.commentId);
@@ -327,219 +469,335 @@ function DetailBody({
     ...reportAttachments.map((a) => ({ key: a.id, name: a.name, path: a.path, mime: a.mime })),
   ];
 
-  const statusTrigger = (
-    <button
-      type="button"
-      disabled={busy}
-      className="inline-flex items-center gap-1 rounded-md outline-none transition-opacity hover:opacity-85 focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-60"
-    >
-      <ProblemStatusBadge status={problem.status} className="h-8 px-2.5 text-xs" />
-      <ChevronDown aria-hidden className="h-3.5 w-3.5 text-muted-foreground" />
-    </button>
+  const statusOptions = PROBLEM_STATUS_OPTIONS.filter(
+    // Banco legado só conhece resolvido/não resolvido.
+    (s) => !legacy || s === "novo" || s === "resolvido",
   );
+  const hasMenu = canChangeStatus || canTriage || isAdmin;
+  const assigneeLabel = problem.assigneeName ?? "Sem responsável";
 
   return (
     <>
-      <SheetHeader className="space-y-3 border-b border-border px-5 py-4 pr-12 text-left sm:px-6">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <ProblemKindIcon kind={problem.kind} className="h-4 w-4" />
-          <span>{PROBLEM_KIND_LABEL[problem.kind]}</span>
-          {isAdmin && (
+      {/* Header: tipo à esquerda; ⋯ e X à direita, separados. */}
+      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4 sm:px-6">
+        <ProblemKindIcon kind={problem.kind} className="h-4 w-4" />
+        <span className="min-w-0 truncate text-xs font-medium text-muted-foreground">
+          {PROBLEM_KIND_LABEL[problem.kind]}
+        </span>
+        <div className="ml-auto flex items-center gap-1">
+          {hasMenu && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="Mais ações"
-                  className="ml-auto rounded p-1 hover:bg-muted hover:text-foreground"
-                >
+                <button type="button" aria-label="Ações do problema" className={ICON_BTN}>
                   <MoreHorizontal className="h-4 w-4" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
-                  onClick={async () => {
-                    if (!window.confirm("Excluir este report? Essa ação é permanente.")) return;
-                    try {
-                      await deleteProblem(problem.id);
-                      toast.success("Report excluído.");
-                      onChanged();
-                      onClose();
-                    } catch (err) {
-                      toast.error(err instanceof Error ? err.message : "Não foi possível excluir.");
-                    }
-                  }}
-                >
-                  <Trash2 className="h-3.5 w-3.5" /> Excluir report
-                </DropdownMenuItem>
+              <DropdownMenuContent align="end" className="w-56">
+                {canChangeStatus && (
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger className="gap-2">
+                      <CircleDot className="h-3.5 w-3.5" /> Alterar status
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                      {statusOptions.map((s) => (
+                        <DropdownMenuItem key={s} onClick={() => setStatus(s)} className="gap-2">
+                          <ProblemStatusIcon status={s} />
+                          <span className="flex-1">{PROBLEM_STATUS_LABEL[s]}</span>
+                          {s === problem.status && <Check className="h-3.5 w-3.5" />}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                )}
+                {canTriage && (
+                  <>
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger className="gap-2">
+                        <User className="h-3.5 w-3.5" /> Alterar responsável
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent className="max-h-72 overflow-y-auto">
+                        <DropdownMenuItem onClick={() => setAssignee("")} className="gap-2">
+                          <span className="flex-1">Sem responsável</span>
+                          {!problem.assigneeId && <Check className="h-3.5 w-3.5" />}
+                        </DropdownMenuItem>
+                        {members.map((m) => (
+                          <DropdownMenuItem
+                            key={m.id}
+                            onClick={() => setAssignee(m.id)}
+                            className="gap-2"
+                          >
+                            <span className="flex-1 truncate">{m.name}</span>
+                            {m.id === problem.assigneeId && <Check className="h-3.5 w-3.5" />}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger className="gap-2">
+                        <Flag className="h-3.5 w-3.5" /> Alterar prioridade
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent>
+                        {PROBLEM_PRIORITIES.map((p) => (
+                          <DropdownMenuItem
+                            key={p}
+                            onClick={() => setPriority(p)}
+                            className="gap-2"
+                          >
+                            <Flag className={`h-3.5 w-3.5 ${PROBLEM_PRIORITY_TONE[p]}`} />
+                            <span className="flex-1">{PROBLEM_PRIORITY_LABEL[p]}</span>
+                            {p === problem.priority && <Check className="h-3.5 w-3.5" />}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                  </>
+                )}
+                {canChangeStatus && !legacy && problem.status !== "fechado" && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setStatus("fechado")} className="gap-2">
+                      <Archive className="h-3.5 w-3.5" /> Arquivar
+                    </DropdownMenuItem>
+                  </>
+                )}
+                {isAdmin && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => void remove()}
+                      className="gap-2 text-destructive focus:bg-destructive/10 focus:text-destructive"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> Excluir
+                    </DropdownMenuItem>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           )}
+          <SheetClose asChild>
+            <button type="button" aria-label="Fechar" className={ICON_BTN}>
+              <X className="h-4 w-4" />
+            </button>
+          </SheetClose>
         </div>
-        <SheetTitle className="break-words text-xl leading-snug">{problem.title}</SheetTitle>
-        <SheetDescription className="text-xs">
-          Reportado por {problem.reporterName} · {formatDateTime(problem.createdAt)}
-        </SheetDescription>
+      </div>
 
-        <div className="flex flex-wrap items-center gap-1.5">
-          {canChangeStatus ? (
-            <TaskOptionPicker
-              value={problem.status}
-              ariaLabel={`Status: ${PROBLEM_STATUS_LABEL[problem.status]}. Alterar status`}
-              widthClass="w-60"
-              options={PROBLEM_STATUSES.map((s) => ({
-                value: s,
-                label: PROBLEM_STATUS_LABEL[s],
-                icon: <ProblemStatusIcon status={s} />,
-              }))}
-              onSelect={pickStatus}
-              trigger={statusTrigger}
-            />
-          ) : (
-            <ProblemStatusBadge status={problem.status} className="h-8 px-2.5 text-xs" />
-          )}
-
-          {canManage ? (
-            <TaskOptionPicker
-              value={problem.priority}
-              ariaLabel="Prioridade"
-              widthClass="w-44"
-              options={PROBLEM_PRIORITIES.map((p) => ({
-                value: p,
-                label: PROBLEM_PRIORITY_LABEL[p],
-                icon: <Flag aria-hidden className={`h-3.5 w-3.5 ${PROBLEM_PRIORITY_TONE[p]}`} />,
-              }))}
-              onSelect={(p) =>
-                p !== problem.priority &&
-                void apply(
-                  { priority: p },
-                  `Prioridade alterada para ${PROBLEM_PRIORITY_LABEL[p]}.`,
-                )
-              }
-              trigger={
-                <button type="button" disabled={busy} className={TASK_CHIP}>
-                  <ProblemPriorityFlag priority={problem.priority} />
-                </button>
-              }
-            />
-          ) : (
-            <span className={TASK_CHIP}>
-              <ProblemPriorityFlag priority={problem.priority} />
-            </span>
-          )}
-
-          {canManage ? (
-            <TaskOptionPicker
-              value={problem.area ?? "Outro"}
-              ariaLabel="Área"
-              widthClass="w-56"
-              searchable
-              searchPlaceholder="Buscar área..."
-              options={PROBLEM_AREAS.map((a) => ({ value: a as string, label: a }))}
-              onSelect={(a) => a !== problem.area && void apply({ area: a }, "Área atualizada.")}
-              trigger={
-                <button type="button" disabled={busy} className={TASK_CHIP}>
-                  {problem.area ?? "Sem área"}
-                </button>
-              }
-            />
-          ) : (
-            <span className={TASK_CHIP}>{problem.area ?? "Sem área"}</span>
-          )}
-
-          {canManage ? (
-            <TaskOptionPicker
-              value={problem.assigneeId ?? ""}
-              ariaLabel="Responsável"
-              widthClass="w-64"
-              searchable={members.length > 6}
-              searchPlaceholder="Buscar pessoa..."
-              options={[
-                { value: "", label: "Sem responsável" },
-                ...members.map((m) => ({ value: m.id, label: m.name })),
-              ]}
-              onSelect={(id) =>
-                id !== (problem.assigneeId ?? "") &&
-                void apply(
-                  { assigneeId: id || null },
-                  id ? "Responsável atribuído." : "Responsável removido.",
-                )
-              }
-              trigger={
-                <button type="button" disabled={busy} className={TASK_CHIP}>
-                  <User aria-hidden className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="truncate">{problem.assigneeName ?? "Sem responsável"}</span>
-                </button>
-              }
-            />
-          ) : (
-            <span className={TASK_CHIP}>
-              <User aria-hidden className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="truncate">{problem.assigneeName ?? "Sem responsável"}</span>
-            </span>
-          )}
-        </div>
-      </SheetHeader>
-
-      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-5 sm:px-6">
-        {resolving && (
-          <div className="space-y-2 rounded-lg border border-emerald-500/40 bg-emerald-500/[0.06] p-3">
-            <p className="text-xs font-semibold text-foreground">
-              {resolving === "resolvido" ? "Como foi resolvido?" : "Por que está sendo fechado?"}
-            </p>
-            <Textarea
-              autoFocus
-              rows={3}
-              value={resolutionNote}
-              onChange={(e) => setResolutionNote(e.target.value)}
-              placeholder={
-                resolving === "resolvido"
-                  ? "Ex.: corrigido o filtro que perdia a seleção ao trocar de aba."
-                  : "Ex.: duplicado / comportamento esperado."
-              }
-            />
-            <div className="flex justify-end gap-2">
-              <Button variant="ghost" size="sm" onClick={() => setResolving(null)}>
-                Cancelar
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                disabled={busy || resolutionNote.trim().length < 3}
-                onClick={async () => {
-                  await apply(
-                    { status: resolving, resolutionNote: resolutionNote.trim() },
-                    `Status alterado para ${PROBLEM_STATUS_LABEL[resolving]}.`,
-                  );
-                  setResolving(null);
-                }}
-              >
-                Confirmar
-              </Button>
-            </div>
+      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-5 sm:px-6">
+        {/* Título + ação principal */}
+        <div className="space-y-3">
+          <div>
+            <SheetTitle className="break-words text-xl font-semibold leading-snug">
+              {problem.title}
+            </SheetTitle>
+            <SheetDescription className="mt-1 text-xs">
+              Reportado por {problem.reporterName} · {formatDateTime(problem.createdAt)}
+            </SheetDescription>
           </div>
-        )}
+          <div className="flex flex-wrap items-center gap-2">
+            {canChangeStatus ? (
+              <TaskOptionPicker
+                value={problem.status}
+                ariaLabel={`Status: ${PROBLEM_STATUS_LABEL[problem.status]}. Alterar status`}
+                widthClass="w-56"
+                options={statusOptions.map((s) => ({
+                  value: s,
+                  label: PROBLEM_STATUS_LABEL[s],
+                  icon: <ProblemStatusIcon status={s} />,
+                }))}
+                onSelect={setStatus}
+                trigger={
+                  <button
+                    type="button"
+                    disabled={!!busy}
+                    className="inline-flex items-center gap-1 rounded-md outline-none transition-opacity hover:opacity-85 focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-60"
+                  >
+                    <ProblemStatusBadge status={problem.status} className="h-8 px-2.5 text-xs" />
+                    <ChevronDown aria-hidden className="h-3.5 w-3.5 text-muted-foreground" />
+                  </button>
+                }
+              />
+            ) : (
+              <ProblemStatusBadge status={problem.status} className="h-8 px-2.5 text-xs" />
+            )}
+            {canChangeStatus &&
+              (finished ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1.5"
+                  disabled={!!busy}
+                  onClick={() => setStatus("novo")}
+                >
+                  {busy === "reopen" ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  )}
+                  Reabrir problema
+                </Button>
+              ) : (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="h-8 gap-1.5"
+                  disabled={!!busy}
+                  onClick={() => setStatus("resolvido")}
+                >
+                  {busy === "resolve" ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                  )}
+                  Marcar como resolvido
+                </Button>
+              ))}
+          </div>
+        </div>
 
-        {FINISHED_STATUSES.has(problem.status) && !resolving && (
-          <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-xs">
-            <CheckCircle2
-              aria-hidden
-              className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400"
-            />
-            <div className="min-w-0 space-y-0.5">
-              <p className="font-medium text-foreground">
-                {PROBLEM_STATUS_LABEL[problem.status]}
-                {problem.resolvedAt && ` em ${formatDateTime(problem.resolvedAt)}`}
-                {problem.resolvedByName && ` por ${problem.resolvedByName}`}
-              </p>
-              {problem.resolutionNote && (
-                <p className="whitespace-pre-wrap break-words text-muted-foreground">
-                  {problem.resolutionNote}
+        {/* Resolução */}
+        {finished && (
+          <div className="space-y-2 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-xs">
+            <div className="flex items-start gap-2">
+              <CheckCircle2
+                aria-hidden
+                className={`mt-0.5 h-4 w-4 shrink-0 ${problem.status === "resolvido" ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}
+              />
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <p className="font-medium text-foreground">
+                  {PROBLEM_STATUS_LABEL[problem.status]}
+                  {problem.resolvedAt && ` em ${formatDateTime(problem.resolvedAt)}`}
+                  {problem.resolvedByName && ` por ${problem.resolvedByName}`}
                 </p>
+                {problem.resolutionNote && !noteOpen && (
+                  <p className="whitespace-pre-wrap break-words text-muted-foreground">
+                    {problem.resolutionNote}
+                  </p>
+                )}
+              </div>
+              {canChangeStatus && !legacy && !noteOpen && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNoteDraft(problem.resolutionNote ?? "");
+                    setNoteOpen(true);
+                  }}
+                  className="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  {problem.resolutionNote ? "Editar nota" : "Como foi resolvido?"}
+                </button>
               )}
             </div>
+            {noteOpen && (
+              <div className="space-y-2 pl-6">
+                <Textarea
+                  autoFocus
+                  rows={3}
+                  value={noteDraft}
+                  onChange={(e) => setNoteDraft(e.target.value)}
+                  placeholder="Ex.: corrigido o filtro que perdia a seleção ao trocar de aba."
+                />
+                <div className="flex justify-end gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setNoteOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    disabled={!!busy}
+                    onClick={() => void saveNote()}
+                  >
+                    Salvar nota
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
+
+        {/* Propriedades — todas visíveis, editáveis por quem pode. */}
+        <dl className="grid grid-cols-[110px_minmax(0,1fr)] gap-x-3 sm:grid-cols-[130px_minmax(0,1fr)]">
+          <PropRow label="Prioridade">
+            {canTriage ? (
+              <TaskOptionPicker
+                value={problem.priority}
+                ariaLabel="Prioridade"
+                widthClass="w-44"
+                options={PROBLEM_PRIORITIES.map((p) => ({
+                  value: p,
+                  label: PROBLEM_PRIORITY_LABEL[p],
+                  icon: <Flag aria-hidden className={`h-3.5 w-3.5 ${PROBLEM_PRIORITY_TONE[p]}`} />,
+                }))}
+                onSelect={setPriority}
+                trigger={
+                  <button type="button" disabled={!!busy} className={TASK_CHIP}>
+                    <ProblemPriorityFlag priority={problem.priority} />
+                    <ChevronDown aria-hidden className="h-3 w-3 text-muted-foreground" />
+                  </button>
+                }
+              />
+            ) : (
+              <ProblemPriorityFlag priority={problem.priority} />
+            )}
+          </PropRow>
+          <PropRow label="Área">
+            {canTriage ? (
+              <TaskOptionPicker
+                value={problem.area ?? "Outro"}
+                ariaLabel="Área"
+                widthClass="w-56"
+                searchable
+                searchPlaceholder="Buscar área..."
+                options={PROBLEM_AREAS.map((a) => ({ value: a as string, label: a }))}
+                onSelect={setArea}
+                trigger={
+                  <button type="button" disabled={!!busy} className={TASK_CHIP}>
+                    <span className="truncate">{problem.area ?? "Sem área"}</span>
+                    <ChevronDown aria-hidden className="h-3 w-3 text-muted-foreground" />
+                  </button>
+                }
+              />
+            ) : (
+              <span>{problem.area ?? "—"}</span>
+            )}
+          </PropRow>
+          <PropRow label="Responsável">
+            {canTriage ? (
+              <TaskOptionPicker
+                value={problem.assigneeId ?? ""}
+                ariaLabel="Responsável"
+                widthClass="w-64"
+                searchable={members.length > 6}
+                searchPlaceholder="Buscar pessoa..."
+                options={[
+                  { value: "", label: "Sem responsável" },
+                  ...members.map((m) => ({ value: m.id, label: m.name })),
+                ]}
+                onSelect={setAssignee}
+                trigger={
+                  <button type="button" disabled={!!busy} className={TASK_CHIP}>
+                    <User aria-hidden className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span
+                      className={`truncate ${problem.assigneeId ? "" : "text-muted-foreground"}`}
+                    >
+                      {assigneeLabel}
+                    </span>
+                    <ChevronDown aria-hidden className="h-3 w-3 text-muted-foreground" />
+                  </button>
+                }
+              />
+            ) : (
+              <span className={problem.assigneeId ? "" : "text-muted-foreground"}>
+                {assigneeLabel}
+              </span>
+            )}
+          </PropRow>
+          <PropRow label="Reportado por">
+            <span className="truncate">{problem.reporterName}</span>
+          </PropRow>
+          <PropRow label="Data">
+            <span className="tabular-nums">{formatDateTime(problem.createdAt)}</span>
+          </PropRow>
+        </dl>
 
         <section>
           <SectionTitle>Descrição</SectionTitle>
@@ -556,7 +814,7 @@ function DetailBody({
         )}
 
         {detail?.diagnostics && (
-          <details className="group rounded-lg border border-border px-3 py-2 text-xs">
+          <details className="rounded-lg border border-border px-3 py-2 text-xs">
             <summary className="cursor-pointer list-none font-medium text-muted-foreground hover:text-foreground">
               Contexto técnico
               <span className="ml-1 text-[10px] font-normal">
@@ -595,8 +853,8 @@ function DetailBody({
 
         {legacy ? (
           <p className="rounded-lg border border-dashed border-border px-3 py-3 text-xs text-muted-foreground">
-            Histórico, comentários e triagem ficam disponíveis assim que a atualização do banco da
-            Central de Problemas for aplicada.
+            Resolver e reabrir já funcionam. Prioridade, área, responsável, histórico e comentários
+            ficam disponíveis assim que a atualização do banco da Central de Problemas for aplicada.
           </p>
         ) : (
           <>
@@ -610,22 +868,25 @@ function DetailBody({
                   </button>
                 </p>
               ) : !detail ? (
-                <p className="text-xs text-muted-foreground">Carregando…</p>
-              ) : detail.events.length === 0 ? (
-                <p className="text-xs text-muted-foreground">Sem eventos registrados.</p>
+                <div className="space-y-2">
+                  <Skeleton className="h-3.5 w-3/4" />
+                  <Skeleton className="h-3.5 w-1/2" />
+                </div>
+              ) : detail.events.filter((e) => e.type !== "comment").length === 0 ? (
+                <p className="text-xs text-muted-foreground">Sem alterações registradas.</p>
               ) : (
-                <ol className="space-y-1.5 border-l border-border pl-3">
+                <ol className="space-y-2 border-l border-border pl-3">
                   {detail.events
                     .filter((e) => e.type !== "comment")
                     .map((e) => (
-                      <li key={e.id} className="relative text-xs">
+                      <li key={e.id} className="relative text-xs leading-relaxed">
                         <span
                           aria-hidden
                           className="absolute -left-[15px] top-1.5 h-1.5 w-1.5 rounded-full bg-muted-foreground/50"
                         />
                         <span className="font-medium text-foreground">{e.actorName}</span>{" "}
                         <span className="text-muted-foreground">{eventText(e)}</span>
-                        <span className="ml-1.5 text-[10px] text-muted-foreground">
+                        <span className="block text-[10px] text-muted-foreground">
                           {formatDateTime(e.createdAt)}
                         </span>
                       </li>
@@ -636,7 +897,13 @@ function DetailBody({
 
             <section>
               <SectionTitle>Comentários</SectionTitle>
-              <CommentList detail={detail} members={members} urls={urls} />
+              {loadError ? (
+                <p className="text-xs text-muted-foreground">
+                  Não foi possível carregar os comentários.
+                </p>
+              ) : (
+                <CommentList detail={detail} members={members} urls={urls} />
+              )}
             </section>
           </>
         )}
@@ -653,6 +920,7 @@ function DetailBody({
           }}
         />
       )}
+      {confirmDialog}
     </>
   );
 }

@@ -50,7 +50,7 @@ describe("mapProblem (compatível com reports antigos)", () => {
 });
 
 describe("summarizeProblems (números reais)", () => {
-  it("agrupa os 6 status nos 4 indicadores", () => {
+  it("agrupa os status nos 4 indicadores (arquivado fica de fora)", () => {
     const list = [
       "novo",
       "aguardando_info",
@@ -63,7 +63,7 @@ describe("summarizeProblems (números reais)", () => {
       abertos: 2,
       emAnalise: 1,
       emCorrecao: 1,
-      resolvidos: 2,
+      resolvidos: 1,
     });
     expect(summarizeProblems([])).toEqual({
       abertos: 0,

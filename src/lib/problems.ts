@@ -41,9 +41,21 @@ export const PROBLEM_STATUS_LABEL: Record<ProblemStatus, string> = {
   em_correcao: "Em correção",
   aguardando_info: "Aguardando informações",
   resolvido: "Resolvido",
-  fechado: "Fechado",
+  // "fechado" no banco = Arquivado na interface (sem estado novo no schema).
+  fechado: "Arquivado",
 };
 export const FINISHED_STATUSES = new Set<ProblemStatus>(["resolvido", "fechado"]);
+
+/** Fluxo oferecido na interface: Novo → Em análise → Em correção →
+ * Resolvido (+ Arquivado). "Aguardando informações" continua existindo no
+ * banco e é exibido se algum report estiver nele, mas não é oferecido. */
+export const PROBLEM_STATUS_OPTIONS: ProblemStatus[] = [
+  "novo",
+  "em_analise",
+  "em_correcao",
+  "resolvido",
+  "fechado",
+];
 
 export const PROBLEM_PRIORITIES: ProblemPriority[] = ["baixa", "normal", "alta", "critica"];
 export const PROBLEM_PRIORITY_LABEL: Record<ProblemPriority, string> = {
@@ -260,14 +272,15 @@ export type ProblemSummary = {
   resolvidos: number;
 };
 
-/** "Abertos" = novo + aguardando informações (ainda sem ninguém atuando). */
+/** "Abertos" = novo + aguardando informações (ainda sem ninguém atuando).
+ * Arquivados não entram em nenhum indicador. */
 export function summarizeProblems(list: Problem[]): ProblemSummary {
   const s: ProblemSummary = { abertos: 0, emAnalise: 0, emCorrecao: 0, resolvidos: 0 };
   for (const p of list) {
     if (p.status === "novo" || p.status === "aguardando_info") s.abertos += 1;
     else if (p.status === "em_analise") s.emAnalise += 1;
     else if (p.status === "em_correcao") s.emCorrecao += 1;
-    else s.resolvidos += 1;
+    else if (p.status === "resolvido") s.resolvidos += 1;
   }
   return s;
 }
@@ -440,13 +453,41 @@ export async function updateProblem(id: string, patch: ProblemPatch): Promise<vo
   if (patch.area !== undefined) row.area = patch.area;
   if (patch.assigneeId !== undefined) row.assignee_id = patch.assigneeId;
   if (patch.resolutionNote !== undefined) row.resolution_note = patch.resolutionNote;
-  const { error } = await supabase.from("bug_reports").update(row).eq("id", id);
-  if (error) throw new Error("Não foi possível atualizar o problema.");
+
+  if (legacySchema) {
+    // Banco sem a migration da Central: só existe o booleano `resolved`
+    // (mesma escrita do painel HypeApp). Resolver/reabrir funciona; o resto
+    // da triagem só depois da migration.
+    if (patch.status === undefined || Object.keys(row).length > 1) {
+      throw new Error("Disponível após a atualização do banco da Central de Problemas.");
+    }
+    const resolved = FINISHED_STATUSES.has(patch.status);
+    const legacy = await supabase
+      .from("bug_reports")
+      .update({ resolved, resolved_at: resolved ? new Date().toISOString() : null })
+      .eq("id", id)
+      .select("id");
+    if (legacy.error) throw new Error("Não foi possível atualizar o problema.");
+    if (!legacy.data?.length) throw new Error("Você não tem permissão para alterar este problema.");
+    return;
+  }
+
+  const { data, error } = await supabase.from("bug_reports").update(row).eq("id", id).select("id");
+  if (error) {
+    throw new Error(
+      /forbidden/i.test(error.message)
+        ? "Você só pode alterar o status de problemas atribuídos a você."
+        : "Não foi possível atualizar o problema.",
+    );
+  }
+  // RLS sem permissão não dá erro: só não altera nenhuma linha.
+  if (!data?.length) throw new Error("Você não tem permissão para alterar este problema.");
 }
 
 export async function deleteProblem(id: string): Promise<void> {
-  const { error } = await supabase.from("bug_reports").delete().eq("id", id);
+  const { data, error } = await supabase.from("bug_reports").delete().eq("id", id).select("id");
   if (error) throw new Error("Não foi possível excluir o problema.");
+  if (!data?.length) throw new Error("Só administradores podem excluir problemas.");
 }
 
 /* ------------------------------------------------------------------ */

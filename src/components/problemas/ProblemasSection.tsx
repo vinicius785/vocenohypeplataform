@@ -28,7 +28,6 @@ import { useMyAccess } from "@/lib/permissions";
 import { getMe } from "@/lib/chat-store";
 import { openReportProblem } from "@/lib/problem-context";
 import {
-  FINISHED_STATUSES,
   isLegacyProblemsSchema,
   listProblems,
   PRIORITY_RANK,
@@ -38,7 +37,7 @@ import {
   PROBLEM_PRIORITIES,
   PROBLEM_PRIORITY_LABEL,
   PROBLEM_STATUS_LABEL,
-  PROBLEM_STATUSES,
+  PROBLEM_STATUS_OPTIONS,
   summarizeProblems,
   type Problem,
   type ProblemKind,
@@ -146,10 +145,27 @@ export function ProblemasSection() {
 
   useEffect(() => {
     void load();
-    const onCreated = () => void load();
-    window.addEventListener(PROBLEM_CREATED_EVENT, onCreated);
-    return () => window.removeEventListener(PROBLEM_CREATED_EVENT, onCreated);
+    const refresh = () => void load();
+    // Mudanças feitas por outras pessoas aparecem sem refresh manual: ao
+    // voltar para a aba e a cada minuto enquanto ela estiver visível.
+    const onVisible = () => {
+      if (!document.hidden) refresh();
+    };
+    const timer = window.setInterval(onVisible, 60_000);
+    window.addEventListener(PROBLEM_CREATED_EVENT, refresh);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener(PROBLEM_CREATED_EVENT, refresh);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [load]);
+
+  /** Atualização otimista da linha (e dos indicadores, derivados de
+   * `items`) assim que o painel altera algo; o recarregamento confirma. */
+  const patchItem = useCallback((id: string, patch: Partial<Problem>) => {
+    setItems((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+  }, []);
 
   const summary = useMemo(() => summarizeProblems(items), [items]);
   const assignees = useMemo(() => {
@@ -165,7 +181,9 @@ export function ProblemasSection() {
     const q = query.trim().toLowerCase();
     const list = items.filter((p) => {
       if (view === "meus" && p.reporterId !== meId) return false;
-      if (view === "resolvidos" && !FINISHED_STATUSES.has(p.status)) return false;
+      if (view === "resolvidos" && p.status !== "resolvido") return false;
+      // Arquivados só aparecem quando filtrados explicitamente.
+      if (p.status === "fechado" && filters.status !== "fechado") return false;
       if (filters.status && p.status !== filters.status) return false;
       if (filters.kind && p.kind !== filters.kind) return false;
       if (filters.priority && p.priority !== filters.priority) return false;
@@ -307,7 +325,7 @@ export function ProblemasSection() {
               widthClass="w-60"
               options={[
                 { value: ALL, label: "Todos os status" },
-                ...PROBLEM_STATUSES.map((s) => ({
+                ...PROBLEM_STATUS_OPTIONS.map((s) => ({
                   value: s,
                   label: PROBLEM_STATUS_LABEL[s],
                   icon: <ProblemStatusIcon status={s} />,
@@ -439,9 +457,10 @@ export function ProblemasSection() {
           ) : items.length === 0 ? (
             <div className="flex flex-col items-center gap-2 px-5 py-14 text-center">
               <Smile aria-hidden className="h-8 w-8 text-text-secondary" />
-              <p className="text-sm font-medium text-foreground">Está tudo tranquilo por aqui.</p>
+              <p className="text-sm font-medium text-foreground">Nenhum problema reportado</p>
               <p className="max-w-sm text-xs text-text-secondary">
-                Quando alguém reportar um problema, ele aparecerá nesta lista.
+                Está tudo tranquilo por aqui. Quando alguém reportar um problema, ele aparecerá
+                nesta lista.
               </p>
               <Button
                 variant="primary"
@@ -518,6 +537,12 @@ export function ProblemasSection() {
           isAdmin={isAdmin}
           legacy={isLegacyProblemsSchema()}
           onClose={() => setOpenId(null)}
+          onPatched={patchItem}
+          onDeleted={(id) => {
+            setItems((prev) => prev.filter((p) => p.id !== id));
+            setOpenId(null);
+            void load();
+          }}
           onChanged={() => void load()}
         />
       </div>
