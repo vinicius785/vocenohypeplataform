@@ -7,87 +7,37 @@ import {
   useFinanceiroFilteredEntries,
   type AdvancedFilters,
 } from "./financeiro/useFinanceiroFilteredEntries";
-import { PeriodPicker } from "./financeiro/PeriodPicker";
 import { VisaoGeralTab } from "./financeiro/VisaoGeralTab";
-import { MovimentacoesTab } from "./financeiro/MovimentacoesTab";
-import { AReceberTab } from "./financeiro/AReceberTab";
-import { APagarTab } from "./financeiro/APagarTab";
-import { CampanhasTab } from "./financeiro/CampanhasTab";
-import { RelatoriosTab } from "./financeiro/RelatoriosTab";
+import { LancamentosTab } from "./financeiro/LancamentosTab";
+import { AnalisesTab } from "./financeiro/AnalisesTab";
 import { EntryDialog } from "./financeiro/EntryDialog";
 import { useClientes } from "@/lib/clientes-store";
 import { type ManualEntry, createManualEntry } from "@/lib/financeiro-entries";
-import { FINANCEIRO_TABS, resolveFinanceiroTab, type FinanceiroTab } from "@/lib/section-nav";
+import {
+  FINANCEIRO_TABS,
+  resolveFinanceiroLegacyTarget,
+  resolveFinanceiroTab,
+  type AnalisesView,
+  type FinanceiroTab,
+  type LancamentosSegment,
+} from "@/lib/section-nav";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 
 /* ============================================================
- * Financeiro — central financeira da agência.
+ * Financeiro — central financeira da agência, em 3 áreas:
+ *   Resumo      → entender a situação (saldo, atenção, fluxo de caixa)
+ *   Lançamentos → operar (Todos/Entradas/Saídas/A receber/A pagar são
+ *                 segmentações da MESMA lista, não áreas)
+ *   Análises    → entender os resultados (Geral / Por campanha)
  *  - Agrega automaticamente pagamentos de influenciadores lançados
- *    em cada campanha (localStorage: campanha:influs:${id}).
- *  - Agrega receitas de campanhas (valor do cliente / parcelas).
- *  - Agrega salários da equipe (localStorage: time:membros) como
- *    despesa recorrente todo dia 15 de cada mês.
+ *    em cada campanha, receitas de campanhas e salários da equipe.
  *  - Permite lançamentos manuais vinculados a cliente/campanha.
  *  - Uma única fonte de dados filtrada (useFinanceiroFilteredEntries)
- *    alimenta as 6 abas — nenhum widget faz sua própria query.
- *  - O período selecionado no topo filtra por VENCIMENTO (nunca
- *    competência/liquidação) — mesmo critério em todas as abas.
+ *    alimenta tudo — nenhum widget faz sua própria query.
+ *  - O período filtra por VENCIMENTO. Ele é mostrado só onde se aplica:
+ *    Resumo, Lançamentos (exceto A receber/A pagar, que olham a carteira
+ *    inteira) e Análises → Por campanha.
  * ============================================================ */
-
-/** Título/descrição por subpágina (Etapa 4) — evita repetir "Financeiro"
- * em título+descrição ao mesmo tempo, e cada página descreve só o que é
- * dela. `periodo`/`novo`/`importar` controlam quais ações/toolbar fazem
- * sentido em cada uma: A receber/A pagar/Relatórios ignoram o período do
- * topo de propósito (ver `PendingKindTab.tsx`/`RelatoriosTab.tsx`), então
- * não mostram o seletor — mostrá-lo ali seria sugerir um filtro que não
- * se aplica. */
-const PAGE_META: Record<
-  FinanceiroTab,
-  { title: string; description: string; periodo: boolean; novo: boolean; importar: boolean }
-> = {
-  resumo: {
-    title: "Resumo financeiro",
-    description: "Posição atual, alertas e projeção de fluxo de caixa.",
-    periodo: true,
-    novo: true,
-    importar: false,
-  },
-  movimentacoes: {
-    title: "Movimentações",
-    description: "Todos os lançamentos do período, com filtros avançados.",
-    periodo: true,
-    novo: true,
-    importar: true,
-  },
-  "a-receber": {
-    title: "Contas a receber",
-    description: "Toda a carteira em aberto, não só o período selecionado.",
-    periodo: false,
-    novo: true,
-    importar: false,
-  },
-  "a-pagar": {
-    title: "Contas a pagar",
-    description: "Toda a carteira em aberto, não só o período selecionado.",
-    periodo: false,
-    novo: true,
-    importar: false,
-  },
-  campanhas: {
-    title: "Financeiro das campanhas",
-    description: "Receita, custos e resultado por campanha no período.",
-    periodo: true,
-    novo: false,
-    importar: false,
-  },
-  relatorios: {
-    title: "Relatórios financeiros",
-    description: "Indicadores consolidados de toda a carteira.",
-    periodo: false,
-    novo: false,
-    importar: false,
-  },
-};
 
 export function FinanceiroSection() {
   const clientes = useClientes();
@@ -98,6 +48,14 @@ export function FinanceiroSection() {
   const search = useSearch({ from: "/_authenticated/time" });
   const navigate = useNavigate();
   const topTab = resolveFinanceiroTab(search.financeiroTab);
+  // Segmentação/visão inicial vem de um link antigo (`?financeiroTab=a-pagar`
+  // etc.) quando for o caso; depois disso é estado local da sessão.
+  const [segment, setSegment] = useState<LancamentosSegment>(
+    () => resolveFinanceiroLegacyTarget(search.financeiroTab).segment,
+  );
+  const [analiseView, setAnaliseView] = useState<AnalisesView>(
+    () => resolveFinanceiroLegacyTarget(search.financeiroTab).view,
+  );
   const setTopTab = (v: FinanceiroTab) =>
     void navigate({
       to: "/time",
@@ -112,7 +70,7 @@ export function FinanceiroSection() {
     try {
       await createManualEntry(m);
       setNewOpen(false);
-      setTopTab("movimentacoes");
+      setTopTab("lancamentos");
     } catch (err) {
       setSyncError(
         `Não foi possível salvar: ${err instanceof Error ? err.message : "erro desconhecido"}.`,
@@ -123,7 +81,16 @@ export function FinanceiroSection() {
   const applyFilter = (patch: Partial<AdvancedFilters>) =>
     filtered.setFilters((f) => ({ ...f, ...patch }));
 
-  const page = PAGE_META[topTab];
+  // Levar uma pessoa de Resumo/Análises pra lista já filtrada: aplica o
+  // filtro e abre Lançamentos na segmentação que bate com o tipo pedido.
+  const goToLancamentos = (patch: Partial<AdvancedFilters>, seg?: LancamentosSegment) => {
+    applyFilter(patch);
+    setSegment(
+      seg ??
+        (patch.tipo === "receita" ? "entradas" : patch.tipo === "despesa" ? "saidas" : "todos"),
+    );
+    setTopTab("lancamentos");
+  };
 
   return (
     // Canvas experimental (Etapa 5 — mesma correção do conceito visual em
@@ -134,29 +101,27 @@ export function FinanceiroSection() {
     // são distintos, por isso `dark:bg-transparent` neutraliza o ajuste.
     <div className="-m-4 min-h-full bg-muted p-4 dark:bg-transparent md:-m-8 md:p-8">
       <PageContainer className="space-y-6">
-        {/* Título com escala tipográfica maior (Etapa 5, escopada a esta
-         * página) — não usa `PageHeader`/`TYPOGRAPHY.pageTitle` porque
-         * aquele token é global a todo o app; aqui o título é o valor
-         * protagonista da hierarquia visual do Financeiro. */}
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="text-[36px] font-bold leading-[1.05] tracking-tight text-foreground md:text-[42px]">
-              {page.title}
+              Financeiro
             </p>
-            <p className="mt-1.5 text-sm text-text-secondary">{page.description}</p>
+            <p className="mt-1.5 text-sm text-text-secondary">
+              Posição atual, lançamentos e análises financeiras.
+            </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {page.importar && (
-              <Button variant="outline" size="comfortable" onClick={() => setImportOpen(true)}>
-                <Upload className="h-4 w-4" /> Importar
-              </Button>
-            )}
-            {page.novo && (
+          {topTab !== "analises" && (
+            <div className="flex flex-wrap items-center gap-2">
+              {topTab === "lancamentos" && (
+                <Button variant="outline" size="comfortable" onClick={() => setImportOpen(true)}>
+                  <Upload className="h-4 w-4" /> Importar
+                </Button>
+              )}
               <Button variant="primary" size="comfortable" onClick={() => setNewOpen(true)}>
                 <Plus className="h-4 w-4" /> Novo lançamento
               </Button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         <div className="-mx-4 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:px-0 [&::-webkit-scrollbar]:hidden">
@@ -168,58 +133,38 @@ export function FinanceiroSection() {
           />
         </div>
 
-        {/* Resumo (Etapa 6) tem sua própria toolbar compacta, integrada à
-         * composição bento em `VisaoGeralTab.tsx` — a barra de largura
-         * total abaixo só continua pras demais páginas com período
-         * (Movimentações/Campanhas), intocada. */}
-        {page.periodo && topTab !== "resumo" && (
-          <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-card p-3 dark:shadow-none">
-            <PeriodPicker filtered={filtered} />
-          </div>
-        )}
-
-        {/* Subpáginas do Financeiro — navegação contextual do módulo (a
-         * sidebar global só leva ao Financeiro). Mesma URL de antes
-         * (`?financeiroTab=`). */}
         <div>
           {topTab === "resumo" && (
             <VisaoGeralTab
               filtered={filtered}
-              onApplyFilter={(patch) => {
-                applyFilter(patch);
-                setTopTab("movimentacoes");
+              onApplyFilter={(patch) => goToLancamentos(patch)}
+              onNavigateToAReceber={() => {
+                setSegment("a-receber");
+                setTopTab("lancamentos");
               }}
-              onNavigateToAReceber={() => setTopTab("a-receber")}
-              onNavigateToAPagar={() => setTopTab("a-pagar")}
+              onNavigateToAPagar={() => {
+                setSegment("a-pagar");
+                setTopTab("lancamentos");
+              }}
             />
           )}
-          {topTab === "movimentacoes" && (
-            <MovimentacoesTab
+          {topTab === "lancamentos" && (
+            <LancamentosTab
               filtered={filtered}
+              segment={segment}
+              onSegmentChange={setSegment}
               importOpen={importOpen}
               onImportOpenChange={setImportOpen}
               syncError={syncError}
               onSyncError={setSyncError}
             />
           )}
-          {topTab === "a-receber" && <AReceberTab filtered={filtered} />}
-          {topTab === "a-pagar" && <APagarTab filtered={filtered} />}
-          {topTab === "campanhas" && (
-            <CampanhasTab
+          {topTab === "analises" && (
+            <AnalisesTab
               filtered={filtered}
-              onApplyFilter={(patch) => {
-                applyFilter(patch);
-                setTopTab("movimentacoes");
-              }}
-            />
-          )}
-          {topTab === "relatorios" && (
-            <RelatoriosTab
-              filtered={filtered}
-              onApplyFilter={(patch) => {
-                applyFilter(patch);
-                setTopTab("movimentacoes");
-              }}
+              view={analiseView}
+              onViewChange={setAnaliseView}
+              onApplyFilter={(patch) => goToLancamentos(patch)}
             />
           )}
         </div>

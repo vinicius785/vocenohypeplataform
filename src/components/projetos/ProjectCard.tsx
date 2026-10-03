@@ -7,6 +7,7 @@ import {
   Archive,
   Trash2,
   FolderKanban,
+  ArrowUpRight,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -149,7 +150,9 @@ export function ProjectCard({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={onOpen}>Abrir</DropdownMenuItem>
+            <DropdownMenuItem onSelect={onOpen}>
+              <ArrowUpRight className="h-3.5 w-3.5" /> Abrir
+            </DropdownMenuItem>
             {canEdit && (
               <>
                 <DropdownMenuItem onSelect={onEdit}>

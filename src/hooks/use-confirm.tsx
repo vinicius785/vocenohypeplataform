@@ -9,20 +9,35 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { buttonVariants } from "@/components/ui/button";
 
 /**
  * In-app replacement for window.confirm(): native confirm() dialogs are
  * blocked/suppressed in some browsers and webviews, silently returning
  * false and making delete buttons look like they "do nothing".
  */
-export function useConfirm() {
-  const [state, setState] = useState<{ message: string; resolve: (v: boolean) => void } | null>(
-    null,
-  );
+export type ConfirmOptions = {
+  /** Título do diálogo — o padrão ("Confirmar ação") serve pra confirmações
+   * neutras; ações destrutivas devem dizer o que vai acontecer
+   * ("Excluir projeto?"). */
+  title?: string;
+  /** Rótulo do botão de confirmação ("Excluir projeto"), em vez do genérico. */
+  confirmLabel?: string;
+  /** Ação destrutiva/irreversível: o botão de confirmação fica vermelho. É a
+   * linguagem única de exclusão no produto — mensagem diz o que se perde. */
+  destructive?: boolean;
+};
 
-  const confirm = useCallback((message: string) => {
+export function useConfirm() {
+  const [state, setState] = useState<{
+    message: string;
+    options?: ConfirmOptions;
+    resolve: (v: boolean) => void;
+  } | null>(null);
+
+  const confirm = useCallback((message: string, options?: ConfirmOptions) => {
     return new Promise<boolean>((resolve) => {
-      setState({ message, resolve });
+      setState({ message, options, resolve });
     });
   }, []);
 
@@ -35,12 +50,21 @@ export function useConfirm() {
     <AlertDialog open={!!state} onOpenChange={(o) => !o && settle(false)}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Confirmar ação</AlertDialogTitle>
-          <AlertDialogDescription>{state?.message}</AlertDialogDescription>
+          <AlertDialogTitle>{state?.options?.title ?? "Confirmar ação"}</AlertDialogTitle>
+          <AlertDialogDescription className="whitespace-pre-line">
+            {state?.message}
+          </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel onClick={() => settle(false)}>Cancelar</AlertDialogCancel>
-          <AlertDialogAction onClick={() => settle(true)}>Confirmar</AlertDialogAction>
+          <AlertDialogAction
+            onClick={() => settle(true)}
+            className={
+              state?.options?.destructive ? buttonVariants({ variant: "destructive" }) : undefined
+            }
+          >
+            {state?.options?.confirmLabel ?? "Confirmar"}
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

@@ -223,9 +223,13 @@ function InscricaoPage() {
       <div className="min-h-screen bg-background">
         <Header logo={ws.logo} nome={ws.nome} />
         <div className="mx-auto flex max-w-2xl flex-col items-center gap-2 px-5 py-24 text-center">
-          <h1 className="text-xl font-semibold tracking-tight text-foreground">
+          <p
+            role="heading"
+            aria-level={1}
+            className="text-xl font-semibold tracking-tight text-foreground"
+          >
             Esta página ainda não está disponível.
-          </h1>
+          </p>
           <p className="text-sm text-muted-foreground">
             A inscrição pra <strong>{page.publicTitle}</strong> ainda não foi publicada.
           </p>
@@ -246,9 +250,13 @@ function InscricaoPage() {
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background">
               <Check className="h-6 w-6" />
             </div>
-            <h1 className="text-xl font-semibold tracking-tight text-foreground">
+            <p
+              role="heading"
+              aria-level={1}
+              className="text-xl font-semibold tracking-tight text-foreground"
+            >
               Inscrição enviada!
-            </h1>
+            </p>
             <p className="max-w-sm text-sm text-muted-foreground whitespace-pre-wrap">
               {page.thankYouMessage}
             </p>
@@ -266,9 +274,13 @@ function InscricaoPage() {
                 {clienteNome}
               </p>
             )}
-            <h1 className="mt-1 text-3xl font-semibold tracking-tight text-foreground">
+            <p
+              role="heading"
+              aria-level={1}
+              className="mt-1 text-3xl font-semibold tracking-tight text-foreground"
+            >
               {page.publicTitle}
-            </h1>
+            </p>
             {page.publicSubtitle && (
               <p className="mt-2 text-base text-muted-foreground">{page.publicSubtitle}</p>
             )}
@@ -287,9 +299,13 @@ function InscricaoPage() {
               page.sobre.publicoDesejado ||
               page.sobre.infoImportante) && (
               <section className="mt-6 space-y-3 rounded-2xl border border-border bg-card p-5">
-                <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                <p
+                  role="heading"
+                  aria-level={2}
+                  className="text-xs font-semibold uppercase tracking-widest text-muted-foreground"
+                >
                   Sobre a campanha
-                </h2>
+                </p>
                 <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
                   <SobreRow label="Objetivo" value={page.sobre.objetivo} />
                   <SobreRow label="Regiões" value={page.sobre.regioes} />
@@ -310,9 +326,13 @@ function InscricaoPage() {
               <section className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {page.showDos && page.dos.length > 0 && (
                   <div className="rounded-2xl border border-border bg-card p-5">
-                    <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                    <p
+                      role="heading"
+                      aria-level={2}
+                      className="text-xs font-semibold uppercase tracking-widest text-muted-foreground"
+                    >
                       O que fazer
-                    </h2>
+                    </p>
                     <ul className="mt-3 space-y-2">
                       {page.dos.map((d, i) => (
                         <li key={i} className="flex items-start gap-2 text-sm text-foreground">
@@ -325,9 +345,13 @@ function InscricaoPage() {
                 )}
                 {page.showDonts && page.donts.length > 0 && (
                   <div className="rounded-2xl border border-border bg-card p-5">
-                    <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                    <p
+                      role="heading"
+                      aria-level={2}
+                      className="text-xs font-semibold uppercase tracking-widest text-muted-foreground"
+                    >
                       O que evitar
-                    </h2>
+                    </p>
                     <ul className="mt-3 space-y-2">
                       {page.donts.map((d, i) => (
                         <li key={i} className="flex items-start gap-2 text-sm text-foreground">
@@ -621,7 +645,9 @@ function FormSection({
   return (
     <div className="space-y-3 border-t border-border/60 pt-6 first:border-t-0 first:pt-0">
       <div>
-        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        <p role="heading" aria-level={3} className="text-sm font-semibold text-foreground">
+          {title}
+        </p>
         {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
       </div>
       {children}

@@ -34,6 +34,7 @@ import {
   Pause,
   Play,
   Archive,
+  ArrowLeft,
   type LucideIcon,
 } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
@@ -218,7 +219,8 @@ function ProjetoPage() {
     if (!project) return;
     if (
       !(await confirm(
-        `Excluir "${project.name}"? Isso remove o projeto e todo o conteúdo dele (tarefas e arquivos). Não pode ser desfeito.`,
+        `Você está prestes a excluir "${project.name}".\nTodas as tarefas e arquivos associados serão removidos.\nEsta ação não pode ser desfeita.`,
+        { title: "Excluir projeto?", confirmLabel: "Excluir projeto", destructive: true },
       ))
     ) {
       return;
@@ -242,7 +244,10 @@ function ProjetoPage() {
   const requestArchive = async () => {
     if (!project) return;
     if (
-      !(await confirm(`Arquivar "${project.name}"? Ele sai das listas ativas, mas nada é apagado.`))
+      !(await confirm(`"${project.name}" sai das listas ativas, mas nada é apagado.`, {
+        title: "Arquivar projeto?",
+        confirmLabel: "Arquivar",
+      }))
     ) {
       return;
     }
@@ -304,19 +309,14 @@ function ProjetoPage() {
       <PageContainer className="space-y-6">
         {/* Breadcrumb — fora do cabeçalho, mesmo padrão da página de
          * Campanha (`CampanhaDetail`'s `<nav>`). */}
-        <nav
-          aria-label="Navegação"
-          className="flex items-center gap-1.5 text-xs text-text-secondary"
-        >
+        <nav aria-label="Navegação" className="text-xs">
           <button
             type="button"
             onClick={() => goToSection("projetos")}
-            className="rounded hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            className="inline-flex items-center gap-1 text-text-secondary hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
           >
-            Projetos
+            <ArrowLeft className="h-3.5 w-3.5" /> Projetos
           </button>
-          <span>/</span>
-          <span className="min-w-0 truncate font-medium text-foreground">{project.name}</span>
         </nav>
 
         {/* Cabeçalho — card escuro compacto, mesma linguagem visual da
@@ -324,10 +324,10 @@ function ProjetoPage() {
          * (SummaryStat, componente compartilhado) numa faixa só embaixo do
          * mesmo card. Nada de banner azul — azul fica só como destaque
          * (botão, foco, badges de saúde). */}
-        <div className="overflow-hidden rounded-2xl border border-border bg-card dark:shadow-none">
-          <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex min-w-0 flex-1 items-start gap-3">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted">
+        <div className="space-y-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex min-w-0 flex-1 items-start gap-4">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-muted">
                 {project.cover ? (
                   <img
                     src={project.cover}
@@ -340,7 +340,7 @@ function ProjetoPage() {
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="truncate text-xl font-semibold tracking-tight text-foreground">
+                  <h1 className="truncate text-2xl font-bold tracking-tight text-foreground md:text-3xl">
                     {project.name}
                   </h1>
                   <Badge variant={PROJECT_STATUS_BADGE_VARIANT[projectStatus]} className="shrink-0">
@@ -379,9 +379,6 @@ function ProjetoPage() {
                 <DropdownMenuContent align="end">
                   {canEdit && (
                     <>
-                      <DropdownMenuItem onSelect={() => setEditOpen(true)}>
-                        <Pencil className="h-3.5 w-3.5" /> Editar
-                      </DropdownMenuItem>
                       <DropdownMenuItem onSelect={handleDuplicateProject}>
                         <Copy className="h-3.5 w-3.5" /> Duplicar
                       </DropdownMenuItem>
@@ -418,7 +415,7 @@ function ProjetoPage() {
 
           {/* Resumo operacional — uma faixa só, SummaryStat compartilhado
            * (mesmo componente do resumo de Campanha). */}
-          <div className="flex flex-wrap border-t border-border/60">
+          <div className="flex flex-wrap rounded-2xl bg-card dark:shadow-none">
             <SummaryStat
               label="Progresso"
               value={metrics.total === 0 ? "Sem tarefas" : `${metrics.progressPct}%`}
@@ -484,10 +481,10 @@ function ProjetoPage() {
                         <button
                           key={k}
                           onClick={() => setTab(k)}
-                          className={`inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition-colors ${
+                          className={`inline-flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors ${
                             active
-                              ? "border-brand text-brand"
-                              : "border-transparent text-muted-foreground hover:text-foreground"
+                              ? "border-foreground text-foreground"
+                              : "border-transparent text-text-secondary hover:text-foreground"
                           }`}
                         >
                           <Icon className="h-3.5 w-3.5" />
@@ -873,7 +870,14 @@ function DocsPanel({
     });
 
   const remove = async (id: string, name: string) => {
-    if (!(await confirm(`Excluir "${name}"? Isso não pode ser desfeito.`))) return;
+    if (
+      !(await confirm(`Você está prestes a excluir "${name}".\nEsta ação não pode ser desfeita.`, {
+        title: "Excluir item?",
+        confirmLabel: "Excluir",
+        destructive: true,
+      }))
+    )
+      return;
     update({ docs: project.docs.filter((x) => x.id !== id) });
   };
 

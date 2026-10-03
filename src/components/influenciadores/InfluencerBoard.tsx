@@ -2002,9 +2002,13 @@ export function InfluencerBoard({
     <section className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          <p
+            role="heading"
+            aria-level={2}
+            className="text-xs font-semibold uppercase tracking-widest text-muted-foreground"
+          >
             Influenciadores
-          </h2>
+          </p>
           <p className="mt-1 text-sm text-muted-foreground">
             {influs.length} {influs.length === 1 ? "adicionado" : "adicionados"}
           </p>
@@ -4902,7 +4906,9 @@ function EntregasOperationalList({
   return (
     <div>
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-foreground">Entregas</h2>
+        <p role="heading" aria-level={2} className="text-sm font-semibold text-foreground">
+          Entregas
+        </p>
         <button
           type="button"
           onClick={onAddEntrega}
@@ -5251,7 +5257,9 @@ function WorkspaceDetailBody({
       />
 
       <section className="space-y-5">
-        <h2 className="text-sm font-semibold text-foreground">Contexto da seleção</h2>
+        <p role="heading" aria-level={2} className="text-sm font-semibold text-foreground">
+          Contexto da seleção
+        </p>
         <MotivoSelecaoField
           key={influ.id}
           value={influ.justificativaTime ?? ""}
@@ -6068,7 +6076,9 @@ function BriefingAnexoUploadButton({
 function FieldLabel({ title, hint }: { title: string; hint?: string }) {
   return (
     <div>
-      <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+      <p role="heading" aria-level={3} className="text-sm font-semibold text-foreground">
+        {title}
+      </p>
       {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
     </div>
   );

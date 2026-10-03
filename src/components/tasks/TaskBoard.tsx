@@ -1551,9 +1551,13 @@ export function TaskBoard({
       <section className="space-y-4">
         <div className="flex flex-wrap items-end justify-between gap-y-2 gap-x-4">
           <div>
-            <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            <p
+              role="heading"
+              aria-level={2}
+              className="text-xs font-semibold uppercase tracking-widest text-muted-foreground"
+            >
               {title}
-            </h2>
+            </p>
             <p className="mt-1 text-sm text-muted-foreground">
               {viewToggle
                 ? `${openTasksCount} ${openTasksCount === 1 ? "aberta" : "abertas"}${
@@ -2150,12 +2154,14 @@ export function TaskBoard({
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex min-w-0 items-center gap-2">
                             <span className={`h-2 w-2 shrink-0 rounded-full ${col.dotClass}`} />
-                            <h3
+                            <p
+                              role="heading"
+                              aria-level={3}
                               title={col.label}
                               className="truncate text-[13px] font-semibold text-foreground"
                             >
                               {col.label}
-                            </h3>
+                            </p>
                           </div>
                         </div>
                         <p className="mt-1 text-[12px] tabular-nums text-text-secondary">

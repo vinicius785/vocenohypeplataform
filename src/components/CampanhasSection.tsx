@@ -214,7 +214,10 @@ export function CampanhasSection() {
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
 
   const requestDeleteCampanha = async (row: CampanhaRow) => {
-    const ok = await confirm(`Excluir a campanha "${row.campanha.nome}"?`);
+    const ok = await confirm(
+      `Você está prestes a excluir "${row.campanha.nome}".\nOs influenciadores, tarefas e documentos vinculados também serão removidos.\nEsta ação não pode ser desfeita.`,
+      { title: "Excluir campanha?", confirmLabel: "Excluir campanha", destructive: true },
+    );
     if (!ok) return;
     setClientes((prev) =>
       prev.map((c) =>
@@ -779,9 +782,12 @@ function CampanhaDetail({
     useConfirm();
   const requestDeleteCampanha = async () => {
     const ok = await confirmDeleteCampanha(
-      influs.length > 0
-        ? `Excluir a campanha "${c.nome}"? Os ${influs.length} influenciador(es) vinculados também serão removidos — essa ação não pode ser desfeita.`
-        : `Excluir a campanha "${c.nome}"? Essa ação não pode ser desfeita.`,
+      `Você está prestes a excluir "${c.nome}".\n${
+        influs.length > 0
+          ? `Os ${influs.length} influenciador(es) vinculados também serão removidos.\n`
+          : ""
+      }Esta ação não pode ser desfeita.`,
+      { title: "Excluir campanha?", confirmLabel: "Excluir campanha", destructive: true },
     );
     if (!ok) return;
     setClientes((prev) =>
@@ -939,9 +945,13 @@ function CampanhaDetail({
             <div className="flex min-w-0 items-start gap-4 md:gap-5">
               <ClienteLogo photo={cliente.photo} empresa={cliente.empresa} size="lg" />
               <div className="min-w-0">
-                <h1 className="truncate text-2xl font-bold tracking-tight text-foreground md:text-3xl">
+                <p
+                  role="heading"
+                  aria-level={1}
+                  className="truncate text-2xl font-bold tracking-tight text-foreground md:text-3xl"
+                >
                   {c.nome}
-                </h1>
+                </p>
                 <p className="mt-0.5 truncate text-sm text-text-secondary">
                   Cliente: <span className="font-medium text-foreground">{cliente.empresa}</span>
                 </p>
@@ -1145,13 +1155,8 @@ function CampanhaDetail({
           <div className="flex flex-wrap">
             <SummaryStat
               label="Influenciadores"
-              value={visibleInflus.length.toString()}
-              complement={`Meta ${totalInflus}`}
-            />
-            <SummaryStat
-              label="Aprovados"
               value={eligibleInflus.length.toString()}
-              complement={`${enviados}/${totalEnviar} enviados · ${emAprovacao} em aprovação`}
+              complement={`Meta ${totalInflus} · ${enviados}/${totalEnviar} enviados`}
             />
             <SummaryStat
               label="Entregas"
@@ -1184,16 +1189,15 @@ function CampanhaDetail({
         {/* PRECISA DE ATENÇÃO — só existe quando há sinal real (ver
          * `attentionItems`); sem pendência, nenhum container é renderizado. */}
         {attentionItems.length > 0 && (
-          <section
-            aria-labelledby="campanha-atencao"
-            className="-mt-2 rounded-2xl bg-card px-4 py-3 dark:shadow-none md:-mt-4 lg:-mt-6 xl:-mt-8"
-          >
-            <h2
+          <section aria-labelledby="campanha-atencao" className="-mt-2 md:-mt-4 lg:-mt-6 xl:-mt-8">
+            <p
+              role="heading"
+              aria-level={2}
               id="campanha-atencao"
               className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-text-secondary"
             >
               <AlertTriangle className="h-3.5 w-3.5" /> Precisa de atenção
-            </h2>
+            </p>
             <ul className="mt-1.5 flex flex-col divide-y divide-border/30">
               {attentionItems.map((item) => (
                 <li key={item.key} className="flex items-center gap-x-3 py-1.5">
@@ -1277,12 +1281,17 @@ function CampanhaDetail({
             className={`${BOTTOM_BOX} scroll-mt-6 md:col-span-2`}
           >
             <div className="-my-1 flex h-8 items-center">
-              <h2 id="campanha-entregas" className={`${BOTTOM_BOX_TITLE} flex items-center gap-2`}>
+              <p
+                role="heading"
+                aria-level={2}
+                id="campanha-entregas"
+                className={`${BOTTOM_BOX_TITLE} flex items-center gap-2`}
+              >
                 Entregas
                 <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
                   {allEntregas.length}
                 </span>
-              </h2>
+              </p>
             </div>
             <div className="mt-1.5">
               {allEntregas.length === 0 ? (
@@ -1332,9 +1341,9 @@ function CampanhaDetail({
           {/* 2. BRIEFING */}
           <section aria-labelledby="campanha-briefing" className={BOTTOM_BOX}>
             <div className="-my-1 flex h-8 items-center justify-between gap-2">
-              <h2 id="campanha-briefing" className={BOTTOM_BOX_TITLE}>
+              <p role="heading" aria-level={2} id="campanha-briefing" className={BOTTOM_BOX_TITLE}>
                 Briefing
-              </h2>
+              </p>
               <Button variant="ghost" size="sm" onClick={() => setEditOpen(true)}>
                 <Pencil className="h-3 w-3" /> Editar
               </Button>
@@ -1399,9 +1408,9 @@ function CampanhaDetail({
           {/* 3. INFOS ÚTEIS (substitui "Contrato") — só operacional. */}
           <section aria-labelledby="campanha-infos" className={BOTTOM_BOX}>
             <div className="-my-1 flex h-8 items-center justify-between gap-2">
-              <h2 id="campanha-infos" className={BOTTOM_BOX_TITLE}>
+              <p role="heading" aria-level={2} id="campanha-infos" className={BOTTOM_BOX_TITLE}>
                 Infos úteis
-              </h2>
+              </p>
               <Button variant="ghost" size="sm" onClick={() => setEditOpen(true)}>
                 <Pencil className="h-3 w-3" /> Editar
               </Button>

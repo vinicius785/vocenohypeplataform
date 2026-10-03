@@ -177,12 +177,6 @@ export function RelatoriosTab({
           </button>
         )}
       </ChartCard>
-
-      <p className="text-[11px] text-muted-foreground">
-        Rentabilidade por campanha e o toggle contratado/realizado vivem na aba{" "}
-        <span className="font-medium text-foreground">Campanhas</span>, pra não duplicar a mesma
-        tabela em dois lugares.
-      </p>
     </div>
   );
 }

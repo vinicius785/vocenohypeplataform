@@ -16,6 +16,9 @@ import { formatDateToIso, cn } from "@/lib/utils";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { TYPOGRAPHY } from "@/lib/design-tokens";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -44,8 +47,6 @@ import {
   type InscricaoSobre,
 } from "@/lib/inscricao-page";
 
-const inputCls =
-  "h-9 w-full rounded-md border border-border bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring";
 const FIELD_KEYS: InscricaoFieldKey[] = ["nicho", "redes", "mensagem", "midiaKit"];
 const QUESTION_TYPES: CustomQuestionType[] = [
   "texto_curto",
@@ -384,8 +385,10 @@ export function InscricaoPageDialog({
           <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2.5">
-                <DialogTitle className="text-xl font-semibold tracking-tight text-foreground">
-                  Página de inscrição
+                <DialogTitle asChild>
+                  <p className={`${TYPOGRAPHY.sectionTitle} text-foreground`}>
+                    Página de inscrição
+                  </p>
                 </DialogTitle>
                 <Badge
                   variant={
@@ -399,7 +402,7 @@ export function InscricaoPageDialog({
                   {INSCRICAO_STATUS_LABEL[effective.status]}
                 </Badge>
               </div>
-              <DialogDescription className="mt-1 text-sm text-text-secondary">
+              <DialogDescription className={`mt-1 ${TYPOGRAPHY.bodySecondary}`}>
                 {campaign.nome} · {clienteNome}
               </DialogDescription>
               <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-secondary">
@@ -511,20 +514,18 @@ export function InscricaoPageDialog({
                   >
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <FormField label="Título público">
-                        <input
+                        <Input
                           value={publicTitle}
                           onChange={(e) => setPublicTitle(e.target.value)}
                           placeholder={showCampaignName ? campaign.nome : ANONYMOUS_CAMPAIGN_TITLE}
-                          className={inputCls}
                           maxLength={120}
                         />
                       </FormField>
                       <FormField label="Subtítulo público">
-                        <input
+                        <Input
                           value={publicSubtitle}
                           onChange={(e) => setPublicSubtitle(e.target.value)}
                           placeholder="Ex: Estamos buscando criadores para..."
-                          className={inputCls}
                           maxLength={160}
                         />
                       </FormField>
@@ -611,12 +612,12 @@ export function InscricaoPageDialog({
                       )}
                     </FormField>
                     <FormField label="Texto de apresentação">
-                      <textarea
+                      <Textarea
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
                         rows={3}
                         placeholder="Estamos buscando influenciadores para..."
-                        className={`${inputCls} h-auto resize-none py-2`}
+                        className="resize-none"
                         maxLength={2000}
                       />
                     </FormField>
@@ -638,22 +639,21 @@ export function InscricaoPageDialog({
                         ] as const
                       ).map(([key, label]) => (
                         <FormField key={key} label={label}>
-                          <input
+                          <Input
                             value={sobre[key] ?? ""}
                             onChange={(e) => setSobre((s) => ({ ...s, [key]: e.target.value }))}
-                            className={inputCls}
                           />
                         </FormField>
                       ))}
                     </div>
                     <FormField label="Informações importantes">
-                      <textarea
+                      <Textarea
                         value={sobre.infoImportante ?? ""}
                         onChange={(e) =>
                           setSobre((s) => ({ ...s, infoImportante: e.target.value }))
                         }
                         rows={2}
-                        className={`${inputCls} h-auto resize-none py-2`}
+                        className="resize-none"
                       />
                     </FormField>
                   </FormSection>
@@ -663,11 +663,11 @@ export function InscricaoPageDialog({
                     description="Mensagem mostrada ao influenciador depois de enviar."
                   >
                     <FormField label="Mensagem de confirmação">
-                      <textarea
+                      <Textarea
                         value={thankYouMessage}
                         onChange={(e) => setThankYouMessage(e.target.value)}
                         rows={2}
-                        className={`${inputCls} h-auto resize-none py-2`}
+                        className="resize-none"
                         maxLength={500}
                       />
                     </FormField>
@@ -775,11 +775,11 @@ export function InscricaoPageDialog({
                           <li key={q.id} className="space-y-2.5 py-4 first:pt-0">
                             <div className="flex items-start gap-2">
                               <div className="flex flex-1 flex-col gap-2 sm:flex-row">
-                                <input
+                                <Input
                                   value={q.label}
                                   onChange={(e) => patchQuestion(q.id, { label: e.target.value })}
                                   placeholder="Ex: Você mora em qual cidade?"
-                                  className={`${inputCls} sm:flex-1`}
+                                  className="sm:flex-1"
                                 />
                                 <select
                                   value={q.type}
@@ -788,7 +788,7 @@ export function InscricaoPageDialog({
                                       type: e.target.value as CustomQuestionType,
                                     })
                                   }
-                                  className={`${inputCls} sm:w-44`}
+                                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:w-44"
                                 >
                                   {QUESTION_TYPES.map((t) => (
                                     <option key={t} value={t}>
@@ -808,7 +808,7 @@ export function InscricaoPageDialog({
                             </div>
                             {(q.type === "selecao_unica" || q.type === "selecao_multipla") && (
                               <FormField label="Opções (uma por linha)">
-                                <textarea
+                                <Textarea
                                   value={(q.options ?? []).join("\n")}
                                   onChange={(e) =>
                                     patchQuestion(q.id, {
@@ -819,7 +819,7 @@ export function InscricaoPageDialog({
                                     })
                                   }
                                   rows={3}
-                                  className={`${inputCls} h-auto resize-none py-2`}
+                                  className="resize-none"
                                 />
                               </FormField>
                             )}
@@ -918,8 +918,10 @@ function FormSection({
     <section className={cn("space-y-4 py-7", first ? "pt-0" : "border-t border-border/60")}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-          {description && <p className="mt-0.5 text-sm text-text-secondary">{description}</p>}
+          <p role="heading" aria-level={3} className={TYPOGRAPHY.cardTitle}>
+            {title}
+          </p>
+          {description && <p className={`mt-0.5 ${TYPOGRAPHY.bodySecondary}`}>{description}</p>}
         </div>
         {action}
       </div>
@@ -1081,7 +1083,7 @@ function DoDontEditor({
         </ul>
       )}
       <div className="flex items-center gap-2">
-        <input
+        <Input
           value={newValue}
           onChange={(e) => setNewValue(e.target.value)}
           onKeyDown={(e) => {
@@ -1091,7 +1093,6 @@ function DoDontEditor({
             }
           }}
           placeholder="Descreva o item e pressione Enter..."
-          className={inputCls}
         />
         <Button variant="outline" size="sm" onClick={onAdd} className="shrink-0">
           <Plus className="h-3.5 w-3.5" /> {addLabel}
@@ -1160,9 +1161,13 @@ function LivePreview({
                 {clienteNome}
               </p>
             )}
-            <h3 className="text-base font-semibold leading-tight text-foreground">
+            <p
+              role="heading"
+              aria-level={3}
+              className="text-base font-semibold leading-tight text-foreground"
+            >
               {publicTitle.trim() || fallbackTitle}
-            </h3>
+            </p>
             {publicSubtitle.trim() && (
               <p className="mt-1 text-xs text-text-secondary">{publicSubtitle}</p>
             )}

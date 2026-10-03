@@ -23,22 +23,46 @@ export type SectionKey =
   | "configuracoes"
   | "problemas";
 
-export type FinanceiroTab =
-  | "resumo"
-  | "movimentacoes"
-  | "a-receber"
-  | "a-pagar"
-  | "campanhas"
-  | "relatorios";
+/** Financeiro tem 3 áreas: Resumo (entender a situação), Lançamentos (operar)
+ * e Análises (entender os resultados). "A receber"/"A pagar"/"Entradas"/
+ * "Saídas" são segmentações DENTRO de Lançamentos, e "Por campanha" é uma
+ * visão DENTRO de Análises — nunca áreas estruturais. */
+export type FinanceiroTab = "resumo" | "lancamentos" | "analises";
 
 export const FINANCEIRO_TABS: { key: FinanceiroTab; label: string }[] = [
   { key: "resumo", label: "Resumo" },
-  { key: "movimentacoes", label: "Movimentações" },
+  { key: "lancamentos", label: "Lançamentos" },
+  { key: "analises", label: "Análises" },
+];
+
+export type LancamentosSegment = "todos" | "entradas" | "saidas" | "a-receber" | "a-pagar";
+export const LANCAMENTOS_SEGMENTS: { key: LancamentosSegment; label: string }[] = [
+  { key: "todos", label: "Todos" },
+  { key: "entradas", label: "Entradas" },
+  { key: "saidas", label: "Saídas" },
   { key: "a-receber", label: "A receber" },
   { key: "a-pagar", label: "A pagar" },
-  { key: "campanhas", label: "Campanhas" },
-  { key: "relatorios", label: "Relatórios" },
 ];
+
+export type AnalisesView = "geral" | "campanhas";
+export const ANALISES_VIEWS: { key: AnalisesView; label: string }[] = [
+  { key: "geral", label: "Geral" },
+  { key: "campanhas", label: "Por campanha" },
+];
+
+/** Valores antigos de `?financeiroTab=` (links salvos/compartilhados antes
+ * da consolidação em 3 áreas) → a área nova + a segmentação/visão
+ * equivalente. Nunca quebra um link antigo. */
+const LEGACY_FINANCEIRO_TAB: Record<
+  string,
+  { tab: FinanceiroTab; segment?: LancamentosSegment; view?: AnalisesView }
+> = {
+  movimentacoes: { tab: "lancamentos", segment: "todos" },
+  "a-receber": { tab: "lancamentos", segment: "a-receber" },
+  "a-pagar": { tab: "lancamentos", segment: "a-pagar" },
+  campanhas: { tab: "analises", view: "campanhas" },
+  relatorios: { tab: "analises", view: "geral" },
+};
 
 export type MetasTab = "objetivos" | "indicadores";
 
@@ -60,7 +84,17 @@ export const METAS_TABS: { key: MetasTab; label: string }[] = [
 export type ReunioesView = "agenda" | "calendar" | "requests";
 
 export function resolveFinanceiroTab(value: string | undefined): FinanceiroTab {
+  if (value && LEGACY_FINANCEIRO_TAB[value]) return LEGACY_FINANCEIRO_TAB[value].tab;
   return FINANCEIRO_TABS.some((t) => t.key === value) ? (value as FinanceiroTab) : "resumo";
+}
+
+/** Segmentação/visão inicial implícita num valor antigo da URL (ver acima). */
+export function resolveFinanceiroLegacyTarget(value: string | undefined): {
+  segment: LancamentosSegment;
+  view: AnalisesView;
+} {
+  const legacy = value ? LEGACY_FINANCEIRO_TAB[value] : undefined;
+  return { segment: legacy?.segment ?? "todos", view: legacy?.view ?? "geral" };
 }
 
 export function resolveMetasTab(value: string | undefined): MetasTab {

@@ -63,12 +63,6 @@ export function AdvancedFilterBar({ filtered }: { filtered: Filtered }) {
   // Chips das colunas ativas — cada um removível individualmente, sem
   // precisar abrir o popover de novo pra tirar só um filtro.
   const chips: { key: string; label: string; onRemove: () => void }[] = [];
-  if (filters.tipo !== "todos")
-    chips.push({
-      key: "tipo",
-      label: filters.tipo === "receita" ? "Receitas" : "Despesas",
-      onRemove: () => setF({ tipo: "todos" }),
-    });
   for (const s of filters.status)
     chips.push({ key: `status-${s}`, label: STATUS_LABEL[s], onRemove: () => toggleStatus(s) });
   if (filters.clienteId) {
@@ -137,22 +131,6 @@ export function AdvancedFilterBar({ filtered }: { filtered: Filtered }) {
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="inline-flex rounded-md border border-border bg-background p-0.5">
-          {(["todos", "receita", "despesa"] as const).map((k) => (
-            <button
-              key={k}
-              onClick={() => setF({ tipo: k })}
-              className={`cursor-pointer rounded px-2.5 py-1 text-[11px] font-medium capitalize transition-colors ${
-                filters.tipo === k
-                  ? "bg-muted text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {k === "todos" ? "Todos" : k + "s"}
-            </button>
-          ))}
-        </div>
-
         <select
           value={filters.clienteId ?? "todos"}
           onChange={(e) =>
@@ -368,7 +346,7 @@ export function AdvancedFilterBar({ filtered }: { filtered: Filtered }) {
           ))}
           <button
             type="button"
-            onClick={() => setFilters(DEFAULT_FILTERS)}
+            onClick={() => setFilters({ ...DEFAULT_FILTERS, tipo: filters.tipo })}
             className="cursor-pointer text-xs font-medium text-text-secondary underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
           >
             Limpar filtros

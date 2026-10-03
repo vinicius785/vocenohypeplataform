@@ -1,9 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { resolveFinanceiroTab, resolveMetasTab, resolveReunioesView } from "./section-nav";
+import {
+  resolveFinanceiroLegacyTarget,
+  resolveFinanceiroTab,
+  resolveMetasTab,
+  resolveReunioesView,
+} from "./section-nav";
 
 describe("resolveFinanceiroTab", () => {
   it("mantém um valor válido", () => {
-    expect(resolveFinanceiroTab("a-receber")).toBe("a-receber");
+    expect(resolveFinanceiroTab("lancamentos")).toBe("lancamentos");
+    expect(resolveFinanceiroTab("analises")).toBe("analises");
+  });
+
+  it("links antigos caem na área nova equivalente", () => {
+    expect(resolveFinanceiroTab("movimentacoes")).toBe("lancamentos");
+    expect(resolveFinanceiroTab("a-receber")).toBe("lancamentos");
+    expect(resolveFinanceiroTab("a-pagar")).toBe("lancamentos");
+    expect(resolveFinanceiroTab("campanhas")).toBe("analises");
+    expect(resolveFinanceiroTab("relatorios")).toBe("analises");
+    expect(resolveFinanceiroLegacyTarget("a-pagar").segment).toBe("a-pagar");
+    expect(resolveFinanceiroLegacyTarget("campanhas").view).toBe("campanhas");
+    expect(resolveFinanceiroLegacyTarget(undefined)).toEqual({ segment: "todos", view: "geral" });
   });
 
   it("cai para 'resumo' quando o valor é inválido ou ausente", () => {
