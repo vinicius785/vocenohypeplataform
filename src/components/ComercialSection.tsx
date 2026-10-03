@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
+import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { CalendarDays, Plus } from "lucide-react";
+import { AlertTriangle, CalendarDays, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 import { type Lead, type PropostaSnapshot } from "@/lib/comercial";
 import {
@@ -34,7 +36,6 @@ import { useConfirm } from "@/hooks/use-confirm";
 import { PageContainer } from "@/components/shared/PageContainer";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { PipelineSummary } from "./comercial/PipelineSummary";
 import { FilterRow, FilterSearch, FilterToolbar } from "@/components/shared/FilterToolbar";
 import { SortSelect, FilterPanel, LeadFiltersSummary } from "./comercial/LeadFiltersBar";
@@ -314,18 +315,14 @@ export function ComercialSection() {
         </FilterToolbar>
 
         {isError ? (
-          <div className="surface-card p-10 text-center">
-            <p className="text-sm text-text-secondary">
-              Não foi possível carregar as oportunidades.
-            </p>
-            <button
-              type="button"
-              onClick={() => void refetch()}
-              className="mt-3 rounded-full border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted"
-            >
-              Tentar novamente
-            </button>
-          </div>
+          <Card>
+            <EmptyState
+              icon={<AlertTriangle className="h-5 w-5" />}
+              title="Não foi possível carregar as oportunidades"
+              description="Verifique a conexão e tente de novo."
+              primaryAction={{ label: "Tentar novamente", onClick: () => void refetch() }}
+            />
+          </Card>
         ) : (
           <div className="space-y-3">
             {isLoading ? (
@@ -338,11 +335,13 @@ export function ComercialSection() {
                 ))}
               </div>
             ) : leads.length === 0 ? (
-              <div className="surface-card p-10 text-center">
-                <p className="text-sm text-text-secondary">
-                  Nenhuma oportunidade encontrada com esses filtros.
-                </p>
-              </div>
+              <Card>
+                <EmptyState
+                  icon={<Search className="h-5 w-5" />}
+                  title="Nenhuma oportunidade encontrada"
+                  description="Ajuste a busca ou os filtros para ver outras oportunidades."
+                />
+              </Card>
             ) : (
               <PipelineBoard
                 leads={leads}

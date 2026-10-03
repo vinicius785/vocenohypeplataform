@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { ChevronLeft, ChevronRight, Plus, Ban, Trash2, CalendarDays } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
@@ -362,12 +364,12 @@ function MonthAgendaMobile({
 
   if (daysWithMeetings.length === 0) {
     return (
-      <div className="surface-card p-8 text-center">
-        <CalendarDays className="mx-auto h-7 w-7 text-text-secondary/50" />
-        <p className="mt-3 text-sm font-medium text-foreground">
-          Nenhuma reunião em {monthLabel(cursor)}
-        </p>
-      </div>
+      <Card>
+        <EmptyState
+          icon={<CalendarDays className="h-5 w-5" />}
+          title={`Nenhuma reunião em ${monthLabel(cursor)}`}
+        />
+      </Card>
     );
   }
 

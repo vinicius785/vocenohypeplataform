@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
+import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { KpiCell, KpiStrip } from "@/components/shared/Kpi";
-import { Filter, Gauge, Plus, Search } from "lucide-react";
+import { Filter, Gauge, Search } from "lucide-react";
 import {
   META_AREAS,
   type Indicador,
@@ -14,7 +16,6 @@ import {
   indicadorStatusAtualizacao,
   type StatusAtualizacao,
 } from "@/lib/metas-engine";
-import { Button } from "@/components/ui/button";
 import { FilterSearch } from "@/components/shared/FilterToolbar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CADENCE_LABEL, CADENCE_OPTIONS } from "./metas-ui-utils";
@@ -284,24 +285,22 @@ export function IndicadoresView({
       </KpiStrip>
 
       {indicadores.length === 0 ? (
-        <div className="surface-card p-10 text-center">
-          <Gauge className="mx-auto h-8 w-8 text-text-secondary/50" />
-          <p className="mt-3 text-sm font-medium text-foreground">Nenhum indicador cadastrado</p>
-          <p className="mt-1 text-sm text-text-secondary">
-            Crie o primeiro indicador pra começar a acompanhar uma métrica.
-          </p>
-          <Button variant="primary" size="comfortable" className="mt-5" onClick={onRequestCreate}>
-            <Plus className="h-4 w-4" /> Novo indicador
-          </Button>
-        </div>
+        <Card>
+          <EmptyState
+            icon={<Gauge className="h-5 w-5" />}
+            title="Nenhum indicador cadastrado"
+            description="Crie o primeiro indicador pra começar a acompanhar uma métrica."
+            primaryAction={{ label: "Novo indicador", onClick: onRequestCreate }}
+          />
+        </Card>
       ) : ordenados.length === 0 ? (
-        <div className="surface-card p-10 text-center">
-          <Search className="mx-auto h-8 w-8 text-text-secondary/50" />
-          <p className="mt-3 text-sm font-medium text-foreground">Nenhum indicador encontrado</p>
-          <p className="mt-1 text-sm text-text-secondary">
-            Ajuste a busca, os filtros ou o chip selecionado.
-          </p>
-        </div>
+        <Card>
+          <EmptyState
+            icon={<Search className="h-5 w-5" />}
+            title="Nenhum indicador encontrado"
+            description="Ajuste a busca, os filtros ou o resumo selecionado."
+          />
+        </Card>
       ) : (
         <div className="surface-card p-5">
           <div className="hidden grid-cols-[1fr_5.5rem_6rem_6rem_9rem_2rem] gap-3 px-1 pb-2 text-[11px] font-semibold uppercase tracking-wide text-text-secondary sm:grid">

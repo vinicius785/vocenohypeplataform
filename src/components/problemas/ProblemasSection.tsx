@@ -1,31 +1,22 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { KpiCell, KpiStrip } from "@/components/shared/Kpi";
-import {
-  ArrowUpDown,
-  Check,
-  CircleDot,
-  Flag,
-  LayoutGrid,
-  Plus,
-  RefreshCw,
-  Search,
-  Shapes,
-  Smile,
-  User,
-  X,
-} from "lucide-react";
+import { AlertTriangle, Loader2, Plus, Search, Smile } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { SegmentedControl } from "@/components/ui/segmented-control";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  FilterChips,
+  FilterGroup,
+  FilterPill,
+  FilterPopover,
+  FilterRow,
+  FilterSearch,
+  FilterToolbar,
+  SortMenu,
+} from "@/components/shared/FilterToolbar";
+import { NativeSelect } from "@/components/ui/native-select";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { PageContainer } from "@/components/shared/PageContainer";
 import { PageHeader } from "@/components/shared/PageHeader";
-import { TaskOptionPicker } from "@/components/tasks/task-ui";
 import { useMyAccess } from "@/lib/permissions";
 import { getMe } from "@/lib/chat-store";
 import { openReportProblem } from "@/lib/problem-context";
@@ -49,12 +40,9 @@ import {
 import { PROBLEM_CREATED_EVENT } from "./ReportProblemSheet";
 import { ProblemDetailSheet } from "./ProblemDetailSheet";
 import {
-  KIND_ICON,
-  PROBLEM_PRIORITY_TONE,
   ProblemKindIcon,
   ProblemPriorityFlag,
   ProblemStatusBadge,
-  ProblemStatusIcon,
   relativeDay,
 } from "./problem-ui";
 
@@ -84,32 +72,6 @@ const NO_FILTERS: Filters = {
   assignee: null,
 };
 const ALL = "__all";
-
-function FilterChip({
-  icon,
-  label,
-  active,
-  ...rest
-}: {
-  icon: ReactNode;
-  label: string;
-  active: boolean;
-} & React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  return (
-    <button
-      type="button"
-      {...rest}
-      className={`inline-flex h-8 max-w-[200px] shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
-        active
-          ? "border-primary bg-primary/10 text-foreground"
-          : "border-border bg-card text-text-secondary hover:text-foreground"
-      }`}
-    >
-      {icon}
-      <span className="truncate">{label}</span>
-    </button>
-  );
-}
 
 /**
  * Central de Problemas — reportar algo e acompanhar o que já foi
@@ -266,7 +228,8 @@ export function ProblemasSection() {
         </KpiStrip>
 
         <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
+          {/* Divisão primária da lista (quais reports ver) — não é filtro. */}
+          <div className="-mx-4 max-w-full overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden">
             <SegmentedControl
               aria-label="Visão"
               size="sm"
@@ -278,197 +241,180 @@ export function ProblemasSection() {
                 { value: "resolvidos", label: "Resolvidos" },
               ]}
             />
-            <div className="relative w-full sm:w-64">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-secondary" />
-              <Input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Buscar problemas..."
-                aria-label="Buscar problemas"
-                className="h-9 border-0 bg-card pl-9 text-sm"
-              />
-            </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="ml-auto h-8 gap-1.5 text-xs">
-                  <ArrowUpDown className="h-3.5 w-3.5" />
-                  {SORT_LABEL[sort]}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[200px]">
-                {(Object.keys(SORT_LABEL) as SortKey[]).map((k) => (
-                  <DropdownMenuItem key={k} onSelect={() => setSort(k)} className="gap-2">
-                    <Check className={`h-3.5 w-3.5 ${sort === k ? "opacity-100" : "opacity-0"}`} />
-                    {SORT_LABEL[k]}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
           </div>
 
-          <div
-            role="group"
-            aria-label="Filtros"
-            className="-mx-4 flex items-center gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0 [&::-webkit-scrollbar]:hidden"
-          >
-            <TaskOptionPicker
-              value={filters.status ?? ALL}
-              ariaLabel="Filtrar por status"
-              widthClass="w-60"
-              options={[
-                { value: ALL, label: "Todos os status" },
-                ...PROBLEM_STATUS_OPTIONS.map((s) => ({
-                  value: s,
-                  label: PROBLEM_STATUS_LABEL[s],
-                  icon: <ProblemStatusIcon status={s} />,
-                })),
-              ]}
-              onSelect={(v) =>
-                setFilters((f) => ({ ...f, status: v === ALL ? null : (v as ProblemStatus) }))
-              }
-              trigger={
-                <FilterChip
-                  icon={<CircleDot className="h-3.5 w-3.5" />}
-                  label={filters.status ? PROBLEM_STATUS_LABEL[filters.status] : "Status"}
-                  active={!!filters.status}
-                />
-              }
-            />
-            <TaskOptionPicker
-              value={filters.kind ?? ALL}
-              ariaLabel="Filtrar por tipo"
-              widthClass="w-48"
-              options={[
-                { value: ALL, label: "Todos os tipos" },
-                ...PROBLEM_KINDS.map((k) => {
-                  const Icon = KIND_ICON[k];
-                  return {
-                    value: k,
-                    label: PROBLEM_KIND_LABEL[k],
-                    icon: <Icon aria-hidden className="h-3.5 w-3.5 text-muted-foreground" />,
-                  };
-                }),
-              ]}
-              onSelect={(v) =>
-                setFilters((f) => ({ ...f, kind: v === ALL ? null : (v as ProblemKind) }))
-              }
-              trigger={
-                <FilterChip
-                  icon={<Shapes className="h-3.5 w-3.5" />}
-                  label={filters.kind ? PROBLEM_KIND_LABEL[filters.kind] : "Tipo"}
-                  active={!!filters.kind}
-                />
-              }
-            />
-            <TaskOptionPicker
-              value={filters.priority ?? ALL}
-              ariaLabel="Filtrar por prioridade"
-              widthClass="w-48"
-              options={[
-                { value: ALL, label: "Todas as prioridades" },
-                ...PROBLEM_PRIORITIES.map((p) => ({
-                  value: p,
-                  label: PROBLEM_PRIORITY_LABEL[p],
-                  icon: <Flag aria-hidden className={`h-3.5 w-3.5 ${PROBLEM_PRIORITY_TONE[p]}`} />,
-                })),
-              ]}
-              onSelect={(v) =>
-                setFilters((f) => ({ ...f, priority: v === ALL ? null : (v as ProblemPriority) }))
-              }
-              trigger={
-                <FilterChip
-                  icon={<Flag className="h-3.5 w-3.5" />}
-                  label={filters.priority ? PROBLEM_PRIORITY_LABEL[filters.priority] : "Prioridade"}
-                  active={!!filters.priority}
-                />
-              }
-            />
-            <TaskOptionPicker
-              value={filters.area ?? ALL}
-              ariaLabel="Filtrar por área"
-              widthClass="w-56"
-              searchable
-              searchPlaceholder="Buscar área..."
-              options={[
-                { value: ALL, label: "Todas as áreas" },
-                ...PROBLEM_AREAS.map((a) => ({ value: a as string, label: a })),
-              ]}
-              onSelect={(v) => setFilters((f) => ({ ...f, area: v === ALL ? null : v }))}
-              trigger={
-                <FilterChip
-                  icon={<LayoutGrid className="h-3.5 w-3.5" />}
-                  label={filters.area ?? "Área"}
-                  active={!!filters.area}
-                />
-              }
-            />
-            <TaskOptionPicker
-              value={filters.assignee ?? ALL}
-              ariaLabel="Filtrar por responsável"
-              widthClass="w-60"
-              searchable={assignees.length > 6}
-              options={[
-                { value: ALL, label: "Qualquer responsável" },
-                ...assignees.map((a) => ({ value: a.id, label: a.name })),
-              ]}
-              onSelect={(v) => setFilters((f) => ({ ...f, assignee: v === ALL ? null : v }))}
-              trigger={
-                <FilterChip
-                  icon={<User className="h-3.5 w-3.5" />}
-                  label={
-                    filters.assignee
-                      ? (assignees.find((a) => a.id === filters.assignee)?.name ?? "Responsável")
-                      : "Responsável"
-                  }
-                  active={!!filters.assignee}
-                />
-              }
-            />
-            {activeFilterCount > 0 && (
-              <button
-                type="button"
-                onClick={() => setFilters(NO_FILTERS)}
-                className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full px-2.5 text-xs text-text-secondary hover:text-foreground"
+          <FilterToolbar>
+            <FilterRow>
+              <FilterSearch value={query} onChange={setQuery} placeholder="Buscar problemas..." />
+              <FilterPopover
+                title="Filtrar problemas"
+                activeCount={activeFilterCount}
+                onClear={() => setFilters(NO_FILTERS)}
               >
-                <X className="h-3.5 w-3.5" /> Limpar filtros
-              </button>
-            )}
-          </div>
+                <FilterGroup label="Status">
+                  {PROBLEM_STATUS_OPTIONS.map((st) => (
+                    <FilterPill
+                      key={st}
+                      active={filters.status === st}
+                      onClick={() =>
+                        setFilters((f) => ({ ...f, status: f.status === st ? null : st }))
+                      }
+                    >
+                      {PROBLEM_STATUS_LABEL[st]}
+                    </FilterPill>
+                  ))}
+                </FilterGroup>
+                <FilterGroup label="Tipo">
+                  {PROBLEM_KINDS.map((k) => (
+                    <FilterPill
+                      key={k}
+                      active={filters.kind === k}
+                      onClick={() => setFilters((f) => ({ ...f, kind: f.kind === k ? null : k }))}
+                    >
+                      {PROBLEM_KIND_LABEL[k]}
+                    </FilterPill>
+                  ))}
+                </FilterGroup>
+                <FilterGroup label="Prioridade">
+                  {PROBLEM_PRIORITIES.map((pr) => (
+                    <FilterPill
+                      key={pr}
+                      active={filters.priority === pr}
+                      onClick={() =>
+                        setFilters((f) => ({ ...f, priority: f.priority === pr ? null : pr }))
+                      }
+                    >
+                      {PROBLEM_PRIORITY_LABEL[pr]}
+                    </FilterPill>
+                  ))}
+                </FilterGroup>
+                <div>
+                  <p className="mb-1.5 text-[11px] font-medium text-text-secondary">Área</p>
+                  <NativeSelect
+                    aria-label="Filtrar por área"
+                    value={filters.area ?? ALL}
+                    onChange={(e) =>
+                      setFilters((f) => ({
+                        ...f,
+                        area: e.target.value === ALL ? null : e.target.value,
+                      }))
+                    }
+                  >
+                    <option value={ALL}>Todas as áreas</option>
+                    {PROBLEM_AREAS.map((ar) => (
+                      <option key={ar} value={ar}>
+                        {ar}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                </div>
+                <div>
+                  <p className="mb-1.5 text-[11px] font-medium text-text-secondary">Responsável</p>
+                  <NativeSelect
+                    aria-label="Filtrar por responsável"
+                    value={filters.assignee ?? ALL}
+                    onChange={(e) =>
+                      setFilters((f) => ({
+                        ...f,
+                        assignee: e.target.value === ALL ? null : e.target.value,
+                      }))
+                    }
+                  >
+                    <option value={ALL}>Qualquer responsável</option>
+                    {assignees.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                </div>
+              </FilterPopover>
+              <SortMenu value={sort} options={SORT_LABEL} onChange={setSort} />
+            </FilterRow>
+            <FilterChips
+              chips={[
+                ...(filters.status
+                  ? [
+                      {
+                        id: "status",
+                        label: `Status: ${PROBLEM_STATUS_LABEL[filters.status]}`,
+                        onRemove: () => setFilters((f) => ({ ...f, status: null })),
+                      },
+                    ]
+                  : []),
+                ...(filters.kind
+                  ? [
+                      {
+                        id: "kind",
+                        label: `Tipo: ${PROBLEM_KIND_LABEL[filters.kind]}`,
+                        onRemove: () => setFilters((f) => ({ ...f, kind: null })),
+                      },
+                    ]
+                  : []),
+                ...(filters.priority
+                  ? [
+                      {
+                        id: "priority",
+                        label: `Prioridade: ${PROBLEM_PRIORITY_LABEL[filters.priority]}`,
+                        onRemove: () => setFilters((f) => ({ ...f, priority: null })),
+                      },
+                    ]
+                  : []),
+                ...(filters.area
+                  ? [
+                      {
+                        id: "area",
+                        label: `Área: ${filters.area}`,
+                        onRemove: () => setFilters((f) => ({ ...f, area: null })),
+                      },
+                    ]
+                  : []),
+                ...(filters.assignee
+                  ? [
+                      {
+                        id: "assignee",
+                        label: `Responsável: ${assignees.find((a) => a.id === filters.assignee)?.name ?? "—"}`,
+                        onRemove: () => setFilters((f) => ({ ...f, assignee: null })),
+                      },
+                    ]
+                  : []),
+              ]}
+              onClear={() => setFilters(NO_FILTERS)}
+            />
+          </FilterToolbar>
         </div>
 
         <section className="surface-card overflow-hidden">
           {state === "error" ? (
-            <div className="flex flex-col items-center gap-2 px-5 py-12 text-center">
-              <p className="text-sm text-text-secondary">Não foi possível carregar os problemas.</p>
-              <Button variant="outline" size="sm" onClick={() => void load()} className="gap-1.5">
-                <RefreshCw className="h-3.5 w-3.5" /> Tentar novamente
-              </Button>
-            </div>
+            <EmptyState
+              icon={<AlertTriangle className="h-5 w-5" />}
+              title="Não foi possível carregar os problemas"
+              primaryAction={{ label: "Tentar novamente", onClick: () => void load() }}
+            />
           ) : state === "loading" ? (
-            <p className="px-5 py-12 text-center text-sm text-text-secondary">Carregando…</p>
-          ) : items.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 px-5 py-14 text-center">
-              <Smile aria-hidden className="h-8 w-8 text-text-secondary" />
-              <p className="text-sm font-medium text-foreground">Nenhum problema reportado</p>
-              <p className="max-w-sm text-xs text-text-secondary">
-                Está tudo tranquilo por aqui. Quando alguém reportar um problema, ele aparecerá
-                nesta lista.
-              </p>
-              <Button
-                variant="primary"
-                size="sm"
-                className="mt-2 gap-1.5"
-                onClick={() => openReportProblem()}
-              >
-                <Plus className="h-3.5 w-3.5" /> Reportar problema
-              </Button>
+            <div
+              className="flex items-center justify-center gap-2 px-5 py-12 text-sm text-text-secondary"
+              role="status"
+            >
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Carregando…
             </div>
+          ) : items.length === 0 ? (
+            <EmptyState
+              icon={<Smile className="h-5 w-5" />}
+              title="Nenhum problema reportado"
+              description="Está tudo tranquilo por aqui. Quando alguém reportar um problema, ele aparecerá nesta lista."
+              primaryAction={{ label: "Reportar problema", onClick: () => openReportProblem() }}
+            />
           ) : visible.length === 0 ? (
-            <p className="px-5 py-12 text-center text-sm text-text-secondary">
-              {view === "meus"
-                ? "Você ainda não reportou nada com esses filtros."
-                : "Nenhum problema encontrado com esses filtros."}
-            </p>
+            <EmptyState
+              icon={<Search className="h-5 w-5" />}
+              title={
+                view === "meus"
+                  ? "Você ainda não reportou nada com esses filtros"
+                  : "Nenhum problema encontrado"
+              }
+              description="Ajuste a busca ou os filtros para ver outros problemas."
+            />
           ) : (
             <ul className="divide-y divide-border/60">
               {visible.map((p) => (

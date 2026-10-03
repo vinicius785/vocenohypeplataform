@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { KpiCell, KpiStrip } from "@/components/shared/Kpi";
 import { Filter, Search, Target } from "lucide-react";
 import { META_AREAS, type Indicador, type MetaArea, type Objetivo } from "@/lib/metas-store";
@@ -268,13 +270,13 @@ export function ObjetivosView({
       />
 
       {objetivos.length === 0 ? (
-        <div className="surface-card p-10 text-center">
-          <Target className="mx-auto h-8 w-8 text-text-secondary/50" />
-          <p className="mt-3 text-sm font-medium text-foreground">Nenhum objetivo cadastrado</p>
-          <p className="mt-1 text-sm text-text-secondary">
-            Crie o primeiro objetivo pelo botão "Criar" no topo da página.
-          </p>
-        </div>
+        <Card>
+          <EmptyState
+            icon={<Target className="h-5 w-5" />}
+            title="Nenhum objetivo cadastrado"
+            description='Crie o primeiro objetivo pelo botão "Criar" no topo da página.'
+          />
+        </Card>
       ) : (
         <div className="space-y-8">
           {meusObjetivos.length > 0 && (
@@ -370,15 +372,17 @@ export function ObjetivosView({
           )}
 
           {meusObjetivos.length === 0 && outrosObjetivos.length === 0 && (
-            <div className="surface-card p-10 text-center">
-              <Search className="mx-auto h-8 w-8 text-text-secondary/50" />
-              <p className="mt-3 text-sm font-medium text-foreground">Nenhum objetivo encontrado</p>
-              <p className="mt-1 text-sm text-text-secondary">
-                {busca.trim()
-                  ? "Ajuste a busca ou remova filtros ativos."
-                  : "Nenhum objetivo corresponde aos filtros selecionados."}
-              </p>
-            </div>
+            <Card>
+              <EmptyState
+                icon={<Search className="h-5 w-5" />}
+                title="Nenhum objetivo encontrado"
+                description={
+                  busca.trim()
+                    ? "Ajuste a busca ou remova filtros ativos."
+                    : "Nenhum objetivo corresponde aos filtros selecionados."
+                }
+              />
+            </Card>
           )}
         </div>
       )}

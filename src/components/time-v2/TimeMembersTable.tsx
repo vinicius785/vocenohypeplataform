@@ -1,4 +1,5 @@
-import { ArrowDown, ArrowUp } from "lucide-react";
+import { ArrowDown, ArrowUp, Users } from "lucide-react";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -173,13 +174,16 @@ export function TimeMembersTable({
           ))}
         </div>
       ) : rows.length === 0 ? (
-        <p className="px-5 py-12 text-center text-sm text-text-secondary">
-          {totalMembers === 0
-            ? "Nenhum membro cadastrado."
-            : filtered
-              ? "Nenhum membro encontrado com esses filtros."
-              : "Nenhum membro encontrado."}
-        </p>
+        <EmptyState
+          icon={<Users className="h-5 w-5" />}
+          title={
+            totalMembers === 0
+              ? "Nenhum membro cadastrado"
+              : filtered
+                ? "Nenhum membro encontrado com esses filtros"
+                : "Nenhum membro encontrado"
+          }
+        />
       ) : (
         <ul className="divide-y divide-border/60">
           {rows.map((r) => {

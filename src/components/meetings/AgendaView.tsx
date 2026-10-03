@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { KpiCell, KpiStrip } from "@/components/shared/Kpi";
 import { useServerFn } from "@tanstack/react-start";
-import { LogIn, CalendarDays, Plus, AlertTriangle } from "lucide-react";
+import { LogIn, CalendarDays, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Meeting } from "@/lib/reunioes-store";
 import { meetingStartTime, meetingEndTime, meetingDisplayStatus } from "@/lib/reunioes-store";
@@ -198,18 +200,16 @@ export function AgendaView({
       </div>
 
       {isEmpty ? (
-        <div className="surface-card p-10 text-center">
-          <CalendarDays className="mx-auto h-8 w-8 text-text-secondary/50" />
-          <p className="mt-3 text-sm font-medium text-foreground">Nenhuma reunião agendada</p>
-          <p className="mt-1 text-sm text-text-secondary">
-            Crie uma nova reunião ou entre com um código/link no topo da página.
-          </p>
-          {onNewMeeting && (
-            <Button variant="primary" size="comfortable" className="mt-5" onClick={onNewMeeting}>
-              <Plus className="h-4 w-4" /> Nova reunião
-            </Button>
-          )}
-        </div>
+        <Card>
+          <EmptyState
+            icon={<CalendarDays className="h-5 w-5" />}
+            title="Nenhuma reunião agendada"
+            description="Crie uma nova reunião ou entre com um código/link no topo da página."
+            primaryAction={
+              onNewMeeting ? { label: "Nova reunião", onClick: onNewMeeting } : undefined
+            }
+          />
+        </Card>
       ) : (
         <>
           {hero && (

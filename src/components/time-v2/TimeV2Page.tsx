@@ -1,24 +1,8 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
-import {
-  AlertTriangle,
-  ArrowUpDown,
-  Check,
-  CircleDot,
-  Copy,
-  Link2,
-  Plus,
-  Search,
-} from "lucide-react";
+import { AlertTriangle, CircleDot, Copy, Link2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { OPEN_STATUSES } from "@/lib/score";
 import type { ScorePeriodMode } from "@/lib/performance-engine";
 import { formatResponseDuration } from "@/lib/member-response-time";
@@ -34,6 +18,16 @@ import { PageContainer } from "@/components/shared/PageContainer";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { MemberProfileV2 } from "./MemberProfileV2";
 import { TimeMembersTable } from "./TimeMembersTable";
+import {
+  FilterChips,
+  FilterGroup,
+  FilterPill,
+  FilterPopover,
+  FilterRow,
+  FilterSearch,
+  FilterToolbar,
+  SortMenu,
+} from "@/components/shared/FilterToolbar";
 import { TimeSummaryStrip } from "./TimeSummaryStrip";
 import { dependencyBreakdownText, dependencySummary, teamAverageOpen } from "./member-metrics";
 import {
@@ -265,17 +259,9 @@ export function TimeV2Page() {
             }
           />
 
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative w-full sm:w-64">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-secondary" />
-              <Input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Buscar membro..."
-                aria-label="Buscar membro"
-                className="h-9 border-0 bg-card pl-9 text-sm"
-              />
-            </div>
+          {/* Contexto global: o período vale para os KPIs e para a tabela de membros. */}
+          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Período">
+            <span className="text-sm text-text-secondary">Período</span>
             <SegmentedControl
               aria-label="Período"
               size="sm"
@@ -283,46 +269,6 @@ export function TimeV2Page() {
               onChange={setScorePeriod}
               options={PERIOD_OPTIONS}
             />
-            <div role="group" aria-label="Filtros" className="flex flex-wrap items-center gap-1.5">
-              {FILTERS.map((f) => {
-                const active = filters.has(f.key);
-                return (
-                  <button
-                    key={f.key}
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() => toggleFilter(f.key)}
-                    className={`inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors ${active ? "border-primary bg-primary/10 text-foreground" : "border-border bg-card text-text-secondary hover:text-foreground"}`}
-                  >
-                    {f.icon}
-                    {f.label}
-                    <span className="tabular-nums text-text-secondary">{filterCounts[f.key]}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="ml-auto h-8 gap-1.5 text-xs">
-                  <ArrowUpDown className="h-3.5 w-3.5" />
-                  <span className="max-w-[160px] truncate">{MEMBER_SORT_LABEL[sort.key]}</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[220px]">
-                {(Object.keys(MEMBER_SORT_LABEL) as MemberSortKey[]).map((key) => (
-                  <DropdownMenuItem
-                    key={key}
-                    onSelect={() => setSort({ key, dir: DEFAULT_SORT_DIR[key] })}
-                    className="gap-2"
-                  >
-                    <Check
-                      className={`h-3.5 w-3.5 ${sort.key === key ? "opacity-100" : "opacity-0"}`}
-                    />
-                    {MEMBER_SORT_LABEL[key]}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
           </div>
 
           {error && (
@@ -398,6 +344,42 @@ export function TimeV2Page() {
             onOpenAtrasadas={() => goAttention("atrasadas")}
             onOpenBloqueadas={() => goAttention("bloqueadas")}
           />
+
+          <FilterToolbar>
+            <FilterRow>
+              <FilterSearch value={query} onChange={setQuery} placeholder="Buscar membro..." />
+              <FilterPopover
+                title="Filtrar membros"
+                activeCount={filters.size}
+                onClear={() => setFilters(new Set())}
+              >
+                <FilterGroup label="Situação">
+                  {FILTERS.map((f) => (
+                    <FilterPill
+                      key={f.key}
+                      active={filters.has(f.key)}
+                      onClick={() => toggleFilter(f.key)}
+                    >
+                      {f.label} · {filterCounts[f.key]}
+                    </FilterPill>
+                  ))}
+                </FilterGroup>
+              </FilterPopover>
+              <SortMenu
+                value={sort.key}
+                options={MEMBER_SORT_LABEL}
+                onChange={(key) => setSort({ key, dir: DEFAULT_SORT_DIR[key] })}
+              />
+            </FilterRow>
+            <FilterChips
+              chips={FILTERS.filter((f) => filters.has(f.key)).map((f) => ({
+                id: f.key,
+                label: f.label,
+                onRemove: () => toggleFilter(f.key),
+              }))}
+              onClear={() => setFilters(new Set())}
+            />
+          </FilterToolbar>
 
           <div className="space-y-2">
             <p className="px-1 text-[11px] font-medium text-text-secondary">
