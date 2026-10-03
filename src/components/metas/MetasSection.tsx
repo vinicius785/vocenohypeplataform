@@ -229,9 +229,12 @@ export function MetasSection() {
   const handleDeleteObjetivo = async (obj: Objetivo) => {
     const filhos = indicadores.filter((i) => i.objetivoIds?.includes(obj.id));
     const ok = await confirm(
-      filhos.length > 0
-        ? `Excluir o objetivo "${obj.titulo}"? Os ${filhos.length} indicador(es) vinculados continuam existindo, só deixam de fazer parte deste objetivo.`
-        : `Excluir o objetivo "${obj.titulo}"?`,
+      `Você está prestes a excluir "${obj.titulo}".\n${
+        filhos.length > 0
+          ? `Os ${filhos.length} indicador(es) vinculados continuam existindo, só deixam de fazer parte deste objetivo.\n`
+          : ""
+      }Esta ação não pode ser desfeita.`,
+      { title: "Excluir objetivo?", confirmLabel: "Excluir objetivo", destructive: true },
     );
     if (!ok) return;
     persist(
@@ -249,9 +252,12 @@ export function MetasSection() {
   const handleDeleteIndicador = async (ind: Indicador) => {
     const vinculados = objetivos.filter((o) => ind.objetivoIds?.includes(o.id));
     const ok = await confirm(
-      vinculados.length > 0
-        ? `Excluir o indicador "${ind.titulo}"? Ele está sendo utilizado em ${vinculados.length} objetivo(s): ${vinculados.map((o) => o.titulo).join(", ")}.`
-        : `Excluir o indicador "${ind.titulo}"?`,
+      `Você está prestes a excluir "${ind.titulo}".\n${
+        vinculados.length > 0
+          ? `Ele é usado em ${vinculados.length} objetivo(s): ${vinculados.map((o) => o.titulo).join(", ")}.\n`
+          : ""
+      }Esta ação não pode ser desfeita.`,
+      { title: "Excluir indicador?", confirmLabel: "Excluir indicador", destructive: true },
     );
     if (!ok) return;
     persist(items.filter((x) => x.id !== ind.id));
@@ -336,7 +342,7 @@ export function MetasSection() {
                 : "Objetivos e indicadores operacionais do time."}
             </p>
           </div>
-          {metasView !== "indicadores" && (
+          {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="primary" size="comfortable">
@@ -374,7 +380,7 @@ export function MetasSection() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          )}
+          }
         </div>
 
         <SegmentedControl
@@ -388,11 +394,10 @@ export function MetasSection() {
           <IndicadoresView
             indicadores={indicadores}
             objetivos={objetivos}
-            members={members}
             onOpenIndicador={(id) => push({ kind: "indicador", id })}
             onOpenObjetivo={(id) => push({ kind: "objetivo", id })}
             onQuickUpdate={updateIndicadorPatch}
-            onCreate={createIndicadorStandalone}
+            onRequestCreate={() => setIndicadorCreateDialog(true)}
           />
         ) : (
           <ObjetivosView

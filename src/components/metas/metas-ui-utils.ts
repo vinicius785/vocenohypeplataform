@@ -1,3 +1,4 @@
+import type { IndicadorSaude } from "@/lib/metas-engine";
 /** Pequenos helpers puros compartilhados entre os componentes de Metas —
  * evita duplicar entre `MetasSection`, `MetaCard`, os diálogos etc. */
 
@@ -184,4 +185,13 @@ export function formatMetaVinculo(ind: Indicador, objetivoId: string): string | 
   const valorFmt = formatIndicadorValor(ind.tipo, meta, ind.unidade);
   if (comparador === "<=" || comparador === "<") return `Limite ${valorFmt}`;
   return `Meta ${COMPARISON_OPERATOR_SYMBOL[comparador]} ${valorFmt}`;
+}
+
+/** Saúde "silenciosa quando está tudo bem": só o que exige atenção ganha
+ * texto colorido (sem fundo, sem caixa-alta); saudável/concluído/não
+ * iniciado não mostram rótulo — o ponto colorido da linha já basta. */
+export function saudeAlertaClass(saude: IndicadorSaude): string | null {
+  if (saude === "em_risco" || saude === "atrasado") return "text-danger";
+  if (saude === "atencao") return "text-warning";
+  return null;
 }

@@ -1,8 +1,7 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { ArrowLeft, MoreHorizontal, Percent, Plus, Trash2 } from "lucide-react";
 import type { ComparisonOperator, Indicador, Objetivo } from "@/lib/metas-store";
 import {
-  INDICADOR_SAUDE_DOT,
   INDICADOR_SAUDE_LABEL,
   indicadorSaudeParaObjetivo,
   objetivoProgresso,
@@ -11,7 +10,15 @@ import {
   progressoEsperado,
 } from "@/lib/metas-engine";
 import { Button } from "@/components/ui/button";
-import { fmtPeriodo } from "./metas-ui-utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { fmtPeriodo, saudeAlertaClass } from "./metas-ui-utils";
 import { Avatar } from "./Avatar";
 import { ExpectedProgressLine } from "./ExpectedProgressLine";
 import { ObjetivoIndicadorRow } from "./ObjetivoIndicadorRow";
@@ -19,7 +26,6 @@ import { VincularIndicadorDialog } from "./VincularIndicadorDialog";
 import { IndicadorQuickCreateDialog } from "./IndicadorQuickCreateDialog";
 import { IndicadorQuickUpdate, type IndicadorQuickPatch } from "./IndicadorQuickUpdate";
 import { AjustarPesosDialog } from "./AjustarPesosDialog";
-import { useDropdown } from "./use-dropdown";
 
 type Member = { name: string; photo?: string };
 
@@ -73,19 +79,17 @@ export function ObjetivoPage({
     dataISO: string,
   ) => void;
 }) {
-  const [menuOpen, setMenuOpen] = useState(false);
   const [vincularOpen, setVincularOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [pesosOpen, setPesosOpen] = useState(false);
   const [quickUpdateTarget, setQuickUpdateTarget] = useState<Indicador | null>(null);
   const [filtro, setFiltro] = useState<IndicadorFiltro>("todos");
-  const menuRef = useRef<HTMLDivElement>(null);
-  useDropdown(menuRef, menuOpen, () => setMenuOpen(false));
 
   const progresso = objetivoProgresso(objetivo.id, indicadoresDoObjetivo);
   const stats = objetivoStats(objetivo.id, indicadoresDoObjetivo);
   const resumoSaude = objetivoResumoSaude(objetivo, stats);
   const esperado = progressoEsperado(objetivo);
+  const saudeAlerta = saudeAlertaClass(resumoSaude);
   const periodo = fmtPeriodo(objetivo.dataInicio, objetivo.dataFim);
   const linkable = indicadoresDisponiveis.filter(
     (i) => !indicadoresDoObjetivo.some((l) => l.id === i.id),
@@ -111,7 +115,7 @@ export function ObjetivoPage({
     filtro === "em_risco" ? emRisco : filtro === "saudaveis" ? saudaveis : indicadoresDoObjetivo;
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-6">
+    <div className="mx-auto w-full max-w-4xl space-y-8 pb-10">
       <button
         type="button"
         onClick={onBack}
@@ -120,93 +124,69 @@ export function ObjetivoPage({
         <ArrowLeft className="h-4 w-4" /> Metas
       </button>
 
-      {/* Hero — protagonista brand blue com título/dono/área/período,
-       * progresso (sempre dominante e azul) e saúde à parte, como chip
-       * semântico, nunca pintando a superfície inteira de vermelho. */}
-      <div className="rounded-[28px] bg-brand p-6 dark:shadow-none md:p-7">
+      {/* Identidade + andamento — sem "hero" colorido: o nome é o elemento
+       * dominante, o progresso vem logo abaixo e a saúde só aparece quando
+       * pede atenção. */}
+      <header className="space-y-4">
         <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <Avatar
-              name={objetivo.dono}
-              photo={members.find((m) => m.name === objetivo.dono)?.photo}
-            />
-            <p className="min-w-0 truncate text-sm text-brand-foreground-secondary">
-              {objetivo.dono || "Sem dono"} · {objetivo.area}
-              {periodo ? ` · ${periodo}` : ""}
-            </p>
-          </div>
-          <div ref={menuRef} className="relative shrink-0">
-            <button
-              type="button"
-              onClick={() => setMenuOpen((v) => !v)}
-              aria-label="Mais ações"
-              aria-expanded={menuOpen}
-              className="flex h-8 w-8 items-center justify-center rounded-full text-brand-foreground-secondary hover:bg-black/10 hover:text-brand-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-background"
+          <div className="min-w-0">
+            <p
+              role="heading"
+              aria-level={1}
+              className="text-2xl font-bold leading-tight tracking-tight text-foreground md:text-3xl"
             >
-              <MoreHorizontal className="h-4 w-4" />
-            </button>
-            {menuOpen && (
-              <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-xl bg-popover p-1 text-foreground shadow-lg dark:shadow-none">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onEdit();
-                  }}
-                  className="block w-full rounded px-2 py-1.5 text-left text-sm font-medium hover:bg-muted"
-                >
-                  Editar objetivo
-                </button>
-                {stats.total >= 2 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      setPesosOpen(true);
-                    }}
-                    className="block w-full rounded px-2 py-1.5 text-left text-sm font-medium hover:bg-muted"
-                  >
-                    Ajustar pesos
-                  </button>
-                )}
-                <div className="my-1 border-t border-border/60" />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onDelete();
-                  }}
-                  className="flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm font-medium text-danger hover:bg-danger-soft"
-                >
-                  <Trash2 className="h-3.5 w-3.5" /> Excluir objetivo
-                </button>
-              </div>
+              {objetivo.titulo}
+            </p>
+            <p className="mt-2 flex min-w-0 items-center gap-2 text-sm text-text-secondary">
+              <Avatar
+                name={objetivo.dono}
+                photo={members.find((m) => m.name === objetivo.dono)?.photo}
+              />
+              <span className="truncate">
+                {objetivo.dono || "Sem responsável"} · {objetivo.area}
+                {periodo ? ` · ${periodo}` : ""}
+              </span>
+            </p>
+            {objetivo.descricao && (
+              <p className="mt-2 max-w-2xl text-sm text-text-secondary">{objetivo.descricao}</p>
             )}
           </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label="Mais ações"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-secondary/80 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={onEdit}>Editar objetivo</DropdownMenuItem>
+              {stats.total >= 2 && (
+                <DropdownMenuItem onSelect={() => setPesosOpen(true)}>
+                  Ajustar pesos
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={onDelete}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Excluir objetivo
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
-        <h1 className="mt-3 text-2xl font-bold tracking-tight text-brand-foreground md:text-3xl">
-          {objetivo.titulo}
-        </h1>
-        {objetivo.descricao && (
-          <p className="mt-1.5 max-w-xl text-sm text-brand-foreground-secondary">
-            {objetivo.descricao}
+        <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
+          <p className="whitespace-nowrap text-4xl font-bold leading-none tracking-tight text-foreground">
+            {progresso == null ? "—" : Math.round(progresso)}
+            {progresso != null && <span className="text-xl text-text-secondary">%</span>}
           </p>
-        )}
-
-        <div className="mt-6 flex flex-wrap items-end gap-x-8 gap-y-4">
-          <div>
-            <p className="whitespace-nowrap text-[44px] font-bold leading-none tracking-tight text-brand-foreground">
-              {progresso == null ? "—" : Math.round(progresso)}
-              {progresso != null && <span className="text-2xl">%</span>}
-            </p>
-            <p className="mt-1.5 text-xs font-medium uppercase tracking-wide text-brand-foreground-secondary">
-              Progresso
-            </p>
-          </div>
           <div className="min-w-[160px] flex-1">
             <div
-              className="h-2 w-full overflow-hidden rounded-full bg-black/10"
+              className="h-1.5 w-full overflow-hidden rounded-full bg-muted-foreground/15"
               role="progressbar"
               aria-valuenow={progresso == null ? undefined : Math.round(progresso)}
               aria-valuemin={0}
@@ -214,7 +194,7 @@ export function ObjetivoPage({
               aria-label={`Progresso de ${objetivo.titulo}`}
             >
               <div
-                className="h-full rounded-full bg-background transition-[width] duration-300"
+                className="h-full rounded-full bg-brand transition-[width] duration-300"
                 style={{ width: `${Math.max(0, Math.min(100, progresso ?? 0))}%` }}
               />
             </div>
@@ -222,33 +202,22 @@ export function ObjetivoPage({
               <ExpectedProgressLine progresso={progresso} esperado={esperado} />
             </div>
           </div>
-          <div className="flex items-center gap-1.5 rounded-full bg-black/10 px-3 py-1.5">
-            <span
-              className={`h-1.5 w-1.5 shrink-0 rounded-full ${INDICADOR_SAUDE_DOT[resumoSaude]}`}
-            />
-            <span className="text-xs font-medium text-brand-foreground">
+          {saudeAlerta && (
+            <span className={`text-sm font-medium ${saudeAlerta}`}>
               {INDICADOR_SAUDE_LABEL[resumoSaude]}
             </span>
-          </div>
-          {stats.total > 0 && (
-            <div>
-              <p className="text-lg font-semibold text-brand-foreground">{stats.total}</p>
-              <p className="text-xs font-medium uppercase tracking-wide text-brand-foreground-secondary">
-                {stats.total === 1 ? "Indicador" : "Indicadores"}
-              </p>
-            </div>
           )}
         </div>
-      </div>
+      </header>
 
-      {/* Indicadores vinculados — superfície estruturada com cabeçalho
-       * claro, filtros contextuais preservados, ações em cada linha. */}
-      <div className="rounded-[24px] bg-card p-5 dark:shadow-none">
+      {/* Indicadores — seção contínua (sem card): título + ações, filtro
+       * Todos/Em risco/Saudáveis relativo a ESTE objetivo, linhas. */}
+      <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-[15px] font-semibold text-foreground">
+          <p role="heading" aria-level={2} className="text-[15px] font-semibold text-foreground">
             Indicadores{" "}
             {stats.total > 0 && <span className="text-text-secondary">({stats.total})</span>}
-          </h2>
+          </p>
           <div className="flex items-center gap-2">
             {stats.total >= 2 && (
               <button
@@ -266,52 +235,37 @@ export function ObjetivoPage({
         </div>
 
         {stats.total > 0 && (
-          <div className="mt-3 flex items-center gap-1">
-            {(
-              [
-                ["todos", `Todos ${stats.total}`],
-                ["em_risco", `Em risco ${emRisco.length}`],
-                ["saudaveis", `Saudáveis ${saudaveis.length}`],
-              ] as const
-            ).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setFiltro(key)}
-                className={`rounded-full px-2.5 py-1 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
-                  filtro === key
-                    ? key === "em_risco"
-                      ? "bg-danger-soft text-danger-soft-foreground"
-                      : key === "saudaveis"
-                        ? "bg-success-soft text-success-soft-foreground"
-                        : "bg-muted text-foreground"
-                    : "text-text-secondary hover:bg-muted/60"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            aria-label="Filtrar indicadores"
+            size="sm"
+            value={filtro}
+            onChange={setFiltro}
+            options={[
+              { value: "todos", label: `Todos ${stats.total}` },
+              { value: "em_risco", label: `Em risco ${emRisco.length}` },
+              { value: "saudaveis", label: `Saudáveis ${saudaveis.length}` },
+            ]}
+          />
         )}
 
         {indicadoresDoObjetivo.length === 0 ? (
-          <div className="mt-4 rounded-2xl bg-muted/40 p-8 text-center">
-            <p className="text-sm text-text-secondary">Nenhum indicador ainda.</p>
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-3"
-              onClick={() => setVincularOpen(true)}
-            >
+          <div className="flex items-center justify-between gap-3 border-y border-border/60 py-4">
+            <div>
+              <p className="text-sm font-medium text-foreground">Nenhum indicador ainda</p>
+              <p className="text-sm text-text-secondary">
+                Vincule um indicador existente ou crie um novo para acompanhar este objetivo.
+              </p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setVincularOpen(true)}>
               <Plus className="h-4 w-4" /> Vincular indicador
             </Button>
           </div>
         ) : indicadoresFiltrados.length === 0 ? (
-          <p className="mt-6 text-center text-sm text-text-secondary">
+          <p className="py-6 text-center text-sm text-text-secondary">
             {filtro === "em_risco" ? "Nenhum indicador em risco." : "Nenhum indicador saudável."}
           </p>
         ) : (
-          <div className="mt-3 divide-y divide-border/60">
+          <div className="divide-y divide-border/60 border-y border-border/60">
             {indicadoresFiltrados.map((ind) => (
               <ObjetivoIndicadorRow
                 key={ind.id}
@@ -325,7 +279,7 @@ export function ObjetivoPage({
             ))}
           </div>
         )}
-      </div>
+      </section>
 
       <VincularIndicadorDialog
         open={vincularOpen}

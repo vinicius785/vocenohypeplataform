@@ -1,10 +1,15 @@
-import { useRef, useState } from "react";
 import { MoreHorizontal, RefreshCw } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { Indicador } from "@/lib/metas-store";
 import {
   INDICADOR_SAUDE_DOT,
   INDICADOR_SAUDE_LABEL,
-  INDICADOR_SAUDE_TONE,
   indicadorPeso,
   indicadorSaudeParaObjetivo,
   indicadorTendencia,
@@ -17,7 +22,7 @@ import {
   TENDENCIA_ICON,
   TENDENCIA_TONE,
 } from "./metas-ui-utils";
-import { useDropdown } from "./use-dropdown";
+import { saudeAlertaClass } from "./metas-ui-utils";
 
 /** Linha densa de um indicador DENTRO de um objetivo — substitui o card
  * grande (`IndicadorRow`) só aqui, onde comparar vários indicadores lado
@@ -50,9 +55,7 @@ export function ObjetivoIndicadorRow({
   const meta = formatMetaVinculo(indicador, objetivoId);
   const peso = indicadorPeso(indicador, siblings, objetivoId);
 
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  useDropdown(menuRef, menuOpen, () => setMenuOpen(false));
+  const alerta = saudeAlertaClass(saude);
 
   return (
     <div className="group flex flex-col gap-1.5 py-3 sm:flex-row sm:items-center sm:gap-3">
@@ -81,11 +84,9 @@ export function ObjetivoIndicadorRow({
             <span className="font-medium tabular-nums text-foreground">{valor}</span>
             {meta && <span className="text-text-secondary">{meta}</span>}
             <span className="text-text-secondary">Peso {Math.round(peso)}%</span>
-            <span
-              className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${INDICADOR_SAUDE_TONE[saude]}`}
-            >
-              {INDICADOR_SAUDE_LABEL[saude]}
-            </span>
+            {alerta && (
+              <span className={`font-medium ${alerta}`}>{INDICADOR_SAUDE_LABEL[saude]}</span>
+            )}
           </p>
         </div>
         <span className="hidden w-16 shrink-0 text-right text-sm tabular-nums text-foreground sm:block">
@@ -98,9 +99,9 @@ export function ObjetivoIndicadorRow({
           {Math.round(peso)}%
         </span>
         <span
-          className={`hidden w-24 shrink-0 rounded px-1.5 py-0.5 text-center text-[9px] font-semibold uppercase tracking-wide sm:block ${INDICADOR_SAUDE_TONE[saude]}`}
+          className={`hidden w-24 shrink-0 text-right text-xs font-medium sm:block ${alerta ?? ""}`}
         >
-          {INDICADOR_SAUDE_LABEL[saude]}
+          {alerta ? INDICADOR_SAUDE_LABEL[saude] : ""}
         </span>
       </button>
       <div className="flex shrink-0 items-center gap-0.5 self-end sm:self-auto sm:opacity-0 sm:group-hover:opacity-100">
@@ -115,42 +116,28 @@ export function ObjetivoIndicadorRow({
             <RefreshCw className="h-3.5 w-3.5" />
           </button>
         )}
-        <div ref={menuRef} className="relative">
-          <button
-            type="button"
-            onClick={() => setMenuOpen((v) => !v)}
-            title="Mais ações"
-            aria-label="Mais ações"
-            aria-expanded={menuOpen}
-            className="rounded p-1.5 text-text-secondary hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-          >
-            <MoreHorizontal className="h-3.5 w-3.5" />
-          </button>
-          {menuOpen && (
-            <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-xl bg-popover p-1 shadow-lg dark:shadow-none">
-              <button
-                type="button"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onOpen();
-                }}
-                className="block w-full rounded px-2 py-1.5 text-left text-sm font-medium text-foreground hover:bg-muted"
-              >
-                Abrir
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onUnlink();
-                }}
-                className="block w-full rounded px-2 py-1.5 text-left text-sm font-medium text-danger hover:bg-danger-soft"
-              >
-                Desvincular deste objetivo
-              </button>
-            </div>
-          )}
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              title="Mais ações"
+              aria-label="Mais ações"
+              className="rounded p-1.5 text-text-secondary hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            >
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={onOpen}>Abrir</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onSelect={onUnlink}
+              className="text-destructive focus:text-destructive"
+            >
+              Desvincular deste objetivo
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );

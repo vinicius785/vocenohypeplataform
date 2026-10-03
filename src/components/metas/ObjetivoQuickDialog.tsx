@@ -123,7 +123,7 @@ export function ObjetivoQuickDialog({
             </div>
             <div>
               <Label htmlFor="objetivo-dono" className={LABEL_CLS}>
-                Dono
+                Responsável
               </Label>
               <select
                 id="objetivo-dono"
@@ -131,7 +131,7 @@ export function ObjetivoQuickDialog({
                 onChange={(e) => setDono(e.target.value)}
                 className={FIELD_CLS}
               >
-                <option value="">Sem dono</option>
+                <option value="">Sem responsável</option>
                 {members.map((m) => (
                   <option key={m.name} value={m.name}>
                     {m.name}

@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Check, Minus, TrendingDown, TrendingUp } from "lucide-react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { DateField } from "@/components/ui/date-field";
 import {
@@ -21,11 +22,11 @@ const LABEL_CLS = "text-xs font-medium text-text-secondary";
 
 type HowKind = "alcancar" | "acima" | "abaixo" | "concluir";
 
-const HOW_OPTIONS: { kind: HowKind; label: string; icon: typeof TrendingUp }[] = [
-  { kind: "alcancar", label: "Alcançar um valor", icon: TrendingUp },
-  { kind: "acima", label: "Manter acima de um valor", icon: TrendingUp },
-  { kind: "abaixo", label: "Manter abaixo de um valor", icon: TrendingDown },
-  { kind: "concluir", label: "Concluir algo", icon: Check },
+const HOW_OPTIONS: { kind: HowKind; label: string; hint: string }[] = [
+  { kind: "alcancar", label: "Chegar a um valor", hint: "Ex.: faturar R$ 100 mil no trimestre." },
+  { kind: "acima", label: "Ficar acima de um valor", hint: "Ex.: margem sempre acima de 30%." },
+  { kind: "abaixo", label: "Ficar abaixo de um valor", hint: "Ex.: cancelamentos abaixo de 5%." },
+  { kind: "concluir", label: "Marcar como concluído", hint: "Sem número: está feito ou não." },
 ];
 
 type Unit = "percentual" | "moeda" | "numero";
@@ -134,6 +135,7 @@ export function IndicadorQuickCreateDialog({
   const [dono, setDono] = useState("");
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
+  const [moreOpen, setMoreOpen] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -146,6 +148,7 @@ export function IndicadorQuickCreateDialog({
     setDono("");
     setDataInicio("");
     setDataFim("");
+    setMoreOpen(false);
   }, [open, objetivoArea]);
 
   const submit = () => {
@@ -182,8 +185,8 @@ export function IndicadorQuickCreateDialog({
         <div className="border-b border-border/60 px-6 py-5">
           <SheetTitle>Novo indicador</SheetTitle>
           <SheetDescription className="text-xs text-text-secondary">
-            Uma métrica individual para acompanhar. Detalhes mais finos (baseline, meta mínima,
-            excelência...) dá pra ajustar depois, na página do indicador.
+            Uma métrica para acompanhar. Detalhes mais finos (baseline, metas mínima e de
+            excelência) dá pra ajustar depois, na página do indicador.
           </SheetDescription>
         </div>
 
@@ -203,76 +206,42 @@ export function IndicadorQuickCreateDialog({
           </div>
 
           <div>
-            <Label className={LABEL_CLS}>Como essa meta funciona?</Label>
-            <div className="mt-1.5 grid grid-cols-2 gap-2">
-              {HOW_OPTIONS.map(({ kind, label, icon: Icon }) => (
-                <button
+            <Label className={LABEL_CLS}>O que você quer acompanhar?</Label>
+            <RadioGroup
+              value={how ?? ""}
+              onValueChange={(v) => setHow(v as HowKind)}
+              className="mt-1 gap-0"
+            >
+              {HOW_OPTIONS.map(({ kind, label, hint }) => (
+                <label
                   key={kind}
-                  type="button"
-                  onClick={() => setHow(kind)}
-                  className={`flex items-center gap-1.5 rounded-md px-2.5 py-2 text-left text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
-                    how === kind
-                      ? "bg-brand-subtle text-brand"
-                      : "bg-muted text-text-secondary hover:text-foreground"
-                  }`}
+                  className="flex cursor-pointer items-start gap-3 rounded-md px-2 py-2 transition-colors hover:bg-muted/50"
                 >
-                  <Icon className="h-3.5 w-3.5 shrink-0" />
-                  {label}
-                </button>
+                  <RadioGroupItem value={kind} className="mt-0.5" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium text-foreground">{label}</span>
+                    <span className="block text-xs leading-snug text-text-secondary">{hint}</span>
+                  </span>
+                </label>
               ))}
-            </div>
+            </RadioGroup>
           </div>
 
-          {how === "alcancar" && (
-            <div>
-              <Label className={LABEL_CLS}>Meta</Label>
-              <div className="mt-1 flex gap-2">
-                <MetaValueInput
-                  unit={unit}
-                  value={meta}
-                  onChange={setMeta}
-                  placeholder="63"
-                  className="h-9 flex-1 rounded-md border border-input bg-background px-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-brand"
-                />
-                <div className="flex overflow-hidden rounded-md bg-muted p-0.5">
-                  {UNIT_OPTIONS.map(({ unit: u, label }) => (
-                    <button
-                      key={u}
-                      type="button"
-                      onClick={() => setUnit(u)}
-                      className={`rounded px-3 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
-                        unit === u
-                          ? "bg-background text-foreground shadow-sm"
-                          : "text-text-secondary hover:text-foreground"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {unit === "numero" && (
-                <input
-                  value={unidadeLivre}
-                  onChange={(e) => setUnidadeLivre(e.target.value)}
-                  placeholder="Unidade (opcional) — clientes, operações..."
-                  className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-brand"
-                />
-              )}
-            </div>
-          )}
-
-          {(how === "acima" || how === "abaixo") && (
+          {how && how !== "concluir" && (
             <div>
               <Label className={LABEL_CLS}>
-                {how === "acima" ? "Manter acima de" : "Manter abaixo de"}
+                {how === "alcancar"
+                  ? "Valor a alcançar"
+                  : how === "acima"
+                    ? "Manter acima de"
+                    : "Manter abaixo de"}
               </Label>
               <div className="mt-1 flex gap-2">
                 <MetaValueInput
                   unit={unit}
                   value={meta}
                   onChange={setMeta}
-                  placeholder="Ex: 6"
+                  placeholder={how === "alcancar" ? "Ex: 63" : "Ex: 6"}
                   className="h-9 flex-1 rounded-md border border-input bg-background px-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-brand"
                 />
                 <div className="flex overflow-hidden rounded-md bg-muted p-0.5">
@@ -303,64 +272,76 @@ export function IndicadorQuickCreateDialog({
             </div>
           )}
 
-          {how === "concluir" && (
-            <p className="flex items-center gap-1.5 rounded-2xl bg-muted/40 p-3 text-xs text-text-secondary">
-              <Minus className="h-3.5 w-3.5 shrink-0" /> Sem valor numérico — o indicador fica
-              "concluído" ou "em aberto".
-            </p>
-          )}
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label htmlFor="indicador-area" className={LABEL_CLS}>
-                Área
-              </Label>
-              <select
-                id="indicador-area"
-                value={area}
-                onChange={(e) => setArea(e.target.value as MetaArea)}
-                className={FIELD_CLS}
-              >
-                {META_AREAS.map((a) => (
-                  <option key={a} value={a}>
-                    {a}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <Label htmlFor="indicador-dono" className={LABEL_CLS}>
-                Dono
-              </Label>
-              <select
-                id="indicador-dono"
-                value={dono}
-                onChange={(e) => setDono(e.target.value)}
-                className={FIELD_CLS}
-              >
-                <option value="">Sem dono</option>
-                {members.map((m) => (
-                  <option key={m.name} value={m.name}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div>
-            <Label className={LABEL_CLS}>Período (opcional)</Label>
-            <div className="mt-1 grid grid-cols-2 gap-3">
-              <DateField
-                value={dataInicio || undefined}
-                onChange={(v) => setDataInicio(v ?? "")}
-                max={dataFim || undefined}
-              />
-              <DateField
-                value={dataFim || undefined}
-                onChange={(v) => setDataFim(v ?? "")}
-                min={dataInicio || undefined}
-              />
-            </div>
+          <div className="border-t border-border/60 pt-3">
+            <button
+              type="button"
+              onClick={() => setMoreOpen((v) => !v)}
+              aria-expanded={moreOpen}
+              className="inline-flex items-center gap-1 rounded text-xs font-medium text-text-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            >
+              {moreOpen ? (
+                <ChevronUp className="h-3.5 w-3.5" />
+              ) : (
+                <ChevronDown className="h-3.5 w-3.5" />
+              )}
+              Mais detalhes (responsável, área, período)
+            </button>
+            {moreOpen && (
+              <div className="mt-3 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label htmlFor="indicador-dono" className={LABEL_CLS}>
+                      Responsável
+                    </Label>
+                    <select
+                      id="indicador-dono"
+                      value={dono}
+                      onChange={(e) => setDono(e.target.value)}
+                      className={FIELD_CLS}
+                    >
+                      <option value="">Sem responsável</option>
+                      {members.map((m) => (
+                        <option key={m.name} value={m.name}>
+                          {m.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <Label htmlFor="indicador-area" className={LABEL_CLS}>
+                      Área
+                    </Label>
+                    <select
+                      id="indicador-area"
+                      value={area}
+                      onChange={(e) => setArea(e.target.value as MetaArea)}
+                      className={FIELD_CLS}
+                    >
+                      {META_AREAS.map((a) => (
+                        <option key={a} value={a}>
+                          {a}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <Label className={LABEL_CLS}>Período (opcional)</Label>
+                  <div className="mt-1 grid grid-cols-2 gap-3">
+                    <DateField
+                      value={dataInicio || undefined}
+                      onChange={(v) => setDataInicio(v ?? "")}
+                      max={dataFim || undefined}
+                    />
+                    <DateField
+                      value={dataFim || undefined}
+                      onChange={(v) => setDataFim(v ?? "")}
+                      min={dataInicio || undefined}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Filter, Search, Target, X } from "lucide-react";
 import { META_AREAS, type Indicador, type MetaArea, type Objetivo } from "@/lib/metas-store";
 import {
@@ -9,16 +9,11 @@ import {
   objetivoStats,
 } from "@/lib/metas-engine";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SegmentedControl } from "@/components/ui/segmented-control";
-import {
-  PageSummaryPanel,
-  SummaryMetric,
-  SummaryPrimaryMetric,
-} from "@/components/shared/PageSummaryPanel";
 import { fmtMonthYear } from "./metas-ui-utils";
 import { Avatar } from "./Avatar";
 import { ObjetivoSummaryCard } from "./ObjetivoSummaryCard";
-import { useDropdown } from "./use-dropdown";
 
 type Member = { name: string; photo?: string };
 
@@ -48,9 +43,6 @@ export function ObjetivosView({
   const [donoFilter, setDonoFilter] = useState("");
   const [saudeFilter, setSaudeFilter] = useState<"" | IndicadorSaude>("");
   const [periodoFilter, setPeriodoFilter] = useState("");
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const filtersRef = useRef<HTMLDivElement>(null);
-  useDropdown(filtersRef, filtersOpen, () => setFiltersOpen(false));
 
   const [agrupamento, setAgrupamento] = useState<"pessoa" | "objetivo">(() => {
     try {
@@ -129,7 +121,7 @@ export function ObjetivosView({
   const objetivosPorDono = useMemo(() => {
     const map = new Map<string, Objetivo[]>();
     for (const o of outrosObjetivos) {
-      const key = o.dono || "Sem dono";
+      const key = o.dono || "Sem responsável";
       map.set(key, [...(map.get(key) ?? []), o]);
     }
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
@@ -163,128 +155,124 @@ export function ObjetivosView({
 
   return (
     <div className="space-y-6">
-      {/* Protagonista — progresso médio é o dado dominante; os demais
-       * (ativos/saudáveis/atenção/risco) são apoio dentro da mesma
-       * composição, nunca 4 cards do mesmo peso. Painel neutro
-       * (`PageSummaryPanel`) substitui o antigo `bg-brand` grande — a
-       * barra de progresso abaixo continua azul de propósito (é uma
-       * barra fina, não uma superfície). */}
-      <PageSummaryPanel title="Progresso geral">
-        <SummaryPrimaryMetric
-          value={resumo.progressoMedio == null ? "—" : `${resumo.progressoMedio}%`}
-          label="progresso médio"
-        />
-        <SummaryMetric label="Ativos" value={resumo.ativos} />
-        <SummaryMetric
-          label="Saudáveis"
-          value={resumo.saudaveis}
-          onClick={() => setSaudeFilter((s) => (s === "saudavel" ? "" : "saudavel"))}
-          active={saudeFilter === "saudavel"}
-        />
-        <SummaryMetric
-          label="Em atenção"
-          value={resumo.atencao}
-          onClick={() => setSaudeFilter((s) => (s === "atencao" ? "" : "atencao"))}
-          active={saudeFilter === "atencao"}
-        />
-        <SummaryMetric
-          label="Em risco"
-          value={<span className="text-destructive">{resumo.emRisco}</span>}
-          onClick={() => setSaudeFilter((s) => (s === "em_risco" ? "" : "em_risco"))}
-          active={saudeFilter === "em_risco"}
-        />
+      {/* Resumo — uma linha, não um painel: progresso médio e, SÓ quando
+       * existir, o que pede atenção (clicável, vira filtro). "Saudáveis" não
+       * aparece: é o estado normal e não pede decisão nenhuma. */}
+      <div className="space-y-2">
+        <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm text-text-secondary">
+          <span className="text-2xl font-bold tracking-tight text-foreground">
+            {resumo.progressoMedio == null ? "—" : `${resumo.progressoMedio}%`}
+          </span>
+          <span>
+            de progresso médio em {resumo.ativos} {resumo.ativos === 1 ? "objetivo" : "objetivos"}
+          </span>
+          {resumo.atencao > 0 && (
+            <button
+              type="button"
+              onClick={() => setSaudeFilter((v) => (v === "atencao" ? "" : "atencao"))}
+              className={`rounded font-medium text-warning hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${saudeFilter === "atencao" ? "underline" : ""}`}
+            >
+              · {resumo.atencao} em atenção
+            </button>
+          )}
+          {resumo.emRisco > 0 && (
+            <button
+              type="button"
+              onClick={() => setSaudeFilter((v) => (v === "em_risco" ? "" : "em_risco"))}
+              className={`rounded font-medium text-danger hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${saudeFilter === "em_risco" ? "underline" : ""}`}
+            >
+              · {resumo.emRisco} em risco
+            </button>
+          )}
+        </p>
         {resumo.progressoMedio != null && (
-          <div className="h-1.5 w-full rounded-full bg-muted">
+          <div className="h-1 w-full max-w-md overflow-hidden rounded-full bg-muted-foreground/15">
             <div
               className="h-full rounded-full bg-brand"
               style={{ width: `${resumo.progressoMedio}%` }}
             />
           </div>
         )}
-      </PageSummaryPanel>
+      </div>
 
       {/* Toolbar única — busca + filtros, sincronizados com a mesma lista. */}
-      <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-card p-2 dark:shadow-none">
+      <div className="flex flex-wrap items-center gap-2">
         <div className="relative w-full max-w-xs sm:flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-secondary" />
           <Input
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             placeholder="Buscar objetivos..."
-            className="h-9 border-0 bg-background pl-8 text-sm focus-visible:ring-brand"
+            className="h-9 pl-8 text-sm"
           />
         </div>
-        <div ref={filtersRef} className="relative">
-          <button
-            type="button"
-            onClick={() => setFiltersOpen((v) => !v)}
-            aria-expanded={filtersOpen}
-            className={`inline-flex h-9 items-center gap-1.5 rounded-md px-3 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
-              hasFilters
-                ? "bg-brand-subtle text-brand"
-                : "bg-background text-text-secondary hover:text-foreground"
-            }`}
-          >
-            <Filter className="h-3.5 w-3.5" />{" "}
-            {hasFilters ? `Filtros · ${activeChips.length}` : "Filtros"}
-          </button>
-          {filtersOpen && (
-            <div className="absolute right-0 top-full z-20 mt-1.5 w-72 space-y-2 rounded-2xl bg-popover p-3 shadow-lg dark:shadow-none">
-              {donosEmUso.length > 0 && (
-                <select
-                  value={donoFilter}
-                  onChange={(e) => setDonoFilter(e.target.value)}
-                  className="h-9 w-full rounded-md border-0 bg-muted px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-                >
-                  <option value="">Responsável</option>
-                  {donosEmUso.map((d) => (
-                    <option key={d} value={d}>
-                      {d}
-                    </option>
-                  ))}
-                </select>
-              )}
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className={`inline-flex h-9 items-center gap-1.5 rounded-md border border-input px-3 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
+                hasFilters ? "text-foreground" : "text-text-secondary hover:text-foreground"
+              }`}
+            >
+              <Filter className="h-3.5 w-3.5" />{" "}
+              {hasFilters ? `Filtros · ${activeChips.length}` : "Filtros"}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-72 space-y-2 p-3">
+            {donosEmUso.length > 0 && (
               <select
-                value={areaFilter}
-                onChange={(e) => setAreaFilter(e.target.value as typeof areaFilter)}
-                className="h-9 w-full rounded-md border-0 bg-muted px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                value={donoFilter}
+                onChange={(e) => setDonoFilter(e.target.value)}
+                className="h-9 w-full rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
               >
-                <option value="">Área</option>
-                {META_AREAS.map((a) => (
-                  <option key={a} value={a}>
-                    {a}
+                <option value="">Responsável</option>
+                {donosEmUso.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
                   </option>
                 ))}
               </select>
+            )}
+            <select
+              value={areaFilter}
+              onChange={(e) => setAreaFilter(e.target.value as typeof areaFilter)}
+              className="h-9 w-full rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            >
+              <option value="">Área</option>
+              {META_AREAS.map((a) => (
+                <option key={a} value={a}>
+                  {a}
+                </option>
+              ))}
+            </select>
+            <select
+              value={saudeFilter}
+              onChange={(e) => setSaudeFilter(e.target.value as typeof saudeFilter)}
+              className="h-9 w-full rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            >
+              <option value="">Status</option>
+              {(Object.keys(INDICADOR_SAUDE_LABEL) as IndicadorSaude[]).map((s) => (
+                <option key={s} value={s}>
+                  {INDICADOR_SAUDE_LABEL[s]}
+                </option>
+              ))}
+            </select>
+            {periodosEmUso.length > 0 && (
               <select
-                value={saudeFilter}
-                onChange={(e) => setSaudeFilter(e.target.value as typeof saudeFilter)}
-                className="h-9 w-full rounded-md border-0 bg-muted px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                value={periodoFilter}
+                onChange={(e) => setPeriodoFilter(e.target.value)}
+                className="h-9 w-full rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
               >
-                <option value="">Status</option>
-                {(Object.keys(INDICADOR_SAUDE_LABEL) as IndicadorSaude[]).map((s) => (
-                  <option key={s} value={s}>
-                    {INDICADOR_SAUDE_LABEL[s]}
+                <option value="">Período</option>
+                {periodosEmUso.map((p) => (
+                  <option key={p.value} value={p.value}>
+                    {p.label}
                   </option>
                 ))}
               </select>
-              {periodosEmUso.length > 0 && (
-                <select
-                  value={periodoFilter}
-                  onChange={(e) => setPeriodoFilter(e.target.value)}
-                  className="h-9 w-full rounded-md border-0 bg-muted px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-                >
-                  <option value="">Período</option>
-                  {periodosEmUso.map((p) => (
-                    <option key={p.value} value={p.value}>
-                      {p.label}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-          )}
-        </div>
+            )}
+          </PopoverContent>
+        </Popover>
       </div>
 
       {activeChips.length > 0 && (
@@ -294,7 +282,7 @@ export function ObjetivosView({
               key={c.key}
               type="button"
               onClick={c.clear}
-              className="inline-flex items-center gap-1 rounded-full bg-brand-subtle px-2.5 py-1 text-xs font-medium text-brand hover:bg-brand-subtle/70"
+              className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted/70"
             >
               {c.label} <X className="h-3 w-3" />
             </button>
@@ -321,7 +309,13 @@ export function ObjetivosView({
         <div className="space-y-8">
           {meusObjetivos.length > 0 && (
             <section className="space-y-3">
-              <h2 className="text-[15px] font-semibold text-foreground">Meus objetivos</h2>
+              <p
+                role="heading"
+                aria-level={2}
+                className="text-[15px] font-semibold text-foreground"
+              >
+                Meus objetivos
+              </p>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {meusObjetivos.map((o) => (
                   <ObjetivoSummaryCard
@@ -339,7 +333,13 @@ export function ObjetivosView({
           {outrosObjetivos.length > 0 && (
             <section className="space-y-4">
               <div className="flex items-center justify-between gap-3">
-                <h2 className="text-[15px] font-semibold text-foreground">Objetivos do time</h2>
+                <p
+                  role="heading"
+                  aria-level={2}
+                  className="text-[15px] font-semibold text-foreground"
+                >
+                  Objetivos do time
+                </p>
                 <SegmentedControl
                   aria-label="Agrupamento dos objetivos do time"
                   size="sm"
@@ -347,7 +347,7 @@ export function ObjetivosView({
                   onChange={setAgrupamento}
                   options={[
                     { value: "pessoa", label: "Por pessoa" },
-                    { value: "objetivo", label: "Por objetivo" },
+                    { value: "objetivo", label: "Todos" },
                   ]}
                 />
               </div>
@@ -357,7 +357,7 @@ export function ObjetivosView({
                   {objetivosPorDono.map(([dono, objs]) => {
                     const donoMember = members.find((m) => m.name === dono);
                     return (
-                      <div key={dono} className="rounded-[24px] bg-card p-5 dark:shadow-none">
+                      <div key={dono}>
                         <div className="flex items-center gap-2.5">
                           <Avatar name={dono} photo={donoMember?.photo} size="md" />
                           <div className="min-w-0 flex-1">

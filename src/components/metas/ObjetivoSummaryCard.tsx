@@ -47,13 +47,7 @@ function healthBadge(
       variant: "brand",
     };
   }
-  if (resumoSaude === "saudavel") {
-    return {
-      icon: CheckCircle2,
-      text: stats.total > 1 ? "Todos os indicadores saudáveis" : "Saudável",
-      variant: "success",
-    };
-  }
+  // Saudável não ganha badge: é o estado normal, não pede decisão.
   return null; // "nao_iniciado" (sem indicadores ainda) / "cancelado" — nada a destacar
 }
 
@@ -97,15 +91,19 @@ export function ObjetivoSummaryCard({
         <div className="flex items-center gap-2">
           <Avatar name={objetivo.dono} photo={donoMember?.photo} />
           <span className="min-w-0 flex-1 truncate text-xs font-medium text-text-secondary">
-            {objetivo.dono || "Sem dono"}
+            {objetivo.dono || "Sem responsável"}
           </span>
         </div>
       )}
 
       <div className="flex items-start justify-between gap-3">
-        <h3 className="min-w-0 text-base font-medium leading-snug text-foreground">
+        <p
+          role="heading"
+          aria-level={3}
+          className="min-w-0 text-base font-medium leading-snug text-foreground"
+        >
           {objetivo.titulo}
-        </h3>
+        </p>
         <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-text-secondary" />
       </div>
 

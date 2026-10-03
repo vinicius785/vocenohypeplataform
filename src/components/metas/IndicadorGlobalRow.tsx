@@ -1,14 +1,12 @@
-import { useRef, useState } from "react";
 import { AlertTriangle, MoreHorizontal, RefreshCw } from "lucide-react";
 import type { Indicador, Objetivo } from "@/lib/metas-store";
 import {
   INDICADOR_SAUDE_LABEL,
-  INDICADOR_SAUDE_TONE,
   type StatusAtualizacao,
   indicadorSaudeParaObjetivo,
 } from "@/lib/metas-engine";
-import { formatMetaVinculo, formatValorAtual, timeAgo } from "./metas-ui-utils";
-import { useDropdown } from "./use-dropdown";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { formatMetaVinculo, formatValorAtual, saudeAlertaClass, timeAgo } from "./metas-ui-utils";
 
 const STATUS_LABEL: Record<StatusAtualizacao, string> = {
   atualizado: "Atualizado",
@@ -67,10 +65,6 @@ export function IndicadorGlobalRow({
   const situacao = situacaoTexto(objetivosVinculados, indicador);
   const precisaAtenção = status !== "atualizado";
 
-  const [impactoOpen, setImpactoOpen] = useState(false);
-  const impactoRef = useRef<HTMLDivElement>(null);
-  useDropdown(impactoRef, impactoOpen, () => setImpactoOpen(false));
-
   return (
     <div className="group grid grid-cols-1 items-center gap-1.5 py-3 sm:grid-cols-[1fr_5.5rem_6rem_6rem_9rem_2rem] sm:gap-3 sm:py-2.5">
       <button
@@ -105,53 +99,48 @@ export function IndicadorGlobalRow({
       <div>
         {/* "Objetivos vinculados" é dado, não ação — sempre visível,
             diferente de Atualizar/Abrir (só no hover, desktop). */}
-        <div ref={impactoRef} className="relative">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setImpactoOpen((v) => !v);
-            }}
-            className="w-full rounded px-1.5 py-1 text-left text-[11px] font-medium text-text-secondary hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-          >
-            {objetivosVinculados.length === 0
-              ? "Nenhum objetivo"
-              : `${objetivosVinculados.length} objetivo${objetivosVinculados.length === 1 ? "" : "s"}`}
-          </button>
-          {impactoOpen && objetivosVinculados.length > 0 && (
-            <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-xl bg-popover p-1.5 shadow-lg dark:shadow-none">
-              <p className="px-1.5 pb-1 text-[10px] font-semibold uppercase tracking-wide text-text-secondary">
-                Usado em
-              </p>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              onClick={(e) => e.stopPropagation()}
+              className="w-full rounded px-1.5 py-1 text-left text-[11px] font-medium text-text-secondary hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            >
+              {objetivosVinculados.length === 0
+                ? "Nenhum objetivo"
+                : `${objetivosVinculados.length} objetivo${objetivosVinculados.length === 1 ? "" : "s"}`}
+            </button>
+          </PopoverTrigger>
+          {objetivosVinculados.length > 0 && (
+            <PopoverContent align="end" className="w-72 p-1.5">
+              <p className="px-1.5 pb-1 text-xs font-medium text-text-secondary">Usado em</p>
               {objetivosVinculados.map((o) => {
-                const s = indicadorSaudeParaObjetivo(indicador, o.id);
+                const sd = indicadorSaudeParaObjetivo(indicador, o.id);
+                const alerta = saudeAlertaClass(sd);
                 return (
                   <button
                     key={o.id}
                     type="button"
-                    onClick={() => {
-                      setImpactoOpen(false);
-                      onOpenObjetivo(o.id);
-                    }}
+                    onClick={() => onOpenObjetivo(o.id)}
                     className="flex w-full items-center gap-2 rounded px-1.5 py-1.5 text-left hover:bg-muted"
                   >
                     <span className="min-w-0 flex-1 truncate text-xs text-foreground">
                       {o.titulo}
                     </span>
-                    <span className="shrink-0 text-[10px] tabular-nums text-text-secondary">
+                    <span className="shrink-0 text-[11px] tabular-nums text-text-secondary">
                       {formatMetaVinculo(indicador, o.id) ?? "—"}
                     </span>
-                    <span
-                      className={`shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${INDICADOR_SAUDE_TONE[s]}`}
-                    >
-                      {INDICADOR_SAUDE_LABEL[s]}
-                    </span>
+                    {alerta && (
+                      <span className={`shrink-0 text-[11px] font-medium ${alerta}`}>
+                        {INDICADOR_SAUDE_LABEL[sd]}
+                      </span>
+                    )}
                   </button>
                 );
               })}
-            </div>
+            </PopoverContent>
           )}
-        </div>
+        </Popover>
       </div>
       <div className="flex items-center justify-end gap-0.5 sm:opacity-0 sm:group-hover:opacity-100">
         {indicador.dataSource === "manual" && (

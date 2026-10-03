@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { Filter, Gauge, Plus, Search } from "lucide-react";
 import {
   META_AREAS,
@@ -15,13 +15,11 @@ import {
 } from "@/lib/metas-engine";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CADENCE_LABEL, CADENCE_OPTIONS } from "./metas-ui-utils";
 import { IndicadorGlobalRow } from "./IndicadorGlobalRow";
-import { IndicadorQuickCreateDialog } from "./IndicadorQuickCreateDialog";
 import { IndicadorQuickUpdate, type IndicadorQuickPatch } from "./IndicadorQuickUpdate";
-import { useDropdown } from "./use-dropdown";
 
-type Member = { name: string; photo?: string };
 type SortKey = "prioridade" | "nome" | "atualizacao" | "impacto";
 type QuickChip = "" | "precisa_atualizar" | "em_risco";
 
@@ -49,15 +47,13 @@ const SORT_LABEL: Record<SortKey, string> = {
 export function IndicadoresView({
   indicadores,
   objetivos,
-  members,
   onOpenIndicador,
   onOpenObjetivo,
   onQuickUpdate,
-  onCreate,
+  onRequestCreate,
 }: {
   indicadores: Indicador[];
   objetivos: Objetivo[];
-  members: Member[];
   onOpenIndicador: (id: string) => void;
   onOpenObjetivo: (id: string) => void;
   onQuickUpdate: (
@@ -66,7 +62,7 @@ export function IndicadoresView({
     nota: string,
     dataISO: string,
   ) => void;
-  onCreate: (ind: Indicador) => void;
+  onRequestCreate: () => void;
 }) {
   const [busca, setBusca] = useState("");
   const [statusFilter, setStatusFilter] = useState<"" | StatusAtualizacao>("");
@@ -75,11 +71,7 @@ export function IndicadoresView({
   const [areaFilter, setAreaFilter] = useState<"" | MetaArea>("");
   const [quickChip, setQuickChip] = useState<QuickChip>("");
   const [sortKey, setSortKey] = useState<SortKey>("prioridade");
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
   const [quickUpdateTarget, setQuickUpdateTarget] = useState<Indicador | null>(null);
-  const filtersRef = useRef<HTMLDivElement>(null);
-  useDropdown(filtersRef, filtersOpen, () => setFiltersOpen(false));
 
   const impactoPorIndicador = useMemo(() => {
     const map = new Map<string, { objetivos: Objetivo[]; emRiscoCount: number }>();
@@ -176,124 +168,87 @@ export function IndicadoresView({
 
   return (
     <div className="space-y-6">
-      {/* Resumo — faixa compacta, nunca 3 cards grandes iguais; o que
-       * exige ação (precisam atualizar / impactam risco) ganha destaque
-       * semântico, o total fica neutro. */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-card p-4 dark:shadow-none">
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm">
-          <span>
-            <span className="text-base font-semibold text-foreground">{resumo.total}</span>{" "}
-            <span className="text-text-secondary">
-              {resumo.total === 1 ? "indicador" : "indicadores"}
-            </span>
-          </span>
-          <span className="text-border">·</span>
-          <span
-            className={
-              resumo.precisamAtualizar > 0 ? "font-medium text-warning" : "text-text-secondary"
-            }
-          >
-            {resumo.precisamAtualizar} precisa{resumo.precisamAtualizar === 1 ? "" : "m"} atualizar
-          </span>
-          <span className="text-border">·</span>
-          <span
-            className={
-              resumo.impactamEmRisco > 0 ? "font-medium text-danger" : "text-text-secondary"
-            }
-          >
-            {resumo.impactamEmRisco} impacta{resumo.impactamEmRisco === 1 ? "" : "m"} objetivos em
-            risco
-          </span>
-        </div>
-        <Button variant="primary" size="comfortable" onClick={() => setCreateOpen(true)}>
-          <Plus className="h-4 w-4" /> Novo indicador
-        </Button>
-      </div>
-
       {/* Toolbar única — busca + filtros + ordenação, sincronizados. */}
-      <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-card p-2 dark:shadow-none">
+      <div className="flex flex-wrap items-center gap-2">
         <div className="relative w-full max-w-xs sm:flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-secondary" />
           <Input
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             placeholder="Buscar indicador..."
-            className="h-9 border-0 bg-background pl-8 text-sm focus-visible:ring-brand"
+            className="h-9 pl-8 text-sm"
           />
         </div>
-        <div ref={filtersRef} className="relative">
-          <button
-            type="button"
-            onClick={() => setFiltersOpen((v) => !v)}
-            aria-expanded={filtersOpen}
-            className={`inline-flex h-9 items-center gap-1.5 rounded-md px-3 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
-              hasFilters
-                ? "bg-brand-subtle text-brand"
-                : "bg-background text-text-secondary hover:text-foreground"
-            }`}
-          >
-            <Filter className="h-3.5 w-3.5" /> {hasFilters ? `Filtros · ${filterCount}` : "Filtros"}
-          </button>
-          {filtersOpen && (
-            <div className="absolute right-0 top-full z-20 mt-1.5 w-72 space-y-2 rounded-2xl bg-popover p-3 shadow-lg dark:shadow-none">
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className={`inline-flex h-9 items-center gap-1.5 rounded-md border border-input px-3 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
+                hasFilters ? "text-foreground" : "text-text-secondary hover:text-foreground"
+              }`}
+            >
+              <Filter className="h-3.5 w-3.5" />{" "}
+              {hasFilters ? `Filtros · ${filterCount}` : "Filtros"}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-72 space-y-2 p-3">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+              className="h-9 w-full rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            >
+              <option value="">Status de atualização</option>
+              {(Object.keys(STATUS_ATUALIZACAO_LABEL) as StatusAtualizacao[]).map((s) => (
+                <option key={s} value={s}>
+                  {STATUS_ATUALIZACAO_LABEL[s]}
+                </option>
+              ))}
+            </select>
+            <select
+              value={cadenciaFilter}
+              onChange={(e) => setCadenciaFilter(e.target.value as typeof cadenciaFilter)}
+              className="h-9 w-full rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            >
+              <option value="">Toda cadência</option>
+              {CADENCE_OPTIONS.map((f) => (
+                <option key={f} value={f}>
+                  {CADENCE_LABEL[f]}
+                </option>
+              ))}
+            </select>
+            <select
+              value={areaFilter}
+              onChange={(e) => setAreaFilter(e.target.value as typeof areaFilter)}
+              className="h-9 w-full rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            >
+              <option value="">Toda área</option>
+              {META_AREAS.map((a) => (
+                <option key={a} value={a}>
+                  {a}
+                </option>
+              ))}
+            </select>
+            {objetivos.length > 0 && (
               <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-                className="h-9 w-full rounded-md border-0 bg-muted px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                value={objetivoFilter}
+                onChange={(e) => setObjetivoFilter(e.target.value)}
+                className="h-9 w-full rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
               >
-                <option value="">Status de atualização</option>
-                {(Object.keys(STATUS_ATUALIZACAO_LABEL) as StatusAtualizacao[]).map((s) => (
-                  <option key={s} value={s}>
-                    {STATUS_ATUALIZACAO_LABEL[s]}
+                <option value="">Todo objetivo</option>
+                {objetivos.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.titulo}
                   </option>
                 ))}
               </select>
-              <select
-                value={cadenciaFilter}
-                onChange={(e) => setCadenciaFilter(e.target.value as typeof cadenciaFilter)}
-                className="h-9 w-full rounded-md border-0 bg-muted px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-              >
-                <option value="">Toda cadência</option>
-                {CADENCE_OPTIONS.map((f) => (
-                  <option key={f} value={f}>
-                    {CADENCE_LABEL[f]}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={areaFilter}
-                onChange={(e) => setAreaFilter(e.target.value as typeof areaFilter)}
-                className="h-9 w-full rounded-md border-0 bg-muted px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-              >
-                <option value="">Toda área</option>
-                {META_AREAS.map((a) => (
-                  <option key={a} value={a}>
-                    {a}
-                  </option>
-                ))}
-              </select>
-              {objetivos.length > 0 && (
-                <select
-                  value={objetivoFilter}
-                  onChange={(e) => setObjetivoFilter(e.target.value)}
-                  className="h-9 w-full rounded-md border-0 bg-muted px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-                >
-                  <option value="">Todo objetivo</option>
-                  {objetivos.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.titulo}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-          )}
-        </div>
+            )}
+          </PopoverContent>
+        </Popover>
         <select
           value={sortKey}
           onChange={(e) => setSortKey(e.target.value as SortKey)}
           aria-label="Ordenar por"
-          className="h-9 rounded-md border-0 bg-background px-2 text-xs text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+          className="h-9 rounded-md border border-input bg-background px-2 text-xs text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
         >
           {(Object.keys(SORT_LABEL) as SortKey[]).map((k) => (
             <option key={k} value={k}>
@@ -326,7 +281,7 @@ export function IndicadoresView({
             onClick={() => setQuickChip(key)}
             className={`rounded-full px-2.5 py-1 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
               quickChip === key
-                ? "bg-brand-subtle text-brand"
+                ? "bg-muted text-foreground"
                 : "text-text-secondary hover:bg-muted/60"
             }`}
           >
@@ -342,12 +297,7 @@ export function IndicadoresView({
           <p className="mt-1 text-sm text-text-secondary">
             Crie o primeiro indicador pra começar a acompanhar uma métrica.
           </p>
-          <Button
-            variant="primary"
-            size="comfortable"
-            className="mt-5"
-            onClick={() => setCreateOpen(true)}
-          >
+          <Button variant="primary" size="comfortable" className="mt-5" onClick={onRequestCreate}>
             <Plus className="h-4 w-4" /> Novo indicador
           </Button>
         </div>
@@ -385,15 +335,6 @@ export function IndicadoresView({
         </div>
       )}
 
-      <IndicadorQuickCreateDialog
-        open={createOpen}
-        members={members}
-        onClose={() => setCreateOpen(false)}
-        onCreate={(ind) => {
-          setCreateOpen(false);
-          onCreate(ind);
-        }}
-      />
       <IndicadorQuickUpdate
         indicador={quickUpdateTarget}
         objetivosVinculados={

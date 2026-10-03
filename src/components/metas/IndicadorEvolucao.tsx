@@ -63,7 +63,9 @@ export function IndicadorEvolucao({
 
   return (
     <div>
-      <h2 className="text-[15px] font-semibold text-foreground">Evolução</h2>
+      <p role="heading" aria-level={2} className="text-[15px] font-semibold text-foreground">
+        Evolução
+      </p>
       {chartData.length >= 2 ? (
         <div className="mt-3 h-40 w-full">
           <ResponsiveContainer width="100%" height="100%">
