@@ -65,13 +65,13 @@ export function PipelineBoard({
               onClick={() => setMobileStage(stage)}
               className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-xs font-medium ${
                 mobileStage === stage
-                  ? "bg-brand text-brand-foreground"
-                  : "bg-card text-text-secondary"
+                  ? "bg-brand-subtle text-text-brand"
+                  : "bg-muted text-text-secondary"
               }`}
             >
               <span className={`h-1.5 w-1.5 rounded-full ${OPPORTUNITY_STAGE_COLOR[stage]}`} />
               {OPPORTUNITY_STAGE_LABEL[stage]}
-              <span className="tabular-nums opacity-70">{byStage.get(stage)?.length ?? 0}</span>
+              <span className="tabular-nums">{byStage.get(stage)?.length ?? 0}</span>
             </button>
           ))}
         </div>
@@ -122,19 +122,19 @@ export function PipelineBoard({
                       type="button"
                       onClick={() => onCreateInStage(stage)}
                       aria-label={`Nova oportunidade em ${OPPORTUNITY_STAGE_LABEL[stage]}`}
-                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-text-secondary hover:bg-card hover:text-foreground"
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-text-secondary hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <Plus className="h-3.5 w-3.5" />
                     </button>
                   </div>
-                  <p className="mt-1 text-[12px] tabular-nums text-text-secondary">
+                  <p className="mt-1 text-xs tabular-nums text-text-secondary">
                     {items.length} · {formatBRL(sum)}
                   </p>
                 </div>
 
                 <div className="space-y-2.5 p-3 pt-1">
                   {items.length === 0 ? (
-                    <div className="rounded-2xl bg-card/40 py-5 text-center text-xs text-text-secondary">
+                    <div className="rounded-xl border border-dashed border-border/60 py-5 text-center text-xs text-text-secondary">
                       Sem oportunidades
                     </div>
                   ) : (
@@ -157,7 +157,7 @@ export function PipelineBoard({
           })}
         </div>
         {!isMobile && (
-          <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-muted to-transparent dark:from-background" />
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-background to-transparent" />
         )}
       </div>
     </div>

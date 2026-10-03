@@ -1,12 +1,8 @@
 import { AlertTriangle, MessageCircle, Phone } from "lucide-react";
 import type { Lead } from "@/lib/comercial";
 import { formatBRL } from "@/lib/comercial";
-import {
-  daysSinceLastContact,
-  hasNoRecentContact,
-  isNextActionOverdue,
-  legacyStage,
-} from "@/lib/comercial-engine";
+import { daysSinceLastContact, hasNoRecentContact, legacyStage } from "@/lib/comercial-engine";
+import { Button } from "@/components/ui/button";
 import { normalizePhoneDigits } from "@/lib/social-profiles";
 import { avatarAccent, initialsOf } from "@/components/team/member-ui";
 
@@ -93,8 +89,8 @@ export function LeadCard({
       draggable={draggable}
       onDragStart={draggable ? onDragStart : undefined}
       onDragEnd={draggable ? onDragEnd : undefined}
-      className={`rounded-2xl bg-card p-4 text-sm transition-all dark:shadow-none ${
-        dragging ? "scale-[0.98] opacity-50 shadow-lg" : "shadow-sm"
+      className={`surface-card p-4 text-sm transition-all ${
+        dragging ? "scale-[0.98] opacity-50 shadow-lg" : ""
       }`}
     >
       <div
@@ -146,7 +142,7 @@ export function LeadCard({
         </div>
 
         {isTerminal ? (
-          <div className="mt-2 text-[11px] font-medium text-muted-foreground">
+          <div className="mt-2 text-[11px] font-medium text-text-secondary">
             {stage === "GANHO"
               ? "Ganho"
               : lead.lossReason
@@ -158,9 +154,9 @@ export function LeadCard({
             <div
               className={`mt-2 flex items-center gap-1 truncate text-[11px] font-medium ${
                 nextAction.tone === "red"
-                  ? "text-danger"
+                  ? "text-danger-soft-foreground"
                   : nextAction.tone === "amber"
-                    ? "text-amber-600 dark:text-amber-400"
+                    ? "text-warning-soft-foreground"
                     : "text-foreground"
               }`}
             >
@@ -179,28 +175,30 @@ export function LeadCard({
             </p>
           )}
           <div className="mt-2.5 flex items-center gap-1.5">
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
+              className="flex-1"
               onClick={(e) => {
                 e.stopPropagation();
                 onRegisterFollowUp();
               }}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-[11px] font-semibold text-foreground hover:bg-muted/70"
             >
-              <Phone className="h-3 w-3" />
-              Registrar follow-up
-            </button>
+              <Phone /> Registrar follow-up
+            </Button>
             {hasWhatsapp && (
-              <a
-                href={`https://wa.me/${whatsappDigits}`}
-                target="_blank"
-                rel="noreferrer"
-                title="Abrir WhatsApp"
-                onClick={(e) => e.stopPropagation()}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-secondary hover:bg-muted hover:text-foreground"
-              >
-                <MessageCircle className="h-4 w-4" />
-              </a>
+              <Button asChild variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                <a
+                  href={`https://wa.me/${whatsappDigits}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="Abrir WhatsApp"
+                  aria-label="Abrir WhatsApp"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <MessageCircle />
+                </a>
+              </Button>
             )}
           </div>
         </>

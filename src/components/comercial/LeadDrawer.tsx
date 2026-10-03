@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -14,7 +16,6 @@ import {
   History,
   Calculator,
   MoreHorizontal,
-  Loader2,
   Link2,
   AlertTriangle,
   MessageSquare,
@@ -22,7 +23,16 @@ import {
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { DateField } from "@/components/ui/date-field";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SimuladorPropostaForm } from "@/components/comercial/SimuladorPropostaDialog";
 import { formatBRL, type Lead, type PropostaSnapshot } from "@/lib/comercial";
 import {
@@ -50,9 +60,7 @@ import { generatePropostaPublicToken } from "@/lib/comercial.functions";
 import { convertLeadToClienteEProjeto } from "./convertLead";
 import { NativeSelect } from "@/components/ui/native-select";
 
-const inputCls =
-  "h-9 w-full rounded-md border border-border bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring";
-const labelCls = "block space-y-1 text-xs font-medium text-text-secondary";
+const labelCls = "block space-y-1.5 text-sm font-medium text-foreground";
 const SOURCES = ["Indicação", "Instagram", "Google", "LinkedIn", "Site", "Evento", "Outro"];
 const PERDIDO_MOTIVOS = [
   "Sem orçamento",
@@ -282,10 +290,10 @@ export function LeadDrawer({
         {/* Cabeçalho — hierarquia real (Etapa 7): nome/valor protagonistas,
          * etapa/responsável subordinados, em vez de uma sequência de
          * textos do mesmo peso. */}
-        <div className="bg-card pr-10 dark:shadow-none">
-          <div className="flex items-start justify-between gap-3 px-6 pt-6">
+        <div className="border-b border-border/60 bg-card pr-10">
+          <div className="flex items-start justify-between gap-3 px-6 pt-5">
             <div className="min-w-0">
-              <h3 className="truncate text-[22px] font-semibold tracking-tight text-foreground">
+              <h3 className="truncate text-xl font-semibold tracking-tight text-foreground md:text-2xl">
                 {company.trim() || name.trim() || "Nova oportunidade"}
               </h3>
               {contact.trim() && (
@@ -308,14 +316,12 @@ export function LeadDrawer({
           </div>
 
           <div className="flex flex-wrap items-center gap-3 px-6 pt-3">
-            <span className="whitespace-nowrap text-[28px] font-semibold tabular-nums leading-none text-foreground">
+            <span className="whitespace-nowrap text-2xl font-semibold tabular-nums leading-none text-foreground">
               {formatBRL(parsedValue)}
             </span>
-            <span
-              className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${OPPORTUNITY_STAGE_TONE[stage]}`}
-            >
+            <Badge variant="secondary" size="sm" className={OPPORTUNITY_STAGE_TONE[stage]}>
               {currentStageLabel}
-            </span>
+            </Badge>
             {responsible && <span className="text-xs text-text-secondary">{responsible}</span>}
           </div>
 
@@ -331,9 +337,9 @@ export function LeadDrawer({
                       (nextStep.actor === "CLIENTE" ? "Aguardar retorno do cliente" : "Nenhuma")}
                   </div>
                   {nextStep.actor && (
-                    <span className="mt-1 inline-block rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-medium text-text-secondary">
+                    <Badge variant="secondary" size="sm" className="mt-1">
                       {OPPORTUNITY_ACTOR_LABEL[nextStep.actor]}
-                    </span>
+                    </Badge>
                   )}
                 </>
               )}
@@ -387,116 +393,114 @@ export function LeadDrawer({
                   />
                 )}
 
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setShowEtapaMenu((v) => !v)}
-                    aria-label="Mais ações"
-                    className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-text-secondary hover:bg-muted hover:text-foreground"
-                  >
-                    <MoreHorizontal className="h-4 w-4" />
-                  </button>
-                  {showEtapaMenu && (
-                    <div className="absolute right-0 top-full z-10 mt-1 w-64 space-y-1 rounded-xl border border-border bg-background p-2 shadow-lg">
-                      {nextStep.stage === "PROPOSTA_ENVIADA" && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowEtapaMenu(false);
-                            void runAction("revisar_proposta");
-                          }}
-                          className="w-full rounded-md px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted"
-                        >
-                          Revisar proposta
-                        </button>
-                      )}
-                      {nextStep.stage !== "GANHO" && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowEtapaMenu(false);
-                            setValorGanho(String(proposta?.precoFinal ?? liveLead.value ?? ""));
-                            setShowGanho(true);
-                          }}
-                          className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted"
-                        >
-                          <CheckCircle2 className="h-3.5 w-3.5" /> Marcar como ganho
-                        </button>
-                      )}
-                      {nextStep.stage !== "PERDIDO" && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowEtapaMenu(false);
-                            setShowPerdido(true);
-                          }}
-                          className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted"
-                        >
-                          <XCircle className="h-3.5 w-3.5" /> Marcar como perdido
-                        </button>
-                      )}
-                      <div className="border-t border-border pt-1">
-                        <p className="mb-1 px-2 text-[11px] font-medium text-text-secondary">
-                          Alterar etapa manualmente
-                        </p>
-                        <NativeSelect
-                          value={nextStep.stage}
-                          onChange={(e) => {
-                            setShowEtapaMenu(false);
-                            void runAction("alterar_etapa_manual", {
-                              toStage: e.target.value as OpportunityStage,
-                            });
-                          }}
-                          className={inputCls}
-                        >
-                          {OPPORTUNITY_STAGES.map((s) => (
-                            <option key={s} value={s}>
-                              {OPPORTUNITY_STAGE_LABEL[s]}
-                            </option>
-                          ))}
-                        </NativeSelect>
-                      </div>
-                      {onDelete && (
-                        <div className="border-t border-border pt-1">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShowEtapaMenu(false);
-                              onDelete();
-                            }}
-                            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium text-destructive hover:bg-destructive/10"
-                          >
-                            <XCircle className="h-3.5 w-3.5" /> Excluir oportunidade
-                          </button>
-                        </div>
-                      )}
+                <Popover open={showEtapaMenu} onOpenChange={setShowEtapaMenu}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      aria-label="Mais ações"
+                      className="h-8 w-8"
+                    >
+                      <MoreHorizontal />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-64 space-y-1 p-2">
+                    {nextStep.stage === "PROPOSTA_ENVIADA" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowEtapaMenu(false);
+                          void runAction("revisar_proposta");
+                        }}
+                        className="w-full rounded-md px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted"
+                      >
+                        Revisar proposta
+                      </button>
+                    )}
+                    {nextStep.stage !== "GANHO" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowEtapaMenu(false);
+                          setValorGanho(String(proposta?.precoFinal ?? liveLead.value ?? ""));
+                          setShowGanho(true);
+                        }}
+                        className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted"
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Marcar como ganho
+                      </button>
+                    )}
+                    {nextStep.stage !== "PERDIDO" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowEtapaMenu(false);
+                          setShowPerdido(true);
+                        }}
+                        className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted"
+                      >
+                        <XCircle className="h-3.5 w-3.5" /> Marcar como perdido
+                      </button>
+                    )}
+                    <div className="border-t border-border pt-1">
+                      <p className="mb-1 px-2 text-[11px] font-medium text-text-secondary">
+                        Alterar etapa manualmente
+                      </p>
+                      <NativeSelect
+                        value={nextStep.stage}
+                        onChange={(e) => {
+                          setShowEtapaMenu(false);
+                          void runAction("alterar_etapa_manual", {
+                            toStage: e.target.value as OpportunityStage,
+                          });
+                        }}
+                      >
+                        {OPPORTUNITY_STAGES.map((s) => (
+                          <option key={s} value={s}>
+                            {OPPORTUNITY_STAGE_LABEL[s]}
+                          </option>
+                        ))}
+                      </NativeSelect>
                     </div>
-                  )}
-                </div>
+                    {onDelete && (
+                      <div className="border-t border-border pt-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowEtapaMenu(false);
+                            onDelete();
+                          }}
+                          className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium text-destructive hover:bg-destructive/10"
+                        >
+                          <XCircle className="h-3.5 w-3.5" /> Excluir oportunidade
+                        </button>
+                      </div>
+                    )}
+                  </PopoverContent>
+                </Popover>
               </div>
             )}
           </div>
         </div>
 
         <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
-          <TabsList className="mx-5 mt-3 w-fit shrink-0">
+          <TabsList className="mx-6 mt-3 w-fit max-w-[calc(100%-3rem)] shrink-0">
             <TabsTrigger value="visao-geral">Visão geral</TabsTrigger>
             <TabsTrigger value="proposta">Proposta</TabsTrigger>
             {liveLead && <TabsTrigger value="historico-comercial">Histórico comercial</TabsTrigger>}
             {liveLead && <TabsTrigger value="historico">Alterações do lead</TabsTrigger>}
           </TabsList>
 
-          <div className="min-h-0 flex-1 overflow-y-auto bg-muted/20 p-5">
+          <div className="min-h-0 flex-1 overflow-y-auto bg-muted/20 p-6">
             <TabsContent value="visao-geral" className="mt-0 space-y-4">
               <Section title="Oportunidade" icon={<Tag className="h-4 w-4" />}>
                 <label className={labelCls}>
                   <span>Nome da oportunidade *</span>
-                  <input
+                  <Input
                     autoFocus={!liveLead}
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     onBlur={autosaveField}
-                    className={inputCls}
                     placeholder="Ex: Website institucional Acme"
                     maxLength={120}
                   />
@@ -504,29 +508,27 @@ export function LeadDrawer({
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <label className={labelCls}>
                     <span>Empresa</span>
-                    <input
+                    <Input
                       value={company}
                       onChange={(e) => setCompany(e.target.value)}
                       onBlur={autosaveField}
-                      className={inputCls}
                       maxLength={120}
                     />
                   </label>
                   <label className={labelCls}>
                     <span>Valor (R$)</span>
-                    <input
+                    <Input
                       inputMode="decimal"
                       value={value}
                       onChange={(e) => setValue(e.target.value)}
                       onBlur={autosaveField}
-                      className={inputCls}
                       placeholder="0"
                     />
                     {valueDivergesFromProposal && (
                       <button
                         type="button"
                         onClick={() => setTab("proposta")}
-                        className="flex items-center gap-1 text-[11px] font-normal text-amber-600 hover:underline dark:text-amber-400"
+                        className="flex items-center gap-1 text-[11px] font-normal text-warning-soft-foreground hover:underline"
                       >
                         <AlertTriangle className="h-3 w-3" /> Diverge da proposta salva (
                         {formatBRL(proposta!.precoFinal)})
@@ -540,7 +542,6 @@ export function LeadDrawer({
                     <NativeSelect
                       value={stage}
                       onChange={(e) => setStage(e.target.value as OpportunityStage)}
-                      className={inputCls}
                     >
                       {OPPORTUNITY_STAGES.map((s) => (
                         <option key={s} value={s}>
@@ -556,42 +557,38 @@ export function LeadDrawer({
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <label className={labelCls}>
                     <span>Nome do contato</span>
-                    <input
+                    <Input
                       value={contact}
                       onChange={(e) => setContact(e.target.value)}
                       onBlur={autosaveField}
-                      className={inputCls}
                       maxLength={120}
                     />
                   </label>
                   <label className={labelCls}>
                     <span>Cargo</span>
-                    <input
+                    <Input
                       value={role}
                       onChange={(e) => setRole(e.target.value)}
                       onBlur={autosaveField}
-                      className={inputCls}
                       maxLength={120}
                     />
                   </label>
                   <label className={labelCls}>
                     <span>E-mail</span>
-                    <input
+                    <Input
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       onBlur={autosaveField}
-                      className={inputCls}
                       maxLength={255}
                     />
                   </label>
                   <label className={labelCls}>
                     <span>Telefone</span>
-                    <input
+                    <Input
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       onBlur={autosaveField}
-                      className={inputCls}
                       maxLength={40}
                     />
                   </label>
@@ -599,30 +596,29 @@ export function LeadDrawer({
                 {(phone.trim() || email.trim()) && (
                   <div className="flex flex-wrap gap-2 pt-1">
                     {phone.trim() && (
-                      <a
-                        href={`tel:${phone.replace(/\D/g, "")}`}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
-                      >
-                        <Phone className="h-3.5 w-3.5" /> Ligar
-                      </a>
+                      <Button asChild variant="outline" size="sm">
+                        <a href={`tel:${phone.replace(/\D/g, "")}`}>
+                          <Phone /> Ligar
+                        </a>
+                      </Button>
                     )}
                     {phone.trim() && (
-                      <a
-                        href={`https://wa.me/${phone.replace(/\D/g, "")}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
-                      >
-                        WhatsApp
-                      </a>
+                      <Button asChild variant="outline" size="sm">
+                        <a
+                          href={`https://wa.me/${phone.replace(/\D/g, "")}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          WhatsApp
+                        </a>
+                      </Button>
                     )}
                     {email.trim() && (
-                      <a
-                        href={`mailto:${email}`}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
-                      >
-                        <Mail className="h-3.5 w-3.5" /> E-mail
-                      </a>
+                      <Button asChild variant="outline" size="sm">
+                        <a href={`mailto:${email}`}>
+                          <Mail /> E-mail
+                        </a>
+                      </Button>
                     )}
                   </div>
                 )}
@@ -630,7 +626,7 @@ export function LeadDrawer({
 
               <Section title="Qualificação" icon={<Star className="h-4 w-4" />}>
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-xs font-medium text-text-secondary">Qualificação</span>
+                  <span className="text-sm font-medium text-foreground">Nota (1 a 5)</span>
                   <div className="flex h-9 items-center gap-1">
                     {[1, 2, 3, 4, 5].map((n) => (
                       <button
@@ -658,7 +654,6 @@ export function LeadDrawer({
                       value={source}
                       onChange={(e) => setSource(e.target.value)}
                       onBlur={autosaveField}
-                      className={inputCls}
                     >
                       <option value="">Selecione...</option>
                       {SOURCES.map((s) => (
@@ -674,7 +669,6 @@ export function LeadDrawer({
                       value={responsible}
                       onChange={(e) => setResponsible(e.target.value)}
                       onBlur={autosaveField}
-                      className={inputCls}
                     >
                       <option value="">Selecione...</option>
                       {team.map((m) => (
@@ -686,52 +680,49 @@ export function LeadDrawer({
                   </label>
                   <label className={labelCls}>
                     <span>Setor</span>
-                    <input
+                    <Input
                       value={vertical}
                       onChange={(e) => setVertical(e.target.value)}
                       onBlur={autosaveField}
-                      className={inputCls}
                       maxLength={120}
                     />
                   </label>
                   <label className={labelCls}>
                     <span>Orçamento mensal</span>
-                    <input
+                    <Input
                       value={budget}
                       onChange={(e) => setBudget(e.target.value)}
                       onBlur={autosaveField}
-                      className={inputCls}
                       placeholder="R$"
                     />
                   </label>
                 </div>
                 <label className={labelCls}>
                   <span>Urgência</span>
-                  <input
+                  <Input
                     value={urgency}
                     onChange={(e) => setUrgency(e.target.value)}
                     onBlur={autosaveField}
-                    className={inputCls}
                     maxLength={60}
                   />
                 </label>
                 <label className={labelCls}>
                   <span>Observações</span>
-                  <textarea
+                  <Textarea
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     onBlur={autosaveField}
-                    className={`${inputCls} h-20 resize-none py-2`}
+                    className="h-20 resize-none py-2"
                     maxLength={1000}
                   />
                 </label>
                 <label className={labelCls}>
                   <span>Experiência com agência</span>
-                  <textarea
+                  <Textarea
                     value={experience}
                     onChange={(e) => setExperience(e.target.value)}
                     onBlur={autosaveField}
-                    className={`${inputCls} h-16 resize-none py-2`}
+                    className="h-16 resize-none py-2"
                     maxLength={500}
                   />
                 </label>
@@ -807,7 +798,7 @@ export function LeadDrawer({
         </Tabs>
 
         {liveLead && legacyStage(liveLead.stage) === "GANHO" && (
-          <div className="border-t border-border px-5 py-3">
+          <div className="border-t border-border/60 px-6 py-4">
             {liveLead.clienteId ? (
               <span className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground">
                 <CheckCircle2 className="h-3.5 w-3.5" /> Convertido em cliente/projeto
@@ -819,7 +810,7 @@ export function LeadDrawer({
         )}
 
         {!liveLead && (
-          <div className="flex items-center justify-end gap-2 bg-card px-5 py-3 dark:shadow-none">
+          <div className="flex items-center justify-end gap-2 border-t border-border/60 bg-card px-6 py-4">
             <Button variant="ghost" size="comfortable" onClick={onClose}>
               Cancelar
             </Button>
@@ -842,11 +833,7 @@ export function LeadDrawer({
         >
           <label className={labelCls}>
             <span>Data da reunião</span>
-            <DateField
-              value={dataReuniao || undefined}
-              onChange={(v) => setDataReuniao(v ?? "")}
-              className={inputCls}
-            />
+            <DateField value={dataReuniao || undefined} onChange={(v) => setDataReuniao(v ?? "")} />
           </label>
         </MiniActionDialog>
       )}
@@ -867,19 +854,18 @@ export function LeadDrawer({
         >
           <label className={labelCls}>
             <span>Novo valor (opcional)</span>
-            <input
+            <Input
               inputMode="decimal"
               value={novoValorNegociacao}
               onChange={(e) => setNovoValorNegociacao(e.target.value)}
-              className={inputCls}
             />
           </label>
           <label className={labelCls}>
             <span>Nota</span>
-            <textarea
+            <Textarea
               value={notaNegociacao}
               onChange={(e) => setNotaNegociacao(e.target.value)}
-              className={`${inputCls} h-20 resize-none py-2`}
+              className="h-20 resize-none py-2"
               placeholder="O que mudou na negociação?"
             />
           </label>
@@ -901,11 +887,10 @@ export function LeadDrawer({
         >
           <label className={labelCls}>
             <span>Valor final (R$)</span>
-            <input
+            <Input
               inputMode="decimal"
               value={valorGanho}
               onChange={(e) => setValorGanho(e.target.value)}
-              className={inputCls}
             />
           </label>
         </MiniActionDialog>
@@ -925,11 +910,10 @@ export function LeadDrawer({
         >
           <label className={labelCls}>
             <span>Motivo</span>
-            <input
+            <Input
               list="perdido-motivos"
               value={motivoPerdido}
               onChange={(e) => setMotivoPerdido(e.target.value)}
-              className={inputCls}
               placeholder="Ex: Sem orçamento"
             />
             <datalist id="perdido-motivos">
@@ -946,8 +930,9 @@ export function LeadDrawer({
 
 function ConvertButton({ lead, onConverted }: { lead: Lead; onConverted: (l: Lead) => void }) {
   return (
-    <button
-      type="button"
+    <Button
+      variant="outline"
+      size="sm"
       onClick={() => {
         void convertLeadToClienteEProjeto(lead)
           .then(({ clienteId, projectId }) => {
@@ -958,10 +943,9 @@ function ConvertButton({ lead, onConverted }: { lead: Lead; onConverted: (l: Lea
             toast.error("Não foi possível converter o lead em cliente", { description: message });
           });
       }}
-      className="inline-flex items-center gap-1.5 rounded-full border border-foreground px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted"
     >
-      <Briefcase className="h-3.5 w-3.5" /> Converter em cliente
-    </button>
+      <Briefcase /> Converter em cliente
+    </Button>
   );
 }
 
@@ -1009,11 +993,11 @@ function ProposalTabContent({
         <Section title="Proposta atual" icon={<Calculator className="h-4 w-4" />}>
           {/* Preço final protagonista (Etapa 7) — o valor que mais importa
            * na aba, não mais um MiniStat igual aos outros. */}
-          <div className="rounded-2xl bg-brand p-5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-brand-foreground-secondary">
+          <div className="rounded-2xl bg-brand p-4 md:p-5">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-brand-foreground-secondary">
               Preço final ao cliente
             </p>
-            <p className="mt-1 whitespace-nowrap text-[32px] font-semibold tabular-nums leading-none text-brand-foreground">
+            <p className="mt-1 whitespace-nowrap text-3xl font-semibold tabular-nums leading-none text-brand-foreground">
               {formatBRL(proposta.precoFinal)}
             </p>
           </div>
@@ -1031,14 +1015,14 @@ function ProposalTabContent({
             />
           </div>
           {margemBaixa && (
-            <p className="flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2.5 py-1.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">
+            <p className="flex items-center gap-1.5 rounded-md bg-warning-soft px-2.5 py-1.5 text-[11px] font-medium text-warning-soft-foreground">
               <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
               Margem abaixo do percentual configurado ({Math.round((margemMinima ?? 0) * 100)}%) —
               revise o preço final antes de enviar.
             </p>
           )}
           {proposta.ajustadoManualmente && (
-            <p className="text-[11px] italic text-text-secondary">Ajustado manualmente</p>
+            <p className="text-[11px] text-text-secondary">Ajustado manualmente</p>
           )}
           {liveLead && nextStep?.action === "enviar_proposta" && (
             <div className="flex flex-wrap items-center gap-2">
@@ -1057,19 +1041,10 @@ function ProposalTabContent({
         icon={<Calculator className="h-4 w-4" />}
         action={
           liveLead && (
-            <button
-              type="button"
-              onClick={onCopyLink}
-              disabled={generatingLink}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1 text-xs font-medium shadow-sm hover:bg-muted disabled:opacity-50"
-            >
-              {generatingLink ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Link2 className="h-3.5 w-3.5" />
-              )}
+            <Button variant="outline" size="sm" isLoading={generatingLink} onClick={onCopyLink}>
+              {!generatingLink && <Link2 />}
               {linkCopied ? "Link copiado!" : "Calculadora externa"}
-            </button>
+            </Button>
           )
         }
       >
@@ -1113,23 +1088,18 @@ function CommercialHistoryTabContent({
   return (
     <Section title="Histórico comercial" icon={<MessageSquare className="h-4 w-4" />}>
       {onRegisterFollowUp && (
-        <button
-          type="button"
-          onClick={onRegisterFollowUp}
-          className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted/70"
-        >
-          <MessageSquare className="h-3.5 w-3.5" />
-          Registrar follow-up
-        </button>
+        <Button variant="secondary" size="sm" className="mb-3" onClick={onRegisterFollowUp}>
+          <MessageSquare /> Registrar follow-up
+        </Button>
       )}
       {interactions.length === 0 ? (
         <p className="text-xs text-text-secondary">Nenhum follow-up registrado ainda.</p>
       ) : (
-        <ul className="space-y-4 border-l border-border pl-4">
+        <ul className="space-y-5 border-l border-border/60 pl-6">
           {interactions.map((i) => (
             <li key={i.id} className="relative text-xs leading-relaxed">
-              <span className="absolute -left-[21px] flex h-4 w-4 items-center justify-center rounded-full bg-muted text-text-secondary ring-2 ring-background">
-                <MessageSquare className="h-2.5 w-2.5" />
+              <span className="absolute -left-[34px] flex h-5 w-5 items-center justify-center rounded-full bg-muted text-text-secondary">
+                <MessageSquare className="h-3 w-3" />
               </span>
               <div className="font-medium text-foreground">
                 {INTERACTION_TYPE_LABEL[i.interaction_type]} —{" "}
@@ -1142,7 +1112,7 @@ function CommercialHistoryTabContent({
                   minute: "2-digit",
                 })}
               </div>
-              <div className="text-text-secondary/80">{i.created_by_name}</div>
+              <div className="text-text-secondary">{i.created_by_name}</div>
               <div className="mt-0.5 min-w-0 break-words text-foreground [overflow-wrap:anywhere]">
                 {linkifyText(i.summary)}
               </div>
@@ -1184,18 +1154,18 @@ function HistoryTabContent({ history }: { history: Lead["history"] }) {
       {sorted.length === 0 ? (
         <p className="text-xs text-text-secondary">Sem eventos registrados.</p>
       ) : (
-        <ul className="space-y-4 border-l border-border pl-4">
+        <ul className="space-y-5 border-l border-border/60 pl-6">
           {sorted.map((h) => {
             const Icon = (h.kind && HISTORY_ICON[h.kind]) || History;
             return (
               <li key={h.id} className="relative text-xs leading-relaxed">
-                <span className="absolute -left-[21px] flex h-4 w-4 items-center justify-center rounded-full bg-muted text-text-secondary ring-2 ring-background">
-                  <Icon className="h-2.5 w-2.5" />
+                <span className="absolute -left-[34px] flex h-5 w-5 items-center justify-center rounded-full bg-muted text-text-secondary">
+                  <Icon className="h-3 w-3" />
                 </span>
                 <div className="min-w-0 break-words text-foreground [overflow-wrap:anywhere]">
                   {linkifyText(h.text)}
                 </div>
-                <div className="text-text-secondary/70">
+                <div className="text-text-secondary">
                   {new Date(h.createdAt).toLocaleString("pt-BR", {
                     timeZone: BRASILIA_TZ,
                     day: "2-digit",
@@ -1226,15 +1196,10 @@ function ActionButton({
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      disabled={busy}
-      onClick={onClick}
-      className="inline-flex items-center gap-1.5 rounded-full bg-brand px-3.5 py-2 text-xs font-semibold text-brand-foreground hover:opacity-90 disabled:opacity-60"
-    >
-      {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : icon}
+    <Button variant="primary" size="sm" isLoading={busy} onClick={onClick}>
+      {!busy && icon}
       {label}
-    </button>
+    </Button>
   );
 }
 
@@ -1254,36 +1219,22 @@ function MiniActionDialog({
   onConfirm: () => void;
 }) {
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
-      onClick={onClose}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-sm rounded-2xl bg-card p-5 shadow-2xl dark:shadow-none"
-      >
-        <h4 className="mb-3 text-[15px] font-semibold text-foreground">{title}</h4>
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
         <div className="space-y-3">{children}</div>
-        <div className="mt-4 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full border border-border px-3.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
-          >
+        <DialogFooter>
+          <Button variant="ghost" size="sm" onClick={onClose}>
             Cancelar
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={onConfirm}
-            className="inline-flex items-center gap-1.5 rounded-full bg-brand px-3.5 py-2 text-xs font-semibold text-brand-foreground hover:opacity-90 disabled:opacity-60"
-          >
-            {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          </Button>
+          <Button variant="primary" size="sm" isLoading={busy} onClick={onConfirm}>
             {confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -1298,17 +1249,19 @@ function Section({
   action?: React.ReactNode;
   children: React.ReactNode;
 }) {
-  // Seção definida por tipografia/espaço (Etapa 7) — sem card-dentro-de-
-  // card; a separação entre seções vem de uma borda inferior discreta, não
-  // de mais um retângulo com fundo próprio.
+  // Seção definida por tipografia/espaço, sem card-dentro-de-card: título de
+  // seção do Design System (15px, 600) com ícone secundário e uma borda
+  // inferior discreta separando as seções.
   return (
-    <div className="space-y-3 border-b border-border/60 pb-5">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-text-secondary">
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-text-secondary">
+    <div className="space-y-3 border-b border-border/60 pb-5 last:border-b-0">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-foreground">
+          <span className="text-muted-foreground" aria-hidden="true">
             {icon}
           </span>
-          {title}
+          <p role="heading" aria-level={3} className="text-[15px] font-semibold">
+            {title}
+          </p>
         </div>
         {action}
       </div>
@@ -1328,10 +1281,10 @@ function MiniStat({
 }) {
   return (
     <div>
-      <p className="text-[11px] uppercase tracking-wide text-text-secondary">{label}</p>
+      <p className="text-[11px] font-medium uppercase tracking-wide text-text-secondary">{label}</p>
       <p
         className={`mt-0.5 text-sm font-semibold tabular-nums ${
-          tone === "danger" ? "text-destructive" : "text-foreground"
+          tone === "danger" ? "text-danger-soft-foreground" : "text-foreground"
         }`}
       >
         {value}

@@ -4,7 +4,7 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { AlertTriangle, CalendarDays, Plus, Search } from "lucide-react";
+import { AlertTriangle, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 import { type Lead, type PropostaSnapshot } from "@/lib/comercial";
 import {
@@ -37,12 +37,12 @@ import { PageContainer } from "@/components/shared/PageContainer";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { PipelineSummary } from "./comercial/PipelineSummary";
+import { PeriodMenu } from "@/components/shared/PeriodMenu";
 import { FilterRow, FilterSearch, FilterToolbar } from "@/components/shared/FilterToolbar";
 import { SortSelect, FilterPanel, LeadFiltersSummary } from "./comercial/LeadFiltersBar";
 import { PipelineBoard } from "./comercial/PipelineBoard";
 import { LeadDrawer, type OpportunityActionInput } from "./comercial/LeadDrawer";
 import { FollowUpDialog, type FollowUpInput } from "./comercial/FollowUpDialog";
-import { NativeSelect } from "@/components/ui/native-select";
 
 /** Debounce simples — evita 1 request por tecla na busca. */
 function useDebouncedValue<T>(value: T, delayMs: number): T {
@@ -254,35 +254,28 @@ export function ComercialSection() {
   return (
     <>
       <PageContainer variant="wide" className="space-y-5 md:space-y-6">
-        <PageHeader
-          title="Comercial"
-          description="Pipeline e acompanhamento de oportunidades."
-          actionsSlot={
-            <>
-              <Button variant="primary" size="comfortable" onClick={() => openNewLead()}>
-                <Plus className="h-4 w-4" /> Novo lead
-              </Button>
-            </>
-          }
-        />
+        <div className="space-y-4">
+          <PageHeader
+            title="Comercial"
+            description="Pipeline e acompanhamento de oportunidades."
+            actionsSlot={
+              <>
+                <Button variant="primary" size="comfortable" onClick={() => openNewLead()}>
+                  <Plus className="h-4 w-4" /> Novo lead
+                </Button>
+              </>
+            }
+          />
 
-        {/* Contexto global: o período vale para os KPIs e para o Kanban; fica
-         * uma vez, logo abaixo do cabeçalho, fora de Filtros. */}
-        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Período">
-          <CalendarDays className="h-4 w-4 text-text-secondary" aria-hidden="true" />
-          <NativeSelect
-            value={period}
-            onChange={(e) => patchSearch({ cPeriod: e.target.value as ComercialPeriodMode })}
-            aria-label="Período"
-            className="w-auto min-w-36"
-            selectClassName="font-medium"
-          >
-            {COMERCIAL_PERIOD_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </NativeSelect>
+          {/* Contexto global: o período vale para os KPIs e para o Kanban; fica
+           * uma vez, logo abaixo do cabeçalho, fora de Filtros. */}
+          <div className="flex justify-end">
+            <PeriodMenu
+              value={period}
+              options={COMERCIAL_PERIOD_OPTIONS}
+              onChange={(v) => patchSearch({ cPeriod: v })}
+            />
+          </div>
         </div>
 
         <PipelineSummary
@@ -300,7 +293,7 @@ export function ComercialSection() {
               onChange={setSearchText}
               placeholder="Buscar por empresa, contato, e-mail, telefone, responsável..."
             />
-            <FilterPanel filters={filters} onApply={(f) => patchSearch({ cf: f })} team={team} />
+            <FilterPanel filters={filters} onChange={(f) => patchSearch({ cf: f })} team={team} />
             <SortSelect
               sort={sort}
               direction={direction}
@@ -309,7 +302,7 @@ export function ComercialSection() {
           </FilterRow>
           <LeadFiltersSummary
             filters={filters}
-            onClear={() => patchSearch({ cf: EMPTY_LEAD_FILTERS })}
+            onChange={(f) => patchSearch({ cf: f })}
             resultCount={leads.length}
           />
         </FilterToolbar>

@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Loader2 } from "lucide-react";
 import {
   Dialog,
@@ -21,7 +23,7 @@ import { NativeSelect } from "@/components/ui/native-select";
 const INTERACTION_TYPES = Object.keys(INTERACTION_TYPE_LABEL) as InteractionType[];
 const OUTCOMES = Object.keys(INTERACTION_OUTCOME_LABEL) as InteractionOutcome[];
 
-/** ISO local (sem timezone) pra preencher um `<input type="datetime-local">`
+/** ISO local (sem timezone) pra preencher um `<Input type="datetime-local">`
  * com o momento atual — igual ao que o campo já produz ao ser editado. */
 function nowForDateTimeLocal(): string {
   const d = new Date();
@@ -39,9 +41,7 @@ export type FollowUpInput = {
   nextActionAt?: string;
 };
 
-const inputCls =
-  "h-9 w-full rounded-md border border-border bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring";
-const labelCls = "block space-y-1 text-xs font-medium text-text-secondary";
+const labelCls = "block space-y-1.5 text-sm font-medium text-foreground";
 
 /**
  * Registro rápido de follow-up — SEM abrir a ficha completa do lead
@@ -129,7 +129,6 @@ export function FollowUpDialog({
             <NativeSelect
               value={interactionType}
               onChange={(e) => setInteractionType(e.target.value as InteractionType)}
-              className={inputCls}
             >
               <option value="" disabled>
                 Selecione
@@ -144,21 +143,20 @@ export function FollowUpDialog({
 
           <label className={labelCls}>
             <span>Quando aconteceu</span>
-            <input
+            <Input
               type="datetime-local"
               value={occurredAt}
               onChange={(e) => setOccurredAt(e.target.value)}
-              className={inputCls}
             />
           </label>
 
           <label className={labelCls}>
             <span>Resumo *</span>
-            <textarea
+            <Textarea
               value={summary}
               onChange={(e) => setSummary(e.target.value)}
               placeholder="O que foi conversado ou combinado?"
-              className={`${inputCls} h-20 resize-none py-2`}
+              className="h-20 resize-none py-2"
               maxLength={2000}
             />
           </label>
@@ -168,7 +166,6 @@ export function FollowUpDialog({
             <NativeSelect
               value={outcome}
               onChange={(e) => setOutcome(e.target.value as InteractionOutcome)}
-              className={inputCls}
             >
               <option value="">—</option>
               {OUTCOMES.map((o) => (
@@ -181,7 +178,7 @@ export function FollowUpDialog({
 
           <div className="space-y-2 rounded-lg border border-border p-3">
             <label className="flex items-center gap-2 text-xs font-medium text-foreground">
-              <input
+              <Input
                 type="checkbox"
                 checked={!hasNextAction}
                 onChange={(e) => setHasNextAction(!e.target.checked)}
@@ -192,21 +189,19 @@ export function FollowUpDialog({
               <div className="space-y-2 pt-1">
                 <label className={labelCls}>
                   <span>Próxima ação</span>
-                  <input
+                  <Input
                     value={nextActionDescription}
                     onChange={(e) => setNextActionDescription(e.target.value)}
                     placeholder="Ex.: Enviar apresentação comercial"
-                    className={inputCls}
                     maxLength={300}
                   />
                 </label>
                 <label className={labelCls}>
                   <span>Data e hora</span>
-                  <input
+                  <Input
                     type="datetime-local"
                     value={nextActionAt}
                     onChange={(e) => setNextActionAt(e.target.value)}
-                    className={inputCls}
                   />
                 </label>
               </div>

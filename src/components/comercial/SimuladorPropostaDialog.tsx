@@ -1,5 +1,7 @@
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
-import { Plus, Trash2, Calculator, RotateCcw, ArrowRight } from "lucide-react";
+import { Plus, Trash2, RotateCcw, ArrowRight } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import {
@@ -17,9 +19,6 @@ import { NativeSelect } from "@/components/ui/native-select";
 function newLinha(): PacoteLinha {
   return { id: crypto.randomUUID(), tier: TIERS[1].id, formato: FORMATOS[0].id, qtd: 1 };
 }
-
-const selectCls =
-  "h-9 flex-1 rounded-md border border-input bg-background px-2 text-xs focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring";
 
 /**
  * Simulador de Proposta — traz pra dentro do Comercial a lógica da planilha
@@ -102,21 +101,18 @@ export function SimuladorPropostaForm({
   return (
     <div className="space-y-5">
       <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Pacote de influenciadores
-        </p>
+        <p className="text-sm font-medium text-foreground">Pacote de influenciadores</p>
         {linhas.map((l, i) => (
           <div
             key={l.id}
-            className="flex items-center gap-2 rounded-xl border border-border bg-muted/20 p-2"
+            className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/20 p-2"
           >
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-background text-[11px] font-semibold text-muted-foreground">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-background text-[11px] font-semibold text-text-secondary">
               {i + 1}
             </span>
             <NativeSelect
               value={l.tier}
               onChange={(e) => updateLinha(l.id, { tier: e.target.value as TierId })}
-              className={selectCls}
             >
               {TIERS.map((t) => (
                 <option key={t.id} value={t.id}>
@@ -127,7 +123,6 @@ export function SimuladorPropostaForm({
             <NativeSelect
               value={l.formato}
               onChange={(e) => updateLinha(l.id, { formato: e.target.value as FormatoId })}
-              className={selectCls}
             >
               {FORMATOS.map((f) => (
                 <option key={f.id} value={f.id}>
@@ -135,39 +130,33 @@ export function SimuladorPropostaForm({
                 </option>
               ))}
             </NativeSelect>
-            <input
+            <Input
               type="number"
               min={1}
+              aria-label="Quantidade"
               value={l.qtd}
               onChange={(e) => updateLinha(l.id, { qtd: Math.max(1, Number(e.target.value)) })}
-              className="h-9 w-14 shrink-0 rounded-md border border-input bg-background px-2 text-center text-xs focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+              className="w-16 shrink-0 px-2 text-center"
             />
             <button
               type="button"
               onClick={() => removeLinha(l.id)}
               disabled={linhas.length === 1}
-              className="shrink-0 text-muted-foreground hover:text-destructive disabled:opacity-30"
+              className="shrink-0 rounded p-1 text-text-secondary hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Remover linha"
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
           </div>
         ))}
-        <button
-          type="button"
-          onClick={addLinha}
-          disabled={linhas.length >= 10}
-          className="inline-flex items-center gap-1 text-xs font-medium text-foreground hover:underline disabled:opacity-40"
-        >
-          <Plus className="h-3 w-3" /> adicionar linha
-        </button>
+        <Button variant="ghost" size="sm" onClick={addLinha} disabled={linhas.length >= 10}>
+          <Plus /> Adicionar linha
+        </Button>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-border">
+      <div className="surface-card overflow-hidden">
         <div className="flex items-center justify-between bg-muted/40 px-4 py-2.5">
-          <span className="text-xs font-medium text-muted-foreground">
-            Custo dos influenciadores
-          </span>
+          <span className="text-xs font-medium text-text-secondary">Custo dos influenciadores</span>
           <span className="text-sm font-semibold text-foreground">{formatBRL(custoTotal)}</span>
         </div>
         <div className="space-y-1.5 px-4 py-3 text-xs">
@@ -193,7 +182,7 @@ export function SimuladorPropostaForm({
             emphasis
           />
         </div>
-        <div className="flex items-center gap-2 border-t border-dashed border-border px-4 py-2.5 text-[11px] text-muted-foreground">
+        <div className="flex items-center gap-2 border-t border-border/60 px-4 py-2.5 text-[11px] text-text-secondary">
           <ArrowRight className="h-3 w-3 shrink-0" />
           Percentuais definidos em Configurações → Precificação.
         </div>
@@ -201,9 +190,9 @@ export function SimuladorPropostaForm({
 
       {/* Preço final + ação de aplicar na mesma superfície azul — visualmente
        * ligados (Etapa 7), sem borda grossa. */}
-      <div className="rounded-2xl bg-brand p-5">
+      <div className="rounded-2xl bg-brand p-4 md:p-5">
         <div className="flex items-center justify-between gap-2">
-          <label className="text-xs font-semibold uppercase tracking-wide text-brand-foreground-secondary">
+          <label className="text-[11px] font-medium uppercase tracking-wide text-brand-foreground-secondary">
             Preço final ao cliente
           </label>
           {editadoManualmente && (
@@ -227,20 +216,16 @@ export function SimuladorPropostaForm({
           mode="currency"
           value={precoManual ?? Math.round(precoCalculado)}
           onValueChange={(v) => setPrecoManual(v ?? null)}
-          className="mt-2 h-14 w-full rounded-2xl border border-black/10 bg-background px-4 text-[28px] font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-brand-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-brand"
+          className="mt-2 h-12 w-full rounded-md border border-black/10 bg-background px-4 text-2xl font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-brand-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-brand"
         />
         <p className="mt-2 text-[11px] text-brand-foreground-secondary">
           {editadoManualmente
             ? "Ajustado manualmente — a quebra acima recalcula com base neste valor."
             : "Calculado a partir do custo + percentuais. Pode editar por cima."}
         </p>
-        <button
-          type="button"
-          onClick={apply}
-          className="mt-4 w-full rounded-full bg-brand-foreground py-3 text-sm font-semibold text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-brand"
-        >
+        <Button size="comfortable" className="mt-4 w-full" onClick={apply}>
           {applyLabel}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -265,10 +250,7 @@ export function SimuladorPropostaDialog({
     <div onClick={(e) => e.stopPropagation()}>
       <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
         <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col gap-0 p-0" mobileFullScreen>
-          <div className="flex items-center gap-3 border-b border-border px-5 py-4">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
-              <Calculator className="h-4 w-4" />
-            </span>
+          <div className="border-b border-border/60 px-6 py-5">
             <div className="min-w-0">
               <DialogTitle>Simular proposta</DialogTitle>
               <DialogDescription className="mt-0.5">
@@ -277,7 +259,7 @@ export function SimuladorPropostaDialog({
               </DialogDescription>
             </div>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto p-5">
+          <div className="min-h-0 flex-1 overflow-y-auto p-6">
             <SimuladorPropostaForm
               onApply={(precoFinal, snapshot) => {
                 onApply(precoFinal, snapshot);
@@ -304,7 +286,7 @@ function BreakdownRow({
 }) {
   return (
     <div
-      className={`flex items-center justify-between ${emphasis ? "font-medium text-foreground" : "text-muted-foreground"}`}
+      className={`flex items-center justify-between ${emphasis ? "font-medium text-foreground" : "text-text-secondary"}`}
     >
       <span>
         {label} <span className="text-text-secondary">({(pct * 100).toFixed(1)}%)</span>

@@ -87,7 +87,7 @@ export function PipelineSummary({
           <div className="mt-4 flex items-end gap-2">
             {buckets.map((b) => (
               <div key={b.stage} className="flex flex-1 flex-col items-center gap-1.5">
-                <div className="flex h-16 w-full items-end">
+                <div className="mx-auto flex h-16 w-full max-w-20 items-end">
                   <div
                     className="w-full rounded-md bg-muted-foreground/30"
                     style={{ height: `${Math.max(18, (b.value / maxValue) * 100)}%` }}
