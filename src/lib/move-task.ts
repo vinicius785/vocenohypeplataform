@@ -16,8 +16,7 @@ export type MoveTarget =
   | { kind: "marketing"; label: string };
 
 /** Marketing guarda tarefas num shape próprio (`MktStandalone`, quase
- * idêntico a `Task` — ver `marketing-tasks.ts`), sem `roadmapPhaseId`
- * (não existe fase em Marketing). Mesma lista de campos que
+ * idêntico a `Task` — ver `marketing-tasks.ts`). Mesma lista de campos que
  * `MarketingSection.tsx`'s `onChange` já grava ao criar/atualizar uma
  * tarefa avulsa — mantém as duas conversões (leitura e escrita)
  * sempre no mesmo formato. */
@@ -33,8 +32,6 @@ function taskToMkt(t: Task): MktStandalone {
     tags: t.tags,
     attachments: t.attachments,
     subtasks: t.subtasks,
-    startDate: t.startDate,
-    estimate: t.estimate,
     dueDate: t.dueDate,
     note: t.description,
     noteText: t.descriptionText,
@@ -63,11 +60,10 @@ function taskToMkt(t: Task): MktStandalone {
  * está saindo do Marketing) — dependências (`task_dependencies`) e
  * qualquer link cruzado guardam só o id cru da tarefa, sem coluna de
  * escopo, então preservar o id é o que faz esses vínculos sobreviverem
- * ao move sem nenhuma migração. `roadmapPhaseId` é sempre limpo: fase
- * só faz sentido dentro do projeto de origem. */
+ * ao move sem nenhuma migração. */
 export function moveTask(task: Task, from: TaskBoardScope, to: MoveTarget): void {
   const rawId = from.kind === "marketing" ? task.id.replace(/^mkt:/, "") : task.id;
-  const movedTask: Task = { ...task, id: rawId, roadmapPhaseId: undefined };
+  const movedTask: Task = { ...task, id: rawId };
 
   if (from.kind === "projeto") {
     saveProjetoTarefas(

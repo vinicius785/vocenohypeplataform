@@ -13,7 +13,7 @@ import type { MoveTarget } from "@/lib/move-task";
 import type { TaskBoardScope } from "./TaskBoard";
 
 /** Picker de destino pra "Mover tarefa" — mesmo padrão de busca + lista
- * clicável já usado em `LinkTasksPanel.tsx` (Roadmap). Projetos vêm de
+ * clicável do `TaskPicker`. Projetos vêm de
  * `loadProjetos()`; campanhas não têm uma lista própria (vivem dentro
  * de `Cliente.campanhas`), então são achatadas aqui — mesmo padrão já
  * usado em `TimeSection.tsx` pra resolver nome de campanha por id.

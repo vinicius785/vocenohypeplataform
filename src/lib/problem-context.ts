@@ -1,7 +1,7 @@
 /**
  * Contexto automático do "Reportar problema" — o usuário nunca precisa
  * explicar onde estava. Guarda (em memória da aba) a última tela visitada
- * FORA de Problemas e a tarefa aberta no momento, e monta os metadados de
+ * FORA de Problemas e monta os metadados de
  * diagnóstico (rota, módulo, navegador, dispositivo, versão).
  */
 import { APP_VERSION } from "@/lib/app-version";
@@ -11,7 +11,6 @@ import type { SectionKey } from "@/lib/section-nav";
 type NavContext = { route: string; section: SectionKey | null };
 
 let lastContext: NavContext | null = null;
-let taskContext: { id: string; title: string } | null = null;
 
 const SECTION_AREA: Partial<Record<SectionKey, ProblemArea>> = {
   inicio: "Início",
@@ -42,11 +41,6 @@ export function rememberNavigationContext(route: string, section: SectionKey | n
   lastContext = { route, section };
 }
 
-/** Chamado pelo detalhe da tarefa ao abrir/fechar. */
-export function setProblemTaskContext(task: { id: string; title: string } | null) {
-  taskContext = task;
-}
-
 export type ReportContext = {
   defaultArea: ProblemArea;
   diagnostics: ProblemDiagnostics;
@@ -73,7 +67,6 @@ export function captureReportContext(): ReportContext {
       touch: typeof window !== "undefined" ? "ontouchstart" in window : undefined,
       language: nav2?.language,
       appVersion: APP_VERSION,
-      task: taskContext,
     },
   };
 }

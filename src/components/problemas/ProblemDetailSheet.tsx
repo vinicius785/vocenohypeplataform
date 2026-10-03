@@ -568,7 +568,6 @@ function DetailBody({
                 [
                   ["Rota", detail.diagnostics.route],
                   ["Módulo", detail.diagnostics.module],
-                  ["Tarefa", detail.diagnostics.task ? detail.diagnostics.task.title : undefined],
                   ["Versão", detail.diagnostics.appVersion],
                   [
                     "Dispositivo",

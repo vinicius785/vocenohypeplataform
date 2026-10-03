@@ -254,7 +254,15 @@ function LinkPopover({ editor, active }: { editor: Editor; active: boolean }) {
  * v3 pra re-renderizar só quando o estado observado muda (seleção/marcas
  * ativas), em vez de escutar `transaction` na mão.
  */
-export function EditorToolbar({ editor }: { editor: Editor }) {
+export function EditorToolbar({
+  editor,
+  subtle = false,
+}: {
+  editor: Editor;
+  /** Barra discreta (modo documento da descrição): sem fundo de cartão
+   * nem cantos, só uma linha fina — parece parte da página. */
+  subtle?: boolean;
+}) {
   const [containerRef, width] = useElementWidth<HTMLDivElement>();
   const visible = useMemo(() => computeVisibleItems(width), [width]);
 
@@ -289,7 +297,11 @@ export function EditorToolbar({ editor }: { editor: Editor }) {
       ref={containerRef}
       role="toolbar"
       aria-label="Formatação de texto"
-      className="sticky top-0 z-10 flex h-10 min-h-10 items-center gap-0.5 overflow-hidden rounded-t-lg border-b border-border bg-card px-1.5 motion-reduce:transition-none"
+      className={
+        subtle
+          ? "sticky top-0 z-10 flex h-8 min-h-8 items-center gap-0.5 overflow-hidden border-b border-border/50 bg-background/95 px-0.5 backdrop-blur motion-reduce:transition-none [&_button]:h-7"
+          : "sticky top-0 z-10 flex h-10 min-h-10 items-center gap-0.5 overflow-hidden rounded-t-lg border-b border-border bg-card px-1.5 motion-reduce:transition-none"
+      }
     >
       <Select value={state.block} onValueChange={(v) => applyBlock(editor, v as BlockKey)}>
         <SelectTrigger className="h-8 w-auto shrink-0 gap-1 border-0 bg-transparent px-2 text-xs font-medium shadow-none hover:bg-muted focus:ring-0 focus:ring-offset-0">

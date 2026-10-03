@@ -6,7 +6,6 @@
  */
 import type { ComponentType } from "react";
 import {
-  Map as MapIcon,
   KanbanSquare,
   Users,
   FileText,
@@ -22,9 +21,6 @@ import { getTaskAssignees, loadTeamMembers } from "@/lib/projetos";
 import { OPEN_STATUSES } from "@/lib/score";
 import { todayIsoInBrasilia } from "@/lib/timezone";
 import { timeAgo } from "@/components/metas/metas-ui-utils";
-import { loadProjetoFases } from "@/lib/projeto-scoped-store";
-import { faseAtual, type ProjetoFase } from "@/lib/roadmap-engine";
-import type { Task as BoardTask } from "@/components/tasks/TaskBoard";
 
 /** Projeto "encerrado" — concluído ou arquivado. Usado tanto pra recolher
  * esses projetos numa seção separada (mesmo padrão de "Ver campanhas
@@ -36,7 +32,6 @@ export function isEncerrado(status: ProjectStatus): boolean {
 /** Ícone por funcionalidade — usado tanto no card quanto no wizard
  * (`ProjetosSection.tsx`), um lugar só pra não divergir. */
 export const FEATURE_ICONS: Record<FeatureKey, ComponentType<{ className?: string }>> = {
-  roadmap: MapIcon,
   kanban: KanbanSquare,
   influenciadores: Users,
   documentos: FileText,
@@ -50,8 +45,7 @@ export const FEATURE_ICONS: Record<FeatureKey, ComponentType<{ className?: strin
 
 /* ============================================================
  * Saúde operacional — calculada, nunca armazenada. Não existia nenhuma
- * regra de "projeto em risco" no sistema antes disso (só a nível de FASE
- * de roadmap, em `roadmap-engine.ts`'s `faseStatusEfetivo`) — os
+ * regra de "projeto em risco" no sistema antes disso — os
  * limiares abaixo são os "sugestão inicial" do pedido, adotados por
  * ausência de uma regra prévia pra reaproveitar.
  * ============================================================ */
@@ -84,12 +78,10 @@ export const PROJECT_STATUS_BADGE_VARIANT: Record<
 };
 
 /** % de tarefas abertas atrasadas a partir do qual o projeto vira
- * "Atenção"/"Em risco". Nomeados aqui, nunca soltos no JSX — mesma
- * convenção de `roadmap-engine.ts`'s `RISCO_DIAS_RESTANTES`. */
+ * "Atenção"/"Em risco". Nomeados aqui, nunca soltos no JSX. */
 const RISK_ATENCAO_MIN_PCT = 10;
 const RISK_EM_RISCO_MIN_PCT = 25;
-/** Dias até o prazo pra contar como "vencendo em breve" — mesmo valor de
- * `roadmap-engine.ts`'s `RISCO_DIAS_RESTANTES`, por consistência. */
+/** Dias até o prazo pra contar como "vencendo em breve". */
 export const DUE_SOON_DAYS = 7;
 /** Dias sem nenhuma atividade (projeto ou tarefa) pra contar como
  * "ausência prolongada" (item de Atenção). */
@@ -129,24 +121,6 @@ function projectDeadlineIso(project: Project): string | null {
   const datas = project.milestones.map((m) => m.date).filter(Boolean);
   if (datas.length === 0) return null;
   return [...datas].sort().at(-1) ?? null;
-}
-
-/** Fase atual do roadmap (`faseAtual`, já existente em
- * `roadmap-engine.ts`) e a data de fim dessa fase, tratada como "próxima
- * entrega" — mesma fonte de verdade usada dentro do próprio projeto, não
- * uma segunda leitura inventada aqui. `null`/`null` quando o projeto não
- * usa Roadmap ou todas as fases já estão concluídas. */
-function deriveCurrentPhase(
-  fases: ProjetoFase[],
-  tasks: Task[],
-): { label: string | null; deliveryIso: string | null } {
-  if (fases.length === 0) return { label: null, deliveryIso: null };
-  // Mesmo cast já usado no antigo `ProjectCard` (`score.ts`/`roadmap-engine.ts`
-  // tipam `Task` a partir de `TaskBoard.tsx`, estruturalmente idêntico ao
-  // `Task` desta store — ver comentário em `roadmap-engine.ts`).
-  const atual = faseAtual(fases, tasks as unknown as BoardTask[]);
-  if (!atual) return { label: null, deliveryIso: null };
-  return { label: atual.nome, deliveryIso: atual.dataFim || null };
 }
 
 function taskLastActivityMs(t: Task): number {
@@ -262,18 +236,14 @@ export type ProjectMetrics = {
   health: ProjectHealth | null;
   principal: ProjectPerson | null;
   participantes: ProjectPerson[];
-  /** Nome da fase atual do roadmap, ou `null` se o projeto não usa
-   * Roadmap/todas as fases já terminaram — exibir "Sem fase atual". */
-  currentPhaseLabel: string | null;
-  /** "Próxima entrega" mostrada no rodapé do card — fim da fase atual
-   * quando existe, senão o prazo derivado dos marcos (`deadlineIso`). */
+  /** "Próxima entrega" mostrada no card — prazo derivado dos marcos
+   * (`deadlineIso`). */
   nextDeliveryIso: string | null;
 };
 
 export function computeProjectMetrics(
   project: Project,
   team: TeamMemberLite[] = loadTeamMembers(),
-  fases: ProjetoFase[] = loadProjetoFases(project.id),
 ): ProjectMetrics {
   const tasks = project.tasks ?? [];
   const today = todayIsoInBrasilia();
@@ -286,11 +256,7 @@ export function computeProjectMetrics(
   const deadlineIso = projectDeadlineIso(project);
   const lastActivityMs = projectLastActivityMs(project, tasks);
   const { principal, participantes } = deriveResponsibility(tasks, team);
-  const { label: currentPhaseLabel, deliveryIso: phaseDeliveryIso } = deriveCurrentPhase(
-    fases,
-    tasks,
-  );
-  const nextDeliveryIso = phaseDeliveryIso ?? deadlineIso;
+  const nextDeliveryIso = deadlineIso;
   const status: ProjectStatus = project.status ?? "ativo";
   const health =
     status === "ativo"
@@ -321,7 +287,6 @@ export function computeProjectMetrics(
     health,
     principal,
     participantes,
-    currentPhaseLabel,
     nextDeliveryIso,
   };
 }

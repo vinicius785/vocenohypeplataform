@@ -67,12 +67,9 @@ export function ProjectCard({
   const initials = initialsOf(project.name);
   const extraCount = metrics.participantes.length;
 
-  const linha1 = [
-    metrics.currentPhaseLabel ?? "Sem fase atual",
-    metrics.nextDeliveryIso ? `Entrega ${fmtDiaMes(metrics.nextDeliveryIso)}` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const linha1 = metrics.nextDeliveryIso
+    ? `Entrega ${fmtDiaMes(metrics.nextDeliveryIso)}`
+    : "Sem entrega definida";
 
   const progressoLabel =
     metrics.total === 0 ? null : `${metrics.completed} de ${metrics.total} concluídas`;

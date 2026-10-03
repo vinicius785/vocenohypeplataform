@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
 
 const { fallbackTitle, mapProblem, summarizeProblems } = await import("./problems");
-const { areaForContext, captureReportContext, rememberNavigationContext, setProblemTaskContext } =
+const { areaForContext, captureReportContext, rememberNavigationContext } =
   await import("./problem-context");
 
 const row = (over: Record<string, unknown> = {}) => ({
@@ -86,12 +86,9 @@ describe("contexto automático do report", () => {
   it("visitar Problemas não apaga onde a pessoa estava antes", () => {
     rememberNavigationContext("/time?section=financeiro", "financeiro");
     rememberNavigationContext("/time?section=problemas", "problemas");
-    setProblemTaskContext({ id: "t1", title: "Atualizar Metas" });
     const ctx = captureReportContext();
     expect(ctx.defaultArea).toBe("Financeiro");
     expect(ctx.diagnostics.route).toBe("/time?section=financeiro");
-    expect(ctx.diagnostics.task).toEqual({ id: "t1", title: "Atualizar Metas" });
     expect(ctx.diagnostics.appVersion).toBeTruthy();
-    setProblemTaskContext(null);
   });
 });

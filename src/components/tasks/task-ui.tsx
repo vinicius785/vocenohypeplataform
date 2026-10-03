@@ -2,7 +2,7 @@
  * VOCABULÁRIO VISUAL ÚNICO DE TAREFAS — todo lugar da plataforma que
  * mostra status, prioridade, prazo/atraso, bloqueio, dependência ou um
  * cabeçalho de seção de tarefa usa estes componentes (Kanban, detalhe da
- * tarefa, subtarefas, Time, Início, Chat, roadmap). Nenhuma regra de
+ * tarefa, subtarefas, Time, Início, Chat). Nenhuma regra de
  * negócio vive aqui: quem decide se um status pode ser aplicado, se o
  * prazo está pausado ou se uma tarefa está atrasada continua sendo o
  * chamador / `performance-engine` / RPCs de bloqueio. Este módulo só
@@ -130,14 +130,14 @@ export function TaskStatusBadge({
 }
 
 /* ================================================================== */
-/* SELETOR GENÉRICO (status, prioridade, fase...)                       */
+/* SELETOR GENÉRICO (status, prioridade...)                             */
 /* ================================================================== */
 
 export type PickerOption<T extends string> = {
   value: T;
   label: string;
   icon?: ReactNode;
-  /** Texto auxiliar à direita (ex.: datas da fase). */
+  /** Texto auxiliar à direita. */
   hint?: string;
   group?: string;
   disabled?: boolean;
@@ -146,7 +146,7 @@ export type PickerOption<T extends string> = {
 /**
  * Dropdown único de tarefas — Popover + Command: busca (quando há muitos
  * itens), grupos, ícones, seleção marcada, hover/foco e teclado nativos
- * do `cmdk`. Status, prioridade e fase usam este mesmo componente.
+ * do `cmdk`. Status, prioridade e filtros usam este mesmo componente.
  */
 export function TaskOptionPicker<T extends string>({
   value,
@@ -312,7 +312,7 @@ export function TaskStatusSelect({
 /* ================================================================== */
 
 /** Moldura única dos controles inline da barra de propriedades — status,
- * responsável, prazo, prioridade, fase e tempo têm a mesma altura, borda
+ * responsável, prazo, prioridade e etiquetas têm a mesma altura, borda
  * e hover; cada um abre o seu próprio seletor. */
 export const TASK_CHIP =
   "inline-flex h-8 max-w-[240px] shrink-0 items-center gap-1.5 rounded-md border border-border/70 bg-background px-2 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand data-[state=open]:bg-muted";

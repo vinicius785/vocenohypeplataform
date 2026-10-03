@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import type { Project, Task } from "@/lib/projetos";
-import type { ProjetoFase } from "@/lib/roadmap-engine";
 import {
   computeProjectMetrics,
   countActiveProjectFilters,
@@ -11,21 +10,6 @@ import {
   statusMenuActions,
   type ProjectFiltersState,
 } from "./projeto-ui";
-
-function fase(overrides: Partial<ProjetoFase> = {}): ProjetoFase {
-  return {
-    id: overrides.id ?? crypto.randomUUID(),
-    nome: "Fase",
-    dataInicio: "2026-01-01",
-    dataFim: "2026-12-31",
-    status: "em_andamento",
-    cor: "chart-1",
-    sortOrder: 0,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    ...overrides,
-  };
-}
 
 function task(overrides: Partial<Task> = {}): Task {
   return {
@@ -232,7 +216,7 @@ describe("computeProjectMetrics — responsáveis", () => {
 describe("filterProjects", () => {
   const projetos = [
     project({ id: "1", name: "Alpha", status: "ativo", features: ["kanban"] }),
-    project({ id: "2", name: "Beta", status: "pausado", features: ["roadmap"] }),
+    project({ id: "2", name: "Beta", status: "pausado", features: ["blog"] }),
     project({
       id: "3",
       name: "Gama",
@@ -283,7 +267,7 @@ describe("filterProjects", () => {
   it("filtro de funcionalidade", () => {
     const r = filterProjects(projetos, metricsById, "", {
       ...DEFAULT_PROJECT_FILTERS,
-      feature: "roadmap",
+      feature: "blog",
     });
     expect(r.map((p) => p.id)).toEqual(["2"]);
   });
@@ -390,28 +374,15 @@ describe("isEncerrado", () => {
   });
 });
 
-describe("computeProjectMetrics — fase atual e próxima entrega", () => {
-  it("sem fases cadastradas: sem fase atual, mas cai pro prazo dos marcos", () => {
+describe("computeProjectMetrics — próxima entrega", () => {
+  it("usa o prazo mais distante dos marcos", () => {
     const p = project({
       milestones: [{ id: "m", title: "Entrega", date: "2026-06-10", done: false }],
     });
-    const m = computeProjectMetrics(p, [], []);
-    expect(m.currentPhaseLabel).toBeNull();
-    expect(m.nextDeliveryIso).toBe("2026-06-10");
+    expect(computeProjectMetrics(p, []).nextDeliveryIso).toBe("2026-06-10");
   });
-
-  it("com fases: usa o nome e o fim da fase atual como próxima entrega", () => {
-    const f1 = fase({ nome: "Descoberta", status: "concluida", sortOrder: 0 });
-    const f2 = fase({
-      nome: "Execução",
-      status: "em_andamento",
-      dataFim: "2026-05-01",
-      sortOrder: 1,
-    });
-    const p = project({ features: ["roadmap"], tasks: [] });
-    const m = computeProjectMetrics(p, [], [f1, f2]);
-    expect(m.currentPhaseLabel).toBe("Execução");
-    expect(m.nextDeliveryIso).toBe("2026-05-01");
+  it("sem marcos: sem próxima entrega", () => {
+    expect(computeProjectMetrics(project({}), []).nextDeliveryIso).toBeNull();
   });
 });
 

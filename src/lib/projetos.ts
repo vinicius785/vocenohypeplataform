@@ -4,7 +4,6 @@ import { loadProjetoTarefas, onProjetoTarefasChange } from "./projeto-scoped-sto
 import type { TaskRecurrence } from "@/lib/task-recurrence";
 
 export type FeatureKey =
-  | "roadmap"
   | "kanban"
   | "influenciadores"
   | "documentos"
@@ -21,12 +20,6 @@ export const FEATURES: {
   hint: string;
   group?: "core" | "marketing";
 }[] = [
-  {
-    key: "roadmap",
-    label: "Roadmap",
-    hint: "Marcos e datas-chave do projeto em uma linha do tempo.",
-    group: "core",
-  },
   {
     key: "kanban",
     label: "Kanban de tarefas",
@@ -83,12 +76,7 @@ export const FEATURES: {
   },
 ];
 
-export const DEFAULT_FEATURES: FeatureKey[] = [
-  "roadmap",
-  "kanban",
-  "influenciadores",
-  "documentos",
-];
+export const DEFAULT_FEATURES: FeatureKey[] = ["kanban", "influenciadores", "documentos"];
 
 /** Which influencer fields a project's "Influenciadores" feature collects —
  * see @/components/influenciadores/InfluencerBoard, the same board Campanhas uses. */
@@ -251,8 +239,6 @@ export type Task = {
   description?: unknown;
   descriptionText?: string;
   dueDate?: string;
-  startDate?: string;
-  estimate?: string;
   priority?: TaskPriority;
   assignee?: string;
   assignees?: string[];
@@ -279,8 +265,6 @@ export type Task = {
   blockedState?: TaskBlockedState | null;
   /** Ver comentário equivalente em `TaskBoard.tsx`'s `Task.recurrence`. */
   recurrence?: TaskRecurrence;
-  /** Ver comentário equivalente em `TaskBoard.tsx`'s `Task.roadmapPhaseId`. */
-  roadmapPhaseId?: string;
 };
 
 /** `assignees` (novo, múltiplos) tem prioridade; cai para `assignee` (legado, único) quando ausente. */
@@ -307,10 +291,6 @@ export type Milestone = {
   date: string;
   done: boolean;
   taskId?: string;
-  /** Fase do roadmap a que este marco pertence — opcional (marcos
-   * antigos, de antes de fases existirem, ficam sem essa associação;
-   * não inventamos a qual fase pertenciam). */
-  faseId?: string;
 };
 
 /** De onde veio o link — detectado pela URL (`detectSourceType` em
@@ -503,6 +483,9 @@ export function loadProjetos(): Project[] {
     status: p.status ?? DEFAULT_PROJECT_STATUS,
     updatedAt: p.updatedAt ?? p.createdAt,
     milestones: p.milestones ?? [],
+    // Ignora funcionalidades descontinuadas ainda gravadas no projeto
+    // (ex.: "roadmap", removido) — só chaves conhecidas chegam na UI.
+    features: (p.features ?? []).filter((f) => FEATURES.some((x) => x.key === f)),
     // Tarefas de projeto viviam dentro do JSONB do projeto inteiro
     // (`p.tasks`) — cada edição regravava o array completo junto com o
     // resto do projeto, e duas edições concorrentes em tarefas diferentes
@@ -571,7 +554,7 @@ export function setProjetoStatus(id: string, status: ProjectStatus) {
 
 /** Duplica a CONFIGURAÇÃO do projeto (nome, capa, descrição,
  * funcionalidades, navegação) num workspace novo e vazio — não copia
- * tarefas, marcos, arquivos, roadmap nem conteúdo de nenhuma
+ * tarefas, marcos, arquivos nem conteúdo de nenhuma
  * funcionalidade. Duplicar um projeto inteiro com todo o histórico de
  * tarefas seria surpreendente (e pesado); replicar só o "molde" é o
  * comportamento esperado de "duplicar projeto" e evita arrastar dados

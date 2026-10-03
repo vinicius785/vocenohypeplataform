@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Calendar,
-  CalendarClock,
-  SlidersHorizontal,
-  Timer,
   ChevronRight,
   ChevronDown,
   FileText,
@@ -23,12 +20,9 @@ import {
   ArrowUpDown,
   Filter,
   MessageSquare,
-  LifeBuoy,
-  Undo2,
   MoreHorizontal,
   Search,
   Link2,
-  Milestone as MilestoneIcon,
   Copy,
   Archive,
   AlertTriangle,
@@ -58,7 +52,6 @@ import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import { toRichDoc, isDescriptionEmpty, type RichDoc } from "@/lib/rich-text";
 import type { MentionOption } from "@/lib/mention-kinds";
 import { RichTaskEditor } from "@/components/tasks/rich-editor/RichTaskEditor";
-import { openReportProblem, setProblemTaskContext } from "@/lib/problem-context";
 
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
@@ -77,8 +70,10 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useConfirm } from "@/hooks/use-confirm";
 import { DateField } from "@/components/ui/date-field";
 import { TimeTrackingPanel } from "@/components/tasks/TimeTrackingPanel";
 import { stopIfRunningOnTask } from "@/lib/time-entries";
@@ -174,7 +169,6 @@ import {
   TaskDeadlineBadge,
   TaskDependencyIndicator,
   TaskEmptyLine,
-  TaskOptionPicker,
   TaskPriorityFlag,
   TaskPrioritySelect,
   TaskSectionHeader,
@@ -208,7 +202,6 @@ export type ResolveFormFields = {
   resolutionNote: string;
   newStatus: TaskStatus;
 };
-import type { ProjetoFase } from "@/lib/roadmap-engine";
 
 // `TASK_STATUSES` concorda no masculino ("Concluído", coluna do Kanban),
 // mas o resumo textual concorda com "tarefa" (feminino) — sem esse mapa
@@ -524,8 +517,6 @@ export type Task = {
   status: TaskStatus;
   priority: TaskPriority;
   dueDate?: string;
-  startDate?: string;
-  estimate?: string;
   assignee?: string;
   assignees?: string[];
   /** Nome de quem é accountable pela entrega — deve ser um dos
@@ -569,13 +560,6 @@ export type Task = {
    * `applyRecurrenceIfCompleted`), sem duplicar registro, igual ao
    * ClickUp. */
   recurrence?: TaskRecurrence;
-  /** Fase do roadmap (só faz sentido pra tarefas de projeto,
-   * `scope.kind === "projeto"`) — `undefined`/ausente = "Sem fase".
-   * Vínculo por id só, nunca uma cópia da tarefa; excluir a fase nunca
-   * apaga a tarefa (só deixa este campo apontando pra um id que não
-   * existe mais, tratado como "sem fase" na leitura). Ver comentário
-   * equivalente em `projetos.ts`'s `Task.roadmapPhaseId`. */
-  roadmapPhaseId?: string;
   /** Presente só quando a tarefa nasceu do menu "Criar tarefa" de uma
    * mensagem do chat — gravado direto, nunca por
    * `save()` do modal. */
@@ -927,7 +911,6 @@ function applyRecurrenceIfCompleted(prev: Task, next: Task): Task {
     status: "Aberto",
     completedAt: undefined,
     dueDate: nextDue,
-    startDate: undefined,
     originalDueDate: nextDue,
     performanceDueDate: nextDue,
     deadlineHistory: [],
@@ -1227,7 +1210,6 @@ export function TaskBoard({
   breadcrumb,
   initialOpenTaskId,
   onInitialOpenTaskHandled,
-  fases,
   viewToggle = false,
 }: {
   /** Opt-in (Campanhas): mostra o alternador "Lista | Kanban", com Lista
@@ -1241,15 +1223,11 @@ export function TaskBoard({
   breadcrumb?: string;
   initialOpenTaskId?: string;
   onInitialOpenTaskHandled?: () => void;
-  /** Fases do roadmap deste projeto — só faz sentido quando `scope.kind
-   * === "projeto"`; ver comentário equivalente em `TaskDialog`. */
-  fases?: ProjetoFase[];
 }) {
   const [taskDialog, setTaskDialog] = useState<{
     mode: "new" | "edit";
     data?: Task;
     defaultStatus?: TaskStatus;
-    defaultRoadmapPhaseId?: string;
     // Quando se clica numa subtarefa (card achatado ou prévia expandida no
     // board), `data` continua sendo a tarefa-mãe (é ela quem tem o
     // diálogo) mas isso diz pro diálogo abrir já direto na subtarefa —
@@ -1299,6 +1277,7 @@ export function TaskBoard({
   // só de sessão (não persiste), igual a qualquer accordion aberto/fechado.
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const members = useTeamMembers();
+  const { confirm: confirmTaskDelete, confirmDialog: taskDeleteConfirmDialog } = useConfirm();
   const { settings: performanceSettings } = usePerformanceSettings();
 
   // Um deep-link (`?taskId=`) pode apontar pra uma SUBTAREFA — antes,
@@ -1382,20 +1361,6 @@ export function TaskBoard({
     "taskboard:deadlineFilters",
     [],
   );
-  // Sentinela pra "Sem fase" (nunca colide com um id real de fase, que é
-  // sempre um UUID) — reaproveita a mesma lista de filtros em vez de um
-  // toggle separado, mesmo padrão das outras categorias.
-  const SEM_FASE = "__sem_fase__";
-  const [faseFilters, setFaseFilters] = usePersistedState<string[]>("taskboard:faseFilters", []);
-  // "Agrupar por" — mesma preferência vale em qualquer board (não é
-  // por-projeto), mas só tem efeito quando `fases` existe; sem isso
-  // (Campanhas/Marketing) o board sempre agrupa por status, mesmo que a
-  // preferência salva seja "fase" de outro projeto.
-  const [groupByPref, setGroupByPref] = usePersistedState<"status" | "fase">(
-    "taskboard:groupBy",
-    "status",
-  );
-  const groupBy = fases ? groupByPref : "status";
   const [filterOpen, setFilterOpen] = useState(false);
   useEffect(() => {
     setAssigneeFilters((prev) => prev.filter((a) => allAssignees.includes(a)));
@@ -1403,17 +1368,11 @@ export function TaskBoard({
   useEffect(() => {
     setTagFilters((prev) => prev.filter((t) => allTags.includes(t)));
   }, [allTags, setTagFilters]);
-  useEffect(() => {
-    if (!fases) return;
-    const validIds = new Set([SEM_FASE, ...fases.map((f) => f.id)]);
-    setFaseFilters((prev) => prev.filter((id) => validIds.has(id)));
-  }, [fases, setFaseFilters]);
   const activeFilterCount = [
     assigneeFilters.length > 0,
     tagFilters.length > 0,
     priorityFilters.length > 0,
     deadlineFilters.length > 0,
-    faseFilters.length > 0,
   ].filter(Boolean).length;
   const toggleIn = <T,>(list: T[], value: T): T[] =>
     list.includes(value) ? list.filter((x) => x !== value) : [...list, value];
@@ -1433,10 +1392,6 @@ export function TaskBoard({
       )
     )
       return false;
-    if (faseFilters.length > 0) {
-      const key = t.roadmapPhaseId ?? SEM_FASE;
-      if (!faseFilters.includes(key)) return false;
-    }
     return true;
   };
   const visibleTasks = tasks.filter(taskMatchesFilters);
@@ -1467,47 +1422,24 @@ export function TaskBoard({
         label: DEADLINE_PERIOD_FILTER_LABEL[key],
         onRemove: () => setDeadlineFilters((prev) => prev.filter((x) => x !== key)),
       })),
-      ...faseFilters.map((id) => ({
-        id: `fase:${id}`,
-        label: id === SEM_FASE ? "Sem fase" : (fases?.find((f) => f.id === id)?.nome ?? "Fase"),
-        onRemove: () => setFaseFilters((prev) => prev.filter((x) => x !== id)),
-      })),
     ],
     [
       assigneeFilters,
       tagFilters,
       priorityFilters,
       deadlineFilters,
-      faseFilters,
-      fases,
       setAssigneeFilters,
       setTagFilters,
       setPriorityFilters,
       setDeadlineFilters,
-      setFaseFilters,
     ],
   );
 
-  // Colunas do board — por status (padrão, sempre disponível) ou por
-  // fase do roadmap (só quando `fases` existe e "Agrupar por" está em
-  // "fase", ver `groupBy` acima). Fases ordenadas por `sortOrder`, com
-  // "Sem fase" sempre por último — mesmo sentinela `SEM_FASE` já usado
-  // pelo filtro por fase, pra nunca ter dois conceitos de "sem fase".
-  const faseColumnKey = (t: Pick<Task, "roadmapPhaseId">): string => {
-    if (!t.roadmapPhaseId) return SEM_FASE;
-    return fases?.some((f) => f.id === t.roadmapPhaseId) ? t.roadmapPhaseId : SEM_FASE;
-  };
-  const boardColumns = useMemo(() => {
-    if (groupBy === "fase" && fases) {
-      return [
-        ...[...fases]
-          .sort((a, b) => a.sortOrder - b.sortOrder)
-          .map((f) => ({ key: f.id, label: f.nome, dotClass: f.cor.split(" ")[0] })),
-        { key: SEM_FASE, label: "Sem fase", dotClass: "bg-muted-foreground" },
-      ];
-    }
-    return TASK_STATUSES.map((s) => ({ key: s, label: s, dotClass: TASK_STATUS_DOT[s] }));
-  }, [groupBy, fases]);
+  // Colunas do board — uma por status.
+  const boardColumns = useMemo(
+    () => TASK_STATUSES.map((s) => ({ key: s, label: s, dotClass: TASK_STATUS_DOT[s] })),
+    [],
+  );
 
   // "Exibir subtarefas no board" — preferência pessoal, persistida (não é
   // por-board: a mesma escolha vale em qualquer kanban, já que é o mesmo
@@ -1580,13 +1512,9 @@ export function TaskBoard({
   }, [boardColumns, mobileActiveCol]);
   const mobileColCounts = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const t of visibleTasks) {
-      const key = groupBy === "fase" ? faseColumnKey(t) : t.status;
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
+    for (const t of visibleTasks) counts.set(t.status, (counts.get(t.status) ?? 0) + 1);
     return counts;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleTasks, groupBy, fases]);
+  }, [visibleTasks]);
 
   // Resumo textual do total (rodada de refinamento — achado real: "1 no
   // total" sem dizer ONDE está essa tarefa deixa a seção parecendo
@@ -1790,7 +1718,6 @@ export function TaskBoard({
                       setTagFilters([]);
                       setPriorityFilters([]);
                       setDeadlineFilters([]);
-                      setFaseFilters([]);
                     }}
                     className="text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:hover:text-muted-foreground"
                   >
@@ -1942,90 +1869,6 @@ export function TaskBoard({
                   </div>
                 </div>
 
-                {fases && (
-                  <div>
-                    <p className="text-[11px] font-medium text-muted-foreground">Agrupar por</p>
-                    <div className="mt-1.5 inline-flex rounded-md border border-border p-0.5">
-                      <button
-                        type="button"
-                        onClick={() => setGroupByPref("status")}
-                        className={`rounded px-2 py-1 text-[11px] font-medium transition-colors ${
-                          groupBy === "status"
-                            ? "bg-foreground text-background"
-                            : "text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        Status
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setGroupByPref("fase")}
-                        className={`rounded px-2 py-1 text-[11px] font-medium transition-colors ${
-                          groupBy === "fase"
-                            ? "bg-foreground text-background"
-                            : "text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        Fase
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {fases && fases.length > 0 && (
-                  <div>
-                    <p className="text-[11px] font-medium text-muted-foreground">Fase</p>
-                    <div className="mt-1.5 space-y-0.5">
-                      {fases.map((f) => {
-                        const active = faseFilters.includes(f.id);
-                        return (
-                          <button
-                            key={f.id}
-                            type="button"
-                            onClick={() => setFaseFilters((prev) => toggleIn(prev, f.id))}
-                            className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs hover:bg-muted/60"
-                          >
-                            <input
-                              type="checkbox"
-                              readOnly
-                              checked={active}
-                              className="h-3.5 w-3.5 shrink-0 rounded border-border accent-foreground"
-                            />
-                            <span
-                              className={`h-2 w-2 shrink-0 rounded-full ${f.cor.split(" ")[0]}`}
-                            />
-                            <span
-                              className={`truncate ${active ? "text-foreground" : "text-muted-foreground"}`}
-                            >
-                              {f.nome}
-                            </span>
-                          </button>
-                        );
-                      })}
-                      {(() => {
-                        const active = faseFilters.includes(SEM_FASE);
-                        return (
-                          <button
-                            type="button"
-                            onClick={() => setFaseFilters((prev) => toggleIn(prev, SEM_FASE))}
-                            className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs hover:bg-muted/60"
-                          >
-                            <input
-                              type="checkbox"
-                              readOnly
-                              checked={active}
-                              className="h-3.5 w-3.5 shrink-0 rounded border-border accent-foreground"
-                            />
-                            <span className={active ? "text-foreground" : "text-muted-foreground"}>
-                              Sem fase
-                            </span>
-                          </button>
-                        );
-                      })()}
-                    </div>
-                  </div>
-                )}
-
                 <label className="flex items-center gap-2 border-t border-border pt-3 text-xs text-foreground">
                   <input
                     type="checkbox"
@@ -2081,7 +1924,6 @@ export function TaskBoard({
                 setTagFilters([]);
                 setPriorityFilters([]);
                 setDeadlineFilters([]);
-                setFaseFilters([]);
               }}
               className="text-[11px] text-muted-foreground hover:text-foreground"
             >
@@ -2234,16 +2076,12 @@ export function TaskBoard({
             <div className="relative">
               <div className="-mx-1 flex gap-4 overflow-x-auto px-1 pb-3 [scrollbar-width:thin]">
                 {renderedColumns.map((col) => {
-                  const rootItems: BoardItem[] = visibleTasks.filter((t) =>
-                    groupBy === "fase" ? faseColumnKey(t) === col.key : t.status === col.key,
-                  );
+                  const rootItems: BoardItem[] = visibleTasks.filter((t) => t.status === col.key);
                   const subtaskItems: BoardItem[] = showSubtasksInline
                     ? allSubtasksFlat
                         .filter(
                           ({ subtask }) =>
-                            (groupBy === "fase"
-                              ? faseColumnKey(subtask) === col.key
-                              : subtask.status === col.key) && taskMatchesFilters(subtask),
+                            subtask.status === col.key && taskMatchesFilters(subtask),
                         )
                         .map(({ subtask, parent }) => ({ ...subtask, __parentTask: parent }))
                     : [];
@@ -2253,10 +2091,8 @@ export function TaskBoard({
                   // precisa ver no dia a dia. Mostra só as 4 mais recentes por
                   // padrão (derivado do log de atividade, ver `taskCompletedAt`),
                   // com "Mostrar tudo" pra quem realmente precisar olhar o histórico
-                  // completo. Só faz sentido agrupando por status — agrupando por
-                  // fase, uma tarefa concluída convive normalmente com as outras
-                  // da mesma fase.
-                  const isDone = groupBy === "status" && col.key === "Concluído";
+                  // completo.
+                  const isDone = col.key === "Concluído";
                   const sortedItems = isDone
                     ? [...allItems].sort((a, b) =>
                         taskCompletedAt(b).localeCompare(taskCompletedAt(a)),
@@ -2273,50 +2109,32 @@ export function TaskBoard({
                       onDrop={() => {
                         if (dragId) {
                           const dragged = tasks.find((t) => t.id === dragId);
-                          if (groupBy === "fase") {
-                            // Agrupar por fase: o drop só move a tarefa de fase,
-                            // nunca muda status — nenhuma das regras de transição
-                            // de status (dependência pendente, ledger, recorrência,
-                            // cronômetro) se aplica aqui.
-                            if (dragged) {
-                              const faseId = col.key === SEM_FASE ? undefined : col.key;
-                              persist(
-                                tasks.map((t) =>
-                                  t.id === dragId ? { ...t, roadmapPhaseId: faseId } : t,
-                                ),
-                              );
-                            }
-                          } else {
-                            if (
-                              dragged &&
-                              col.key === "Em andamento" &&
-                              (pendingDepCountByTaskId.get(dragged.id) ?? 0) > 0
-                            ) {
-                              toast.error("Esta tarefa depende de outra ainda não concluída.");
-                              setDragId(null);
-                              setDragOverCol(null);
-                              return;
-                            }
-                            if (dragged) {
-                              const updated = withStatusChange(dragged, col.key as TaskStatus);
-                              if (updated !== dragged)
-                                recordTaskLedgerEventsOnStatusChange(dragged, updated, {
-                                  scope,
-                                  members,
-                                  performanceSettings,
-                                });
-                              const finalTask = applyRecurrenceIfCompleted(dragged, updated);
-                              persist(tasks.map((t) => (t.id === dragId ? finalTask : t)));
-                              // Cronômetro de `time_entries` (não é mais o campo
-                              // antigo que `withStatusChange` já tratou acima) — só
-                              // "Concluído" para sozinho, silenciosamente.
-                              const dragOrigin = taskOriginFromScope(scope);
-                              if (col.key === "Concluído" && dragOrigin) {
-                                void stopIfRunningOnTask(
-                                  dragged.id.replace(/^mkt:/, ""),
-                                  dragOrigin,
-                                );
-                              }
+                          if (
+                            dragged &&
+                            col.key === "Em andamento" &&
+                            (pendingDepCountByTaskId.get(dragged.id) ?? 0) > 0
+                          ) {
+                            toast.error("Esta tarefa depende de outra ainda não concluída.");
+                            setDragId(null);
+                            setDragOverCol(null);
+                            return;
+                          }
+                          if (dragged) {
+                            const updated = withStatusChange(dragged, col.key as TaskStatus);
+                            if (updated !== dragged)
+                              recordTaskLedgerEventsOnStatusChange(dragged, updated, {
+                                scope,
+                                members,
+                                performanceSettings,
+                              });
+                            const finalTask = applyRecurrenceIfCompleted(dragged, updated);
+                            persist(tasks.map((t) => (t.id === dragId ? finalTask : t)));
+                            // Cronômetro de `time_entries` (não é mais o campo
+                            // antigo que `withStatusChange` já tratou acima) — só
+                            // "Concluído" para sozinho, silenciosamente.
+                            const dragOrigin = taskOriginFromScope(scope);
+                            if (col.key === "Concluído" && dragOrigin) {
+                              void stopIfRunningOnTask(dragged.id.replace(/^mkt:/, ""), dragOrigin);
                             }
                           }
                         }
@@ -2345,15 +2163,7 @@ export function TaskBoard({
                         <button
                           type="button"
                           onClick={() =>
-                            setTaskDialog(
-                              groupBy === "fase"
-                                ? {
-                                    mode: "new",
-                                    defaultRoadmapPhaseId:
-                                      col.key === SEM_FASE ? undefined : col.key,
-                                  }
-                                : { mode: "new", defaultStatus: col.key as TaskStatus },
-                            )
+                            setTaskDialog({ mode: "new", defaultStatus: col.key as TaskStatus })
                           }
                           className="flex h-8 w-full items-center justify-center gap-1.5 rounded-md text-[12px] font-medium text-muted-foreground transition-colors hover:bg-brand-subtle hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                         >
@@ -2403,8 +2213,12 @@ export function TaskBoard({
                                     openSubtaskId: t.__parentTask ? t.id : undefined,
                                   })
                                 }
-                                onDelete={(e) => {
+                                onDelete={async (e) => {
                                   e.stopPropagation();
+                                  const ok = await confirmTaskDelete(
+                                    `Excluir "${t.title}"? Essa ação não pode ser desfeita.`,
+                                  );
+                                  if (!ok) return;
                                   if (t.__parentTask) {
                                     const parent = t.__parentTask;
                                     persist(
@@ -2421,6 +2235,9 @@ export function TaskBoard({
                                     );
                                   } else {
                                     persist(tasks.filter((x) => x.id !== t.id));
+                                    // Mesmo cuidado do "Excluir" do detalhe:
+                                    // sem isso, dependências ficavam órfãs.
+                                    void cleanupDependenciesForTask(t.id);
                                   }
                                 }}
                               />
@@ -2516,33 +2333,6 @@ export function TaskBoard({
                                 </TooltipContent>
                               </Tooltip>
                             )}
-
-                            {/* Fase — linha própria, nunca dividindo espaço com
-                        prazo/prioridade (essa mistura era o que fazia a
-                        fase "brigar" com o resto). Cor suave (`softColor`),
-                        nome completo quando couber, trunca + Tooltip
-                        quando não couber. */}
-                            {fases &&
-                              t.roadmapPhaseId &&
-                              (() => {
-                                const f = fases.find((x) => x.id === t.roadmapPhaseId);
-                                if (!f) return null;
-                                return (
-                                  <div className="mt-2">
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <span
-                                          className={`inline-flex max-w-full items-center gap-1 truncate rounded-full px-1.5 py-0.5 text-[10px] font-medium ${softColor(f.cor)}`}
-                                        >
-                                          <MilestoneIcon className="h-2.5 w-2.5 shrink-0" />
-                                          <span className="truncate">{f.nome}</span>
-                                        </span>
-                                      </TooltipTrigger>
-                                      <TooltipContent>{f.nome}</TooltipContent>
-                                    </Tooltip>
-                                  </div>
-                                );
-                              })()}
 
                             {/* Nível 4 — etiquetas / comentários / anexos / dependências */}
                             {((t.tags?.length ?? 0) > 0 ||
@@ -2665,15 +2455,14 @@ export function TaskBoard({
           </>
         )}
 
+        {taskDeleteConfirmDialog}
         <TaskDialog
           open={!!taskDialog}
           onOpenChange={(o) => !o && setTaskDialog(null)}
           initial={taskDialog?.data}
           defaultStatus={taskDialog?.defaultStatus}
-          defaultRoadmapPhaseId={taskDialog?.defaultRoadmapPhaseId}
           initialEditSubtaskId={taskDialog?.openSubtaskId}
           scope={scope}
-          fases={fases}
           breadcrumb={breadcrumb}
           onSave={(t) => {
             if (taskDialog?.mode === "edit") {
@@ -2736,8 +2525,6 @@ export function TaskDialog({
   onOpenChange,
   initial,
   defaultStatus,
-  defaultRoadmapPhaseId,
-  fases,
   parentTitle,
   scope,
   breadcrumb,
@@ -2751,15 +2538,6 @@ export function TaskDialog({
   onOpenChange: (o: boolean) => void;
   initial?: Task;
   defaultStatus?: TaskStatus;
-  /** Pré-seleciona a fase ao CRIAR uma tarefa (ex. "+ Nova tarefa" de
-   * dentro de uma fase do roadmap) — só usado quando `initial` é
-   * ausente, igual a `defaultStatus`. */
-  defaultRoadmapPhaseId?: string;
-  /** Fases do roadmap DESTE projeto — só populado quando `scope.kind ===
-   * "projeto"`. Presente (mesmo vazio) já basta pra mostrar o campo
-   * "Fase"; ausente/undefined esconde o campo inteiro (campanha,
-   * marketing, ou contexto sem noção de fase). */
-  fases?: ProjetoFase[];
   parentTitle?: string;
   scope?: TaskBoardScope;
   breadcrumb?: string;
@@ -2824,7 +2602,6 @@ export function TaskDialog({
   const [status, setStatus] = useState<TaskStatus>("Aberto");
   const [priority, setPriority] = useState<TaskPriority>("Normal");
   const [dueDate, setDueDate] = useState<string>("");
-  const [startDate, setStartDate] = useState<string>("");
   // Elevados de `let`s recalculados a cada `save()` pra estado de
   // verdade — precisam refletir mudanças de prazo já confirmadas NESTA
   // sessão (silenciosas ou via formulário) antes mesmo do "Salvar" do
@@ -2869,9 +2646,7 @@ export function TaskDialog({
    * re-render do diálogo inteiro a cada tecla digitada só pra saber "tem
    * dado ou não" (só é lido no momento de fechar, em `attemptSave`). */
   const blockComposerHasData = useRef(false);
-  const [estimate, setEstimate] = useState<string>("");
   const [recurrence, setRecurrence] = useState<TaskRecurrence | undefined>(undefined);
-  const [roadmapPhaseId, setRoadmapPhaseId] = useState<string | undefined>(undefined);
   const [timerRunning, setTimerRunning] = useState(false);
   const [timerStartedAt, setTimerStartedAt] = useState<string | undefined>();
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
@@ -2879,6 +2654,7 @@ export function TaskDialog({
   const [primaryAssignee, setPrimaryAssignee] = useState<string | undefined>();
   const [assigneePickerOpen, setAssigneePickerOpen] = useState(false);
   const isMobileDialog = useIsMobile();
+  const { confirm: confirmDelete, confirmDialog: deleteConfirmDialog } = useConfirm();
   // Activity deixou de ser uma coluna permanente — só existe/renderiza
   // quando `activityOpen`, aberta pelo botão "Atividade · N" no
   // cabeçalho ou sozinha quando um questionário de bloqueio/
@@ -2988,7 +2764,6 @@ export function TaskDialog({
   const [subtasksOpen, setSubtasksOpen] = useState(false);
   const [showArchivedSubtasks, setShowArchivedSubtasks] = useState(false);
   const [attachmentsOpen, setAttachmentsOpen] = useState(false);
-  const [fieldsOpen, setFieldsOpen] = useState(false);
   // `dependsOn`/`blocks` só resolvem depois que `allDeps` (store realtime)
   // carrega — abrir a faixa de Dependências sozinha na primeira vez que
   // isso acontecer (por tarefa) evita nascer sempre fechada mesmo quando
@@ -3075,7 +2850,6 @@ export function TaskDialog({
     setStatus(initial?.status ?? defaultStatus ?? "Aberto");
     setPriority(initial?.priority ?? "Normal");
     setDueDate(initial?.dueDate ?? "");
-    setStartDate(initial?.startDate ?? "");
     setOriginalDueDate(initial?.originalDueDate);
     setPerformanceDueDate(initial?.performanceDueDate);
     setDeadlineHistory(initial?.deadlineHistory ?? []);
@@ -3094,10 +2868,7 @@ export function TaskDialog({
     setSubtasksOpen(!!initial?.subtasks?.length);
     setDepsOpen(false); // reaberto pelo `useEffect` de `dependsOn`/`blocks`, quando resolverem
     setAttachmentsOpen(!!initial?.attachments?.length);
-    setFieldsOpen(false);
-    setEstimate(initial?.estimate ?? "");
     setRecurrence(initial?.recurrence);
-    setRoadmapPhaseId(initial?.roadmapPhaseId ?? defaultRoadmapPhaseId);
     setTimerRunning(!!initial?.timerRunning);
     setTimerStartedAt(initial?.timerStartedAt);
     setTimeEntries(initial?.timeEntries ?? []);
@@ -3533,7 +3304,6 @@ export function TaskDialog({
     // em seguida, então o valor certo precisa vir por parâmetro, não do
     // estado.
     let finalDueDate = (dueDateOverride ?? dueDate) || undefined;
-    let finalStartDate = startDate || undefined;
     const me = getMe();
     const actor = getCurrentAuthor();
     const origin = taskOriginFromScope(scope);
@@ -3708,7 +3478,6 @@ export function TaskDialog({
         finalStatus = afterRecurrence.status;
         finalCompletedAt = afterRecurrence.completedAt;
         finalDueDate = afterRecurrence.dueDate;
-        finalStartDate = afterRecurrence.startDate;
         finalOriginalDueDate = afterRecurrence.originalDueDate;
         finalPerformanceDueDate = afterRecurrence.performanceDueDate;
         finalDeadlineHistory = afterRecurrence.deadlineHistory ?? [];
@@ -3729,8 +3498,6 @@ export function TaskDialog({
       status: finalStatus,
       priority,
       dueDate: finalDueDate,
-      startDate: finalStartDate,
-      estimate: estimate || undefined,
       assignees: assignees.length ? assignees : undefined,
       primaryAssignee,
       tags: tags.length ? tags : undefined,
@@ -3748,7 +3515,6 @@ export function TaskDialog({
       deadlineHistory: finalDeadlineHistory.length ? finalDeadlineHistory : undefined,
       blockedState,
       recurrence,
-      roadmapPhaseId,
     });
   };
 
@@ -3941,13 +3707,6 @@ export function TaskDialog({
   const promoteToPrimary = (name: string) => {
     setPrimaryAssignee((prev) => (prev === name ? undefined : name));
   };
-  // Central de Problemas: um report aberto daqui registra esta tarefa.
-  useEffect(() => {
-    if (!open || !initial) return;
-    setProblemTaskContext({ id: initial.id, title: initial.title });
-    return () => setProblemTaskContext(null);
-  }, [open, initial]);
-
   // Nome do projeto no breadcrumb (só leitura do store local, sem I/O).
   const scopeName = useMemo(
     () =>
@@ -3965,14 +3724,11 @@ export function TaskDialog({
       status,
       priority,
       dueDate || "",
-      startDate || "",
       assignees,
       primaryAssignee ?? null,
       tags,
       attachments.map((a) => a.id),
       subtasks,
-      roadmapPhaseId ?? null,
-      estimate || "",
       recurrence ?? null,
       comments.length,
     ];
@@ -3981,14 +3737,11 @@ export function TaskDialog({
       initial.status,
       initial.priority ?? "Normal",
       initial.dueDate ?? "",
-      initial.startDate ?? "",
       getTaskAssignees(initial),
       initial.primaryAssignee ?? null,
       initial.tags ?? [],
       (initial.attachments ?? []).map((a) => a.id),
       initial.subtasks ?? [],
-      initial.roadmapPhaseId ?? null,
-      initial.estimate ?? "",
       initial.recurrence ?? null,
       (initial.comments ?? []).length,
     ];
@@ -3999,14 +3752,11 @@ export function TaskDialog({
     status,
     priority,
     dueDate,
-    startDate,
     assignees,
     primaryAssignee,
     tags,
     attachments,
     subtasks,
-    roadmapPhaseId,
-    estimate,
     recurrence,
     comments.length,
   ]);
@@ -4097,18 +3847,39 @@ export function TaskDialog({
             {initial && (
               <div className="ml-auto flex shrink-0 items-center gap-1">
                 {isDirty ? (
-                  <button
-                    type="button"
-                    onClick={() => attemptSave(true)}
-                    title="As alterações também são salvas ao fechar a tarefa (Ctrl/⌘ + Enter)"
-                    className="hidden items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:bg-muted sm:inline-flex"
-                  >
+                  <span className="hidden items-center gap-1 text-[11px] sm:inline-flex">
                     <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                    Alterações pendentes · Salvar
-                  </button>
+                    <span className="text-muted-foreground">Alterações pendentes</span>
+                    {/* Descartar faz parte do FLUXO de edição (antes era um
+                        item permanente do menu ⋯): fecha sem salvar. */}
+                    <button
+                      type="button"
+                      onClick={() => onOpenChange(false)}
+                      className="rounded-md px-1.5 py-1 font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      Descartar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => attemptSave(true)}
+                      title="As alterações também são salvas ao fechar a tarefa (Ctrl/⌘ + Enter)"
+                      className="rounded-md px-1.5 py-1 font-medium text-foreground transition-colors hover:bg-muted"
+                    >
+                      Salvar
+                    </button>
+                  </span>
                 ) : (
                   <span className="hidden items-center gap-1 px-2 text-[11px] text-muted-foreground sm:inline-flex">
                     <Check aria-hidden className="h-3 w-3" /> Salvo
+                  </span>
+                )}
+                {timeTrackingOrigin && (
+                  <span className="inline-flex h-7 shrink-0 items-center rounded-md border border-border/70 [&>button]:h-full [&>button]:py-0 [&>button]:text-xs">
+                    <TimeTrackingPanel
+                      taskId={timeTrackingTaskId!}
+                      taskOrigin={timeTrackingOrigin}
+                      members={members}
+                    />
                   </span>
                 )}
                 <button
@@ -4137,66 +3908,76 @@ export function TaskDialog({
                         <MoreHorizontal className="h-4 w-4" />
                       </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
+                    {/* Ações DA TAREFA, agrupadas por contexto — nunca um
+                        catálogo do que existe dentro dela. */}
+                    <DropdownMenuContent align="end" className="w-52">
                       {!parentTitle && scope && (
-                        <DropdownMenuItem onClick={() => setMoveDialogOpen(true)}>
-                          <FolderInput className="h-3.5 w-3.5" /> Mover para...
-                        </DropdownMenuItem>
-                      )}
-                      {!parentTitle && scope && (
-                        <DropdownMenuItem
-                          onClick={() => {
-                            duplicateTask(initial, scope);
-                            toast.success("Tarefa duplicada.");
-                          }}
-                        >
-                          <Copy className="h-3.5 w-3.5" /> Duplicar
-                        </DropdownMenuItem>
+                        <>
+                          <DropdownMenuItem onClick={() => setMoveDialogOpen(true)}>
+                            <FolderInput className="h-3.5 w-3.5" /> Mover para...
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              duplicateTask(initial, scope);
+                              toast.success("Tarefa duplicada.");
+                            }}
+                          >
+                            <Copy className="h-3.5 w-3.5" /> Duplicar
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                        </>
                       )}
                       <DropdownMenuItem
-                        onClick={() =>
+                        onClick={() => {
+                          setDepsOpen(true);
                           depsSectionRef.current?.scrollIntoView({
                             behavior: "smooth",
                             block: "center",
-                          })
-                        }
+                          });
+                        }}
                       >
                         <Link2 className="h-3.5 w-3.5" /> Relacionamentos
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => setActivityOpen(true)}>
                         <History className="h-3.5 w-3.5" /> Histórico
                       </DropdownMenuItem>
-                      {parentTitle ? null : status === "Bloqueada" ? (
-                        <DropdownMenuItem onClick={openResolveComposer}>
-                          <Lock className="h-3.5 w-3.5" /> Resolver bloqueio
-                        </DropdownMenuItem>
-                      ) : (
-                        status !== "Concluído" &&
-                        status !== "Arquivado" && (
-                          <DropdownMenuItem onClick={openBlockComposer}>
-                            <Lock className="h-3.5 w-3.5" /> Bloquear tarefa
-                          </DropdownMenuItem>
-                        )
+                      {!parentTitle && (
+                        <>
+                          <DropdownMenuSeparator />
+                          {status === "Bloqueada" ? (
+                            <DropdownMenuItem onClick={openResolveComposer}>
+                              <Lock className="h-3.5 w-3.5" /> Resolver bloqueio
+                            </DropdownMenuItem>
+                          ) : (
+                            status !== "Concluído" &&
+                            status !== "Arquivado" && (
+                              <DropdownMenuItem onClick={openBlockComposer}>
+                                <Lock className="h-3.5 w-3.5" /> Bloquear tarefa
+                              </DropdownMenuItem>
+                            )
+                          )}
+                          {status !== "Arquivado" && (
+                            <DropdownMenuItem onClick={() => setStatus("Arquivado")}>
+                              <Archive className="h-3.5 w-3.5" /> Arquivar
+                            </DropdownMenuItem>
+                          )}
+                        </>
                       )}
-                      {!parentTitle && status !== "Arquivado" && (
-                        <DropdownMenuItem onClick={() => setStatus("Arquivado")}>
-                          <Archive className="h-3.5 w-3.5" /> Arquivar
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem onClick={() => openReportProblem()}>
-                        <LifeBuoy className="h-3.5 w-3.5" /> Reportar problema
-                      </DropdownMenuItem>
-                      {/* Antigo botão "Cancelar" do rodapé: fecha SEM salvar. */}
-                      <DropdownMenuItem onClick={() => onOpenChange(false)}>
-                        <Undo2 className="h-3.5 w-3.5" /> Descartar alterações e fechar
-                      </DropdownMenuItem>
                       {onDelete && (
-                        <DropdownMenuItem
-                          onClick={onDelete}
-                          className="text-destructive focus:text-destructive"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" /> Excluir
-                        </DropdownMenuItem>
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={async () => {
+                              const ok = await confirmDelete(
+                                `Excluir "${initial.title}"${parentTitle ? "" : " e suas subtarefas"}? Essa ação não pode ser desfeita.`,
+                              );
+                              if (ok) onDelete();
+                            }}
+                            className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" /> Excluir
+                          </DropdownMenuItem>
+                        </>
                       )}
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -4386,8 +4167,6 @@ export function TaskDialog({
                         variant="inline"
                         value={dueDate || undefined}
                         onChange={handleDueDateChange}
-                        min={startDate || undefined}
-                        rangeStart={startDate || undefined}
                         rangeEnd={dueDate || undefined}
                         ariaLabel="Entrega"
                         placeholder="Entrega"
@@ -4399,46 +4178,9 @@ export function TaskDialog({
                       <DeadlineHealthBadge task={initial} />
                     )}
                     <TaskPrioritySelect value={priority} onChange={setPriority} chip />
-                    {fases && (
-                      <TaskOptionPicker
-                        value={roadmapPhaseId ?? ""}
-                        ariaLabel="Fase da tarefa"
-                        searchPlaceholder="Buscar fase..."
-                        emptyText="Nenhuma fase encontrada."
-                        widthClass="w-72"
-                        options={[
-                          { value: "", label: "Sem fase" },
-                          ...fases.map((f) => ({
-                            value: f.id,
-                            label: f.nome,
-                            hint: `${fmtDate(f.dataInicio)}–${fmtDate(f.dataFim)}`,
-                          })),
-                        ]}
-                        onSelect={(v) => setRoadmapPhaseId(v || undefined)}
-                        trigger={
-                          <button type="button" aria-label="Fase" className={TASK_CHIP}>
-                            <MilestoneIcon
-                              aria-hidden
-                              className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-                            />
-                            <span className="truncate">
-                              {fases.find((f) => f.id === roadmapPhaseId)?.nome ?? (
-                                <span className="text-muted-foreground">Sem fase</span>
-                              )}
-                            </span>
-                          </button>
-                        }
-                      />
-                    )}
-                    {initial && timeTrackingOrigin && (
-                      <span className="inline-flex h-8 shrink-0 items-center rounded-md border border-border/70 [&>button]:h-full [&>button]:text-xs">
-                        <TimeTrackingPanel
-                          taskId={timeTrackingTaskId!}
-                          taskOrigin={timeTrackingOrigin}
-                          members={members}
-                        />
-                      </span>
-                    )}
+                    <div className="flex min-h-8 shrink-0 items-center rounded-md px-1">
+                      <TaskTagsPopover value={tags} onChange={setTags} taskTags={taskTags} />
+                    </div>
                     <TaskDependencyIndicator
                       pendingTitles={dependsOnPending.map(
                         (id) => directoryByRawId.get(id)?.label ?? "tarefa",
@@ -4502,56 +4244,6 @@ export function TaskDialog({
                       getMentionOptions={getMentionOptions}
                     />
                   </div>
-                </div>
-
-                {/* Campos — propriedades secundárias, recolhidas por padrão. */}
-                <div className="border-t border-border/60 px-5 py-3 sm:px-10">
-                  <TaskSectionHeader
-                    icon={<SlidersHorizontal className="h-3.5 w-3.5" />}
-                    label="Campos"
-                    count={
-                      [tags.length > 0, !!startDate, !!estimate].filter(Boolean).length || undefined
-                    }
-                    open={fieldsOpen}
-                    onToggle={() => setFieldsOpen((v) => !v)}
-                  />
-                  {fieldsOpen && (
-                    <dl className="mt-1 grid grid-cols-[minmax(0,120px)_minmax(0,1fr)] items-center gap-x-3 gap-y-1 pl-5 text-xs">
-                      <dt className="flex items-center gap-1.5 text-muted-foreground">
-                        <Tag aria-hidden className="h-3.5 w-3.5 shrink-0" /> Etiquetas
-                      </dt>
-                      <dd className="min-w-0 py-1">
-                        <TaskTagsPopover value={tags} onChange={setTags} taskTags={taskTags} />
-                      </dd>
-                      <dt className="flex items-center gap-1.5 text-muted-foreground">
-                        <CalendarClock aria-hidden className="h-3.5 w-3.5 shrink-0" /> Início
-                      </dt>
-                      <dd className="min-w-0 py-1">
-                        <DateField
-                          variant="inline"
-                          value={startDate || undefined}
-                          onChange={(v) => setStartDate(v ?? "")}
-                          max={dueDate || undefined}
-                          rangeStart={startDate || undefined}
-                          rangeEnd={dueDate || undefined}
-                          ariaLabel="Início"
-                          placeholder="Início"
-                        />
-                      </dd>
-                      <dt className="flex items-center gap-1.5 text-muted-foreground">
-                        <Timer aria-hidden className="h-3.5 w-3.5 shrink-0" /> Estimativa
-                      </dt>
-                      <dd className="min-w-0 py-1">
-                        <input
-                          value={estimate}
-                          onChange={(e) => setEstimate(e.target.value)}
-                          placeholder="Ex.: 3h"
-                          aria-label="Estimativa"
-                          className="h-7 w-32 rounded-md border border-transparent bg-transparent px-1.5 text-xs outline-none hover:border-border focus:border-ring"
-                        />
-                      </dd>
-                    </dl>
-                  )}
                 </div>
 
                 {initial &&
@@ -5410,7 +5102,6 @@ export function TaskDialog({
             onOpenChange={(o) => !o && setEditSubtask(null)}
             initial={editSubtask ?? undefined}
             scope={scope}
-            fases={fases}
             parentTitle={title || "Tarefa mãe"}
             onSave={(t) => {
               setSubtasks((prev) => prev.map((s) => (s.id === t.id ? t : s)));
@@ -5430,6 +5121,7 @@ export function TaskDialog({
           onClose={() => setPreviewAttachment(null)}
         />
       </Dialog>
+      {deleteConfirmDialog}
       <AlertDialog
         open={showCompleteConfirm}
         onOpenChange={(o) => !o && setShowCompleteConfirm(false)}

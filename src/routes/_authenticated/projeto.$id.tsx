@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   Plus,
   X,
-  Map,
   KanbanSquare,
   Users,
   FileText,
@@ -55,11 +54,7 @@ import { MarketingSection } from "@/components/MarketingSection";
 import { ProjectWizard } from "@/components/ProjetosSection";
 import { PageContainer } from "@/components/shared/PageContainer";
 import { ProjectBugsPanel } from "@/components/projetos/ProjectBugsPanel";
-import {
-  TaskBoard,
-  TaskDialog as SharedTaskDialog,
-  type Task as BoardTask,
-} from "@/components/tasks/TaskBoard";
+import { TaskBoard, type Task as BoardTask } from "@/components/tasks/TaskBoard";
 import {
   FEATURES,
   getProjeto,
@@ -104,15 +99,8 @@ import {
   saveProjetoInflus,
   onProjetoInflusChange,
   saveProjetoTarefas,
-  loadProjetoFases,
-  saveProjetoFases,
-  onProjetoFasesChange,
 } from "@/lib/projeto-scoped-store";
-import { faseAtual, faseStatusEfetivo, type ProjetoFase } from "@/lib/roadmap-engine";
 import { formatIsoDate } from "@/lib/utils";
-import { PhaseFormDialog } from "@/components/roadmap/PhaseFormDialog";
-import { LinkTasksPanel } from "@/components/roadmap/LinkTasksPanel";
-import { PhaseTimeline } from "@/components/roadmap/PhaseTimeline";
 
 export const Route = createFileRoute("/_authenticated/projeto/$id")({
   component: ProjetoPage,
@@ -123,7 +111,6 @@ export const Route = createFileRoute("/_authenticated/projeto/$id")({
 });
 
 const ICONS: Record<FeatureKey, React.ComponentType<{ className?: string }>> = {
-  roadmap: Map,
   kanban: KanbanSquare,
   influenciadores: Users,
   documentos: FileText,
@@ -143,7 +130,6 @@ function renderPanel(
   onInitialOpenTaskHandled?: () => void,
 ) {
   const isMarketingProject = project.name.trim().toUpperCase() === "MARKETING";
-  if (k === "roadmap") return <RoadmapPanel project={project} update={update} />;
   if (k === "kanban")
     return isMarketingProject ? (
       <MarketingSection
@@ -223,19 +209,6 @@ function ProjetoPage() {
 
   const layout: ProjectLayout = project?.layout ?? "tabs";
 
-  // Resumo operacional do cabeçalho — derivado do Roadmap (fase atual,
-  // responsável, próxima entrega, progresso) quando a funcionalidade está
-  // habilitada; nunca inventado quando não há fases/roadmap, só omitido.
-  const hasRoadmap = !!project?.features.includes("roadmap");
-  const [fasesForHeader, setFasesForHeader] = useState<ProjetoFase[]>(() =>
-    id ? loadProjetoFases(id) : [],
-  );
-  useEffect(() => {
-    if (!hasRoadmap) return;
-    setFasesForHeader(loadProjetoFases(id));
-    return onProjetoFasesChange(() => setFasesForHeader(loadProjetoFases(id)));
-  }, [id, hasRoadmap]);
-
   const [editOpen, setEditOpen] = useState(false);
   const { confirm, confirmDialog } = useConfirm();
   const access = useMyAccess();
@@ -245,7 +218,7 @@ function ProjetoPage() {
     if (!project) return;
     if (
       !(await confirm(
-        `Excluir "${project.name}"? Isso remove o projeto e todo o conteúdo dele (tarefas, arquivos, roadmap). Não pode ser desfeito.`,
+        `Excluir "${project.name}"? Isso remove o projeto e todo o conteúdo dele (tarefas e arquivos). Não pode ser desfeito.`,
       ))
     ) {
       return;
@@ -295,26 +268,12 @@ function ProjetoPage() {
 
   // Métricas do cabeçalho — mesma função central já usada na listagem de
   // Projetos (`computeProjectMetrics`), nunca uma segunda regra local só
-  // pra esta tela. `fasesForHeader` já está carregado acima; passado
-  // explícito pra não duplicar a leitura do store escopado.
+  // pra esta tela.
   const projectStatus = project.status ?? "ativo";
-  const metrics = computeProjectMetrics(project, loadTeamMembers(), fasesForHeader);
+  const metrics = computeProjectMetrics(project, loadTeamMembers());
   const { canPause, canReactivate, canArchive } = statusMenuActions(projectStatus);
 
-  // Fase atual / próxima entrega / fases em risco — mesma lógica que
-  // antes vivia na faixa de resumo do Roadmap (RoadmapOverviewTab), agora
-  // só existe aqui: a faixa foi removida do Roadmap pra não repetir a
-  // mesma informação duas vezes na página (item 8 do pedido de
-  // reformulação do cabeçalho).
   const projectTasks = project.tasks as unknown as BoardTask[];
-  const faseAtualDoProjeto = hasRoadmap ? faseAtual(fasesForHeader, projectTasks) : null;
-  const todasFasesConcluidas = hasRoadmap && fasesForHeader.length > 0 && !faseAtualDoProjeto;
-  const fasesEmRiscoCount = hasRoadmap
-    ? fasesForHeader.filter((f) => {
-        const s = faseStatusEfetivo(f, projectTasks);
-        return s === "em_risco" || s === "atrasada";
-      }).length
-    : 0;
   const proximaEntregaTask =
     projectTasks
       .filter((t) => OPEN_STATUSES.has(t.status) && t.dueDate)
@@ -326,13 +285,9 @@ function ProjetoPage() {
     metrics.overdueCount > 0
       ? `${metrics.overdueCount} ${metrics.overdueCount === 1 ? "tarefa atrasada" : "tarefas atrasadas"}`
       : null;
-  const riscoLabel =
-    fasesEmRiscoCount > 0
-      ? `${fasesEmRiscoCount} ${fasesEmRiscoCount === 1 ? "fase em risco" : "fases em risco"}`
-      : null;
-  const pendenciaValue = atrasadasLabel ?? riscoLabel ?? "Nenhuma pendência crítica";
-  const pendenciaComplemento = atrasadasLabel && riscoLabel ? riscoLabel : undefined;
-  const temPendenciaCritica = !!atrasadasLabel || !!riscoLabel;
+  const pendenciaValue = atrasadasLabel ?? "Nenhuma pendência crítica";
+  const pendenciaComplemento: string | undefined = undefined;
+  const temPendenciaCritica = !!atrasadasLabel;
 
   // Projeto "HypeApp" ganha a aba de Bugs & Sugestões automaticamente,
   // mesmo padrão de nome especial já usado pro projeto "MARKETING" — sem
@@ -462,28 +417,13 @@ function ProjetoPage() {
           </div>
 
           {/* Resumo operacional — uma faixa só, SummaryStat compartilhado
-           * (mesmo componente do resumo de Campanha). Substitui de vez a
-           * antiga faixa do Roadmap (RoadmapOverviewTab, removida) — nunca
-           * as duas ao mesmo tempo repetindo a mesma informação. */}
+           * (mesmo componente do resumo de Campanha). */}
           <div className="flex flex-wrap border-t border-border/60">
             <SummaryStat
               label="Progresso"
               value={metrics.total === 0 ? "Sem tarefas" : `${metrics.progressPct}%`}
               complement={
                 metrics.total > 0 ? `${metrics.completed} de ${metrics.total} tarefas` : undefined
-              }
-            />
-            <SummaryStat
-              label="Fase atual"
-              value={
-                todasFasesConcluidas
-                  ? "Roadmap concluído"
-                  : (faseAtualDoProjeto?.nome ?? "Nenhuma fase atual")
-              }
-              complement={
-                faseAtualDoProjeto
-                  ? `${formatIsoDate(faseAtualDoProjeto.dataInicio)} — ${formatIsoDate(faseAtualDoProjeto.dataFim)}`
-                  : undefined
               }
             />
             <SummaryStat
@@ -590,234 +530,6 @@ function ProjetoPage() {
   );
 }
 
-/* -------- Roadmap -------- */
-function RoadmapPanel({
-  project,
-  update,
-}: {
-  project: Project;
-  update: (p: Partial<Project>) => void;
-}) {
-  const access = useMyAccess();
-  const canEdit = hasPermission(access, "projetos");
-  const confirm = useConfirm();
-
-  const [fases, setFases] = useState<ProjetoFase[]>(() => loadProjetoFases(project.id));
-  useEffect(() => {
-    setFases(loadProjetoFases(project.id));
-    return onProjetoFasesChange(() => setFases(loadProjetoFases(project.id)));
-  }, [project.id]);
-  const updateFases = (list: ProjetoFase[]) => {
-    setFases(list);
-    saveProjetoFases(project.id, list);
-  };
-
-  // Dialog de tarefa unificado — edita (fase, "sem fase" ou Kanban) e
-  // cria (dentro de uma fase) usando SEMPRE o mesmo SharedTaskDialog.
-  const [taskDialog, setTaskDialog] = useState<
-    { mode: "edit"; taskId: string } | { mode: "new"; defaultFaseId?: string } | null
-  >(null);
-
-  const saveTaskUnified = (t: Task) => {
-    const tasks = project.tasks.some((x) => x.id === t.id)
-      ? project.tasks.map((x) => (x.id === t.id ? t : x))
-      : [...project.tasks, t];
-    update({ tasks });
-  };
-
-  const deleteTaskUnified = (taskId: string) => {
-    update({ tasks: project.tasks.filter((t) => t.id !== taskId) });
-  };
-
-  const editingTask =
-    taskDialog?.mode === "edit"
-      ? (project.tasks.find((t) => t.id === taskDialog.taskId) ?? null)
-      : null;
-
-  // Fase — criar/editar
-  const [faseDialogOpen, setFaseDialogOpen] = useState(false);
-  const [editingFase, setEditingFase] = useState<ProjetoFase | undefined>(undefined);
-
-  const nowIso = () => new Date().toISOString();
-
-  const saveFase = (partial: Omit<ProjetoFase, "id" | "createdAt" | "updatedAt" | "sortOrder">) => {
-    // Só uma fase de cada vez pode estar marcada manualmente como atual —
-    // marcar esta desmarca qualquer outra, pra não deixar duas "correndo"
-    // ao mesmo tempo (faseAtual() já desempataria por sortOrder mesmo se
-    // duas estivessem marcadas, mas isso confundiria quem está editando).
-    const limparOutrasAtuais = (list: ProjetoFase[], excetoId?: string) =>
-      partial.manualCurrent
-        ? list.map((f) =>
-            f.id !== excetoId && f.manualCurrent ? { ...f, manualCurrent: false } : f,
-          )
-        : list;
-
-    if (editingFase) {
-      const atualizadas = fases.map((f) =>
-        f.id === editingFase.id ? { ...f, ...partial, updatedAt: nowIso() } : f,
-      );
-      updateFases(limparOutrasAtuais(atualizadas, editingFase.id));
-    } else {
-      const novaFase: ProjetoFase = {
-        ...partial,
-        id: crypto.randomUUID(),
-        sortOrder: fases.length,
-        createdAt: nowIso(),
-        updatedAt: nowIso(),
-      };
-      updateFases(limparOutrasAtuais([...fases, novaFase], novaFase.id));
-    }
-    setFaseDialogOpen(false);
-    setEditingFase(undefined);
-  };
-
-  /** Reordenar sem drag-and-drop (item 9 do pedido: se não existir,
-   * implementar uma ação simples) — troca o `sortOrder` com o vizinho
-   * na posição atual, nunca reescreve a lista inteira. */
-  const handleReorderFase = (fase: ProjetoFase, direction: "up" | "down") => {
-    const ordered = [...fases].sort((a, b) => a.sortOrder - b.sortOrder);
-    const idx = ordered.findIndex((f) => f.id === fase.id);
-    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
-    if (swapIdx < 0 || swapIdx >= ordered.length) return;
-    const a = ordered[idx];
-    const b = ordered[swapIdx];
-    updateFases(
-      fases.map((f) => {
-        if (f.id === a.id) return { ...f, sortOrder: b.sortOrder, updatedAt: nowIso() };
-        if (f.id === b.id) return { ...f, sortOrder: a.sortOrder, updatedAt: nowIso() };
-        return f;
-      }),
-    );
-  };
-
-  const handleDeleteFase = async (fase: ProjetoFase) => {
-    const count = project.tasks.filter((t) => t.roadmapPhaseId === fase.id).length;
-    const ok = await confirm.confirm(
-      count > 0
-        ? `Excluir a fase "${fase.nome}"? ${count} tarefa(s) vinculada(s) não serão apagadas — voltam para "Sem fase".`
-        : `Excluir a fase "${fase.nome}"?`,
-    );
-    if (!ok) return;
-    updateFases(fases.filter((f) => f.id !== fase.id));
-  };
-
-  const handleDuplicateFase = (fase: ProjetoFase) => {
-    updateFases([
-      ...fases,
-      {
-        ...fase,
-        id: crypto.randomUUID(),
-        nome: `${fase.nome} (cópia)`,
-        sortOrder: fases.length,
-        createdAt: nowIso(),
-        updatedAt: nowIso(),
-      },
-    ]);
-  };
-
-  // Vincular tarefas existentes
-  const [linkTasksFaseId, setLinkTasksFaseId] = useState<string | null>(null);
-
-  const handleLinkTasks = (taskIds: string[]) => {
-    if (!linkTasksFaseId) return;
-    update({
-      tasks: project.tasks.map((t) =>
-        taskIds.includes(t.id) ? { ...t, roadmapPhaseId: linkTasksFaseId } : t,
-      ),
-    });
-  };
-
-  const handleMoveTask = (taskId: string, faseId?: string) => {
-    update({
-      tasks: project.tasks.map((t) => (t.id === taskId ? { ...t, roadmapPhaseId: faseId } : t)),
-    });
-  };
-
-  return (
-    <div className="space-y-8">
-      <PhaseTimeline
-        fases={fases}
-        tasks={project.tasks as unknown as BoardTask[]}
-        canEdit={canEdit}
-        onOpenTask={(t) => setTaskDialog({ mode: "edit", taskId: t.id })}
-        onCreateTask={(faseId) => setTaskDialog({ mode: "new", defaultFaseId: faseId })}
-        onLinkTasks={(faseId) => setLinkTasksFaseId(faseId)}
-        onEditFase={(fase) => {
-          setEditingFase(fase);
-          setFaseDialogOpen(true);
-        }}
-        onDuplicateFase={handleDuplicateFase}
-        onDeleteFase={(fase) => void handleDeleteFase(fase)}
-        onMoveTask={handleMoveTask}
-        onNewFase={() => {
-          setEditingFase(undefined);
-          setFaseDialogOpen(true);
-        }}
-        onReorderFase={handleReorderFase}
-      />
-
-      {taskDialog && (
-        <SharedTaskDialog
-          open={true}
-          onOpenChange={(o) => {
-            if (!o) setTaskDialog(null);
-          }}
-          initial={taskDialog.mode === "edit" ? (editingTask as unknown as BoardTask) : undefined}
-          defaultRoadmapPhaseId={taskDialog.mode === "new" ? taskDialog.defaultFaseId : undefined}
-          fases={fases}
-          scope={{ kind: "projeto", id: project.id }}
-          breadcrumb="Projetos"
-          onSave={(t) => {
-            saveTaskUnified(t as unknown as Task);
-            setTaskDialog(null);
-          }}
-          onAutosave={(t) => saveTaskUnified(t as unknown as Task)}
-          onDelete={
-            taskDialog.mode === "edit"
-              ? () => {
-                  deleteTaskUnified(taskDialog.taskId);
-                  setTaskDialog(null);
-                }
-              : undefined
-          }
-        />
-      )}
-
-      {faseDialogOpen && (
-        <PhaseFormDialog
-          open={faseDialogOpen}
-          onOpenChange={(o) => {
-            setFaseDialogOpen(o);
-            if (!o) setEditingFase(undefined);
-          }}
-          initial={editingFase}
-          onSave={saveFase}
-        />
-      )}
-
-      {linkTasksFaseId && (
-        <LinkTasksPanel
-          open={true}
-          onOpenChange={(o) => {
-            if (!o) setLinkTasksFaseId(null);
-          }}
-          tasks={project.tasks as unknown as BoardTask[]}
-          fases={fases}
-          targetFaseId={linkTasksFaseId}
-          onLink={(taskIds) => {
-            handleLinkTasks(taskIds);
-            setLinkTasksFaseId(null);
-          }}
-        />
-      )}
-
-      {confirm.confirmDialog}
-    </div>
-  );
-}
-
-/* -------- Task Dialog compartilhado é importado de @/components/tasks/TaskBoard -------- */
-
 /* -------- Kanban (usa o mesmo TaskBoard das Campanhas) -------- */
 function KanbanPanel({
   project,
@@ -830,18 +542,6 @@ function KanbanPanel({
   initialOpenTaskId?: string;
   onInitialOpenTaskHandled?: () => void;
 }) {
-  // Fases do roadmap (pra badge/filtro/"agrupar por fase" no board) — só
-  // faz sentido quando o projeto tem a feature "roadmap" habilitada, mas
-  // carregar aqui é sempre seguro (lista vazia se o projeto não tiver
-  // nenhuma fase criada). Carregado direto aqui, e não recebido como
-  // prop de cima, porque "Kanban" agora é sua própria aba de novo — não
-  // vive mais dentro de "Roadmap" (ver `renderPanel`/`availableTabs`).
-  const [fases, setFases] = useState<ProjetoFase[]>(() => loadProjetoFases(project.id));
-  useEffect(() => {
-    setFases(loadProjetoFases(project.id));
-    return onProjetoFasesChange(() => setFases(loadProjetoFases(project.id)));
-  }, [project.id]);
-
   return (
     <TaskBoard
       tasks={project.tasks as unknown as BoardTask[]}
@@ -852,7 +552,6 @@ function KanbanPanel({
       breadcrumb="Projetos"
       initialOpenTaskId={initialOpenTaskId}
       onInitialOpenTaskHandled={onInitialOpenTaskHandled}
-      fases={fases}
     />
   );
 }

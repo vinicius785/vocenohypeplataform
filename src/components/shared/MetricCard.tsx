@@ -34,7 +34,7 @@ const DIRECTION_ICON = { up: TrendingUp, down: TrendingDown, flat: Minus };
 /**
  * Card de indicador canônico — substitui, na migração, as 8 implementações
  * encontradas na auditoria (financeiro `Kpi`/`IndicatorCard`, Comercial
- * `IndicatorCard` local, `TeamMetricCard`, `RoadmapOverviewTab` `StatCard`,
+ * `IndicatorCard` local, `TeamMetricCard`, `StatCard` do antigo Roadmap,
  * `portal.$token.tsx` `KpiCard`, Campanhas `Kpi`, AEO `KpiCards`).
  *
  * `value === null` é o estado "sem dados" — nunca mostra R$ 0 / 0 no lugar

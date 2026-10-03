@@ -181,16 +181,14 @@ export function RichTaskEditor({
         onClick={() => {
           if (!editing) editor?.commands.focus();
         }}
-        className={`flex flex-col rounded-lg border transition-colors ${
-          editing ? "border-border bg-card" : "cursor-text border-transparent hover:bg-muted/40"
+        className={`flex flex-col rounded-md transition-colors ${
+          editing ? "" : "cursor-text hover:bg-muted/40"
         }`}
       >
-        {editor && editing && (
-          <div className="sticky top-0 z-10 rounded-t-lg bg-card">
-            <EditorToolbar editor={editor} />
-          </div>
-        )}
-        <div className={`min-h-[44px] px-3 ${editing ? "py-2" : "py-1.5"}`}>
+        {/* Editando: só aparece a barra discreta acima do texto — o texto
+            fica exatamente no mesmo lugar (sem caixa, borda ou fundo). */}
+        {editor && editing && <EditorToolbar editor={editor} subtle />}
+        <div className="min-h-[36px] px-3 py-1.5">
           <EditorContent editor={editor} />
         </div>
       </div>

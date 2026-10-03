@@ -37,8 +37,8 @@ export type MktStandalone = {
   assignees?: string[];
   /** Ver comentário equivalente em `TaskBoard.tsx`'s `Task.primaryAssignee`. */
   primaryAssignee?: string;
-  /** Sem estes 5 campos, uma tarefa avulsa do Marketing nunca guardava
-   * prioridade/etiquetas/anexos/subtarefas/início de verdade — cada um
+  /** Sem estes campos, uma tarefa avulsa do Marketing nunca guardava
+   * prioridade/etiquetas/anexos/subtarefas de verdade — cada um
    * "resetava" pro padrão (prioridade sempre "Normal", resto sempre
    * vazio) a cada leitura, porque o tipo nunca tinha onde persisti-los,
    * mesmo a UI (TaskBoard) já editando todos eles normalmente. */
@@ -46,8 +46,6 @@ export type MktStandalone = {
   tags?: string[];
   attachments?: Attachment[];
   subtasks?: Task[];
-  startDate?: string;
-  estimate?: string;
   dueDate?: string;
   /** Mesmo formato de `Task.description` (doc estruturado do editor
    * rich-text) — aceita `string` pra registros antigos ainda não
@@ -143,8 +141,6 @@ export function createStandalone(input: {
   tags?: string[];
   attachments?: Attachment[];
   subtasks?: Task[];
-  startDate?: string;
-  estimate?: string;
   dueDate?: string;
   note?: RichDoc | string;
   noteText?: string;
@@ -162,8 +158,6 @@ export function createStandalone(input: {
     tags: input.tags,
     attachments: input.attachments,
     subtasks: input.subtasks,
-    startDate: input.startDate,
-    estimate: input.estimate,
     dueDate: input.dueDate,
     note: input.note,
     noteText: input.noteText,

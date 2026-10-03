@@ -153,7 +153,7 @@ export function ProjetosSection() {
   const removeProject = async (p: Project) => {
     if (
       !(await confirm(
-        `Excluir "${p.name}"? Isso remove o projeto e todo o conteúdo dele (tarefas, arquivos, roadmap). Não pode ser desfeito.`,
+        `Excluir "${p.name}"? Isso remove o projeto e todo o conteúdo dele (tarefas e arquivos). Não pode ser desfeito.`,
       ))
     ) {
       return;
@@ -224,7 +224,7 @@ export function ProjetosSection() {
               Projetos
             </p>
             <p className="mt-1.5 text-sm text-text-secondary">
-              Organize tarefas, fases e entregas do time.
+              Organize tarefas e entregas do time.
             </p>
           </div>
           {canEdit && (
@@ -282,7 +282,7 @@ export function ProjetosSection() {
           <EmptyState
             icon={<FolderKanban className="h-5 w-5" />}
             title="Nenhum projeto cadastrado ainda"
-            description="Crie o primeiro projeto para organizar tarefas, fases e entregas do time."
+            description="Crie o primeiro projeto para organizar tarefas e entregas do time."
             primaryAction={
               canEdit
                 ? {

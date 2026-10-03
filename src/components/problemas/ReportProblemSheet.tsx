@@ -97,8 +97,6 @@ export function ReportProblemSheet() {
     }
   };
 
-  const task = ctx?.diagnostics.task;
-
   return (
     <Sheet open={open} onOpenChange={(o) => !submitting && setOpen(o)}>
       <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-[480px]">
@@ -243,9 +241,8 @@ export function ReportProblemSheet() {
             <p className="flex items-start gap-1.5 rounded-md bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground">
               <MapPin aria-hidden className="mt-0.5 h-3 w-3 shrink-0" />
               <span className="min-w-0 break-words">
-                Contexto registrado: {ctx.defaultArea}
-                {task ? ` · tarefa "${task.title}"` : ""}. Navegador, dispositivo e versão também
-                são enviados para diagnóstico.
+                Contexto registrado: {ctx.defaultArea}. Navegador, dispositivo e versão também são
+                enviados para diagnóstico.
               </span>
             </p>
           )}

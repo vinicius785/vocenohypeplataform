@@ -285,7 +285,6 @@ export type ProblemDiagnostics = {
   touch?: boolean;
   language?: string;
   appVersion?: string;
-  task?: { id: string; title: string } | null;
 };
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
