@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { Check, Tag as TagIcon, X } from "lucide-react";
+import { useState } from "react";
+import { Check, Plus, Tag as TagIcon, X } from "lucide-react";
 import {
   Command,
   CommandEmpty,
@@ -8,6 +8,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   createTaskTag,
@@ -18,14 +19,17 @@ import {
 } from "@/lib/task-tags-store";
 
 /**
- * Painel de etiquetas INLINE — não é mais um overlay (`Popover`). Expande
- * no fluxo normal do documento, logo abaixo da linha de etiquetas,
- * empurrando o que vem depois (a Descrição) pra baixo — por estar no
- * fluxo normal, não existe mais como ele cobrir o editor ou qualquer
- * outra coisa, então não precisa de Portal/z-index nenhum (diferente do
- * `Popover` usado antes, que resolvia um bug de overlay que não existe
- * mais aqui porque não há overlay). Fecha ao clicar fora (`ref` +
- * `mousedown`) ou Escape.
+ * Etiquetas da tarefa — chips + popover SOBREPOSTO (Radix `Popover`, que
+ * renderiza num Portal fora do fluxo da tarefa). Abrir/fechar o seletor
+ * NUNCA altera o layout: o gatilho tem tamanho fixo ("+ Etiqueta" no fim
+ * das chips) e a lista vive num overlay com largura controlada, altura
+ * limitada ao espaço da viewport e rolagem interna (`CommandList`).
+ * Colisão/flip/shift e `max-h` vêm do `PopoverContent` compartilhado.
+ *
+ * (Um painel inline que "empurrava" a descrição já foi tentado: dentro da
+ * barra de propriedades ele reflui a linha inteira — por isso voltou a ser
+ * overlay, desta vez via Portal, que não é cortado por `overflow` nem fica
+ * atrás do modal.)
  */
 export function TaskTagsPopover({
   value,
@@ -36,38 +40,23 @@ export function TaskTagsPopover({
   onChange: (next: string[]) => void;
   taskTags: TaskTag[];
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [editingColorFor, setEditingColorFor] = useState<string | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!expanded) return;
-    const onDocClick = (e: MouseEvent) => {
-      if (!containerRef.current?.contains(e.target as Node)) {
-        setExpanded(false);
-        setEditingColorFor(null);
-      }
-    };
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setExpanded(false);
-        setEditingColorFor(null);
-      }
-    };
-    document.addEventListener("mousedown", onDocClick);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onDocClick);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [expanded]);
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (!next) {
+      setSearch("");
+      setEditingColorFor(null);
+    }
+  };
 
   const colorFor = (name: string) => taskTags.find((t) => t.name === name)?.color ?? "bg-muted";
 
   const toggle = (name: string) => {
-    // Nunca fecha o painel ao selecionar — seleção múltipla precisa de
-    // vários cliques seguidos sem fechar a cada um.
+    // Não fecha ao selecionar — seleção múltipla precisa de vários cliques
+    // seguidos; fecha ao clicar fora ou com Escape (Radix).
     onChange(value.includes(name) ? value.filter((t) => t !== name) : [...value, name]);
   };
 
@@ -91,48 +80,55 @@ export function TaskTagsPopover({
   const overflow = value.slice(MAX_VISIBLE);
 
   return (
-    <div ref={containerRef} className="w-full">
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="flex min-h-7 w-full flex-wrap items-center gap-1.5 rounded-md px-1 py-0.5 text-left text-sm outline-none"
-      >
-        {value.length === 0 && (
-          <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-            <TagIcon className="h-3.5 w-3.5" /> Adicionar etiqueta
-          </span>
-        )}
-        {visible.map((t) => (
-          <span
-            key={t}
-            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${colorFor(t)}`}
+    <div className="flex min-w-0 flex-nowrap items-center gap-1.5 sm:flex-wrap">
+      {visible.map((t) => (
+        <span
+          key={t}
+          className={`inline-flex max-w-[160px] items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${colorFor(t)}`}
+        >
+          <span className="truncate">{t}</span>
+          <button
+            type="button"
+            aria-label={`Remover etiqueta ${t}`}
+            onClick={() => remove(t)}
+            className="shrink-0 rounded-full opacity-80 hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-current"
           >
-            {t}
-            <X
-              className="h-2.5 w-2.5 cursor-pointer"
-              onClick={(e) => {
-                e.stopPropagation();
-                remove(t);
-              }}
-            />
-          </span>
-        ))}
-        {overflow.length > 0 && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                +{overflow.length}
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>{overflow.join(", ")}</TooltipContent>
-          </Tooltip>
-        )}
-      </button>
+            <X className="h-2.5 w-2.5" />
+          </button>
+        </span>
+      ))}
+      {overflow.length > 0 && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+              +{overflow.length}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{overflow.join(", ")}</TooltipContent>
+        </Tooltip>
+      )}
 
-      {expanded && (
-        <div className="mt-2 overflow-hidden rounded-md border border-border bg-popover [overscroll-behavior:contain]">
+      <Popover open={open} onOpenChange={handleOpenChange}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            aria-label="Adicionar etiqueta"
+            className="inline-flex h-6 shrink-0 items-center gap-1 rounded-full border border-dashed border-border px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand data-[state=open]:border-foreground/40 data-[state=open]:text-foreground"
+          >
+            {value.length === 0 ? (
+              <>
+                <TagIcon aria-hidden className="h-3 w-3" /> Adicionar etiqueta
+              </>
+            ) : (
+              <>
+                <Plus aria-hidden className="h-3 w-3" /> Etiqueta
+              </>
+            )}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-72 overflow-hidden p-0">
           {editingColorFor ? (
-            <div className="p-2">
+            <div className="max-h-[inherit] overflow-y-auto overscroll-contain p-2">
               <p className="mb-1.5 px-1 text-[11px] text-muted-foreground">
                 Cor de "{editingColorFor}" — reflete em todas as tarefas
               </p>
@@ -144,6 +140,7 @@ export function TaskTagsPopover({
                       key={c.value}
                       type="button"
                       title={c.label}
+                      aria-label={`Cor ${c.label}`}
                       onClick={() => {
                         const tag = taskTags.find((t) => t.name === editingColorFor);
                         if (tag) updateTaskTagColor(tag.id, c.value);
@@ -158,18 +155,27 @@ export function TaskTagsPopover({
                   );
                 })}
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  const tag = taskTags.find((t) => t.name === editingColorFor);
-                  if (tag) deleteTaskTag(tag.id);
-                  remove(editingColorFor);
-                  setEditingColorFor(null);
-                }}
-                className="mt-1 w-full rounded px-2 py-1 text-left text-[11px] text-destructive hover:bg-destructive/10"
-              >
-                Excluir etiqueta do registro
-              </button>
+              <div className="mt-1 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingColorFor(null)}
+                  className="rounded px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  Voltar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const tag = taskTags.find((t) => t.name === editingColorFor);
+                    if (tag) deleteTaskTag(tag.id);
+                    remove(editingColorFor);
+                    setEditingColorFor(null);
+                  }}
+                  className="rounded px-2 py-1 text-left text-[11px] text-destructive hover:bg-destructive/10"
+                >
+                  Excluir etiqueta do registro
+                </button>
+              </div>
             </div>
           ) : (
             <Command shouldFilter={false}>
@@ -185,7 +191,9 @@ export function TaskTagsPopover({
                   }
                 }}
               />
-              <CommandList className="max-h-56">
+              {/* Rolagem INTERNA da lista: altura máx. fixa e limitada pelo
+                  espaço disponível do popover (nunca rola a tarefa). */}
+              <CommandList className="max-h-[min(14rem,calc(var(--radix-popover-content-available-height)-3rem))] overscroll-contain">
                 <CommandEmpty>
                   {search.trim() ? (
                     <button
@@ -222,6 +230,7 @@ export function TaskTagsPopover({
                         <button
                           type="button"
                           title="Editar cor desta etiqueta"
+                          aria-label={`Editar cor de ${t.name}`}
                           onClick={(e) => {
                             e.stopPropagation();
                             setEditingColorFor(t.name);
@@ -235,8 +244,8 @@ export function TaskTagsPopover({
               </CommandList>
             </Command>
           )}
-        </div>
-      )}
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }

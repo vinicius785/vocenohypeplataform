@@ -999,6 +999,9 @@ export const fmtDateCompact = (d: string) => {
     .replace(".", "");
 };
 
+/** Nº de subtarefas visíveis a partir do qual a lista ganha rolagem interna. */
+const SUBTASKS_VISIBLE_ROWS = 8;
+
 export type TaskBoardScope =
   | { kind: "campanha"; id: string }
   | { kind: "projeto"; id: string }
@@ -4178,7 +4181,7 @@ export function TaskDialog({
                       <DeadlineHealthBadge task={initial} />
                     )}
                     <TaskPrioritySelect value={priority} onChange={setPriority} chip />
-                    <div className="flex min-h-8 shrink-0 items-center rounded-md px-1">
+                    <div className="flex min-h-8 shrink-0 items-center rounded-md px-1 sm:min-w-0 sm:shrink">
                       <TaskTagsPopover value={tags} onChange={setTags} taskTags={taskTags} />
                     </div>
                     <TaskDependencyIndicator
@@ -4326,307 +4329,327 @@ export function TaskDialog({
                                 <span />
                               </div>
                             )}
-                            {visibleSubtasks.map((s) => {
-                              const done = s.status === "Concluído";
-                              const archived = TASK_STATUS_CATEGORY[s.status] === "archived";
-                              const subtaskAssignees = getTaskAssignees(s);
-                              const applyStatusChange = (next: TaskStatus) => {
-                                // `withStatusChange` já para o timer da subtarefa se
-                                // ele estava rodando (e inicia se o novo status for
-                                // "Em andamento") — sem passar por ela aqui, um
-                                // timer preso rodando nunca parava só porque o
-                                // status mudou.
-                                const updated = withStatusChange(s, next);
-                                setSubtasks((prev) =>
-                                  prev.map((st) => (st.id === s.id ? updated : st)),
-                                );
-                                setActivity((a) =>
-                                  pushActivity(a, `mudou status de "${s.title}" para ${next}`),
-                                );
-                                if (next === "Concluído" && timeTrackingOrigin) {
-                                  void stopIfRunningOnTask(
-                                    s.id.replace(/^mkt:/, ""),
-                                    timeTrackingOrigin,
+                            {/* Só as LINHAS rolam (cabeçalho da tabela acima e
+                                "+ Adicionar subtarefa" abaixo ficam fixos): com
+                                muitas subtarefas a lista tem o seu próprio espaço
+                                de navegação em vez de esticar a tarefa inteira.
+                                `overscroll-contain` impede o scroll de vazar pro
+                                workspace ao chegar no fim da lista. */}
+                            <div
+                              role="list"
+                              aria-label="Subtarefas"
+                              className={
+                                visibleSubtasks.length > SUBTASKS_VISIBLE_ROWS
+                                  ? "max-h-[22rem] overflow-y-auto overscroll-contain pr-1 [scrollbar-gutter:stable]"
+                                  : ""
+                              }
+                            >
+                              {visibleSubtasks.map((s) => {
+                                const done = s.status === "Concluído";
+                                const archived = TASK_STATUS_CATEGORY[s.status] === "archived";
+                                const subtaskAssignees = getTaskAssignees(s);
+                                const applyStatusChange = (next: TaskStatus) => {
+                                  // `withStatusChange` já para o timer da subtarefa se
+                                  // ele estava rodando (e inicia se o novo status for
+                                  // "Em andamento") — sem passar por ela aqui, um
+                                  // timer preso rodando nunca parava só porque o
+                                  // status mudou.
+                                  const updated = withStatusChange(s, next);
+                                  setSubtasks((prev) =>
+                                    prev.map((st) => (st.id === s.id ? updated : st)),
                                   );
-                                }
-                                // Sem isso, concluir/reabrir uma subtarefa por aqui
-                                // (o caminho mais usado, direto na linha) nunca
-                                // gerava o evento de XP/"concluídas hoje" — só
-                                // concluir a tarefa-mãe ou abrir a subtarefa em seu
-                                // próprio diálogo passavam por
-                                // `recordTaskLedgerEventsOnStatusChange`. Isso fazia
-                                // o Score subcontar completions de verdade.
-                                if (updated !== s) {
-                                  recordTaskLedgerEventsOnStatusChange(s, updated, {
-                                    scope,
-                                    members,
-                                    performanceSettings,
-                                  });
-                                }
-                              };
-                              return (
-                                <div
-                                  key={s.id}
-                                  className={`group grid min-h-10 grid-cols-[24px_minmax(0,1fr)_20px] items-center gap-x-2 gap-y-0.5 rounded-md px-2 py-1 hover:bg-muted/60 sm:grid-cols-[24px_minmax(0,1fr)_88px_96px_112px_20px] ${
-                                    archived ? "opacity-60" : ""
-                                  }`}
-                                >
-                                  <TaskStatusSelect
-                                    variant="icon"
-                                    value={s.status}
-                                    onChange={applyStatusChange}
-                                    onSelectBlocked={() => openSubtaskBlockComposer(s.id)}
-                                  />
-
-                                  <button
-                                    type="button"
-                                    onClick={() => setEditSubtask(s)}
-                                    className="flex min-w-0 items-center gap-2 text-left"
+                                  setActivity((a) =>
+                                    pushActivity(a, `mudou status de "${s.title}" para ${next}`),
+                                  );
+                                  if (next === "Concluído" && timeTrackingOrigin) {
+                                    void stopIfRunningOnTask(
+                                      s.id.replace(/^mkt:/, ""),
+                                      timeTrackingOrigin,
+                                    );
+                                  }
+                                  // Sem isso, concluir/reabrir uma subtarefa por aqui
+                                  // (o caminho mais usado, direto na linha) nunca
+                                  // gerava o evento de XP/"concluídas hoje" — só
+                                  // concluir a tarefa-mãe ou abrir a subtarefa em seu
+                                  // próprio diálogo passavam por
+                                  // `recordTaskLedgerEventsOnStatusChange`. Isso fazia
+                                  // o Score subcontar completions de verdade.
+                                  if (updated !== s) {
+                                    recordTaskLedgerEventsOnStatusChange(s, updated, {
+                                      scope,
+                                      members,
+                                      performanceSettings,
+                                    });
+                                  }
+                                };
+                                return (
+                                  <div
+                                    key={s.id}
+                                    role="listitem"
+                                    className={`group grid min-h-10 grid-cols-[24px_minmax(0,1fr)_20px] items-center gap-x-2 gap-y-0.5 rounded-md px-2 py-1 hover:bg-muted/60 sm:grid-cols-[24px_minmax(0,1fr)_88px_96px_112px_20px] ${
+                                      archived ? "opacity-60" : ""
+                                    }`}
                                   >
-                                    <span
-                                      className={`truncate text-sm ${done ? "text-muted-foreground" : "text-foreground"}`}
+                                    <TaskStatusSelect
+                                      variant="icon"
+                                      value={s.status}
+                                      onChange={applyStatusChange}
+                                      onSelectBlocked={() => openSubtaskBlockComposer(s.id)}
+                                    />
+
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditSubtask(s)}
+                                      className="flex min-w-0 items-center gap-2 text-left"
                                     >
-                                      {s.title}
-                                    </span>
-                                    {!isDescriptionEmpty(s.description) && (
                                       <span
-                                        title="Tem descrição"
-                                        className="shrink-0 text-muted-foreground"
+                                        className={`truncate text-sm ${done ? "text-muted-foreground" : "text-foreground"}`}
                                       >
-                                        <FileText className="h-3 w-3" />
+                                        {s.title}
                                       </span>
-                                    )}
-                                  </button>
-
-                                  {/* Metadados: 2ª linha no celular (sob o título),
-                                    colunas próprias a partir de `sm`. */}
-                                  <div className="col-start-2 row-start-2 flex min-w-0 flex-wrap items-center gap-2 sm:contents">
-                                    <SubtaskAssigneePopover
-                                      showName
-                                      selected={subtaskAssignees}
-                                      members={members}
-                                      onToggle={(name) => {
-                                        const prevAssignees = getTaskAssignees(s);
-                                        const nextAssignees = prevAssignees.includes(name)
-                                          ? prevAssignees.filter((a) => a !== name)
-                                          : [...prevAssignees, name];
-                                        setSubtasks((prev) =>
-                                          prev.map((st) =>
-                                            st.id === s.id
-                                              ? {
-                                                  ...st,
-                                                  assignees: nextAssignees,
-                                                  assignee: undefined,
-                                                }
-                                              : st,
-                                          ),
-                                        );
-                                        setActivity((a) =>
-                                          pushActivity(
-                                            a,
-                                            `alterou responsável de "${s.title}" para ${nextAssignees.join(", ") || "ninguém"}`,
-                                          ),
-                                        );
-                                      }}
-                                    />
-
-                                    <TaskPrioritySelect
-                                      size="xs"
-                                      value={s.priority}
-                                      onChange={(next) => {
-                                        setSubtasks((prev) =>
-                                          prev.map((st) =>
-                                            st.id === s.id ? { ...st, priority: next } : st,
-                                          ),
-                                        );
-                                        setActivity((a) =>
-                                          pushActivity(
-                                            a,
-                                            `alterou prioridade de "${s.title}" para ${next}`,
-                                          ),
-                                        );
-                                      }}
-                                    />
-
-                                    <div className="flex min-w-0 shrink-0 items-center justify-start">
-                                      {s.status === "Bloqueada" && s.blockedState ? (
-                                        <Tooltip>
-                                          <TooltipTrigger asChild>
-                                            <button
-                                              type="button"
-                                              onClick={() => openSubtaskResolveComposer(s.id)}
-                                              aria-label={`Subtarefa bloqueada: ${s.blockedState.reason}. Resolver bloqueio`}
-                                              className="max-w-[160px] rounded-md outline-none hover:opacity-80 focus-visible:ring-2 focus-visible:ring-brand"
-                                            >
-                                              <TaskBlockIndicator
-                                                blocked={s.blockedState}
-                                                size="xs"
-                                              />
-                                            </button>
-                                          </TooltipTrigger>
-                                          <TooltipContent className="max-w-64">
-                                            <p>{s.blockedState.reason}</p>
-                                            {s.blockedState.responsibleForUnblockingName && (
-                                              <p className="text-muted-foreground">
-                                                Aguardando:{" "}
-                                                {s.blockedState.responsibleForUnblockingName}
-                                              </p>
-                                            )}
-                                            <p className="text-muted-foreground">
-                                              Bloqueada em{" "}
-                                              {fmtDateCompact(
-                                                s.blockedState.blockedAt.slice(0, 10),
-                                              )}
-                                              {" · "}
-                                              {s.blockedState.pausesDeadline
-                                                ? "prazo pausado"
-                                                : "prazo continua correndo"}
-                                            </p>
-                                          </TooltipContent>
-                                        </Tooltip>
-                                      ) : (
-                                        (s.dueDate || s.performanceDueDate) && (
-                                          <Popover>
-                                            <PopoverTrigger asChild>
-                                              <button
-                                                type="button"
-                                                onClick={(e) => e.stopPropagation()}
-                                                className="rounded px-1 py-0.5 hover:bg-muted/60"
-                                              >
-                                                <CardDeadlineBadge task={s} />
-                                              </button>
-                                            </PopoverTrigger>
-                                            <PopoverContent
-                                              align="start"
-                                              collisionPadding={12}
-                                              className="w-auto p-0"
-                                              onClick={(e) => e.stopPropagation()}
-                                            >
-                                              <CalendarPicker
-                                                mode="single"
-                                                selected={
-                                                  s.dueDate
-                                                    ? parseIsoDateLocal(s.dueDate)
-                                                    : undefined
-                                                }
-                                                onSelect={(d) => {
-                                                  setSubtasks((prev) =>
-                                                    prev.map((st) =>
-                                                      st.id === s.id
-                                                        ? {
-                                                            ...st,
-                                                            dueDate: d
-                                                              ? formatDateToIso(d)
-                                                              : undefined,
-                                                          }
-                                                        : st,
-                                                    ),
-                                                  );
-                                                  setActivity((a) =>
-                                                    pushActivity(
-                                                      a,
-                                                      `alterou o prazo de "${s.title}"`,
-                                                    ),
-                                                  );
-                                                }}
-                                              />
-                                            </PopoverContent>
-                                          </Popover>
-                                        )
-                                      )}
-                                      {!s.status.startsWith("Bloqueada") &&
-                                        !s.dueDate &&
-                                        !s.performanceDueDate && (
-                                          <Popover>
-                                            <PopoverTrigger asChild>
-                                              <button
-                                                type="button"
-                                                onClick={(e) => e.stopPropagation()}
-                                                className="rounded px-1 py-0.5 text-[11px] text-muted-foreground hover:bg-muted/60 focus-visible:opacity-100 group-hover:opacity-100 sm:opacity-0"
-                                              >
-                                                + Prazo
-                                              </button>
-                                            </PopoverTrigger>
-                                            <PopoverContent
-                                              align="start"
-                                              collisionPadding={12}
-                                              className="w-auto p-0"
-                                              onClick={(e) => e.stopPropagation()}
-                                            >
-                                              <CalendarPicker
-                                                mode="single"
-                                                selected={undefined}
-                                                onSelect={(d) => {
-                                                  setSubtasks((prev) =>
-                                                    prev.map((st) =>
-                                                      st.id === s.id
-                                                        ? {
-                                                            ...st,
-                                                            dueDate: d
-                                                              ? formatDateToIso(d)
-                                                              : undefined,
-                                                          }
-                                                        : st,
-                                                    ),
-                                                  );
-                                                  setActivity((a) =>
-                                                    pushActivity(
-                                                      a,
-                                                      `definiu prazo de "${s.title}"`,
-                                                    ),
-                                                  );
-                                                }}
-                                              />
-                                            </PopoverContent>
-                                          </Popover>
-                                        )}
-                                    </div>
-                                  </div>
-
-                                  <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                      <button
-                                        type="button"
-                                        onClick={(e) => e.stopPropagation()}
-                                        aria-label="Mais ações da subtarefa"
-                                        className="col-start-3 row-start-1 shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100 sm:col-auto sm:row-auto sm:opacity-0"
-                                      >
-                                        <MoreHorizontal className="h-3.5 w-3.5" />
-                                      </button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end">
-                                      <DropdownMenuItem onClick={() => setEditSubtask(s)}>
-                                        <ExternalLink className="h-3.5 w-3.5" /> Abrir detalhes
-                                      </DropdownMenuItem>
-                                      {!archived && (
-                                        <DropdownMenuItem
-                                          onClick={() => {
-                                            setSubtasks((prev) =>
-                                              prev.map((st) =>
-                                                st.id === s.id
-                                                  ? { ...st, status: "Arquivado" }
-                                                  : st,
-                                              ),
-                                            );
-                                            setActivity((a) =>
-                                              pushActivity(a, `arquivou a subtarefa "${s.title}"`),
-                                            );
-                                          }}
+                                      {!isDescriptionEmpty(s.description) && (
+                                        <span
+                                          title="Tem descrição"
+                                          className="shrink-0 text-muted-foreground"
                                         >
-                                          <Archive className="h-3.5 w-3.5" /> Arquivar
-                                        </DropdownMenuItem>
+                                          <FileText className="h-3 w-3" />
+                                        </span>
                                       )}
-                                      <DropdownMenuItem
-                                        onClick={() => removeSubtask(s.id)}
-                                        className="text-destructive focus:text-destructive"
-                                      >
-                                        <Trash2 className="h-3.5 w-3.5" /> Excluir
-                                      </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
-                                </div>
-                              );
-                            })}
+                                    </button>
+
+                                    {/* Metadados: 2ª linha no celular (sob o título),
+                                    colunas próprias a partir de `sm`. */}
+                                    <div className="col-start-2 row-start-2 flex min-w-0 flex-wrap items-center gap-2 sm:contents">
+                                      <SubtaskAssigneePopover
+                                        showName
+                                        selected={subtaskAssignees}
+                                        members={members}
+                                        onToggle={(name) => {
+                                          const prevAssignees = getTaskAssignees(s);
+                                          const nextAssignees = prevAssignees.includes(name)
+                                            ? prevAssignees.filter((a) => a !== name)
+                                            : [...prevAssignees, name];
+                                          setSubtasks((prev) =>
+                                            prev.map((st) =>
+                                              st.id === s.id
+                                                ? {
+                                                    ...st,
+                                                    assignees: nextAssignees,
+                                                    assignee: undefined,
+                                                  }
+                                                : st,
+                                            ),
+                                          );
+                                          setActivity((a) =>
+                                            pushActivity(
+                                              a,
+                                              `alterou responsável de "${s.title}" para ${nextAssignees.join(", ") || "ninguém"}`,
+                                            ),
+                                          );
+                                        }}
+                                      />
+
+                                      <TaskPrioritySelect
+                                        size="xs"
+                                        value={s.priority}
+                                        onChange={(next) => {
+                                          setSubtasks((prev) =>
+                                            prev.map((st) =>
+                                              st.id === s.id ? { ...st, priority: next } : st,
+                                            ),
+                                          );
+                                          setActivity((a) =>
+                                            pushActivity(
+                                              a,
+                                              `alterou prioridade de "${s.title}" para ${next}`,
+                                            ),
+                                          );
+                                        }}
+                                      />
+
+                                      <div className="flex min-w-0 shrink-0 items-center justify-start">
+                                        {s.status === "Bloqueada" && s.blockedState ? (
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <button
+                                                type="button"
+                                                onClick={() => openSubtaskResolveComposer(s.id)}
+                                                aria-label={`Subtarefa bloqueada: ${s.blockedState.reason}. Resolver bloqueio`}
+                                                className="max-w-[160px] rounded-md outline-none hover:opacity-80 focus-visible:ring-2 focus-visible:ring-brand"
+                                              >
+                                                <TaskBlockIndicator
+                                                  blocked={s.blockedState}
+                                                  size="xs"
+                                                />
+                                              </button>
+                                            </TooltipTrigger>
+                                            <TooltipContent className="max-w-64">
+                                              <p>{s.blockedState.reason}</p>
+                                              {s.blockedState.responsibleForUnblockingName && (
+                                                <p className="text-muted-foreground">
+                                                  Aguardando:{" "}
+                                                  {s.blockedState.responsibleForUnblockingName}
+                                                </p>
+                                              )}
+                                              <p className="text-muted-foreground">
+                                                Bloqueada em{" "}
+                                                {fmtDateCompact(
+                                                  s.blockedState.blockedAt.slice(0, 10),
+                                                )}
+                                                {" · "}
+                                                {s.blockedState.pausesDeadline
+                                                  ? "prazo pausado"
+                                                  : "prazo continua correndo"}
+                                              </p>
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        ) : (
+                                          (s.dueDate || s.performanceDueDate) && (
+                                            <Popover>
+                                              <PopoverTrigger asChild>
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => e.stopPropagation()}
+                                                  className="rounded px-1 py-0.5 hover:bg-muted/60"
+                                                >
+                                                  <CardDeadlineBadge task={s} />
+                                                </button>
+                                              </PopoverTrigger>
+                                              <PopoverContent
+                                                align="start"
+                                                collisionPadding={12}
+                                                className="w-auto p-0"
+                                                onClick={(e) => e.stopPropagation()}
+                                              >
+                                                <CalendarPicker
+                                                  mode="single"
+                                                  selected={
+                                                    s.dueDate
+                                                      ? parseIsoDateLocal(s.dueDate)
+                                                      : undefined
+                                                  }
+                                                  onSelect={(d) => {
+                                                    setSubtasks((prev) =>
+                                                      prev.map((st) =>
+                                                        st.id === s.id
+                                                          ? {
+                                                              ...st,
+                                                              dueDate: d
+                                                                ? formatDateToIso(d)
+                                                                : undefined,
+                                                            }
+                                                          : st,
+                                                      ),
+                                                    );
+                                                    setActivity((a) =>
+                                                      pushActivity(
+                                                        a,
+                                                        `alterou o prazo de "${s.title}"`,
+                                                      ),
+                                                    );
+                                                  }}
+                                                />
+                                              </PopoverContent>
+                                            </Popover>
+                                          )
+                                        )}
+                                        {!s.status.startsWith("Bloqueada") &&
+                                          !s.dueDate &&
+                                          !s.performanceDueDate && (
+                                            <Popover>
+                                              <PopoverTrigger asChild>
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => e.stopPropagation()}
+                                                  className="rounded px-1 py-0.5 text-[11px] text-muted-foreground hover:bg-muted/60 focus-visible:opacity-100 group-hover:opacity-100 sm:opacity-0"
+                                                >
+                                                  + Prazo
+                                                </button>
+                                              </PopoverTrigger>
+                                              <PopoverContent
+                                                align="start"
+                                                collisionPadding={12}
+                                                className="w-auto p-0"
+                                                onClick={(e) => e.stopPropagation()}
+                                              >
+                                                <CalendarPicker
+                                                  mode="single"
+                                                  selected={undefined}
+                                                  onSelect={(d) => {
+                                                    setSubtasks((prev) =>
+                                                      prev.map((st) =>
+                                                        st.id === s.id
+                                                          ? {
+                                                              ...st,
+                                                              dueDate: d
+                                                                ? formatDateToIso(d)
+                                                                : undefined,
+                                                            }
+                                                          : st,
+                                                      ),
+                                                    );
+                                                    setActivity((a) =>
+                                                      pushActivity(
+                                                        a,
+                                                        `definiu prazo de "${s.title}"`,
+                                                      ),
+                                                    );
+                                                  }}
+                                                />
+                                              </PopoverContent>
+                                            </Popover>
+                                          )}
+                                      </div>
+                                    </div>
+
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => e.stopPropagation()}
+                                          aria-label="Mais ações da subtarefa"
+                                          className="col-start-3 row-start-1 shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100 sm:col-auto sm:row-auto sm:opacity-0"
+                                        >
+                                          <MoreHorizontal className="h-3.5 w-3.5" />
+                                        </button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end">
+                                        <DropdownMenuItem onClick={() => setEditSubtask(s)}>
+                                          <ExternalLink className="h-3.5 w-3.5" /> Abrir detalhes
+                                        </DropdownMenuItem>
+                                        {!archived && (
+                                          <DropdownMenuItem
+                                            onClick={() => {
+                                              setSubtasks((prev) =>
+                                                prev.map((st) =>
+                                                  st.id === s.id
+                                                    ? { ...st, status: "Arquivado" }
+                                                    : st,
+                                                ),
+                                              );
+                                              setActivity((a) =>
+                                                pushActivity(
+                                                  a,
+                                                  `arquivou a subtarefa "${s.title}"`,
+                                                ),
+                                              );
+                                            }}
+                                          >
+                                            <Archive className="h-3.5 w-3.5" /> Arquivar
+                                          </DropdownMenuItem>
+                                        )}
+                                        <DropdownMenuItem
+                                          onClick={() => removeSubtask(s.id)}
+                                          className="text-destructive focus:text-destructive"
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" /> Excluir
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
+                                );
+                              })}
+                            </div>
                             {!showSubtaskInput && (
                               <button
                                 type="button"
