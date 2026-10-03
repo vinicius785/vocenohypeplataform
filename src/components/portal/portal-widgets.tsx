@@ -1440,19 +1440,17 @@ export function InfluencerDetail({
           {!influPending && inf.clienteReprovacao && (
             <div className="mt-3 space-y-2">
               <ReprovacaoBanner v={inf.clienteReprovacao} lang={lang} nome={inf.nome} />
-              {inf.justificativaTime && (
-                <p className="rounded-lg border border-border bg-muted/30 p-2.5 text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">Justificativa do time: </span>
-                  {inf.justificativaTime}
-                </p>
-              )}
             </div>
           )}
-          {inf.status === "APROVADO" && inf.justificativaTime && (
-            <p className="mt-3 rounded-lg border border-border bg-muted/30 p-2.5 text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">Justificativa do time: </span>
-              {inf.justificativaTime}
-            </p>
+          {inf.justificativaTime && (
+            <div className="mt-3 rounded-lg border border-border bg-muted/30 p-2.5">
+              <p className="text-xs font-semibold text-foreground">
+                Por que escolhemos este influenciador?
+              </p>
+              <p className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground">
+                {inf.justificativaTime}
+              </p>
+            </div>
           )}
 
           {/* Redes + toggle de métricas */}

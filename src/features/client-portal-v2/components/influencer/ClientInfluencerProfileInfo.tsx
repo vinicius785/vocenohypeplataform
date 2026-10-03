@@ -28,12 +28,16 @@ export function ClientInfluencerProfileInfo({ influencer }: { influencer: Public
   );
 }
 
-/** "Por que recomendamos" — só existe quando o time preencheu
- * `justificativaTime`; nunca inventa texto. */
+/** "Por que escolhemos este influenciador?" — justificativa estratégica da
+ * escolha, a MESMA `justificativaTime` que o time edita ("Por que este
+ * influenciador?") — fonte única; só existe quando preenchida. */
 export function ClientInfluencerRecommendation({ influencer }: { influencer: PublicInfluencer }) {
   if (!influencer.justificativaTime) return null;
   return (
-    <InfluencerDrawerSection icon={<Sparkles className="h-4 w-4" />} title="Por que recomendamos">
+    <InfluencerDrawerSection
+      icon={<Sparkles className="h-4 w-4" />}
+      title="Por que escolhemos este influenciador?"
+    >
       <p className="whitespace-pre-wrap rounded-2xl bg-card p-4 text-sm text-foreground dark:shadow-none">
         {influencer.justificativaTime}
       </p>

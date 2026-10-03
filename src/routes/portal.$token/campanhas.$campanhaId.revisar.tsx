@@ -224,7 +224,9 @@ function RevisarPerfisPage() {
 
           {inf.justificativaTime && (
             <div className="mt-3 rounded-lg border border-border bg-muted/30 p-3">
-              <p className="text-xs font-semibold text-foreground">Justificativa do time</p>
+              <p className="text-xs font-semibold text-foreground">
+                Por que escolhemos este influenciador?
+              </p>
               <p className="mt-1 text-xs text-muted-foreground">{inf.justificativaTime}</p>
             </div>
           )}
