@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { loadLastRead, markRead, type ChatMember, type ChatMessage } from "@/lib/chat-store";
+import {
+  loadLastRead,
+  markRead,
+  setViewingConvo,
+  useTabVisible,
+  type ChatMember,
+  type ChatMessage,
+} from "@/lib/chat-store";
 import { ChatV2Header } from "./ChatV2Header";
 import { ChatV2Timeline } from "./ChatV2Timeline";
 import { ChatV2Composer } from "./ChatV2Composer";
@@ -12,11 +19,14 @@ type HeaderInfo = React.ComponentProps<typeof ChatV2Header>["info"];
  * timeline, composer e painel de thread — as 3 rotas de conversa só
  * calculam `convoId`/`headerInfo`/`onBack` e delegam o resto pra cá.
  *
- * "Marcar como lida" só dispara depois que a conversa fica de fato visível
- * por um instante (não no instante do clique) — um `setTimeout` cancelável
- * é a aproximação mais simples de "visualização real" sem instrumentar
- * IntersectionObserver por mensagem; reavaliado a cada nova mensagem
- * enquanto a conversa permanece aberta.
+ * "Marcar como lida" só dispara quando a conversa está de fato sendo vista:
+ * aba em primeiro plano, final da timeline visível (quem está lendo o
+ * histórico NÃO tem as mensagens novas zeradas) e depois de um instante (não
+ * no instante do clique) — um `setTimeout` cancelável é a aproximação mais
+ * simples de "visualização real" sem IntersectionObserver por mensagem;
+ * reavaliado a cada nova mensagem, ao voltar pra aba e ao voltar pro final.
+ * Enquanto montada, também registra a conversa como "em vista" pra
+ * sidebar/sino/toasts não tratarem as mensagens dela como pendentes.
  */
 export function ChatV2ConversationPane({
   convoId,
@@ -45,11 +55,22 @@ export function ChatV2ConversationPane({
   const [inlineReplyTo, setInlineReplyTo] = useState<ChatMessage | undefined>(undefined);
   useEffect(() => setInlineReplyTo(undefined), [convoId]);
 
+  const tabVisible = useTabVisible();
+  const [nearBottom, setNearBottom] = useState(true);
+  useEffect(() => {
+    setViewingConvo(convoId);
+    return () => setViewingConvo("");
+  }, [convoId]);
+
   useEffect(() => {
     setLastReadAt(loadLastRead()[convoId] ?? 0);
+  }, [convoId, convoMessages.length]);
+
+  useEffect(() => {
+    if (!tabVisible || !nearBottom) return;
     const t = setTimeout(() => void markRead(convoId), 1200);
     return () => clearTimeout(t);
-  }, [convoId, convoMessages.length]);
+  }, [convoId, convoMessages.length, tabVisible, nearBottom]);
 
   const openThread = (m: ChatMessage) => {
     void navigate({
@@ -107,6 +128,7 @@ export function ChatV2ConversationPane({
           onReply={openThread}
           onInlineReply={setInlineReplyTo}
           highlightId={highlightId}
+          onNearBottomChange={setNearBottom}
           channelName={headerInfo?.kind === "channel" ? headerInfo.channel.name : undefined}
         />
         <ChatV2Composer

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   LayoutGrid,
@@ -67,17 +67,20 @@ import {
   loadCampaignChannels,
   loadProjectChannels,
   setActive as setActiveConvo,
-  useActiveConvo,
+  isConvoBeingViewed,
+  isTabVisible,
   subscribeChat,
   loadLastRead,
+  summarizeUnread,
+  type ChatMessage,
   markRead,
-  getActive,
   playNotifSound,
   primeNotifSound,
 } from "@/lib/chat-store";
 
 import { useClientes, type Cliente } from "@/lib/clientes-store";
-import { messagePreviewLabel } from "@/lib/voice-messages";
+import { routeForConvoId } from "@/components/chat-v2/chat-v2-utils";
+import { notificationSummary } from "@/lib/voice-messages";
 import { type NotifPrefs, loadNotifPrefs, subscribeNotifPrefs } from "@/lib/notif-prefs";
 import {
   loadMeetings,
@@ -151,31 +154,14 @@ const groups: NavGroup[] = [
   },
 ];
 
-/** Existe alguma mensagem não lida (fora da conversa aberta agora) em
- * qualquer canal/DM? Usado só pra bolinha do item "Chat" no menu — os
- * detalhes (por conversa) ficam no sino de notificações.
- *
- * `chatSectionOpen` (true só quando a seção Chat está de fato aberta na
- * tela) é o que decide se a conversa "ativa" conta como lida — `activeId`
- * vem do localStorage e nunca é limpo ao sair do Chat/fechar a aba, então
- * sem essa checagem a última conversa aberta ficava permanentemente "lida"
- * pra sempre (mesmo com o usuário em outra seção ou dias depois), fazendo
- * mensagens novas nela nunca acenderem a bolinha de notificação. */
-function useHasUnreadChat(chatSectionOpen: boolean): boolean {
-  const [tick, setTick] = useState(0);
-  useEffect(() => subscribeChat(() => setTick((t) => t + 1)), []);
-  const activeId = useActiveConvo();
-  return useMemo(() => {
-    void tick;
-    const me = getMe();
-    const lastRead = loadLastRead();
-    for (const m of loadMessages()) {
-      if (m.authorId === me.id) continue;
-      if (chatSectionOpen && m.convoId === activeId) continue;
-      if (m.createdAt > (lastRead[m.convoId] ?? 0)) return true;
-    }
-    return false;
-  }, [tick, activeId, chatSectionOpen]);
+/** Total de mensagens não lidas em qualquer canal/DM (exceto a conversa que
+ * está sendo vista agora, com a aba em primeiro plano) — badge do item "Chat"
+ * no menu. Mesma conta (`summarizeUnread`) do sino e das listas de conversa,
+ * então os indicadores nunca divergem; os detalhes por conversa ficam no sino. */
+function useUnreadChatCount(): number {
+  const [, force] = useState(0);
+  useEffect(() => subscribeChat(() => force((t) => t + 1)), []);
+  return summarizeUnread(loadMessages(), getMe().id, loadLastRead()).total;
 }
 
 /** Tem alguma reunião onde eu ainda não confirmei nem recusei? Usado pra
@@ -299,7 +285,7 @@ export function AppShell({
   );
   useEffect(() => subscribeWorkspace(() => setWs(loadWorkspace())), []);
   useIncomingMessageNotifier();
-  const hasUnreadChat = useHasUnreadChat(active === "chat");
+  const unreadChatCount = useUnreadChatCount();
   const hasPendingMeetings = useHasPendingMeetingRequests();
   const hasOverdueDespesas = useHasOverdueDespesas();
   const { unseenCount: unseenLeads, markSeen: markLeadsSeen } = useLeadNotifications();
@@ -430,9 +416,9 @@ export function AppShell({
                   const allowed = hasPermission(access, SECTION_PERMISSION[item.key]);
                   const showDot =
                     allowed &&
-                    ((item.key === "chat" && hasUnreadChat) ||
-                      (item.key === "comercial" && unseenLeads > 0) ||
+                    ((item.key === "comercial" && unseenLeads > 0) ||
                       (item.key === "reunioes" && hasPendingMeetings));
+                  const chatUnread = allowed && item.key === "chat" ? unreadChatCount : 0;
                   const showOverdueWarning =
                     allowed && item.key === "financeiro" && hasOverdueDespesas;
                   return (
@@ -452,6 +438,18 @@ export function AppShell({
                         }
                         badge={
                           <>
+                            {chatUnread > 0 && (
+                              <span
+                                aria-label={`${chatUnread} mensagens não lidas`}
+                                className={
+                                  showFull
+                                    ? "flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-semibold leading-none text-brand-foreground"
+                                    : "absolute right-0.5 top-0.5 flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-brand px-1 text-[9px] font-semibold leading-none text-brand-foreground"
+                                }
+                              >
+                                {chatUnread > 99 ? "99+" : chatUnread}
+                              </span>
+                            )}
                             {showDot && (
                               <span
                                 aria-label="Novidades"
@@ -847,25 +845,73 @@ function GlobalSearch({ onSelect }: { onSelect: (key: SectionKey) => void }) {
   );
 }
 
-function useIncomingMessageNotifier() {
-  useEffect(() => {
-    // Unlock audio + request browser notification permission on the first
-    // user gesture (browsers block AudioContext/Notification before that).
-    const unlock = () => {
+/** Abre uma conversa do Chat direto na rota dela (e, se vier `messageId`,
+ * posicionada na mensagem via `?highlight=`) — nunca só a home do Chat. */
+function useOpenConversation() {
+  const navigate = useNavigate();
+  return useCallback(
+    (convoId: string, messageId?: string) => {
+      const { to, params } = routeForConvoId(convoId, getMe().id);
+      setActiveConvo(convoId);
+      void navigate({
+        to: to as never,
+        params: params as never,
+        search: (messageId ? { highlight: messageId } : {}) as never,
+      });
+    },
+    [navigate],
+  );
+}
+
+/** Rótulo curto de onde a mensagem foi enviada — "#canal", nome da campanha
+ * ou do projeto; vazio em DM (o remetente já é a conversa). */
+function convoPlaceLabel(convoId: string): string {
+  if (convoId.startsWith("dm:")) return "";
+  if (convoId.startsWith("camp:")) {
+    const clientes = (() => {
       try {
-        const AC =
-          window.AudioContext ||
-          (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-        const ctx = new AC();
-        void ctx.resume().catch(() => {});
-        setTimeout(() => ctx.close().catch(() => {}), 200);
+        return JSON.parse(localStorage.getItem("clientes") ?? "[]");
       } catch {
-        /* noop */
+        return [];
       }
+    })();
+    return (
+      loadCampaignChannels(clientes as never).find((c) => c.id === convoId)?.name ?? "Campanha"
+    );
+  }
+  if (convoId.startsWith("proj:"))
+    return loadProjectChannels().find((p) => p.id === convoId)?.name ?? "Projeto";
+  const name = loadChannels().find((c) => c.id === convoId)?.name;
+  return name ? `#${name}` : "Canal";
+}
+
+// Mensagens que chegam em rajada viram UMA notificação: acumulam nesta
+// janela e o toast (id fixo) é atualizado em vez de empilhado.
+const INCOMING_BATCH_MS = 1200;
+const INCOMING_GROUP_WINDOW_MS = 6000;
+const INCOMING_TOAST_ID = "chat-incoming";
+
+function groupedAuthorsLabel(names: string[]): string {
+  if (names.length === 1) return `${names[0]} enviou uma nova mensagem`;
+  if (names.length === 2) return `${names[0]} e ${names[1]} enviaram novas mensagens`;
+  return `${names[0]}, ${names[1]} e mais ${names.length - 2} enviaram novas mensagens`;
+}
+
+/** Único ponto que reage a mensagem recebida: usa o MESMO realtime do
+ * `chat-store` (`subscribeChat`) — nenhuma conexão/polling próprio. Respeita
+ * a preferência "Mensagens", não notifica a conversa que a pessoa está vendo
+ * (aba em primeiro plano), agrupa rajadas, toca o som uma vez por lote e só
+ * usa a Notification do navegador se a permissão JÁ foi concedida (nunca a
+ * pede sozinho — o opt-in é feito em Configurações → notificações push). */
+function useIncomingMessageNotifier() {
+  const openConversation = useOpenConversation();
+  const openRef = useRef(openConversation);
+  openRef.current = openConversation;
+
+  useEffect(() => {
+    // Destrava o áudio no primeiro gesto (navegadores bloqueiam antes disso).
+    const unlock = () => {
       primeNotifSound();
-      if ("Notification" in window && Notification.permission === "default") {
-        Notification.requestPermission().catch(() => {});
-      }
       window.removeEventListener("pointerdown", unlock);
       window.removeEventListener("keydown", unlock);
     };
@@ -874,87 +920,111 @@ function useIncomingMessageNotifier() {
 
     const seen = new Set<string>();
     const mountedAt = Date.now();
-    // Seed with messages already loaded so they don't beep on mount
+    // Semeia com o que já está carregado pra não notificar o histórico.
     loadMessages().forEach((m) => seen.add(m.id));
 
-    const notify = async (m: ReturnType<typeof loadMessages>[number]) => {
-      const members = loadMembers();
-      const channels = loadChannels();
-      const clientes = (() => {
-        try {
-          return JSON.parse(localStorage.getItem("clientes") ?? "[]");
-        } catch {
-          return [];
-        }
-      })();
-      const campaigns = loadCampaignChannels(clientes as never);
-      const projects = loadProjectChannels();
-      const me = getMe();
-      let convoLabel = "Nova mensagem";
-      if (m.convoId.startsWith("dm:")) convoLabel = m.authorName;
-      else if (m.convoId.startsWith("camp:"))
-        convoLabel = campaigns.find((c) => c.id === m.convoId)?.name ?? "Campanha";
-      else if (m.convoId.startsWith("proj:"))
-        convoLabel = projects.find((p) => p.id === m.convoId)?.name ?? "Projeto";
-      else convoLabel = channels.find((c) => c.id === m.convoId)?.name ?? "Canal";
+    let pending: ChatMessage[] = [];
+    let timer: number | undefined;
+    // Mensagens já mostradas no toast ainda em tela (pra somar na contagem
+    // quando chega mais uma logo em seguida).
+    let shown: { at: number; messages: ChatMessage[] } | null = null;
 
-      const bodyText = messagePreviewLabel(m);
-      const title = m.convoId.startsWith("dm:") ? m.authorName : `${m.authorName} · ${convoLabel}`;
+    const flush = () => {
+      timer = undefined;
+      const lastRead = loadLastRead();
+      // Reavalia no momento de mostrar: a pessoa pode ter aberto a conversa
+      // ou lido a mensagem durante a janela de agrupamento.
+      const fresh = pending.filter(
+        (m) => !isConvoBeingViewed(m.convoId) && m.createdAt > (lastRead[m.convoId] ?? 0),
+      );
+      pending = [];
+      if (fresh.length === 0 || !loadNotifPrefs().mensagens) return;
+
+      const base = shown && Date.now() - shown.at < INCOMING_GROUP_WINDOW_MS ? shown.messages : [];
+      const all = [...base, ...fresh];
+      shown = { at: Date.now(), messages: all };
+      const latest = all[all.length - 1];
+      const authors = Array.from(new Set(all.map((m) => m.authorName || "Alguém")));
+      const single = all.length === 1;
+      const place = convoPlaceLabel(latest.convoId);
 
       playNotifSound();
 
-      // In-app toast (always shown when tab is visible)
-      if (document.visibilityState === "visible") {
-        const { toast } = await import("sonner");
-        toast(title, {
-          description: bodyText,
-          action: {
-            label: "Abrir",
-            onClick: () => {
-              setActiveConvo(m.convoId);
-              window.dispatchEvent(new CustomEvent("nav:section", { detail: "chat" }));
-            },
+      if (isTabVisible()) {
+        void import("@/components/notifications/NotificationToast").then(
+          ({ showAppNotification }) => {
+            showAppNotification(
+              single
+                ? {
+                    kind: "message",
+                    title: latest.authorName || "Nova mensagem",
+                    event: place ? `Enviou uma mensagem em ${place}` : "Enviou uma nova mensagem",
+                    context: notificationSummary(latest) || undefined,
+                    avatarUrl: latest.authorPhoto,
+                    timeLabel: "agora",
+                    actionLabel: "Ver mensagem",
+                    onAction: () => openRef.current(latest.convoId, latest.id),
+                  }
+                : {
+                    kind: "message",
+                    title: `${all.length} novas mensagens`,
+                    event: groupedAuthorsLabel(authors),
+                    avatarUrl: authors.length === 1 ? latest.authorPhoto : undefined,
+                    avatarFallback: (authors[0] ?? "?").slice(0, 1).toUpperCase(),
+                    timeLabel: "agora",
+                    actionLabel: "Ver mensagens",
+                    onAction: () => openRef.current(latest.convoId, latest.id),
+                  },
+              { id: INCOMING_TOAST_ID },
+            );
           },
-        });
+        );
       } else if ("Notification" in window && Notification.permission === "granted") {
-        // OS notification when tab is hidden
+        // Aba em background: notificação do sistema (só com permissão já dada).
         try {
-          const n = new Notification(title, {
-            body: bodyText,
-            icon: m.authorPhoto || undefined,
-            tag: m.convoId,
-          });
+          const n = new Notification(
+            single ? latest.authorName || "Nova mensagem" : `${all.length} novas mensagens`,
+            {
+              body: single ? notificationSummary(latest) : groupedAuthorsLabel(authors),
+              icon: single ? latest.authorPhoto || undefined : undefined,
+              tag: INCOMING_TOAST_ID,
+            },
+          );
           n.onclick = () => {
             window.focus();
-            setActiveConvo(m.convoId);
-            window.dispatchEvent(new CustomEvent("nav:section", { detail: "chat" }));
+            openRef.current(latest.convoId, latest.id);
             n.close();
           };
         } catch {
           /* ignore */
         }
       }
-      void members;
-      void me;
     };
 
     const check = () => {
       const me = getMe();
-      const active = getActive();
-      const isVisible = document.visibilityState === "visible";
-      const msgs = loadMessages();
-      for (const m of msgs) {
+      for (const m of loadMessages()) {
         if (seen.has(m.id)) continue;
         seen.add(m.id);
-        // Skip anything that predates mount (initial batch loads async)
+        // O lote inicial carrega assíncrono depois da montagem — ignora o que é anterior.
         if (m.createdAt < mountedAt - 2000) continue;
-        if (m.authorId === me.id) continue;
-        // Suppress when the user is actively viewing that conversation
-        if (isVisible && m.convoId === active) continue;
-        void notify(m);
+        if (m.authorId === me.id || m.authorId === "system") continue;
+        // Defesa em profundidade (o RLS já filtra): DM só de quem participa.
+        if (m.convoId.startsWith("dm:") && !m.convoId.slice(3).split("|").includes(me.id)) continue;
+        if (isConvoBeingViewed(m.convoId)) continue;
+        pending.push(m);
+      }
+      if (pending.length > 0 && timer === undefined) {
+        timer = window.setTimeout(flush, INCOMING_BATCH_MS);
       }
     };
-    return subscribeChat(check);
+    const unsubscribe = subscribeChat(check);
+    return () => {
+      unsubscribe();
+      window.clearTimeout(timer);
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
   }, []);
 }
 
@@ -1546,7 +1616,6 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<BellTab>("tarefas");
   const me = getMe();
-  const active = useActiveConvo();
   const messages = loadMessages();
   const lastRead = loadLastRead();
   const [prefs, setPrefs] = useState<NotifPrefs>(() => loadNotifPrefs());
@@ -1576,7 +1645,7 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
   const grouped = new Map<string, { count: number; last: (typeof messages)[number] }>();
   for (const m of messages) {
     if (m.authorId === me.id) continue;
-    if (m.convoId === active) continue;
+    if (isConvoBeingViewed(m.convoId)) continue;
     const lr = lastRead[m.convoId] ?? 0;
     if (m.createdAt <= lr) continue;
     const prev = grouped.get(m.convoId);
@@ -1745,9 +1814,9 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
     void setFaviconBadge(total > 0);
   }, [total]);
 
-  const openConvo = (id: string) => {
-    setActiveConvo(id);
-    onSelect("chat");
+  const openConversation = useOpenConversation();
+  const openConvo = (id: string, messageId?: string) => {
+    openConversation(id, messageId);
     setOpen(false);
   };
 
@@ -1981,11 +2050,11 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
               icon={<AtSign className="h-4 w-4" />}
               iconTone="brand"
               title={`${m.authorName} · ${labelFor(m.convoId)}`}
-              subtitle={m.text}
+              subtitle={notificationSummary(m)}
               time={fmtTime(m.createdAt)}
               onClick={() => {
                 dismissMention(m.id);
-                openConvo(m.convoId);
+                openConvo(m.convoId, m.id);
               }}
               onMarkRead={() => dismissMention(m.id)}
             />
@@ -1999,12 +2068,12 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
               subtitle={
                 <>
                   <span className="font-medium text-foreground/80">{i.last.authorName}:</span>{" "}
-                  {i.last.text}
+                  {notificationSummary(i.last)}
                 </>
               }
               time={fmtTime(i.last.createdAt)}
               badge={i.count}
-              onClick={() => openConvo(i.convoId)}
+              onClick={() => openConvo(i.convoId, i.last.id)}
               onMarkRead={() => void markRead(i.convoId)}
             />
           ))}

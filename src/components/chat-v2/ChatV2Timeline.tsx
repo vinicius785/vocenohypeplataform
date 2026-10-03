@@ -28,6 +28,7 @@ export function ChatV2Timeline({
   onReply,
   onInlineReply,
   highlightId,
+  onNearBottomChange,
   channelName,
 }: {
   convoId: string;
@@ -43,6 +44,9 @@ export function ChatV2Timeline({
   /** Id de mensagem a destacar (vindo da busca) — recebe um scroll-into-view
    * e um realce temporário de ~2s, depois volta ao normal. */
   highlightId?: string;
+  /** Avisa o pai quando a pessoa chega/sai do final — o pai só marca a conversa
+   * como lida enquanto o final está de fato visível. */
+  onNearBottomChange?: (nearBottom: boolean) => void;
   /** Nome do canal (sem `#`), só quando `convoId` é um canal — usado pra
    * mostrar a introdução "# nome / Este é o início do canal #nome." no
    * lugar do texto genérico quando o canal está vazio. */
@@ -122,6 +126,7 @@ export function ChatV2Timeline({
       prevCountRef.current = messages.length;
       settledConvoRef.current = convoId;
       wasAtBottomRef.current = false;
+      onNearBottomChange?.(false);
       return;
     }
     // Ajusta o scroll de imediato (layout já commitado nesta altura do
@@ -134,6 +139,7 @@ export function ChatV2Timeline({
     prevCountRef.current = messages.length;
     settledConvoRef.current = convoId;
     wasAtBottomRef.current = true;
+    onNearBottomChange?.(true);
     const raf = requestAnimationFrame(() => {
       const node = scrollRef.current;
       if (node && wasAtBottomRef.current) node.scrollTop = node.scrollHeight;
@@ -215,6 +221,7 @@ export function ChatV2Timeline({
     const el = scrollRef.current;
     if (!el) return;
     wasAtBottomRef.current = isAtBottom();
+    onNearBottomChange?.(wasAtBottomRef.current);
     setCloseMenusSignal((n) => n + 1);
     if (loadingOlder) return;
     if (el.scrollTop < 80 && hasMoreOlderMessages(convoId)) {
@@ -236,6 +243,7 @@ export function ChatV2Timeline({
     if (!el) return;
     el.scrollTop = el.scrollHeight;
     wasAtBottomRef.current = true;
+    onNearBottomChange?.(true);
     setNewBelowCount(0);
   };
 

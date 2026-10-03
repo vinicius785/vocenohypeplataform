@@ -105,6 +105,29 @@ export function messagePreviewLabel(
   return "";
 }
 
+const NOTIFICATION_TEXT_MAX = 100;
+
+/** Resumo específico pra notificação/toast — mais rígido que
+ * `messagePreviewLabel` (que mantém texto misto com link na íntegra,
+ * certo pra prévia da lista de conversas, mas errado num card pequeno de
+ * notificação). Nunca mostra uma URL crua e sempre tem teto de tamanho:
+ * várias URLs viram "N links recebidos"; texto com 1 URL misturada
+ * mostra só a parte de texto (sem a URL); texto longo é truncado. */
+export function notificationSummary(
+  m: Pick<ChatMessage, "text" | "attachments" | "mentions">,
+): string {
+  const trimmed = m.text?.trim();
+  if (trimmed) {
+    const urls = trimmed.match(URL_RE) ?? [];
+    if (urls.length > 1) return `${urls.length} links recebidos`;
+    const withoutUrls = trimmed.replace(URL_RE, "").trim();
+    if (urls.length === 1 && !withoutUrls) return "🔗 enviou um link";
+    const text = withoutUrls || trimmed;
+    return text.length > NOTIFICATION_TEXT_MAX ? `${text.slice(0, NOTIFICATION_TEXT_MAX)}…` : text;
+  }
+  return messagePreviewLabel(m); // anexo/menção — já resume bem, reaproveitado
+}
+
 // ---------- Reprodução única: pausa qualquer outro áudio em andamento ----------
 type ActivePlayback = { id: string; stop: () => void };
 let active: ActivePlayback | null = null;

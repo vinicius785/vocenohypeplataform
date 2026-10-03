@@ -1252,10 +1252,74 @@ if (typeof window !== "undefined") {
   window.addEventListener("time:membros:changed", () => emit());
   window.addEventListener("projetos:changed", () => emit());
   window.addEventListener("clientes:changed", () => emit());
+  // Voltar pra aba/escondê-la muda o que conta como "visto".
+  document.addEventListener("visibilitychange", () => emit());
 }
 
 export function useActiveConvo() {
   return useSyncExternalStore(subscribeChat, getActive, () => "");
+}
+
+// ---------- Presença de leitura: "o usuário está VENDO esta conversa agora?" ----------
+// `getActive()` (localStorage) é só a última conversa selecionada — nunca é
+// limpo ao sair do Chat, então NÃO diz se a pessoa está de fato olhando pra
+// ela. Quem renderiza uma conversa (Chat V1 ou V2) registra aqui enquanto
+// ela está montada; sidebar, sino e notificador usam o mesmo registro, pra
+// os indicadores nunca divergirem entre si.
+let viewingConvo = "";
+
+export function setViewingConvo(convoId: string) {
+  if (viewingConvo === convoId) return;
+  viewingConvo = convoId;
+  emit();
+}
+
+export function getViewingConvo(): string {
+  return viewingConvo;
+}
+
+export function isTabVisible(): boolean {
+  return typeof document === "undefined" || document.visibilityState === "visible";
+}
+
+/** Conversa aberta na tela E aba em primeiro plano — única situação em que
+ * uma mensagem recebida conta como "já vista" (aba em background não). */
+export function isConvoBeingViewed(convoId: string): boolean {
+  return !!convoId && viewingConvo === convoId && isTabVisible();
+}
+
+/** Aba visível? Reativo — usado pra só marcar como lida com a aba aberta. */
+export function useTabVisible(): boolean {
+  return useSyncExternalStore(
+    subscribeChat,
+    () => isTabVisible(),
+    () => true,
+  );
+}
+
+export type UnreadSummary = {
+  total: number;
+  /** Quantas mensagens não lidas por conversa (já sem a conversa em vista). */
+  byConvo: Map<string, number>;
+};
+
+/** Única fonte de verdade das mensagens não lidas — sidebar e sino chamam
+ * esta função, nunca reimplementam a conta. Ignora mensagens minhas e as da conversa que está sendo vista agora. */
+export function summarizeUnread(
+  messages: ChatMessage[],
+  meId: string,
+  lastRead: Record<string, number>,
+): UnreadSummary {
+  const byConvo = new Map<string, number>();
+  let total = 0;
+  for (const m of messages) {
+    if (m.authorId === meId) continue;
+    if (isConvoBeingViewed(m.convoId)) continue;
+    if (m.createdAt <= (lastRead[m.convoId] ?? 0)) continue;
+    byConvo.set(m.convoId, (byConvo.get(m.convoId) ?? 0) + 1);
+    total++;
+  }
+  return { total, byConvo };
 }
 
 // ---------- Typing indicator ----------
