@@ -968,6 +968,13 @@ export type Influ = {
     status: "aprovado" | "reprovado";
     at: string;
   };
+  /** Justificativa ESTRATÉGICA de por que este influenciador foi escolhido
+   * pra ESTA campanha. Pertence à relação campanha ↔ influenciador (vive na
+   * linha de `campanha_influenciadores`, nunca no cadastro global do banco)
+   * e é INTERNA do time: o mapeamento do portal do cliente
+   * (`cliente-link.functions.ts`) é uma lista explícita de campos e não a
+   * inclui, então nunca vai pro cliente nem pro influenciador. */
+  motivoSelecao?: string;
   /** Instruções específicas pra este influenciador (diferente do briefing
    * geral da campanha, em `Campaign.briefing`) — mostrado no portal do
    * cliente, no perfil do influenciador. */
@@ -5316,64 +5323,77 @@ function WorkspaceDetailBody({
         )}
 
         <CollapsibleSection
-          title="Briefing e observações"
-          summary={`${influ.briefingPersonalizado ? "Briefing personalizado" : "Sem briefing"}${
-            influ.briefingAnexoUrl ? " · 1 anexo" : ""
-          }${influ.observacoes ? " · com observações" : ""}`}
+          title="Contexto da seleção"
+          defaultOpen={!!influ.motivoSelecao}
+          summary={[
+            influ.motivoSelecao ? "Com justificativa" : "Sem justificativa",
+            influ.briefingPersonalizado ? "Briefing personalizado" : "Sem briefing",
+            influ.briefingAnexoUrl ? "1 anexo" : null,
+            influ.observacoes ? "com observações" : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
         >
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <FieldLabel
-                title="Briefing personalizado"
-                hint="Instruções específicas pra este influenciador — aparece no portal do cliente."
-              />
-              <AutoSaveTextarea
-                key={influ.id}
-                value={influ.briefingPersonalizado ?? ""}
-                onSave={(v) => onPatch({ briefingPersonalizado: v || undefined })}
-                placeholder="Ex: focar no tom descontraído, evitar mencionar concorrentes..."
-              />
-              {influ.briefingAnexoUrl ? (
-                <div className="flex items-center gap-2 text-xs">
-                  <a
-                    href={influ.briefingAnexoUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-2"
-                  >
-                    <Paperclip className="h-3 w-3" />
-                    {influ.briefingAnexoNome || "Anexo"}
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onPatch({ briefingAnexoNome: undefined, briefingAnexoUrl: undefined })
-                    }
-                    className="text-muted-foreground hover:text-destructive"
-                    aria-label="Remover anexo"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-              ) : (
-                <BriefingAnexoUploadButton
-                  onUpload={(nome, url) =>
-                    onPatch({ briefingAnexoNome: nome, briefingAnexoUrl: url })
-                  }
+          <div className="space-y-6">
+            <MotivoSelecaoField
+              key={influ.id}
+              value={influ.motivoSelecao ?? ""}
+              onSave={(v) => onPatch({ motivoSelecao: v || undefined })}
+            />
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <FieldLabel
+                  title="Briefing personalizado"
+                  hint="O que este influenciador precisa saber/fazer nesta campanha — aparece no portal do cliente."
                 />
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <FieldLabel
-                title="Observações internas"
-                hint="Nota livre — visível pro time e também no portal do cliente."
-              />
-              <AutoSaveTextarea
-                key={influ.id}
-                value={influ.observacoes ?? ""}
-                onSave={(v) => onPatch({ observacoes: v || undefined })}
-                placeholder="Ex: prefere ser contatado por WhatsApp à tarde..."
-              />
+                <AutoSaveTextarea
+                  key={influ.id}
+                  value={influ.briefingPersonalizado ?? ""}
+                  onSave={(v) => onPatch({ briefingPersonalizado: v || undefined })}
+                  placeholder="Ex: focar no tom descontraído, evitar mencionar concorrentes..."
+                />
+                {influ.briefingAnexoUrl ? (
+                  <div className="flex items-center gap-2 text-xs">
+                    <a
+                      href={influ.briefingAnexoUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-2"
+                    >
+                      <Paperclip className="h-3 w-3" />
+                      {influ.briefingAnexoNome || "Anexo"}
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onPatch({ briefingAnexoNome: undefined, briefingAnexoUrl: undefined })
+                      }
+                      className="text-muted-foreground hover:text-destructive"
+                      aria-label="Remover anexo"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <BriefingAnexoUploadButton
+                    onUpload={(nome, url) =>
+                      onPatch({ briefingAnexoNome: nome, briefingAnexoUrl: url })
+                    }
+                  />
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <FieldLabel
+                  title="Observações compartilhadas"
+                  hint="Nota livre desta campanha — visível pro time e também no portal do cliente (o cliente também escreve aqui)."
+                />
+                <AutoSaveTextarea
+                  key={influ.id}
+                  value={influ.observacoes ?? ""}
+                  onSave={(v) => onPatch({ observacoes: v || undefined })}
+                  placeholder="Ex: prefere ser contatado por WhatsApp à tarde..."
+                />
+              </div>
             </div>
           </div>
         </CollapsibleSection>
@@ -5893,6 +5913,72 @@ function AutoSaveInput({
         "w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-ring"
       }
     />
+  );
+}
+
+/** "Por que este influenciador?" — justificativa estratégica da escolha pra
+ * ESTA campanha (interna do time). Estado vazio com chamada pra ação; com
+ * texto, vira textarea auto-salvo (ao sair do campo) com "Limpar". */
+function MotivoSelecaoField({ value, onSave }: { value: string; onSave: (v: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const open = editing || !!value;
+  return (
+    <div className="space-y-1.5">
+      <FieldLabel
+        title="Por que este influenciador?"
+        hint="Explique por que este influenciador é interessante para esta campanha. Interno do time — não aparece pro cliente."
+      />
+      {open ? (
+        <>
+          <textarea
+            autoFocus={editing && !value}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => {
+              const next = draft.trim();
+              if (next !== value) onSave(next);
+              if (!next) setEditing(false);
+            }}
+            placeholder="Ex.: Forte afinidade com o público da campanha, bom histórico de conteúdo e audiência concentrada na região..."
+            rows={4}
+            className="w-full resize-y rounded-md border border-border bg-background px-2.5 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+          />
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[11px] text-muted-foreground">
+              Registre o principal motivo estratégico para esta escolha.
+            </p>
+            {draft && (
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setDraft("");
+                  setEditing(false);
+                  if (value) onSave("");
+                }}
+                className="text-[11px] font-medium text-muted-foreground hover:text-destructive"
+              >
+                Limpar
+              </button>
+            )}
+          </div>
+        </>
+      ) : (
+        <div className="flex items-center gap-3 rounded-md border border-dashed border-border px-3 py-2.5">
+          <p className="min-w-0 flex-1 text-sm text-muted-foreground">
+            Nenhum motivo registrado ainda.
+          </p>
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="shrink-0 text-sm font-medium text-brand hover:underline"
+          >
+            Adicionar motivo
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
