@@ -19,6 +19,8 @@ import {
   User,
   UserPlus,
   Wallet,
+  ChevronDown,
+  LayoutGrid,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -49,7 +51,7 @@ import { CampanhaCard } from "./campanhas/CampanhaCard";
 import { CampanhaNpsTool } from "./campanhas/CampanhaNpsPanel";
 import { getCampanhaNpsInfluenciadoresStatus } from "@/lib/campanha-nps-influenciador-interno.functions";
 import type { InfluNpsBoardProp } from "@/components/influenciadores/InfluencerBoard";
-import { CampaignToolCard } from "./campanhas/tools/CampaignToolCard";
+import { CAMPAIGN_TOOLS, type CampaignToolKey } from "./campanhas/tools/campaign-tools";
 import { DocumentsTool } from "./campanhas/tools/DocumentsTool";
 import { ReportsTool } from "./campanhas/tools/ReportsTool";
 import { CalendarTool } from "./campanhas/tools/CalendarTool";
@@ -924,15 +926,15 @@ function CampanhaDetail({
           </nav>
 
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="flex min-w-0 items-start gap-4">
-              <ClienteLogo photo={cliente.photo} empresa={cliente.empresa} size="md" />
+            <div className="flex min-w-0 items-start gap-4 md:gap-5">
+              <ClienteLogo photo={cliente.photo} empresa={cliente.empresa} size="lg" />
               <div className="min-w-0">
-                <p className="truncate text-xs font-medium uppercase tracking-wide text-text-secondary">
-                  {cliente.empresa}
-                </p>
-                <h1 className="mt-0.5 truncate text-xl font-bold tracking-tight text-foreground md:text-2xl">
+                <h1 className="truncate text-2xl font-bold tracking-tight text-foreground md:text-3xl">
                   {c.nome}
                 </h1>
+                <p className="mt-0.5 truncate text-sm text-text-secondary">
+                  Cliente: <span className="font-medium text-foreground">{cliente.empresa}</span>
+                </p>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -1010,7 +1012,37 @@ function CampanhaDetail({
             {/* Ações — uma primária (Editar), uma secundária discreta (Link do
              * cliente), e um menu pras menos frequentes (Página de inscrição,
              * Excluir com confirmação) — nunca vários botões com peso igual. */}
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" aria-haspopup="menu">
+                    <LayoutGrid className="h-3.5 w-3.5" /> Recursos
+                    <ChevronDown className="h-3 w-3 text-text-secondary" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  {(
+                    [
+                      ["documentos", docs.length],
+                      ["calendario", cronograma.length],
+                      ["relatorioMensal", relatorios.length],
+                      ["nps", undefined],
+                    ] as [CampaignToolKey, number | undefined][]
+                  ).map(([tool, count]) => {
+                    const t = CAMPAIGN_TOOLS[tool];
+                    const Icon = t.icon;
+                    return (
+                      <DropdownMenuItem key={tool} onSelect={() => setOpenPanel(tool)}>
+                        <Icon className="h-3.5 w-3.5 text-text-secondary" />
+                        <span className="min-w-0 flex-1 truncate">{t.label}</span>
+                        {typeof count === "number" && count > 0 && (
+                          <span className="text-xs tabular-nums text-text-secondary">{count}</span>
+                        )}
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button variant="ghost" size="sm" onClick={copyClientLink} disabled={!fullCliente}>
                 {linkCopied ? (
                   <Check className="h-3.5 w-3.5" />
@@ -1210,17 +1242,80 @@ function CampanhaDetail({
           />
         </section>
 
-        {/* REGIÃO INFERIOR — exatamente 4 caixas fixas, sempre visíveis
-         * (sem accordion/collapse/tabs): Briefing | Infos úteis / Recursos |
-         * Entregas. Desktop 2×2 (`md:grid-cols-2`), mobile 1 coluna na mesma
-         * ordem. Todas usam o MESMO container (`BOTTOM_BOX`).
+        {/* REGIÃO INFERIOR — 3 caixas fixas, sempre visíveis
+         * (sem accordion/collapse/tabs): Entregas (largura total, é o que tem
+         * ação operacional) e, abaixo, Briefing | Infos úteis (apoio). Os
+         * Recursos (Documentos/Calendário/Relatórios/NPS) vivem num único
+         * lugar: o menu "Recursos" do cabeçalho. Desktop `md:grid-cols-2`,
+         * mobile 1 coluna na mesma ordem. Todas usam o MESMO container (`BOTTOM_BOX`).
          *
          * PRIVACIDADE: o valor pago pelo cliente (`valorCliente`, e a forma
          * de pagamento do cliente `pagClienteTipo`) NUNCA é renderizado nesta
          * página. Só dados operacionais: composição, pagamento aos
          * influenciadores (`pagTipos`/`pagConfig`/`prazoPag`), direitos. */}
         <div className="grid items-start gap-3 md:grid-cols-2">
-          {/* 1. BRIEFING */}
+          {/* 1. ENTREGAS — caixa sempre aberta: resumo por etapa + até
+           * ENTREGAS_BOX_PREVIEW itens reais (getEligibleCampaignDeliveries);
+           * "Ver todas as entregas →" abre a listagem completa + galeria. */}
+          <section
+            ref={entregasRef}
+            aria-labelledby="campanha-entregas"
+            className={`${BOTTOM_BOX} scroll-mt-6 md:col-span-2`}
+          >
+            <div className="-my-1 flex h-8 items-center">
+              <h2 id="campanha-entregas" className={`${BOTTOM_BOX_TITLE} flex items-center gap-2`}>
+                Entregas
+                <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
+                  {allEntregas.length}
+                </span>
+              </h2>
+            </div>
+            <div className="mt-1.5">
+              {allEntregas.length === 0 ? (
+                <p className="text-sm text-text-secondary">
+                  Nenhuma entrega ainda. Elas aparecem aqui assim que forem criadas para um
+                  influenciador aprovado desta campanha.
+                </p>
+              ) : (
+                <>
+                  <p className="text-xs text-text-secondary">{entregasStageSummary}</p>
+                  <ul className="mt-2 divide-y divide-border/30 border-t border-border/40">
+                    {allEntregas.slice(0, ENTREGAS_BOX_PREVIEW).map(({ influ, entrega }) => (
+                      <li
+                        key={entrega.id}
+                        className="flex items-center justify-between gap-3 py-1.5 text-sm"
+                      >
+                        <span className="min-w-0 truncate text-foreground">
+                          <span className="font-medium">{influ.nome}</span>
+                          <span className="text-text-secondary">
+                            {" "}
+                            — {entrega.titulo || entrega.tipo}
+                          </span>
+                        </span>
+                        <span
+                          className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${ENTREGA_STAGE_TONE[entrega.stage]}`}
+                        >
+                          {ENTREGA_STAGE_LABEL[entrega.stage]}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+            {allEntregas.length > 0 && (
+              <div className="mt-2">
+                <button
+                  type="button"
+                  onClick={() => setEntregasDialogOpen(true)}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                >
+                  Ver todas as entregas <span aria-hidden>→</span>
+                </button>
+              </div>
+            )}
+          </section>
+          {/* 2. BRIEFING */}
           <section aria-labelledby="campanha-briefing" className={BOTTOM_BOX}>
             <div className="-my-1 flex h-8 items-center justify-between gap-2">
               <h2 id="campanha-briefing" className={BOTTOM_BOX_TITLE}>
@@ -1240,7 +1335,16 @@ function CampanhaDetail({
                   {c.briefing}
                 </p>
               ) : (
-                <p className="text-sm text-text-secondary">Nenhum briefing cadastrado.</p>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm text-text-secondary">Nenhum briefing cadastrado.</p>
+                  <button
+                    type="button"
+                    onClick={() => setEditOpen(true)}
+                    className="shrink-0 text-xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                  >
+                    Adicionar briefing
+                  </button>
+                </div>
               )}
               {briefingIsLong && (
                 <button
@@ -1278,7 +1382,7 @@ function CampanhaDetail({
             )}
           </section>
 
-          {/* 2. INFOS ÚTEIS (substitui "Contrato") — só operacional. */}
+          {/* 3. INFOS ÚTEIS (substitui "Contrato") — só operacional. */}
           <section aria-labelledby="campanha-infos" className={BOTTOM_BOX}>
             <div className="-my-1 flex h-8 items-center justify-between gap-2">
               <h2 id="campanha-infos" className={BOTTOM_BOX_TITLE}>
@@ -1380,99 +1484,6 @@ function CampanhaDetail({
                 <ShieldCheck className="h-3 w-3" /> Direitos de imagem <span aria-hidden>→</span>
               </button>
             </div>
-          </section>
-
-          {/* 3. RECURSOS — mesmos 4 recursos, lista compacta, cada um abre no
-           * `CampaignToolShell`. */}
-          <section aria-labelledby="campanha-recursos" className={BOTTOM_BOX}>
-            <div className="-my-1 flex h-8 items-center">
-              <h2 id="campanha-recursos" className={BOTTOM_BOX_TITLE}>
-                Recursos
-              </h2>
-            </div>
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-2">
-              <CampaignToolCard
-                compact
-                tool="documentos"
-                count={docs.length}
-                onOpen={() => setOpenPanel("documentos")}
-              />
-              <CampaignToolCard
-                compact
-                tool="calendario"
-                count={cronograma.length}
-                onOpen={() => setOpenPanel("calendario")}
-              />
-              <CampaignToolCard
-                compact
-                tool="relatorioMensal"
-                count={relatorios.length}
-                onOpen={() => setOpenPanel("relatorioMensal")}
-              />
-              <CampaignToolCard compact tool="nps" onOpen={() => setOpenPanel("nps")} />
-            </div>
-          </section>
-
-          {/* 4. ENTREGAS — caixa sempre aberta: resumo por etapa + até
-           * ENTREGAS_BOX_PREVIEW itens reais (getEligibleCampaignDeliveries);
-           * "Ver todas as entregas →" abre a listagem completa + galeria. */}
-          <section
-            ref={entregasRef}
-            aria-labelledby="campanha-entregas"
-            className={`${BOTTOM_BOX} scroll-mt-6`}
-          >
-            <div className="-my-1 flex h-8 items-center">
-              <h2 id="campanha-entregas" className={`${BOTTOM_BOX_TITLE} flex items-center gap-2`}>
-                Entregas
-                <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
-                  {allEntregas.length}
-                </span>
-              </h2>
-            </div>
-            <div className="mt-1.5">
-              {allEntregas.length === 0 ? (
-                <p className="text-sm text-text-secondary">
-                  Nenhuma entrega ainda. Elas aparecem aqui assim que forem criadas para um
-                  influenciador aprovado desta campanha.
-                </p>
-              ) : (
-                <>
-                  <p className="text-xs text-text-secondary">{entregasStageSummary}</p>
-                  <ul className="mt-2 divide-y divide-border/30 border-t border-border/40">
-                    {allEntregas.slice(0, ENTREGAS_BOX_PREVIEW).map(({ influ, entrega }) => (
-                      <li
-                        key={entrega.id}
-                        className="flex items-center justify-between gap-3 py-1.5 text-sm"
-                      >
-                        <span className="min-w-0 truncate text-foreground">
-                          <span className="font-medium">{influ.nome}</span>
-                          <span className="text-text-secondary">
-                            {" "}
-                            — {entrega.titulo || entrega.tipo}
-                          </span>
-                        </span>
-                        <span
-                          className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${ENTREGA_STAGE_TONE[entrega.stage]}`}
-                        >
-                          {ENTREGA_STAGE_LABEL[entrega.stage]}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
-            </div>
-            {allEntregas.length > 0 && (
-              <div className="mt-2">
-                <button
-                  type="button"
-                  onClick={() => setEntregasDialogOpen(true)}
-                  className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-                >
-                  Ver todas as entregas <span aria-hidden>→</span>
-                </button>
-              </div>
-            )}
           </section>
         </div>
 
