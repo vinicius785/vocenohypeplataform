@@ -10,7 +10,7 @@ import {
   YAxis,
   type TooltipProps,
 } from "recharts";
-import { SummaryStat } from "@/components/shared/SummaryStat";
+import { KpiCell, KpiStrip } from "@/components/shared/Kpi";
 import { CampaignToolShell, ToolEmpty, ToolError, ToolLoading } from "./tools/CampaignToolShell";
 import { CAMPAIGN_TOOLS } from "./tools/campaign-tools";
 import { Badge } from "@/components/ui/badge";
@@ -180,34 +180,32 @@ export function CampanhaNpsTool({
                   </p>
                 )}
 
-                <div className="overflow-hidden rounded-xl border border-border/60 bg-background">
-                  <div className="flex flex-wrap">
-                    <SummaryStat
-                      label="NPS"
-                      value={formatNpsIndex(current.cumulative.nps)}
-                      complement={
-                        current.cumulative.nps === null
-                          ? `Nota do mês: ${current.entry.score} · ${NPS_CATEGORY_LABEL[current.category]}`
-                          : `${current.cumulative.distribution.total} meses · nota do mês ${current.entry.score}`
-                      }
-                    />
-                    <SummaryStat
-                      label="Satisfação geral"
-                      value={formatOutOfFive(current.entry.satisfactionScore)}
-                      complement={NPS_SATISFACTION_LABELS[current.entry.satisfactionScore]}
-                    />
-                    <SummaryStat
-                      label="Qualidade das entregas"
-                      value={formatOutOfFive(current.deliveryScore)}
-                      complement={ratingLabel(current.entry.deliveryQuality)}
-                    />
-                    <SummaryStat
-                      label="Atendimento e comunicação"
-                      value={formatOutOfFive(current.communicationScore)}
-                      complement={ratingLabel(current.entry.communicationRating)}
-                    />
-                  </div>
-                </div>
+                <KpiStrip aria-label="Resumo do NPS">
+                  <KpiCell
+                    label="NPS"
+                    value={formatNpsIndex(current.cumulative.nps)}
+                    complement={
+                      current.cumulative.nps === null
+                        ? `Nota do mês: ${current.entry.score} · ${NPS_CATEGORY_LABEL[current.category]}`
+                        : `${current.cumulative.distribution.total} meses · nota do mês ${current.entry.score}`
+                    }
+                  />
+                  <KpiCell
+                    label="Satisfação geral"
+                    value={formatOutOfFive(current.entry.satisfactionScore)}
+                    complement={NPS_SATISFACTION_LABELS[current.entry.satisfactionScore]}
+                  />
+                  <KpiCell
+                    label="Qualidade das entregas"
+                    value={formatOutOfFive(current.deliveryScore)}
+                    complement={ratingLabel(current.entry.deliveryQuality)}
+                  />
+                  <KpiCell
+                    label="Atendimento e comunicação"
+                    value={formatOutOfFive(current.communicationScore)}
+                    complement={ratingLabel(current.entry.communicationRating)}
+                  />
+                </KpiStrip>
 
                 <div className="grid gap-4 md:grid-cols-5">
                   <NpsEvolucao months={months} selected={current.referenceMonth} />

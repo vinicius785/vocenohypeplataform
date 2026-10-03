@@ -34,7 +34,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { KpiLead, KpiLeadItem, KpiLeadValue } from "@/components/shared/Kpi";
+import { KpiCell, KpiStrip } from "@/components/shared/Kpi";
 import { ClienteLogo } from "@/components/clientes/ClienteLogo";
 import { useClientes, clientesStore } from "@/lib/clientes-store";
 import {
@@ -73,7 +73,6 @@ import { buildMesReferenciaOptions } from "@/lib/inscricao-page";
 import { useMyAccess } from "@/lib/permissions";
 import { PageContainer } from "@/components/shared/PageContainer";
 import { PageHeader } from "@/components/shared/PageHeader";
-import { SummaryStat } from "@/components/shared/SummaryStat";
 import { OPEN_CAMPANHA_TASK_KEY, OPEN_CAMPANHA_TASK_EVENT } from "./AppShell";
 import { TaskBoard, matchesDeadlinePeriod, type Task } from "./tasks/TaskBoard";
 import { usePerformanceSettings } from "@/lib/performance-events-store";
@@ -319,10 +318,11 @@ export function CampanhasSection() {
         <PageHeader title="Campanhas" description="Todas as campanhas vinculadas aos clientes." />
 
         {hasAnyCampanha && (
-          <KpiLead aria-label="Resumo de campanhas">
-            <KpiLeadValue value={ativas} label="campanhas ativas" />
-            <KpiLeadItem label="Em negociação" value={emNegociacao} />
-          </KpiLead>
+          <KpiStrip aria-label="Resumo de campanhas">
+            <KpiCell label="Campanhas ativas" value={ativas} />
+            <KpiCell label="Em negociação" value={emNegociacao} />
+            <KpiCell label="Total de campanhas" value={totalCampanhas} />
+          </KpiStrip>
         )}
 
         {hasAnyCampanha && (
@@ -1137,40 +1137,38 @@ function CampanhaDetail({
         {/* KPIs — barra horizontal única: label + valor principal + contexto
          * secundário. Todos os números vêm do modelo existente (mês
          * selecionado em campanhas recorrentes). */}
-        <div className="surface-card">
-          <div className="flex flex-wrap">
-            <SummaryStat
-              label="Influenciadores"
-              value={eligibleInflus.length.toString()}
-              complement={`Meta ${totalInflus} · ${enviados}/${totalEnviar} enviados`}
-            />
-            <SummaryStat
-              label="Entregas"
-              value={`${entregasPublicadas}/${allEntregas.length}`}
-              complement={`${pctPublicadas}% publicadas`}
-            />
-            {orcamento > 0 && (
-              <>
-                <SummaryStat
-                  label="Orçamento"
-                  value={fmtBRL(orcamento)}
-                  complement={`${fmtBRL(gasto)} utilizado`}
-                />
-                <SummaryStat
-                  label="Gasto"
-                  value={fmtBRL(gasto)}
-                  complement={`Saldo ${fmtBRL(disponivel)}`}
-                  tone={overBudget ? "danger" : undefined}
-                  progress={{
-                    pct: Math.max(pctGasto, 2),
-                    ariaLabel: `Gasto: ${fmtBRL(gasto)} de ${fmtBRL(orcamento)} do orçamento (${Math.round(pctGasto)}%)`,
-                    tone: overBudget ? "danger" : "brand",
-                  }}
-                />
-              </>
-            )}
-          </div>
-        </div>
+        <KpiStrip aria-label="Resumo da campanha">
+          <KpiCell
+            label="Influenciadores"
+            value={eligibleInflus.length}
+            complement={`Meta ${totalInflus} · ${enviados}/${totalEnviar} enviados`}
+          />
+          <KpiCell
+            label="Entregas"
+            value={`${entregasPublicadas}/${allEntregas.length}`}
+            complement={`${pctPublicadas}% publicadas`}
+          />
+          {orcamento > 0 && (
+            <>
+              <KpiCell
+                label="Orçamento"
+                value={fmtBRL(orcamento)}
+                complement={`${fmtBRL(gasto)} utilizado`}
+              />
+              <KpiCell
+                label="Gasto"
+                value={fmtBRL(gasto)}
+                complement={`Saldo ${fmtBRL(disponivel)}`}
+                tone={overBudget ? "danger" : undefined}
+                progress={{
+                  pct: Math.max(pctGasto, 2),
+                  ariaLabel: `Gasto: ${fmtBRL(gasto)} de ${fmtBRL(orcamento)} do orçamento (${Math.round(pctGasto)}%)`,
+                  tone: overBudget ? "danger" : "brand",
+                }}
+              />
+            </>
+          )}
+        </KpiStrip>
 
         {/* PRECISA DE ATENÇÃO — só existe quando há sinal real (ver
          * `attentionItems`); sem pendência, nenhum container é renderizado. */}

@@ -1,4 +1,4 @@
-import { SummaryStat } from "@/components/shared/SummaryStat";
+import { KpiCell, KpiStrip } from "@/components/shared/Kpi";
 import type { CampaignSummary } from "../../types/attention";
 
 /** Faixa de resumo operacional — substitui os seis cards genéricos
@@ -7,8 +7,8 @@ import type { CampaignSummary } from "../../types/attention";
  * nunca mostra um traço num card vazio. */
 export function ClientCampaignSummary({ campaign }: { campaign: CampaignSummary }) {
   return (
-    <div className="surface-card flex flex-wrap">
-      <SummaryStat
+    <KpiStrip aria-label="Resumo da campanha">
+      <KpiCell
         label="Progresso"
         value={`${campaign.progressPercent}%`}
         complement={
@@ -21,25 +21,25 @@ export function ClientCampaignSummary({ campaign }: { campaign: CampaignSummary 
           ariaLabel: `${campaign.progressPercent}% concluído`,
         }}
       />
-      <SummaryStat
+      <KpiCell
         label="Influenciadores"
         value={`${campaign.influencersApproved}/${campaign.influencersTotal}`}
         complement="aprovados"
       />
-      <SummaryStat label="Conteúdos planejados" value={campaign.contentPlanned.toString()} />
-      <SummaryStat
+      <KpiCell label="Conteúdos planejados" value={campaign.contentPlanned.toString()} />
+      <KpiCell
         label="Publicados"
         value={campaign.contentPublished.toString()}
         tone={campaign.contentPublished > 0 ? "success" : undefined}
       />
-      <SummaryStat
+      <KpiCell
         label="Pendências"
         value={campaign.pendingCount.toString()}
         tone={campaign.pendingCount > 0 ? "warning" : undefined}
       />
       {campaign.nextMilestoneLabel && (
-        <SummaryStat label="Próximo marco" value={campaign.nextMilestoneLabel} />
+        <KpiCell label="Próximo marco" value={campaign.nextMilestoneLabel} />
       )}
-    </div>
+    </KpiStrip>
   );
 }

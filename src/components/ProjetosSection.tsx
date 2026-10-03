@@ -39,7 +39,7 @@ import {
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PageContainer } from "@/components/shared/PageContainer";
 import { PageHeader } from "@/components/shared/PageHeader";
-import { KpiLead, KpiLeadItem, KpiLeadValue } from "@/components/shared/Kpi";
+import { KpiCell, KpiStrip } from "@/components/shared/Kpi";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -231,11 +231,11 @@ export function ProjetosSection() {
         />
 
         {hasAnyProject && (
-          <KpiLead aria-label="Resumo de projetos">
-            <KpiLeadValue value={ativosCount} label="projetos ativos" />
-            <KpiLeadItem label="Em risco" value={emRiscoCount} tone="warning" />
-            <KpiLeadItem label="Tarefas atrasadas" value={tarefasAtrasadasCount} tone="danger" />
-          </KpiLead>
+          <KpiStrip aria-label="Resumo de projetos">
+            <KpiCell label="Projetos ativos" value={ativosCount} />
+            <KpiCell label="Em risco" value={emRiscoCount} tone="warning" />
+            <KpiCell label="Tarefas atrasadas" value={tarefasAtrasadasCount} tone="danger" />
+          </KpiStrip>
         )}
 
         {hasAnyProject && (

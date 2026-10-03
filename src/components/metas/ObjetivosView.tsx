@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { KpiCell, KpiStrip } from "@/components/shared/Kpi";
 import { Filter, Search, Target } from "lucide-react";
 import { META_AREAS, type Indicador, type MetaArea, type Objetivo } from "@/lib/metas-store";
 import {
@@ -159,42 +160,35 @@ export function ObjetivosView({
       {/* Resumo — uma linha, não um painel: progresso médio e, SÓ quando
        * existir, o que pede atenção (clicável, vira filtro). "Saudáveis" não
        * aparece: é o estado normal e não pede decisão nenhuma. */}
-      <div className="space-y-2">
-        <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm text-text-secondary">
-          <span className="text-2xl font-semibold tracking-tight text-foreground">
-            {resumo.progressoMedio == null ? "—" : `${resumo.progressoMedio}%`}
-          </span>
-          <span>
-            de progresso médio em {resumo.ativos} {resumo.ativos === 1 ? "objetivo" : "objetivos"}
-          </span>
-          {resumo.atencao > 0 && (
-            <button
-              type="button"
-              onClick={() => setSaudeFilter((v) => (v === "atencao" ? "" : "atencao"))}
-              className={`rounded font-medium text-warning hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${saudeFilter === "atencao" ? "underline" : ""}`}
-            >
-              · {resumo.atencao} em atenção
-            </button>
-          )}
-          {resumo.emRisco > 0 && (
-            <button
-              type="button"
-              onClick={() => setSaudeFilter((v) => (v === "em_risco" ? "" : "em_risco"))}
-              className={`rounded font-medium text-danger hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${saudeFilter === "em_risco" ? "underline" : ""}`}
-            >
-              · {resumo.emRisco} em risco
-            </button>
-          )}
-        </p>
-        {resumo.progressoMedio != null && (
-          <div className="h-1 w-full max-w-md overflow-hidden rounded-full bg-muted-foreground/15">
-            <div
-              className="h-full rounded-full bg-brand"
-              style={{ width: `${resumo.progressoMedio}%` }}
-            />
-          </div>
-        )}
-      </div>
+      <KpiStrip aria-label="Resumo de objetivos">
+        <KpiCell
+          label="Progresso médio"
+          value={resumo.progressoMedio == null ? "—" : `${resumo.progressoMedio}%`}
+          complement={`em ${resumo.ativos} ${resumo.ativos === 1 ? "objetivo" : "objetivos"}`}
+          progress={
+            resumo.progressoMedio == null
+              ? undefined
+              : {
+                  pct: resumo.progressoMedio,
+                  ariaLabel: `${resumo.progressoMedio}% de progresso médio`,
+                }
+          }
+        />
+        <KpiCell
+          label="Em atenção"
+          value={resumo.atencao}
+          tone="warning"
+          active={saudeFilter === "atencao"}
+          onClick={() => setSaudeFilter((v) => (v === "atencao" ? "" : "atencao"))}
+        />
+        <KpiCell
+          label="Em risco"
+          value={resumo.emRisco}
+          tone="danger"
+          active={saudeFilter === "em_risco"}
+          onClick={() => setSaudeFilter((v) => (v === "em_risco" ? "" : "em_risco"))}
+        />
+      </KpiStrip>
 
       {/* Toolbar única — busca + filtros, sincronizados com a mesma lista. */}
       <div className="flex flex-wrap items-center gap-2">

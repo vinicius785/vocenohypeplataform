@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { KpiCell, KpiStrip } from "@/components/shared/Kpi";
 import {
   ArrowUpDown,
   Check,
@@ -214,31 +215,7 @@ export function ProblemasSection() {
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
   const openProblem = items.find((p) => p.id === openId) ?? null;
 
-  const statTile = (label: string, value: number, onClick?: () => void, hint?: string) => {
-    const body = (
-      <>
-        <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
-          {label}
-        </p>
-        <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">
-          {state === "loading" ? "…" : value}
-        </p>
-        {hint && <p className="truncate text-[11px] text-text-secondary">{hint}</p>}
-      </>
-    );
-    const cls = "surface-card min-w-0 px-4 py-3 text-left";
-    return onClick ? (
-      <button
-        type="button"
-        onClick={onClick}
-        className={`${cls} transition-colors hover:bg-card/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
-      >
-        {body}
-      </button>
-    ) : (
-      <div className={cls}>{body}</div>
-    );
-  };
+  const kpiValue = (n: number) => (state === "loading" ? "…" : n);
 
   return (
     <PageContainer variant="wide">
@@ -256,21 +233,37 @@ export function ProblemasSection() {
           }
         />
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {statTile("Abertos", summary.abertos, undefined, "novos e aguardando informações")}
-          {statTile("Em análise", summary.emAnalise, () => {
-            setView("todos");
-            setFilters({ ...NO_FILTERS, status: "em_analise" });
-          })}
-          {statTile("Em correção", summary.emCorrecao, () => {
-            setView("todos");
-            setFilters({ ...NO_FILTERS, status: "em_correcao" });
-          })}
-          {statTile("Resolvidos", summary.resolvidos, () => {
-            setView("resolvidos");
-            setFilters(NO_FILTERS);
-          })}
-        </div>
+        <KpiStrip aria-label="Resumo de problemas">
+          <KpiCell
+            label="Abertos"
+            value={kpiValue(summary.abertos)}
+            complement="novos e aguardando informações"
+          />
+          <KpiCell
+            label="Em análise"
+            value={kpiValue(summary.emAnalise)}
+            onClick={() => {
+              setView("todos");
+              setFilters({ ...NO_FILTERS, status: "em_analise" });
+            }}
+          />
+          <KpiCell
+            label="Em correção"
+            value={kpiValue(summary.emCorrecao)}
+            onClick={() => {
+              setView("todos");
+              setFilters({ ...NO_FILTERS, status: "em_correcao" });
+            }}
+          />
+          <KpiCell
+            label="Resolvidos"
+            value={kpiValue(summary.resolvidos)}
+            onClick={() => {
+              setView("resolvidos");
+              setFilters(NO_FILTERS);
+            }}
+          />
+        </KpiStrip>
 
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">

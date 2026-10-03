@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { KpiCell, KpiStrip } from "@/components/shared/Kpi";
 import { Filter, Gauge, Plus, Search } from "lucide-react";
 import {
   META_AREAS,
@@ -259,28 +260,28 @@ export function IndicadoresView({
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5">
-        {(
-          [
-            ["", `Todos ${indicadores.length}`],
-            ["precisa_atualizar", `Precisam atualizar ${resumo.precisamAtualizar}`],
-            ["em_risco", `Impactam objetivos em risco ${resumo.impactamEmRisco}`],
-          ] as const
-        ).map(([key, label]) => (
-          <button
-            key={key || "todos"}
-            type="button"
-            onClick={() => setQuickChip(key)}
-            className={`rounded-full px-2.5 py-1 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
-              quickChip === key
-                ? "bg-muted text-foreground"
-                : "text-text-secondary hover:bg-muted/60"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <KpiStrip aria-label="Resumo de indicadores">
+        <KpiCell
+          label="Todos"
+          value={indicadores.length}
+          active={quickChip === ""}
+          onClick={() => setQuickChip("")}
+        />
+        <KpiCell
+          label="Precisam atualizar"
+          value={resumo.precisamAtualizar}
+          tone="warning"
+          active={quickChip === "precisa_atualizar"}
+          onClick={() => setQuickChip("precisa_atualizar")}
+        />
+        <KpiCell
+          label="Impactam objetivos em risco"
+          value={resumo.impactamEmRisco}
+          tone="danger"
+          active={quickChip === "em_risco"}
+          onClick={() => setQuickChip("em_risco")}
+        />
+      </KpiStrip>
 
       {indicadores.length === 0 ? (
         <div className="surface-card p-10 text-center">

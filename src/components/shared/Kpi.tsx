@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Children, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { TYPOGRAPHY } from "@/lib/design-tokens";
@@ -46,11 +46,17 @@ export function KpiStrip({
   className?: string;
   children: ReactNode;
 }) {
+  // Colunas conforme a quantidade de células (sem célula órfã na última linha):
+  // mobile sempre 2; de `sm` em diante 2, 3 ou 4 colunas; 5 células quebram em 3.
+  const n = Children.toArray(children).length;
+  const smCols = n <= 2 ? "sm:grid-cols-2" : n === 4 ? "sm:grid-cols-4" : "sm:grid-cols-3";
   return (
     <Card role="group" aria-label={ariaLabel} className={cn("overflow-hidden", className)}>
       {/* `-mt-px -ml-px` + borda esquerda/superior em cada célula: divisores
           corretos em qualquer quebra de linha, com o excesso cortado pelo card. */}
-      <div className="-ml-px -mt-px grid grid-cols-2 sm:grid-cols-3 lg:grid-flow-col lg:auto-cols-fr">
+      <div
+        className={cn("-ml-px -mt-px grid grid-cols-2 lg:grid-flow-col lg:auto-cols-fr", smCols)}
+      >
         {children}
       </div>
     </Card>
@@ -78,6 +84,8 @@ export function KpiCell({
   onClick?: () => void;
   active?: boolean;
 }) {
+  // Texto (nome de tarefa, marco…) trunca com `title`; número e moeda nunca.
+  const textual = typeof value === "string" && !/^[+-]?(R\$|\d)/.test(value);
   const body = (
     <>
       <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
@@ -85,9 +93,11 @@ export function KpiCell({
         {labelExtra}
       </span>
       <span
+        title={textual ? String(value) : undefined}
         className={cn(
-          "mt-0.5 block whitespace-nowrap",
-          TYPOGRAPHY.kpiValue,
+          "mt-0.5 block",
+          textual ? "truncate text-base font-semibold leading-8" : "whitespace-nowrap",
+          !textual && TYPOGRAPHY.kpiValue,
           valueClass(value, tone),
         )}
       >
@@ -116,7 +126,8 @@ export function KpiCell({
       )}
     </>
   );
-  const cellClass = "min-w-0 border-l border-t border-border/60 px-4 py-3 text-left md:px-5";
+  const cellClass =
+    "flex min-w-0 flex-col items-stretch justify-start border-l border-t border-border/60 px-4 py-3 text-left md:px-5";
   if (!onClick) return <div className={cellClass}>{body}</div>;
   return (
     <button

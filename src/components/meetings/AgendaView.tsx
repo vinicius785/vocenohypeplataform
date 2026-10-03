@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { KpiCell, KpiStrip } from "@/components/shared/Kpi";
 import { useServerFn } from "@tanstack/react-start";
 import { LogIn, CalendarDays, Plus, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -182,22 +183,17 @@ export function AgendaView({
       {/* Resumo operacional — faixa compacta de apoio, nunca 3 cards
        * grandes equivalentes. "Pendentes" só ganha destaque amarelo
        * quando há de fato solicitações aguardando resposta. */}
-      <div className="surface-card flex flex-wrap items-center gap-x-5 gap-y-1.5 px-4 py-3 text-sm">
-        <span>
-          <span className="text-base font-semibold text-foreground">{hojeCount}</span>{" "}
-          <span className="text-text-secondary">
-            {hojeCount === 1 ? "reunião hoje" : "reuniões hoje"}
-          </span>
-        </span>
-        <span className="text-border">·</span>
-        <span>
-          <span className="text-base font-semibold text-foreground">{semanaCount}</span>{" "}
-          <span className="text-text-secondary">esta semana</span>
-        </span>
-        <span className="text-border">·</span>
-        <span className={pendentes > 0 ? "font-medium text-warning" : "text-text-secondary"}>
-          {pendentes} {pendentes === 1 ? "pendente" : "pendentes"}
-        </span>
+      <div className="space-y-3">
+        <KpiStrip aria-label="Resumo da agenda">
+          <KpiCell label={hojeCount === 1 ? "Reunião hoje" : "Reuniões hoje"} value={hojeCount} />
+          <KpiCell label="Esta semana" value={semanaCount} />
+          <KpiCell
+            label={pendentes === 1 ? "Pendente" : "Pendentes"}
+            value={pendentes}
+            tone="warning"
+            complement="solicitações aguardando resposta"
+          />
+        </KpiStrip>
         <GoogleCalendarStatusLine />
       </div>
 

@@ -3,7 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { Megaphone } from "lucide-react";
 import { PageContainer } from "@/components/shared/PageContainer";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { SummaryStat } from "@/components/shared/SummaryStat";
+import { KpiCell, KpiStrip } from "@/components/shared/Kpi";
 import { usePortalSessionData } from "@/components/portal/portal-session-context";
 import { deriveCampaignSummaries } from "../lib/derive";
 import { PortalPageHeader } from "../components/shared/PortalPageHeader";
@@ -60,16 +60,16 @@ export function CampanhasV2() {
       />
 
       {campaigns.length > 0 && (
-        <div className="surface-card flex flex-wrap">
-          <SummaryStat label="Ativas" value={counts.ativas.toString()} />
-          <SummaryStat label="Planejadas" value={counts.planejadas.toString()} />
-          <SummaryStat label="Encerradas" value={counts.encerradas.toString()} />
-          <SummaryStat
+        <KpiStrip aria-label="Resumo das campanhas">
+          <KpiCell label="Ativas" value={counts.ativas.toString()} />
+          <KpiCell label="Planejadas" value={counts.planejadas.toString()} />
+          <KpiCell label="Encerradas" value={counts.encerradas.toString()} />
+          <KpiCell
             label="Precisam de atenção"
             value={counts.atencao.toString()}
             tone={counts.atencao > 0 ? "warning" : undefined}
           />
-        </div>
+        </KpiStrip>
       )}
 
       {campaigns.length > 0 && (

@@ -39,7 +39,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { SummaryStat } from "@/components/shared/SummaryStat";
+import { KpiCell, KpiStrip } from "@/components/shared/Kpi";
 import { useConfirm } from "@/hooks/use-confirm";
 import { useMyAccess, hasPermission } from "@/lib/permissions";
 import { AppShell, type SectionKey } from "@/components/AppShell";
@@ -509,22 +509,22 @@ function ProjetoPage() {
 
           {/* Resumo operacional — uma faixa só, SummaryStat compartilhado
            * (mesmo componente do resumo de Campanha). */}
-          <div className="surface-card flex flex-wrap">
-            <SummaryStat
+          <KpiStrip aria-label="Resumo do projeto">
+            <KpiCell
               label="Progresso"
               value={metrics.total === 0 ? "Sem tarefas" : `${metrics.progressPct}%`}
               complement={
                 metrics.total > 0 ? `${metrics.completed} de ${metrics.total} tarefas` : undefined
               }
             />
-            <SummaryStat
+            <KpiCell
               label="Próxima entrega"
               value={proximaEntregaTask ? proximaEntregaTask.title : "Sem próxima entrega"}
               complement={
                 proximaEntregaTask?.dueDate ? formatIsoDate(proximaEntregaTask.dueDate) : undefined
               }
             />
-            <SummaryStat
+            <KpiCell
               label="Pendências"
               labelExtra={
                 metrics.health &&
@@ -541,7 +541,7 @@ function ProjetoPage() {
               complement={pendenciaComplemento}
               tone={temPendenciaCritica ? "danger" : undefined}
             />
-          </div>
+          </KpiStrip>
         </div>
 
         {editOpen && (

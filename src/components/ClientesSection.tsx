@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { PageContainer } from "@/components/shared/PageContainer";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { KpiLead, KpiLeadItem, KpiLeadValue } from "@/components/shared/Kpi";
+import { KpiCell, KpiStrip } from "@/components/shared/Kpi";
 import { clientesStore, useClientes, type Cliente } from "@/lib/clientes-store";
 import { createClienteComOrganizacao } from "@/lib/clientes.functions";
 import { listContratosProximosDoVencimento } from "@/lib/contratos-alertas.functions";
@@ -256,15 +256,15 @@ export function ClientesSection() {
         />
 
         {hasAnyClient && (
-          <KpiLead aria-label="Resumo de clientes">
-            <KpiLeadValue value={statusCounts.operacao} label="em operação" />
-            <KpiLeadItem
+          <KpiStrip aria-label="Resumo de clientes">
+            <KpiCell label="Em operação" value={statusCounts.operacao} />
+            <KpiCell
               label="Em captação"
               value={statusCounts.capture}
               active={filters.status === "capture"}
               onClick={() => setStatusFilter("capture")}
             />
-            <KpiLeadItem
+            <KpiCell
               label="Sem campanha"
               value={semCampanha}
               active={filters.campanha === "sem"}
@@ -273,13 +273,14 @@ export function ClientesSection() {
               }
             />
             {contratosVencendo !== null && (
-              <KpiLeadItem
-                label="Contratos vencendo (30 dias)"
+              <KpiCell
+                label="Contratos vencendo"
                 value={contratosVencendo}
                 tone="warning"
+                complement="nos próximos 30 dias"
               />
             )}
-          </KpiLead>
+          </KpiStrip>
         )}
 
         {hasAnyClient && (
