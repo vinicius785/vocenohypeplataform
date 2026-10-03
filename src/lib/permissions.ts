@@ -42,7 +42,13 @@ export type Permission =
    * do domínio). A RLS de `contratos` aceita `clientes` OU `contratos`
    * (mesma limitação já documentada para `clientes`/`campanhas`: contrato
    * vive dentro do escopo do cliente). */
-  | "contratos";
+  | "contratos"
+  /** Central de Problemas — triar reports: mudar status/prioridade/área,
+   * atribuir responsável, resolver e ler notas internas e diagnóstico.
+   * Enforced no banco (`can_manage_problems` nas policies/triggers de
+   * `bug_reports`). Ver, criar e comentar não exigem permissão (todo
+   * membro interno). */
+  | "problemas";
 
 export const CONFIG_SUB_PERMISSIONS: { key: Permission; label: string }[] = [
   { key: "configuracoes:perfil", label: "Meu Perfil" },
@@ -57,6 +63,7 @@ export const PERMISSION_GROUPS: { label: string; items: { key: Permission; label
     items: [
       { key: "configuracoes", label: "Administrar workspace" },
       { key: "membros", label: "Gerenciar membros" },
+      { key: "problemas", label: "Gerenciar problemas" },
     ],
   },
   {
@@ -66,7 +73,7 @@ export const PERMISSION_GROUPS: { label: string; items: { key: Permission; label
       { key: "campanhas", label: "Campanhas" },
       { key: "contratos", label: "Contratos" },
       { key: "projetos", label: "Projetos" },
-      { key: "influenciadores", label: "Banco de influenciadores" },
+      { key: "influenciadores", label: "Influenciadores" },
     ],
   },
   {

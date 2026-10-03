@@ -152,28 +152,6 @@ export function ChatV2Composer({
     return () => window.clearTimeout(t);
   }, [convoId, text]);
 
-  // Publica a própria altura numa CSS custom property — é o que permite o
-  // botão flutuante "Encontrou um bug?" (`BugReportButton.tsx`) nunca
-  // sobrepor o composer, mesmo quando ele cresce com o texto, SEM chutar
-  // nenhum valor fixo de `bottom` (o composer pode ir de ~92px até
-  // ~290px de altura com uma mensagem longa).
-  useEffect(() => {
-    const el = rootRef.current;
-    if (!el) return;
-    const set = () =>
-      document.documentElement.style.setProperty(
-        "--chat-v2-composer-height",
-        `${el.getBoundingClientRect().height}px`,
-      );
-    set();
-    const ro = new ResizeObserver(set);
-    ro.observe(el);
-    return () => {
-      ro.disconnect();
-      document.documentElement.style.removeProperty("--chat-v2-composer-height");
-    };
-  }, [voiceMode, pendingFiles.length]);
-
   const handleSend = async () => {
     const trimmed = text.trim();
     if ((!trimmed && pendingFiles.length === 0) || sending) return;

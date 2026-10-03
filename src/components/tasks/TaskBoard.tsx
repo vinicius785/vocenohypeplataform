@@ -23,6 +23,7 @@ import {
   ArrowUpDown,
   Filter,
   MessageSquare,
+  LifeBuoy,
   Undo2,
   MoreHorizontal,
   Search,
@@ -57,6 +58,7 @@ import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import { toRichDoc, isDescriptionEmpty, type RichDoc } from "@/lib/rich-text";
 import type { MentionOption } from "@/lib/mention-kinds";
 import { RichTaskEditor } from "@/components/tasks/rich-editor/RichTaskEditor";
+import { openReportProblem, setProblemTaskContext } from "@/lib/problem-context";
 
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
@@ -3939,6 +3941,13 @@ export function TaskDialog({
   const promoteToPrimary = (name: string) => {
     setPrimaryAssignee((prev) => (prev === name ? undefined : name));
   };
+  // Central de Problemas: um report aberto daqui registra esta tarefa.
+  useEffect(() => {
+    if (!open || !initial) return;
+    setProblemTaskContext({ id: initial.id, title: initial.title });
+    return () => setProblemTaskContext(null);
+  }, [open, initial]);
+
   // Nome do projeto no breadcrumb (só leitura do store local, sem I/O).
   const scopeName = useMemo(
     () =>
@@ -4174,6 +4183,9 @@ export function TaskDialog({
                           <Archive className="h-3.5 w-3.5" /> Arquivar
                         </DropdownMenuItem>
                       )}
+                      <DropdownMenuItem onClick={() => openReportProblem()}>
+                        <LifeBuoy className="h-3.5 w-3.5" /> Reportar problema
+                      </DropdownMenuItem>
                       {/* Antigo botão "Cancelar" do rodapé: fecha SEM salvar. */}
                       <DropdownMenuItem onClick={() => onOpenChange(false)}>
                         <Undo2 className="h-3.5 w-3.5" /> Descartar alterações e fechar

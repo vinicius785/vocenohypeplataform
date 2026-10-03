@@ -20,7 +20,8 @@ export type SectionKey =
   | "influenciadores"
   | "metas"
   | "chat"
-  | "configuracoes";
+  | "configuracoes"
+  | "problemas";
 
 export type FinanceiroTab =
   | "resumo"
@@ -57,18 +58,6 @@ export const METAS_TABS: { key: MetasTab; label: string }[] = [
  * antigo com `reunioesView=calendario`/`solicitacoes` (valor em português)
  * é mapeado pelo `resolveReunioesView`, não aqui. */
 export type ReunioesView = "agenda" | "calendar" | "requests";
-
-/** Só os módulos com subitens de sidebar nesta etapa. "Time" perdeu o
- * próprio subnav quando a subpágina "Horas trabalhadas" foi incorporada
- * à "Visão da equipe" (única subpágina restante não precisa de um item
- * de navegação pra si mesma). "Reuniões" SAIU daqui na Fase 3 da
- * reconstrução — voltou a ser um `SegmentedControl` + botão dentro da
- * própria página (`ReunioesSection.tsx`), não mais 3 subitens de sidebar;
- * a sidebar agora só tem o item principal "Reuniões". */
-export const SECTION_SUBNAV: Partial<Record<SectionKey, { key: string; label: string }[]>> = {
-  financeiro: FINANCEIRO_TABS,
-  metas: METAS_TABS,
-};
 
 export function resolveFinanceiroTab(value: string | undefined): FinanceiroTab {
   return FINANCEIRO_TABS.some((t) => t.key === value) ? (value as FinanceiroTab) : "resumo";

@@ -169,12 +169,7 @@ export function FinanceConceptPage() {
   };
 
   return (
-    <AppShell
-      active="financeiro"
-      onSelect={onSelect}
-      activeSubTab="resumo"
-      onSelectSubTab={onSelectSubTab}
-    >
+    <AppShell active="financeiro" onSelect={onSelect}>
       {/* Canvas claro experimental (escopado a este conceito): o token
        * global `--background` é branco puro e igual a `--card`, então no
        * claro os cards não se distinguiam do fundo (requisito explícito

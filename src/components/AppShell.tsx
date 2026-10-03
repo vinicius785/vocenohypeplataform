@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   LayoutGrid,
   Users,
@@ -27,8 +27,7 @@ import {
   CalendarClock,
   Timer,
   AlertTriangle,
-  Bug,
-  ChevronRight,
+  LifeBuoy,
 } from "lucide-react";
 import { loadProjetos, onProjetosChange, loadTeamMembers, getTaskAssignees } from "@/lib/projetos";
 import { metricasPendentes, type Influ } from "@/components/influenciadores/InfluencerBoard";
@@ -38,8 +37,7 @@ import type { Task } from "@/components/tasks/TaskBoard";
 import { supabase } from "@/integrations/supabase/client";
 import { getTheme, setTheme } from "@/lib/theme";
 import { setFaviconBadge } from "@/lib/favicon-badge";
-import { SidebarProfile, BugsReportadosTab } from "./ConfiguracoesSection";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { SidebarProfile } from "./ConfiguracoesSection";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Drawer,
@@ -58,7 +56,8 @@ import { SURFACE, type SemanticTone } from "@/lib/design-tokens";
 import { cn } from "@/lib/utils";
 import { loadWorkspace, subscribeWorkspace, type Workspace } from "@/lib/workspace-store";
 import { BomDiaDialog } from "./BomDiaDialog";
-import { BugReportButton } from "./BugReportButton";
+import { ReportProblemSheet } from "./problemas/ReportProblemSheet";
+import { rememberNavigationContext } from "@/lib/problem-context";
 import { MeetingReminderToast } from "./MeetingReminderToast";
 import {
   getMe,
@@ -92,7 +91,7 @@ import { useRunningTimer, stopTimer } from "@/lib/time-entries";
 import { toast } from "sonner";
 import { idbAuthStorage } from "@/lib/idb-auth-storage";
 import { TaskModalStack } from "@/components/tasks/TaskModalStack";
-import { type SectionKey, SECTION_SUBNAV } from "@/lib/section-nav";
+import { type SectionKey } from "@/lib/section-nav";
 
 export type { SectionKey };
 
@@ -119,6 +118,9 @@ export const OPEN_MEMBER_EVENT = "time:openMember:event";
 type NavItem = { key: SectionKey; label: string; icon: typeof LayoutGrid };
 type NavGroup = { title: string; items: NavItem[] };
 
+/** Sidebar = navegação GLOBAL. Funcionalidades internas de cada módulo
+ * (abas do Financeiro, Objetivos/Indicadores de Metas, Kanban/Blog/Arquivos
+ * de um projeto...) vivem dentro do próprio módulo, nunca como item aqui. */
 const groups: NavGroup[] = [
   {
     title: "Geral",
@@ -134,17 +136,12 @@ const groups: NavGroup[] = [
     ],
   },
   {
-    title: "Vendas & Finanças",
+    title: "Gestão",
     items: [
       { key: "comercial", label: "Comercial", icon: TrendingUp },
       { key: "financeiro", label: "Financeiro", icon: Wallet },
-    ],
-  },
-  {
-    title: "Estrutura",
-    items: [
       { key: "time", label: "Time", icon: UserCog },
-      { key: "influenciadores", label: "Banco de influenciadores", icon: Star },
+      { key: "influenciadores", label: "Influenciadores", icon: Star },
       { key: "metas", label: "Metas", icon: Target },
     ],
   },
@@ -292,17 +289,10 @@ export function AppShell({
   children,
   active,
   onSelect,
-  activeSubTab,
-  onSelectSubTab,
 }: {
   children: ReactNode;
   active: SectionKey;
   onSelect: (key: SectionKey) => void;
-  /** Chave do subitem ativo dentro da seção atual (Financeiro/Time/Metas)
-   * — undefined quando a seção ativa não tem subnav (ver `SECTION_SUBNAV`
-   * em `@/lib/section-nav`). */
-  activeSubTab?: string;
-  onSelectSubTab?: (section: SectionKey, subKey: string) => void;
 }) {
   const [ws, setWs] = useState<Workspace>(() =>
     typeof window !== "undefined" ? loadWorkspace() : { nome: "Você no Hype" },
@@ -314,7 +304,12 @@ export function AppShell({
   const hasOverdueDespesas = useHasOverdueDespesas();
   const { unseenCount: unseenLeads, markSeen: markLeadsSeen } = useLeadNotifications();
   const access = useMyAccess();
-  const [bugsOpen, setBugsOpen] = useState(false);
+
+  // Contexto do "Reportar problema": última tela visitada fora de Problemas.
+  const routerLocation = useRouterState({ select: (st) => st.location });
+  useEffect(() => {
+    rememberNavigationContext(routerLocation.pathname + routerLocation.searchStr, active);
+  }, [routerLocation.pathname, routerLocation.searchStr, active]);
 
   const [collapsed, setCollapsedState] = useState(
     () => typeof window !== "undefined" && localStorage.getItem("sidebar:collapsed") === "1",
@@ -337,42 +332,6 @@ export function AppShell({
   useEffect(() => {
     setMobileOpen(false);
   }, [active]);
-
-  // Grupos com subitens abertos/recolhidos (rodada corretiva da Etapa 3)
-  // — só isso é persistido em localStorage; a página ATIVA nunca vem daqui,
-  // sempre da rota (`active`/`activeSubTab`, controlados por `time.tsx`).
-  const [expandedNav, setExpandedNav] = useState<Set<SectionKey>>(() => {
-    let stored: unknown = [];
-    try {
-      stored = JSON.parse(localStorage.getItem("sidebar:expanded") ?? "[]");
-    } catch {
-      stored = [];
-    }
-    const set = new Set<SectionKey>(Array.isArray(stored) ? stored : []);
-    if (SECTION_SUBNAV[active]) set.add(active);
-    return set;
-  });
-  // Ao navegar pra uma seção com subnav ainda não vista nesta sessão,
-  // abre o grupo automaticamente — mas só adiciona, nunca remove, então
-  // um recolhimento manual do grupo atualmente ativo não é desfeito por
-  // esse efeito (só dispara de novo se `active` mudar).
-  useEffect(() => {
-    if (!SECTION_SUBNAV[active]) return;
-    setExpandedNav((prev) => (prev.has(active) ? prev : new Set(prev).add(active)));
-  }, [active]);
-  const toggleExpanded = (key: SectionKey) => {
-    setExpandedNav((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      try {
-        localStorage.setItem("sidebar:expanded", JSON.stringify([...next]));
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
-  };
 
   // Foco/Escape do menu mobile: ao abrir, entra no primeiro item de
   // navegação (leitor de tela já sabe que um novo painel apareceu); ao
@@ -410,7 +369,7 @@ export function AppShell({
     <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
       <BomDiaDialog />
       <MeetingReminderToast />
-      <BugReportButton />
+      <ReportProblemSheet />
       {mobileOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/40 md:hidden"
@@ -455,24 +414,18 @@ export function AppShell({
 
         <nav ref={mobileNavRef} className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
           {groups.map((group) => (
-            <div key={group.title} className="mb-4">
+            <div
+              key={group.title}
+              className={showFull ? "mb-3" : "mb-2 border-b border-border/50 pb-2 last:border-0"}
+            >
               {showFull && (
-                <div className="px-2 py-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                <div className="px-2.5 pb-1 pt-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">
                   {group.title}
                 </div>
               )}
-              <ul className="space-y-1">
+              <ul className="space-y-0.5">
                 {group.items.map((item) => {
-                  const subnav = SECTION_SUBNAV[item.key];
-                  const hasSubnav = !!subnav;
-                  const isActiveSection = active === item.key;
-                  // Só recebe o tratamento "ativo" (fundo brand-subtle,
-                  // texto/ícone brand) quem NÃO tem subpáginas — quando
-                  // tem, só a subpágina fica marcada como ativa, o pai
-                  // fica neutro (nunca dupla seleção). Ver rodada
-                  // corretiva §1.
-                  const isActiveLeaf = isActiveSection && !hasSubnav;
-                  const expanded = hasSubnav && expandedNav.has(item.key);
+                  const isActive = active === item.key;
                   const Icon = item.icon;
                   const allowed = hasPermission(access, SECTION_PERMISSION[item.key]);
                   const showDot =
@@ -484,138 +437,59 @@ export function AppShell({
                     allowed && item.key === "financeiro" && hasOverdueDespesas;
                   return (
                     <li key={item.key}>
-                      <button
-                        type="button"
+                      <NavButton
+                        label={item.label}
+                        icon={<Icon className="h-4 w-4" aria-hidden="true" />}
+                        active={isActive}
                         disabled={!allowed}
-                        onClick={() => {
-                          if (!allowed) return;
-                          onSelect(item.key);
-                          if (item.key === "comercial") void markLeadsSeen();
-                        }}
+                        collapsed={!showFull}
                         title={
                           !allowed
                             ? "Sem permissão para acessar esta seção"
                             : showOverdueWarning
                               ? "Há despesas vencidas"
-                              : !showFull
-                                ? item.label
-                                : undefined
+                              : undefined
                         }
-                        aria-current={isActiveLeaf ? "page" : undefined}
-                        className={`relative flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
-                          !showFull ? "justify-center" : ""
-                        } ${
-                          !allowed
-                            ? "cursor-not-allowed text-muted-foreground/40"
-                            : isActiveLeaf
-                              ? "bg-brand-subtle font-medium text-brand"
-                              : hasSubnav && isActiveSection
-                                ? // Pai com subpágina ativa: neutro, só um
-                                  // pouco mais forte que o resto — nunca
-                                  // parece a página selecionada.
-                                  "pill-nav-item font-medium text-foreground"
-                                : "pill-nav-item text-muted-foreground"
-                        }`}
-                      >
-                        {isActiveLeaf && (
-                          <span
-                            aria-hidden="true"
-                            className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-brand"
-                          />
-                        )}
-                        <span className="relative shrink-0">
-                          <Icon className="h-4 w-4" aria-hidden="true" />
-                          {showDot && !showFull && (
-                            <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-destructive" />
-                          )}
-                          {showOverdueWarning && !showFull && (
-                            <AlertTriangle className="absolute -right-1.5 -top-1.5 h-3 w-3 fill-amber-500 text-background" />
-                          )}
-                          {!allowed && (
-                            <Lock className="absolute -right-1 -top-1 h-2.5 w-2.5 text-muted-foreground/60" />
-                          )}
-                        </span>
-                        {showFull && (
-                          <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
-                            {item.label}
+                        badge={
+                          <>
                             {showDot && (
-                              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />
+                              <span
+                                aria-label="Novidades"
+                                className={
+                                  showFull
+                                    ? "h-1.5 w-1.5 shrink-0 rounded-full bg-destructive"
+                                    : "absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-destructive"
+                                }
+                              />
                             )}
                             {showOverdueWarning && (
-                              <AlertTriangle className="h-3.5 w-3.5 shrink-0 fill-amber-500 text-background" />
+                              <AlertTriangle
+                                aria-label="Despesas vencidas"
+                                className={
+                                  showFull
+                                    ? "h-3.5 w-3.5 shrink-0 fill-amber-500 text-background"
+                                    : "absolute right-0.5 top-0.5 h-3 w-3 fill-amber-500 text-background"
+                                }
+                              />
                             )}
-                          </span>
-                        )}
-                        {showFull && hasSubnav && allowed && (
-                          <span
-                            role="button"
-                            tabIndex={0}
-                            aria-label={
-                              expanded ? `Recolher ${item.label}` : `Expandir ${item.label}`
-                            }
-                            aria-expanded={expanded}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleExpanded(item.key);
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                toggleExpanded(item.key);
-                              }
-                            }}
-                            className="shrink-0 rounded p-1.5 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-                          >
-                            <ChevronRight
-                              className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-90" : ""}`}
-                              aria-hidden="true"
-                            />
-                          </span>
-                        )}
-                      </button>
-                      {/* Subitens recolhíveis — visíveis quando o grupo
-                       * está expandido (independente de rota; ver
-                       * `expandedNav` acima), nunca escondidos só porque
-                       * a seção deixou de ser a ativa. */}
-                      {showFull && expanded && subnav && (
-                        <ul className="mt-1 space-y-0.5 border-l border-border pl-3.5">
-                          {subnav.map((sub) => {
-                            const subActive = isActiveSection && activeSubTab === sub.key;
-                            return (
-                              <li key={sub.key}>
-                                <button
-                                  type="button"
-                                  aria-current={subActive ? "page" : undefined}
-                                  onClick={() => {
-                                    onSelectSubTab?.(item.key, sub.key);
-                                    // O `useEffect` que fecha o drawer no
-                                    // mobile só reage a troca de SEÇÃO
-                                    // (`active`) — trocar de subitem
-                                    // dentro da mesma seção não muda
-                                    // `active`, então fecha aqui também
-                                    // (bug real encontrado nesta rodada).
-                                    setMobileOpen(false);
-                                  }}
-                                  className={`relative w-full truncate rounded-md px-2.5 py-1.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
-                                    subActive
-                                      ? "bg-brand-subtle font-medium text-brand"
-                                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                                  }`}
-                                >
-                                  {subActive && (
-                                    <span
-                                      aria-hidden="true"
-                                      className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-brand"
-                                    />
-                                  )}
-                                  {sub.label}
-                                </button>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      )}
+                            {!allowed && (
+                              <Lock
+                                aria-hidden
+                                className={
+                                  showFull
+                                    ? "h-3 w-3 shrink-0 text-muted-foreground/60"
+                                    : "absolute right-1 top-1 h-2.5 w-2.5 text-muted-foreground/60"
+                                }
+                              />
+                            )}
+                          </>
+                        }
+                        onClick={() => {
+                          if (!allowed) return;
+                          onSelect(item.key);
+                          if (item.key === "comercial") void markLeadsSeen();
+                        }}
+                      />
                     </li>
                   );
                 })}
@@ -627,49 +501,28 @@ export function AppShell({
         <div className="shrink-0 border-t border-border bg-background">
           {showFull && <SidebarProfile />}
 
-          <div className="border-t border-border p-3">
-            <button
-              type="button"
-              onClick={() => onSelect("configuracoes")}
-              title={!showFull ? "Configurações" : undefined}
-              className={`flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm transition-colors pill-nav-item ${
-                !showFull ? "justify-center" : ""
-              } ${
-                active === "configuracoes"
-                  ? "pill-nav-item-active font-medium"
-                  : "text-muted-foreground"
-              }`}
-            >
-              <Settings className="h-4 w-4 shrink-0" aria-hidden="true" />
-              {showFull && "Configurações"}
-            </button>
-            {access?.isAdmin && (
-              <button
-                type="button"
-                onClick={() => setBugsOpen(true)}
-                title={!showFull ? "Bugs reportados" : undefined}
-                className={`mt-1 flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors pill-nav-item ${
-                  !showFull ? "justify-center" : ""
-                }`}
-              >
-                <Bug className="h-4 w-4 shrink-0" aria-hidden="true" />
-                {showFull && "Bugs reportados"}
-              </button>
-            )}
-          </div>
+          <ul className="space-y-0.5 border-t border-border p-3">
+            <li>
+              <NavButton
+                label="Configurações"
+                icon={<Settings className="h-4 w-4" aria-hidden="true" />}
+                active={active === "configuracoes"}
+                collapsed={!showFull}
+                onClick={() => onSelect("configuracoes")}
+              />
+            </li>
+            <li>
+              <NavButton
+                label="Problemas"
+                icon={<LifeBuoy className="h-4 w-4" aria-hidden="true" />}
+                active={active === "problemas"}
+                collapsed={!showFull}
+                onClick={() => onSelect("problemas")}
+              />
+            </li>
+          </ul>
         </div>
       </aside>
-
-      {access?.isAdmin && (
-        <Dialog open={bugsOpen} onOpenChange={setBugsOpen}>
-          <DialogContent className="sm:max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="sr-only">Bugs reportados</DialogTitle>
-            </DialogHeader>
-            <BugsReportadosTab />
-          </DialogContent>
-        </Dialog>
-      )}
 
       <div
         className="flex h-screen min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
@@ -713,6 +566,59 @@ export function AppShell({
       </div>
       <TaskModalStack />
     </div>
+  );
+}
+
+/** Item da sidebar — um só componente para módulos e rodapé. Ativo:
+ * fundo neutro + marca lateral discreta (sem excesso de azul); recolhido:
+ * só o ícone, com o nome no `title`/`aria-label`. */
+function NavButton({
+  label,
+  icon,
+  active,
+  disabled,
+  collapsed,
+  title,
+  badge,
+  onClick,
+}: {
+  label: string;
+  icon: ReactNode;
+  active: boolean;
+  disabled?: boolean;
+  collapsed: boolean;
+  title?: string;
+  badge?: ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      title={title ?? (collapsed ? label : undefined)}
+      aria-label={collapsed ? label : undefined}
+      aria-current={active ? "page" : undefined}
+      className={`relative flex h-9 w-full items-center gap-3 rounded-md px-2.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
+        collapsed ? "justify-center" : ""
+      } ${
+        disabled
+          ? "cursor-not-allowed text-muted-foreground/40"
+          : active
+            ? "bg-muted font-medium text-foreground"
+            : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+      }`}
+    >
+      {active && (
+        <span
+          aria-hidden="true"
+          className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-brand"
+        />
+      )}
+      <span className="relative flex shrink-0 items-center">{icon}</span>
+      {!collapsed && <span className="min-w-0 flex-1 truncate">{label}</span>}
+      {badge}
+    </button>
   );
 }
 

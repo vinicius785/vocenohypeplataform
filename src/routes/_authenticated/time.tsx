@@ -69,6 +69,11 @@ function parseComercialSearch(s: Record<string, unknown>): {
 // ela — antes todas as 12 seções (algumas com milhares de linhas, ex.
 // ConfiguracoesSection/ChatSection) eram importadas estaticamente aqui e
 // entravam no bundle inicial mesmo que só "Início" fosse aberto.
+const ProblemasSection = lazy(() =>
+  import("@/components/problemas/ProblemasSection").then((m) => ({
+    default: m.ProblemasSection,
+  })),
+);
 const InicioDashboard = lazy(() =>
   import("@/components/InicioDashboard").then((m) => ({ default: m.InicioDashboard })),
 );
@@ -129,6 +134,7 @@ const VALID: SectionKey[] = [
   "metas",
   "chat",
   "configuracoes",
+  "problemas",
 ];
 
 export const Route = createFileRoute("/_authenticated/time")({
@@ -197,6 +203,10 @@ const SECTIONS: Record<SectionKey, { title: string; description: string }> = {
   metas: { title: "Metas", description: "Metas do time, com progresso e prazos." },
   chat: { title: "Chat", description: "Conversas do time." },
   configuracoes: { title: "Configurações", description: "Preferências do workspace." },
+  problemas: {
+    title: "Problemas",
+    description: "Reporte problemas, acompanhe solicitações e veja o que já foi identificado.",
+  },
 };
 
 function TimePage() {
@@ -235,34 +245,6 @@ function TimePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
-  // Subitem ativo da sidebar — só relevante pras seções com subnav
-  // (`SECTION_SUBNAV`: Financeiro/Metas); as outras seções passam
-  // `undefined` e a sidebar simplesmente não renderiza subitens.
-  // "Reuniões" saiu daqui na Fase 3 (voltou a ser `SegmentedControl` +
-  // botão dentro da própria página, gerenciando seu próprio `?view=`
-  // diretamente via `useNavigate`, mesmo padrão de `ComercialSection`).
-  const activeSubTab =
-    active === "financeiro"
-      ? resolveFinanceiroTab(search.financeiroTab)
-      : active === "metas"
-        ? resolveMetasTab(search.metasView)
-        : undefined;
-  const onSelectSubTab = (section: SectionKey, subKey: string) => {
-    if (section === "financeiro") {
-      void navigate({
-        to: "/time",
-        search: (prev) => ({ ...prev, section, financeiroTab: subKey as FinanceiroTab }),
-        replace: true,
-      });
-    } else if (section === "metas") {
-      void navigate({
-        to: "/time",
-        search: (prev) => ({ ...prev, section, metasView: subKey as MetasTab }),
-        replace: true,
-      });
-    }
-  };
-
   const section = SECTIONS[active];
   const access = useMyAccess();
   // "configuracoes" fica de fora aqui: a própria tela filtra suas abas
@@ -271,12 +253,7 @@ function TimePage() {
   const allowed = active === "configuracoes" || hasPermission(access, SECTION_PERMISSION[active]);
 
   return (
-    <AppShell
-      active={active}
-      onSelect={setActive}
-      activeSubTab={activeSubTab}
-      onSelectSubTab={onSelectSubTab}
-    >
+    <AppShell active={active} onSelect={setActive}>
       {!allowed ? (
         <LockedSection title={section.title} />
       ) : (
@@ -299,6 +276,8 @@ function TimePage() {
             <ProjetosSection />
           ) : active === "comercial" ? (
             <ComercialSection />
+          ) : active === "problemas" ? (
+            <ProblemasSection />
           ) : active === "configuracoes" ? (
             <ConfiguracoesSection />
           ) : active === "financeiro" ? (

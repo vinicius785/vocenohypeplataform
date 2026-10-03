@@ -17,7 +17,8 @@ import { RelatoriosTab } from "./financeiro/RelatoriosTab";
 import { EntryDialog } from "./financeiro/EntryDialog";
 import { useClientes } from "@/lib/clientes-store";
 import { type ManualEntry, createManualEntry } from "@/lib/financeiro-entries";
-import { resolveFinanceiroTab, type FinanceiroTab } from "@/lib/section-nav";
+import { FINANCEIRO_TABS, resolveFinanceiroTab, type FinanceiroTab } from "@/lib/section-nav";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 
 /* ============================================================
  * Financeiro — central financeira da agência.
@@ -92,8 +93,8 @@ export function FinanceiroSection() {
   const clientes = useClientes();
   const filtered = useFinanceiroFilteredEntries();
   // Etapa 3: a aba ativa mora na URL (mesmo mecanismo de `?metasView=`) —
-  // a barra interna foi removida, a navegação agora é pelos subitens de
-  // Financeiro na sidebar; sobrevive a refresh e permite link direto.
+  // a navegação entre subpáginas é a barra interna abaixo do título (a
+  // sidebar só leva ao módulo); sobrevive a refresh e permite link direto.
   const search = useSearch({ from: "/_authenticated/time" });
   const navigate = useNavigate();
   const topTab = resolveFinanceiroTab(search.financeiroTab);
@@ -158,6 +159,15 @@ export function FinanceiroSection() {
           </div>
         </div>
 
+        <div className="-mx-4 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:px-0 [&::-webkit-scrollbar]:hidden">
+          <SegmentedControl
+            aria-label="Seções do Financeiro"
+            value={topTab}
+            onChange={setTopTab}
+            options={FINANCEIRO_TABS.map((t) => ({ value: t.key, label: t.label }))}
+          />
+        </div>
+
         {/* Resumo (Etapa 6) tem sua própria toolbar compacta, integrada à
          * composição bento em `VisaoGeralTab.tsx` — a barra de largura
          * total abaixo só continua pras demais páginas com período
@@ -168,9 +178,9 @@ export function FinanceiroSection() {
           </div>
         )}
 
-        {/* Navegação entre estas 6 subpáginas é pelos subitens de
-         * "Financeiro" na sidebar (`SECTION_SUBNAV.financeiro`) — a aba
-         * ativa vem da URL, nunca uma barra/pill interna aqui. */}
+        {/* Subpáginas do Financeiro — navegação contextual do módulo (a
+         * sidebar global só leva ao Financeiro). Mesma URL de antes
+         * (`?financeiroTab=`). */}
         <div>
           {topTab === "resumo" && (
             <VisaoGeralTab

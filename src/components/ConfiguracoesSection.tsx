@@ -11,20 +11,9 @@ import {
   Lock,
   Download,
   Sliders,
-  Bug,
-  ImageIcon,
-  Trash2,
   ShieldCheck,
 } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import {
-  listBugReports,
-  deleteBugReport,
-  getBugScreenshotUrl,
-  type BugReport,
-} from "@/lib/bug-reports";
 import { getMe, setStatus as setPresenceStatus, type MemberStatus } from "@/lib/chat-store";
-import { useConfirm } from "@/hooks/use-confirm";
 import { useMyAccess, hasPermission } from "@/lib/permissions";
 import { resolveConfigTab, type ConfigTab } from "@/lib/section-nav";
 import { ConfiguracoesLayout } from "@/components/configuracoes/ConfiguracoesLayout";
@@ -192,127 +181,6 @@ export function ConfiguracoesSection() {
       {tab === "log_auditoria" && <AuditLogTab isAdmin={isAdmin} />}
       {tab === "score_operacional" && <ScoreOperacionalSection isAdmin={isAdmin} />}
     </ConfiguracoesLayout>
-  );
-}
-
-/** Movido de `TeamAdminSection.tsx` — área exclusiva de admin/superadmin,
- * fora das configurações normais (NÃO faz parte da navegação de
- * Configurações). Exportado pra `AppShell.tsx` renderizar num botão
- * próprio no rodapé, visível só pra admin. */
-export function BugsReportadosTab() {
-  const [reports, setReports] = useState<BugReport[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [preview, setPreview] = useState<{ id: string; url: string } | null>(null);
-  const { confirm, confirmDialog } = useConfirm();
-
-  const load = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      setReports(await listBugReports("plataforma"));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao carregar relatos.");
-    }
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    void load();
-  }, []);
-
-  const handleDelete = async (r: BugReport) => {
-    const ok = await confirm("Remover este relato de bug?");
-    if (!ok) return;
-    try {
-      await deleteBugReport(r.id, r.screenshotPath);
-      setReports((prev) => prev.filter((x) => x.id !== r.id));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao remover.");
-    }
-  };
-
-  const handlePreview = async (r: BugReport) => {
-    if (!r.screenshotPath) return;
-    try {
-      const url = await getBugScreenshotUrl(r.screenshotPath);
-      setPreview({ id: r.id, url });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao carregar print.");
-    }
-  };
-
-  return (
-    <div className="max-w-lg space-y-4">
-      {confirmDialog}
-      <div className="space-y-3 rounded-lg border border-border bg-background p-4">
-        <div className="flex items-center gap-2">
-          <Bug className="h-4 w-4 text-muted-foreground" />
-          <h3 className="text-sm font-semibold">Bugs reportados</h3>
-          {reports.length > 0 && (
-            <span className="rounded-full bg-destructive/15 px-2 py-0.5 text-xs font-medium text-destructive">
-              {reports.length}
-            </span>
-          )}
-        </div>
-        <div className="max-h-[420px] space-y-2 overflow-y-auto">
-          {error && <p className="text-xs text-destructive">{error}</p>}
-          {loading && <p className="text-xs text-muted-foreground">Carregando...</p>}
-          {!loading && reports.length === 0 && (
-            <p className="text-xs text-muted-foreground">Nenhum bug reportado até agora.</p>
-          )}
-          {reports.map((r) => (
-            <div
-              key={r.id}
-              className="flex flex-col gap-2 rounded-lg border border-border p-3 sm:flex-row sm:items-start sm:justify-between"
-            >
-              <div className="min-w-0 flex-1 space-y-1">
-                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">
-                    {r.reporterName || r.clientLabel || "Sem nome"}
-                  </span>
-                  <span>{new Date(r.createdAt).toLocaleString("pt-BR")}</span>
-                  {r.pageContext && <span className="truncate">{r.pageContext}</span>}
-                </div>
-                <p className="whitespace-pre-wrap text-sm text-foreground">{r.description}</p>
-                {r.screenshotPath && (
-                  <button
-                    type="button"
-                    onClick={() => handlePreview(r)}
-                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                  >
-                    <ImageIcon className="h-3.5 w-3.5" />
-                    Ver print
-                  </button>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => handleDelete(r)}
-                className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:text-destructive"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <Dialog open={!!preview} onOpenChange={(o) => !o && setPreview(null)}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Print anexado</DialogTitle>
-          </DialogHeader>
-          {preview && (
-            <img
-              src={preview.url}
-              alt="Print do bug"
-              className="w-full rounded-md border border-border"
-            />
-          )}
-        </DialogContent>
-      </Dialog>
-    </div>
   );
 }
 

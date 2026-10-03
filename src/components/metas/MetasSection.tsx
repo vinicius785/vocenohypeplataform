@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useSearch } from "@tanstack/react-router";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { Plus, Target, TrendingUp } from "lucide-react";
 import { PageContainer } from "@/components/shared/PageContainer";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { resolveMetasTab } from "@/lib/section-nav";
+import { METAS_TABS, resolveMetasTab, type MetasTab } from "@/lib/section-nav";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { useConfirm } from "@/hooks/use-confirm";
 import { getMe } from "@/lib/chat-store";
 import { loadTeamMembers } from "@/lib/projetos";
@@ -53,6 +54,13 @@ export function MetasSection() {
 
   const search = useSearch({ from: "/_authenticated/time" });
   const metasView = resolveMetasTab(search.metasView);
+  const navigate = useNavigate();
+  const setMetasView = (v: MetasTab) =>
+    void navigate({
+      to: "/time",
+      search: (prev) => ({ ...prev, metasView: v }),
+      replace: true,
+    });
 
   const [viewStack, setViewStack] = useState<MetasView[]>([{ kind: "list" }]);
   const view = viewStack[viewStack.length - 1];
@@ -315,10 +323,8 @@ export function MetasSection() {
   return (
     <div className="-m-4 min-h-[calc(100vh-4rem)] bg-muted p-4 dark:bg-transparent md:-m-8 md:p-8">
       <PageContainer className="space-y-6">
-        {/* Etapa 3: barra interna removida — Objetivos/Indicadores agora
-         * são subitens de "Metas" na sidebar (`SECTION_SUBNAV.metas`);
-         * `metasView` continua vindo da URL, só deixou de ter um controle
-         * visual dentro da página. */}
+        {/* Objetivos/Indicadores: navegação contextual do módulo (a sidebar
+         * global só leva a Metas); `metasView` continua na URL. */}
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="text-[36px] font-bold leading-[1.05] tracking-tight text-foreground md:text-[42px]">
@@ -370,6 +376,13 @@ export function MetasSection() {
             </DropdownMenu>
           )}
         </div>
+
+        <SegmentedControl
+          aria-label="Seções de Metas"
+          value={metasView}
+          onChange={setMetasView}
+          options={METAS_TABS.map((t) => ({ value: t.key, label: t.label }))}
+        />
 
         {metasView === "indicadores" ? (
           <IndicadoresView

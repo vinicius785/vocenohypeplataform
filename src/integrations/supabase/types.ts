@@ -197,51 +197,195 @@ export type Database = {
         };
         Relationships: [];
       };
+      bug_report_attachments: {
+        Row: {
+          comment_id: string | null;
+          created_at: string;
+          id: string;
+          mime: string | null;
+          name: string;
+          path: string;
+          report_id: string;
+          size_bytes: number | null;
+          uploaded_by: string | null;
+        };
+        Insert: {
+          comment_id?: string | null;
+          created_at?: string;
+          id?: string;
+          mime?: string | null;
+          name: string;
+          path: string;
+          report_id: string;
+          size_bytes?: number | null;
+          uploaded_by?: string | null;
+        };
+        Update: {
+          comment_id?: string | null;
+          created_at?: string;
+          id?: string;
+          mime?: string | null;
+          name?: string;
+          path?: string;
+          report_id?: string;
+          size_bytes?: number | null;
+          uploaded_by?: string | null;
+        };
+        Relationships: [];
+      };
+      bug_report_comments: {
+        Row: {
+          author_id: string;
+          author_name: string;
+          body: string;
+          created_at: string;
+          id: string;
+          is_internal: boolean;
+          report_id: string;
+        };
+        Insert: {
+          author_id?: string;
+          author_name?: string;
+          body: string;
+          created_at?: string;
+          id?: string;
+          is_internal?: boolean;
+          report_id: string;
+        };
+        Update: {
+          author_id?: string;
+          author_name?: string;
+          body?: string;
+          created_at?: string;
+          id?: string;
+          is_internal?: boolean;
+          report_id?: string;
+        };
+        Relationships: [];
+      };
+      bug_report_diagnostics: {
+        Row: {
+          created_at: string;
+          data: Json;
+          report_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          data?: Json;
+          report_id: string;
+        };
+        Update: {
+          created_at?: string;
+          data?: Json;
+          report_id?: string;
+        };
+        Relationships: [];
+      };
+      bug_report_events: {
+        Row: {
+          actor_id: string | null;
+          actor_name: string;
+          created_at: string;
+          data: Json;
+          event_type: string;
+          id: string;
+          report_id: string;
+        };
+        Insert: {
+          actor_id?: string | null;
+          actor_name?: string;
+          created_at?: string;
+          data?: Json;
+          event_type: string;
+          id?: string;
+          report_id: string;
+        };
+        Update: {
+          actor_id?: string | null;
+          actor_name?: string;
+          created_at?: string;
+          data?: Json;
+          event_type?: string;
+          id?: string;
+          report_id?: string;
+        };
+        Relationships: [];
+      };
       bug_reports: {
         Row: {
+          area: string | null;
+          assignee_id: string | null;
+          assignee_name: string | null;
           client_label: string | null;
           created_at: string;
           description: string;
           id: string;
           kind: string;
           page_context: string | null;
+          priority: string;
           reporter_id: string | null;
           reporter_name: string;
+          resolution_note: string | null;
           resolved: boolean;
           resolved_at: string | null;
+          resolved_by: string | null;
+          resolved_by_name: string | null;
           scope: string | null;
           screenshot_path: string | null;
           source: string;
+          status: string;
+          title: string | null;
+          updated_at: string;
         };
         Insert: {
+          area?: string | null;
+          assignee_id?: string | null;
+          assignee_name?: string | null;
           client_label?: string | null;
           created_at?: string;
           description: string;
           id?: string;
           kind?: string;
           page_context?: string | null;
+          priority?: string;
           reporter_id?: string | null;
           reporter_name?: string;
+          resolution_note?: string | null;
           resolved?: boolean;
           resolved_at?: string | null;
+          resolved_by?: string | null;
+          resolved_by_name?: string | null;
           scope?: string | null;
           screenshot_path?: string | null;
           source?: string;
+          status?: string;
+          title?: string | null;
+          updated_at?: string;
         };
         Update: {
+          area?: string | null;
+          assignee_id?: string | null;
+          assignee_name?: string | null;
           client_label?: string | null;
           created_at?: string;
           description?: string;
           id?: string;
           kind?: string;
           page_context?: string | null;
+          priority?: string;
           reporter_id?: string | null;
           reporter_name?: string;
+          resolution_note?: string | null;
           resolved?: boolean;
           resolved_at?: string | null;
+          resolved_by?: string | null;
+          resolved_by_name?: string | null;
           scope?: string | null;
           screenshot_path?: string | null;
           source?: string;
+          status?: string;
+          title?: string | null;
+          updated_at?: string;
         };
         Relationships: [];
       };
@@ -3610,6 +3754,10 @@ export type Database = {
           p_task_scope: string;
         };
         Returns: string;
+      };
+      can_manage_problems: {
+        Args: { _user_id: string };
+        Returns: boolean;
       };
       get_member_response_time: {
         Args: { p_from: string; p_to: string; p_user_id: string };

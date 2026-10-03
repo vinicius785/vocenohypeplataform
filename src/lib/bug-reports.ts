@@ -2,10 +2,10 @@ import { supabase } from "@/integrations/supabase/client";
 
 export type BugReportKind = "bug" | "sugestao";
 export type BugReportScope = "influenciador" | "backoffice";
-/** "plataforma" = botão flutuante global "Encontrou um bug?" (ou portal do
- * cliente) — bug do HypeApp enquanto ferramenta. "hypeapp" = formulário
- * dedicado do Projeto HypeApp — bug/sugestão sobre o produto HypeApp em si.
- * São conceitos diferentes e nunca aparecem juntos nas listagens. */
+/** "plataforma" = Central de Problemas (`@/lib/problems`, seção "Problemas")
+ * e o feedback do portal do cliente. "hypeapp" = formulário dedicado do
+ * Projeto HypeApp — bug/sugestão sobre o produto HypeApp em si (este
+ * módulo). São conceitos diferentes e nunca aparecem juntos nas listagens. */
 export type BugReportSource = "plataforma" | "hypeapp";
 
 export type BugReport = {
