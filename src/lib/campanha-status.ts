@@ -76,23 +76,22 @@ export const INFLU_STATUS_LABEL_CLIENTE: Record<InfluStatus, string> = {
   RECUSADO: "Não aprovado",
 };
 
-// Cores corrigidas (rodada corretiva forte): "Inscrito" é neutro (chegou,
-// nada aconteceu ainda), "Em curadoria" é azul (time trabalhando nisso —
-// mesma cor de "em andamento" em Tarefas), "Enviado ao cliente" usa
-// violeta (não amber — amber fica reservado pra alerta/atenção real, não
-// pra "aguardando alguém"), "Aprovado" verde, "Recusado" vermelho. Único
-// lugar que define essas cores — Kanban, pill e badge leem daqui.
+// Paleta com propósito (cor comunica estado, não decora): neutro pra tudo
+// que está em andamento/aguardando (o rótulo já diz o quê), verde só pra
+// resultado positivo (aprovado/publicado), vermelho só pra recusa e âmbar só
+// pro que exige retrabalho (ajustes). Único lugar que define essas cores —
+// Kanban, pill, badge e portal leem daqui.
 export const INFLU_STATUS_TONE: Record<InfluStatus, string> = {
   INSCRITO: "bg-muted text-muted-foreground",
-  EM_CURADORIA: "bg-sky-500/10 text-sky-700 dark:text-sky-400",
-  ENVIADO_AO_CLIENTE: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
+  EM_CURADORIA: "bg-muted text-muted-foreground",
+  ENVIADO_AO_CLIENTE: "bg-muted text-foreground",
   APROVADO: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
   RECUSADO: "bg-red-500/10 text-red-700 dark:text-red-400",
 };
 export const INFLU_STATUS_BORDER: Record<InfluStatus, string> = {
   INSCRITO: "border-muted-foreground/40",
-  EM_CURADORIA: "border-sky-500",
-  ENVIADO_AO_CLIENTE: "border-violet-500",
+  EM_CURADORIA: "border-muted-foreground/40",
+  ENVIADO_AO_CLIENTE: "border-muted-foreground/70",
   APROVADO: "border-emerald-500",
   RECUSADO: "border-red-500",
 };
@@ -185,22 +184,22 @@ export const ENTREGA_STAGE_LABEL_CLIENTE: Record<EntregaStage, string> = {
 
 export const ENTREGA_STAGE_TONE: Record<EntregaStage, string> = {
   ROTEIRO_PRODUCAO: "bg-muted text-muted-foreground",
-  ROTEIRO_APROVACAO: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  ROTEIRO_AJUSTES: "bg-orange-500/10 text-orange-700 dark:text-orange-400",
-  PRODUCAO: "bg-sky-500/10 text-sky-700 dark:text-sky-400",
-  CONTEUDO_APROVACAO: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  CONTEUDO_AJUSTES: "bg-orange-500/10 text-orange-700 dark:text-orange-400",
-  PUBLICACAO: "bg-teal-500/10 text-teal-700 dark:text-teal-400",
+  ROTEIRO_APROVACAO: "bg-muted text-foreground",
+  ROTEIRO_AJUSTES: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  PRODUCAO: "bg-muted text-muted-foreground",
+  CONTEUDO_APROVACAO: "bg-muted text-foreground",
+  CONTEUDO_AJUSTES: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  PUBLICACAO: "bg-muted text-foreground",
   PUBLICADA: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
 };
 export const ENTREGA_STAGE_BORDER: Record<EntregaStage, string> = {
   ROTEIRO_PRODUCAO: "border-muted-foreground/40",
-  ROTEIRO_APROVACAO: "border-amber-500",
-  ROTEIRO_AJUSTES: "border-orange-500",
-  PRODUCAO: "border-sky-500",
-  CONTEUDO_APROVACAO: "border-amber-500",
-  CONTEUDO_AJUSTES: "border-orange-500",
-  PUBLICACAO: "border-teal-500",
+  ROTEIRO_APROVACAO: "border-muted-foreground/70",
+  ROTEIRO_AJUSTES: "border-amber-500",
+  PRODUCAO: "border-muted-foreground/40",
+  CONTEUDO_APROVACAO: "border-muted-foreground/70",
+  CONTEUDO_AJUSTES: "border-amber-500",
+  PUBLICACAO: "border-muted-foreground/70",
   PUBLICADA: "border-emerald-500",
 };
 

@@ -511,8 +511,8 @@ const INFLU_STATUS_PLURAL: Record<InfluStatus, string> = {
 /** Pontinho de cor do resumo — mesma família de cor de `INFLU_STATUS_TONE`. */
 const INFLU_STATUS_DOT: Record<InfluStatus, string> = {
   INSCRITO: "bg-muted-foreground/60",
-  EM_CURADORIA: "bg-sky-500",
-  ENVIADO_AO_CLIENTE: "bg-violet-500",
+  EM_CURADORIA: "bg-muted-foreground/60",
+  ENVIADO_AO_CLIENTE: "bg-muted-foreground",
   APROVADO: "bg-emerald-500",
   RECUSADO: "bg-red-500",
 };
@@ -2414,22 +2414,6 @@ function InfluCard({
               <User className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
             )}
           </div>
-          {approval && (
-            <span
-              aria-hidden
-              className={`absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-background ${
-                approval.status === "aprovado"
-                  ? "bg-emerald-500 text-white"
-                  : "bg-rose-500 text-white"
-              }`}
-            >
-              {approval.status === "aprovado" ? (
-                <CheckCircle2 className="h-2.5 w-2.5" />
-              ) : (
-                <XCircle className="h-2.5 w-2.5" />
-              )}
-            </span>
-          )}
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-foreground">
@@ -2775,9 +2759,11 @@ function InfluStatusPill({
 function NextActionBadge({ actor }: { actor: NextActor }) {
   if (!actor) return null;
   const tone: Record<Exclude<NextActor, null>, string> = {
-    hype: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-    cliente: "bg-sky-500/10 text-sky-700 dark:text-sky-400",
-    influenciador: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
+    // Azul só quando a bola está com o time (é a nossa ação); cliente e
+    // influenciador são só contexto, em neutro.
+    hype: "bg-brand-subtle text-brand",
+    cliente: "bg-muted text-muted-foreground",
+    influenciador: "bg-muted text-muted-foreground",
   };
   return (
     <span

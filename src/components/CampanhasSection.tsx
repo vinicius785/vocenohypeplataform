@@ -5,7 +5,6 @@ import {
   AlertTriangle,
   ArrowLeft,
   Calendar,
-  Check,
   ExternalLink,
   ImageIcon,
   Link as LinkIcon,
@@ -20,7 +19,8 @@ import {
   UserPlus,
   Wallet,
   ChevronDown,
-  LayoutGrid,
+  Archive,
+  ArchiveRestore,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -194,6 +195,18 @@ export function CampanhasSection() {
     [influsVersion, rows],
   );
 
+  // Indicadores da LISTAGEM (card, "Visão geral", filtro e ordenação por
+  // influenciadores) contam só quem já foi aprovado — quem ainda está em
+  // inscrição/curadoria/aprovação continua na campanha, mas não entra nos
+  // números operacionais daqui (o detalhe da campanha mostra tudo).
+  const aprovadosByCampanha = useMemo(() => {
+    const map = new Map<string, Influ[]>();
+    for (const [id, list] of influsByCampanha) {
+      map.set(id, getEligibleCampaignInfluencers(list));
+    }
+    return map;
+  }, [influsByCampanha]);
+
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<CampanhaFiltersState>(DEFAULT_CAMPANHA_FILTERS);
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -249,8 +262,8 @@ export function CampanhasSection() {
   // não há mais uma segunda lista separada, é só mais um valor do mesmo
   // filtro de status que já existe pros outros dois.
   const filteredRows = useMemo(
-    () => filterCampanhas(rows, query, filters, influsByCampanha),
-    [rows, query, filters, influsByCampanha],
+    () => filterCampanhas(rows, query, filters, aprovadosByCampanha, influsByCampanha),
+    [rows, query, filters, aprovadosByCampanha, influsByCampanha],
   );
   const visibleRows = useMemo(
     () =>
@@ -262,9 +275,9 @@ export function CampanhasSection() {
             })
           : filteredRows,
         filters.sort,
-        influsByCampanha,
+        aprovadosByCampanha,
       ),
-    [filteredRows, filters.status, filters.sort, influsByCampanha],
+    [filteredRows, filters.status, filters.sort, aprovadosByCampanha],
   );
 
   if (current) {
@@ -281,7 +294,7 @@ export function CampanhasSection() {
   const totalCampanhas = rows.length;
   const ativas = rows.filter((r) => campanhaStatus(r.campanha) === "active").length;
   const emNegociacao = rows.filter((r) => campanhaStatus(r.campanha) === "planning").length;
-  const totalInflusReais = Array.from(influsByCampanha.values()).reduce(
+  const totalInflusReais = Array.from(aprovadosByCampanha.values()).reduce(
     (s, list) => s + list.length,
     0,
   );
@@ -371,7 +384,7 @@ export function CampanhasSection() {
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {visibleRows.map((row) => {
-              const influs = influsByCampanha.get(row.campanha.id) ?? [];
+              const influs = aprovadosByCampanha.get(row.campanha.id) ?? [];
               const entregas = influs.flatMap((i) => i.entregas ?? []);
               return (
                 <CampanhaCard
@@ -415,7 +428,7 @@ export function CampanhasSection() {
 const ENTREGAS_BOX_PREVIEW = 3;
 /** Container único das 4 caixas fixas da região inferior do detalhe. */
 const BOTTOM_BOX = "flex flex-col rounded-2xl bg-card p-4 dark:shadow-none";
-const BOTTOM_BOX_TITLE = "text-xs font-semibold uppercase tracking-wide text-text-secondary";
+const BOTTOM_BOX_TITLE = "text-xs font-semibold uppercase tracking-widest text-muted-foreground";
 
 function pagTipoResumo(t: PagTipo, cfg: PagamentoConfig): string {
   if (t === "Valor") return cfg.valor ? fmtBRL(parseMoney(cfg.valor)) : "";
@@ -593,7 +606,6 @@ function CampanhaDetail({
   const clientes = useClientes();
   const setClientes = clientesStore.set;
   const fullCliente = clientes.find((cl) => cl.id === cliente.id);
-  const [linkCopied, setLinkCopied] = useState(false);
   const copyClientLink = () => {
     if (!fullCliente) return;
     let token = fullCliente.publicToken;
@@ -603,10 +615,10 @@ function CampanhaDetail({
         prev.map((cl) => (cl.id === fullCliente.id ? { ...cl, publicToken: token } : cl)),
       );
     }
-    void navigator.clipboard.writeText(`${window.location.origin}/portal/${token}`).then(() => {
-      setLinkCopied(true);
-      setTimeout(() => setLinkCopied(false), 1500);
-    });
+    navigator.clipboard
+      .writeText(`${window.location.origin}/portal/${token}`)
+      .then(() => toast.success("Link do cliente copiado"))
+      .catch(() => toast.error("Não foi possível copiar o link"));
   };
 
   // Página de Inscrição pública — permite o influenciador se candidatar
@@ -878,7 +890,7 @@ function CampanhaDetail({
   const myAccess = useMyAccess();
   const canArchiveOrRestore = Boolean(myAccess?.isAdmin);
   const availableTransitions = CAMPANHA_STATUS_TRANSITIONS[status];
-  const canChangeStatus = availableTransitions.length > 0 || canArchiveOrRestore;
+  const canChangeStatus = availableTransitions.length > 0;
 
   return (
     // Canvas fix (mesma correção do Financeiro/Clientes/Campanhas): fundo
@@ -921,8 +933,6 @@ function CampanhaDetail({
             >
               <ArrowLeft className="h-3.5 w-3.5" /> Campanhas
             </button>
-            <span className="text-text-secondary">/</span>
-            <span className="min-w-0 truncate text-text-secondary">{c.nome}</span>
           </nav>
 
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -969,19 +979,6 @@ function CampanhaDetail({
                             {t.actionLabel}
                           </DropdownMenuItem>
                         ))}
-                        {canArchiveOrRestore && status !== "archived" && (
-                          <DropdownMenuItem
-                            onSelect={archiveCampaign}
-                            className="text-destructive focus:text-destructive"
-                          >
-                            {ARCHIVE_ACTION.actionLabel}
-                          </DropdownMenuItem>
-                        )}
-                        {canArchiveOrRestore && status === "archived" && (
-                          <DropdownMenuItem onSelect={() => void restoreCampaign()}>
-                            Restaurar campanha
-                          </DropdownMenuItem>
-                        )}
                       </DropdownMenuContent>
                     )}
                   </DropdownMenu>
@@ -1009,18 +1006,22 @@ function CampanhaDetail({
               </div>
             </div>
 
-            {/* Ações — uma primária (Editar), uma secundária discreta (Link do
-             * cliente), e um menu pras menos frequentes (Página de inscrição,
-             * Excluir com confirmação) — nunca vários botões com peso igual. */}
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {/* Ações — três níveis, cada coisa num único lugar: "Recursos"
+             * (tudo o que se abre/compartilha), "Editar" (a ação direta da
+             * página) e "⋮" (administrativo: arquivar/restaurar e, separado,
+             * excluir). Peso visual decrescente: Editar > Recursos > ⋮. */}
+            <div className="flex shrink-0 items-center gap-1.5">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" aria-haspopup="menu">
-                    <LayoutGrid className="h-3.5 w-3.5" /> Recursos
+                  <Button variant="ghost" size="sm" aria-haspopup="menu">
+                    Recursos
                     <ChevronDown className="h-3 w-3 text-text-secondary" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuContent align="end" className="w-60">
+                  <DropdownMenuLabel className="text-[11px] font-medium uppercase tracking-wide text-text-secondary">
+                    Operação
+                  </DropdownMenuLabel>
                   {(
                     [
                       ["documentos", docs.length],
@@ -1041,17 +1042,22 @@ function CampanhaDetail({
                       </DropdownMenuItem>
                     );
                   })}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-[11px] font-medium uppercase tracking-wide text-text-secondary">
+                    Compartilhamento
+                  </DropdownMenuLabel>
+                  <DropdownMenuItem onSelect={copyClientLink} disabled={!fullCliente}>
+                    <LinkIcon className="h-3.5 w-3.5 text-text-secondary" />
+                    <span className="min-w-0 flex-1 truncate">Link do cliente</span>
+                    <span className="text-[11px] text-text-secondary">Copiar</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setInscricaoOpen(true)} disabled={!fullCliente}>
+                    <UserPlus className="h-3.5 w-3.5 text-text-secondary" />
+                    <span className="min-w-0 flex-1 truncate">Página de inscrição</span>
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button variant="ghost" size="sm" onClick={copyClientLink} disabled={!fullCliente}>
-                {linkCopied ? (
-                  <Check className="h-3.5 w-3.5" />
-                ) : (
-                  <LinkIcon className="h-3.5 w-3.5" />
-                )}
-                {linkCopied ? "Link copiado!" : "Link do cliente"}
-              </Button>
-              <Button variant="primary" size="sm" onClick={() => setEditOpen(true)}>
+              <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
                 <Pencil className="h-3.5 w-3.5" /> Editar
               </Button>
               <DropdownMenu>
@@ -1059,16 +1065,25 @@ function CampanhaDetail({
                   <button
                     type="button"
                     aria-label="Mais ações"
-                    className="flex h-9 w-9 items-center justify-center rounded-full text-text-secondary hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                    className="flex h-8 w-8 items-center justify-center rounded-full text-text-secondary/80 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                   >
                     <MoreVertical className="h-4 w-4" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onSelect={() => setInscricaoOpen(true)} disabled={!fullCliente}>
-                    <UserPlus className="h-3.5 w-3.5" /> Página de inscrição
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
+                  {canArchiveOrRestore && status !== "archived" && (
+                    <DropdownMenuItem onSelect={archiveCampaign}>
+                      <Archive className="h-3.5 w-3.5 text-text-secondary" />
+                      {ARCHIVE_ACTION.actionLabel}
+                    </DropdownMenuItem>
+                  )}
+                  {canArchiveOrRestore && status === "archived" && (
+                    <DropdownMenuItem onSelect={() => void restoreCampaign()}>
+                      <ArchiveRestore className="h-3.5 w-3.5 text-text-secondary" />
+                      Restaurar campanha
+                    </DropdownMenuItem>
+                  )}
+                  {canArchiveOrRestore && <DropdownMenuSeparator />}
                   <DropdownMenuItem
                     onSelect={() => void requestDeleteCampanha()}
                     className="text-destructive focus:text-destructive"
@@ -1142,7 +1157,6 @@ function CampanhaDetail({
               label="Entregas"
               value={`${entregasPublicadas}/${allEntregas.length}`}
               complement={`${pctPublicadas}% publicadas`}
-              tone={entregasPublicadas > 0 ? "success" : undefined}
             />
             {orcamento > 0 && (
               <>
@@ -1253,7 +1267,7 @@ function CampanhaDetail({
          * de pagamento do cliente `pagClienteTipo`) NUNCA é renderizado nesta
          * página. Só dados operacionais: composição, pagamento aos
          * influenciadores (`pagTipos`/`pagConfig`/`prazoPag`), direitos. */}
-        <div className="grid items-start gap-3 md:grid-cols-2">
+        <div className="grid items-stretch gap-4 md:grid-cols-2">
           {/* 1. ENTREGAS — caixa sempre aberta: resumo por etapa + até
            * ENTREGAS_BOX_PREVIEW itens reais (getEligibleCampaignDeliveries);
            * "Ver todas as entregas →" abre a listagem completa + galeria. */}

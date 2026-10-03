@@ -184,6 +184,12 @@ export function filterCampanhas(
   query: string,
   filters: CampanhaFiltersState,
   influsByCampanha: Map<string, { nome: string }[]>,
+  /** Quem a BUSCA por nome enxerga — por padrão o mesmo mapa da contagem;
+   * a listagem passa todos os influenciadores aqui e só os aprovados em
+   * `influsByCampanha` (que define o filtro "com/sem" e bate com o número
+   * do card), pra buscar "Fulana" continuar achando a campanha mesmo que ela
+   * ainda não tenha sido aprovada. */
+  searchInflusByCampanha: Map<string, { nome: string }[]> = influsByCampanha,
 ): CampanhaRow[] {
   return rows.filter((row) => {
     const influs = influsByCampanha.get(row.campanha.id) ?? [];
@@ -191,7 +197,7 @@ export function filterCampanhas(
       !matchesSearch(
         row,
         query,
-        influs.map((i) => i.nome),
+        (searchInflusByCampanha.get(row.campanha.id) ?? []).map((i) => i.nome),
       )
     )
       return false;
