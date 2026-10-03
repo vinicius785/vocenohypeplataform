@@ -1,7 +1,6 @@
 /**
- * Funções puras do Banco de Influenciadores V2 — extraídas (não
- * duplicadas) da implementação atual (`InfluenciadoresSection.tsx`),
- * com uma diferença: devolvem também o STATUS DA CAMPANHA
+ * Funções puras do Banco de Influenciadores V2 — extraídas da
+ * implementação anterior (V1, já removida), com uma diferença: devolvem também o STATUS DA CAMPANHA
  * (`CampanhaStatus`), exibido só como contexto no histórico — a
  * elegibilidade pra "Avaliar influenciador" NÃO usa este campo (nem
  * prazo da campanha): é decidida por participação, comparando entregas

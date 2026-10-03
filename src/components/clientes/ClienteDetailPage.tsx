@@ -51,9 +51,8 @@ import { formatIsoDate } from "@/lib/utils";
 /**
  * Full client-detail page (Part 2 of the client-detail-page rebuild — Part 1
  * was the backend/DB work in `organization-invites.functions.ts`, already
- * committed). Replaces `ClienteDetailsSheet.tsx` as the surface where
- * campaigns/access/editing happen; the drawer's ONLY call site
- * (`ClientesSection.tsx`'s row click) now navigates here instead. See
+ * committed). The surface where campaigns/access/editing happen;
+ * `ClientesSection.tsx`'s row click navigates here. See
  * CLAUDE.md's routing conventions — this is the one other real nested route
  * in Clientes, mirroring `projeto.$id.tsx`'s "not found" + header pattern.
  */
