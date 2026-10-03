@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { Plus, Target, TrendingUp } from "lucide-react";
-import { PageContainer } from "@/components/shared/PageContainer";
+import { PageCanvas, PageContainer } from "@/components/shared/PageContainer";
+import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -327,61 +328,61 @@ export function MetasSection() {
   }
 
   return (
-    <div className="-m-4 min-h-[calc(100vh-4rem)] bg-muted p-4 dark:bg-transparent md:-m-8 md:p-8">
+    <PageCanvas>
       <PageContainer className="space-y-6">
         {/* Objetivos/Indicadores: navegação contextual do módulo (a sidebar
          * global só leva a Metas); `metasView` continua na URL. */}
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-[36px] font-bold leading-[1.05] tracking-tight text-foreground md:text-[42px]">
-              Metas
-            </p>
-            <p className="mt-1.5 text-sm text-text-secondary">
-              {metasView === "indicadores"
-                ? "Acompanhe e atualize as principais métricas do negócio."
-                : "Objetivos e indicadores operacionais do time."}
-            </p>
-          </div>
-          {
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="primary" size="comfortable">
-                  <Plus className="h-4 w-4" /> Criar
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-72">
-                <DropdownMenuItem
-                  onClick={() => setObjetivoDialog({})}
-                  className="items-start gap-2 py-2"
-                >
-                  <Target className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  <span>
-                    <span className="block text-sm font-medium text-foreground">
-                      Criar Objetivo
-                    </span>
-                    <span className="block text-xs text-text-secondary">
-                      Um resultado maior acompanhado por um ou mais indicadores.
-                    </span>
-                  </span>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setIndicadorCreateDialog(true)}
-                  className="items-start gap-2 py-2"
-                >
-                  <TrendingUp className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  <span>
-                    <span className="block text-sm font-medium text-foreground">
-                      Criar Indicador
-                    </span>
-                    <span className="block text-xs text-text-secondary">
-                      Uma métrica individual para acompanhar.
-                    </span>
-                  </span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+        <PageHeader
+          title="Metas"
+          description={
+            metasView === "indicadores"
+              ? "Acompanhe e atualize as principais métricas do negócio."
+              : "Objetivos e indicadores operacionais do time."
           }
-        </div>
+          actionsSlot={
+            <>
+              {
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="primary" size="comfortable">
+                      <Plus className="h-4 w-4" /> Criar
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-72">
+                    <DropdownMenuItem
+                      onClick={() => setObjetivoDialog({})}
+                      className="items-start gap-2 py-2"
+                    >
+                      <Target className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        <span className="block text-sm font-medium text-foreground">
+                          Criar Objetivo
+                        </span>
+                        <span className="block text-xs text-text-secondary">
+                          Um resultado maior acompanhado por um ou mais indicadores.
+                        </span>
+                      </span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => setIndicadorCreateDialog(true)}
+                      className="items-start gap-2 py-2"
+                    >
+                      <TrendingUp className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        <span className="block text-sm font-medium text-foreground">
+                          Criar Indicador
+                        </span>
+                        <span className="block text-xs text-text-secondary">
+                          Uma métrica individual para acompanhar.
+                        </span>
+                      </span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              }
+            </>
+          }
+        />
 
         <SegmentedControl
           aria-label="Seções de Metas"
@@ -424,6 +425,6 @@ export function MetasSection() {
         />
         {confirmDialog}
       </PageContainer>
-    </div>
+    </PageCanvas>
   );
 }

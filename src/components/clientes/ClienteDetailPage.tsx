@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { PageContainer } from "@/components/shared/PageContainer";
+import { PageCanvas, PageContainer } from "@/components/shared/PageContainer";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -228,7 +228,7 @@ export function ClienteDetailPage({ clienteId }: { clienteId: string }) {
   }
 
   return (
-    <div className="-m-4 min-h-[calc(100vh-4rem)] bg-muted p-4 dark:bg-transparent md:-m-8 md:p-8">
+    <PageCanvas>
       <PageContainer className="space-y-6">
         {/* Breadcrumb simples (mesmo padrão de "Voltar para X" de
          * projeto.$id.tsx — não existe componente de breadcrumb dedicado). */}
@@ -573,7 +573,7 @@ export function ClienteDetailPage({ clienteId }: { clienteId: string }) {
         onSave={saveCampaign}
       />
       {confirmDialog}
-    </div>
+    </PageCanvas>
   );
 }
 

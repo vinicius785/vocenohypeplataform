@@ -1551,14 +1551,16 @@ export function TaskBoard({
       <section className="space-y-4">
         <div className="flex flex-wrap items-end justify-between gap-y-2 gap-x-4">
           <div>
-            <p
-              role="heading"
-              aria-level={2}
-              className="text-xs font-semibold uppercase tracking-widest text-muted-foreground"
-            >
-              {title}
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground">
+            {title && (
+              <p
+                role="heading"
+                aria-level={2}
+                className="text-xs font-semibold uppercase tracking-widest text-muted-foreground"
+              >
+                {title}
+              </p>
+            )}
+            <p className={`${title ? "mt-1 " : ""}text-sm text-muted-foreground`}>
               {viewToggle
                 ? `${openTasksCount} ${openTasksCount === 1 ? "aberta" : "abertas"}${
                     tasks.length > openTasksCount ? ` · ${tasks.length} no total` : ""

@@ -1,3 +1,4 @@
+import { useConfirm } from "@/hooks/use-confirm";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Users, Search, ChevronRight, ShieldOff } from "lucide-react";
@@ -56,6 +57,7 @@ function initialsOf(name: string): string {
  * mesmo `MemberDialog` já usado em Time, então editar permissões aqui e
  * lá é literalmente a mesma ação. */
 export function TimePermissoesTab({ isAdmin = false }: { isAdmin?: boolean }) {
+  const { confirm, confirmDialog } = useConfirm();
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -110,9 +112,14 @@ export function TimePermissoesTab({ isAdmin = false }: { isAdmin?: boolean }) {
    * other destructive-ish actions. */
   const handleRemoveMfa = async (m: Member) => {
     if (
-      !window.confirm(
-        `Remover a autenticação em duas etapas de ${m.name || "este membro"}? Ele(a) voltará a entrar só com e-mail e senha até reativar.`,
-      )
+      !(await confirm(
+        `${m.name || "Este membro"} voltará a entrar só com e-mail e senha até reativar.`,
+        {
+          title: "Remover a autenticação em duas etapas?",
+          confirmLabel: "Remover",
+          destructive: true,
+        },
+      ))
     )
       return;
     setMfaBusyId(m.id);
@@ -136,6 +143,7 @@ export function TimePermissoesTab({ isAdmin = false }: { isAdmin?: boolean }) {
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       <SettingsSectionHeader
         icon={<Users className="h-4 w-4" />}
         title="Time e permissões"

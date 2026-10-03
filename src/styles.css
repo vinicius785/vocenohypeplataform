@@ -257,18 +257,24 @@
   }
 }
 
-/* Tratamento tipográfico padrão dos títulos em toda a plataforma (VI e VC):
- * peso mais fino e letras mais juntas, igual ao que já era usado nos cards
- * de Metas. Fica fora de @layer (CSS "não-camadado") de propósito — nesse
- * caso ele já vence qualquer utilitário do Tailwind (font-semibold,
- * font-bold etc, que vivem na camada "utilities"), sem precisar editar
- * className em cada um dos componentes que usam h1-h4 pela plataforma. */
-h1,
-h2,
-h3,
-h4 {
-  font-weight: 300;
-  letter-spacing: -0.02em;
+/* Tratamento tipográfico dos títulos semânticos (h1–h4) em toda a plataforma.
+ *
+ * ANTES: `font-weight: 300` FORA de qualquer camada — vencia qualquer
+ * utilitário do Tailwind, então todo `<h2 className="font-semibold">` da
+ * plataforma renderizava em peso 300, e telas que usam `<p>` + os tokens de
+ * `design-tokens.ts` (Início) ficavam visivelmente diferentes das que usam h1–h4
+ * (Campanhas, Metas, Financeiro, Projetos…). Agora vive em `@layer base`:
+ * um título SEM classe de peso é semibold (600, o padrão do Início); um título
+ * COM classe (`font-bold`, `font-medium`…) mostra exatamente o peso pedido.
+ * `letter-spacing` segue o `tracking-tight` do Início. */
+@layer base {
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
 }
 
 /* Barra de rolagem personalizada, aplicada globalmente (não só num container

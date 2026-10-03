@@ -1,6 +1,7 @@
-import { useState } from "react";
 import { Search, X, SlidersHorizontal } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useClientes } from "@/lib/clientes-store";
 import {
   type EntryStatus,
@@ -33,13 +34,21 @@ const SOURCE_LABEL: Record<Source, string> = {
 };
 
 function inputCls(extra = "") {
-  return `h-8 cursor-pointer rounded-md border border-border bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-brand ${extra}`;
+  return `h-9 w-full cursor-pointer rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-brand ${extra}`;
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block space-y-1">
+      <span className="text-xs font-medium text-text-secondary">{label}</span>
+      {children}
+    </label>
+  );
 }
 
 export function AdvancedFilterBar({ filtered }: { filtered: Filtered }) {
   const clientes = useClientes();
   const { filters, setFilters } = filtered;
-  const [moreOpen, setMoreOpen] = useState(false);
 
   const members = loadFinanceiroMembers();
   const clienteCampanhas = filters.clienteId
@@ -128,108 +137,112 @@ export function AdvancedFilterBar({ filtered }: { filtered: Filtered }) {
       onRemove: () => setF({ possuiComprovante: undefined }),
     });
 
+  // Tudo que não é "busca" e "tipo" mora dentro de UM mecanismo (Filtros).
+  const activeCount = chips.length;
+
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        <select
-          value={filters.clienteId ?? "todos"}
-          onChange={(e) =>
-            setF({
-              clienteId: e.target.value === "todos" ? undefined : e.target.value,
-              campanhaId: undefined,
-            })
-          }
-          className={inputCls()}
-        >
-          <option value="todos">Todos os clientes</option>
-          {clientes.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.empresa}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={filters.campanhaId ?? "todas"}
-          onChange={(e) =>
-            setF({ campanhaId: e.target.value === "todas" ? undefined : e.target.value })
-          }
-          disabled={!filters.clienteId || clienteCampanhas.length === 0}
-          className={inputCls("disabled:cursor-not-allowed disabled:opacity-50")}
-        >
-          <option value="todas">Todas as campanhas</option>
-          {clienteCampanhas.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.nome}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={filters.categoria ?? "todas"}
-          onChange={(e) =>
-            setF({ categoria: e.target.value === "todas" ? undefined : e.target.value })
-          }
-          className={inputCls()}
-        >
-          <option value="todas">Todas as categorias</option>
-          {categoriaOpts.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <input
+        <div className="relative w-full max-w-xs sm:flex-1">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-secondary" />
+          <Input
             value={filters.query}
             onChange={(e) => setF({ query: e.target.value })}
-            placeholder="Buscar"
-            className="h-8 w-48 rounded-md border border-border bg-background pl-8 pr-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            placeholder="Buscar lançamentos..."
+            className="h-9 pl-8 text-sm"
           />
         </div>
 
-        <Popover open={moreOpen} onOpenChange={setMoreOpen}>
+        <Popover>
           <PopoverTrigger asChild>
-            <button
-              type="button"
-              className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              <SlidersHorizontal className="h-3 w-3" />+ Filtros
-            </button>
+            <Button variant="outline" size="sm" className="h-9">
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              {activeCount > 0 ? `Filtros · ${activeCount}` : "Filtros"}
+            </Button>
           </PopoverTrigger>
-          <PopoverContent align="end" className="w-72 space-y-3 p-3.5 text-xs">
-            <div>
-              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
-                Status
-              </label>
+          <PopoverContent align="end" className="max-h-[70vh] w-80 space-y-3 overflow-y-auto p-4">
+            <div className="space-y-1">
+              <span className="text-xs font-medium text-text-secondary">Status</span>
               <div className="flex flex-wrap gap-1.5">
-                {STATUS_OPTIONS.map((s) => (
+                {STATUS_OPTIONS.map((st) => (
                   <button
-                    key={s}
+                    key={st}
                     type="button"
-                    onClick={() => toggleStatus(s)}
-                    className={`cursor-pointer rounded-full border px-2 py-0.5 text-[11px] ${
-                      filters.status.includes(s)
+                    onClick={() => toggleStatus(st)}
+                    aria-pressed={filters.status.includes(st)}
+                    className={`cursor-pointer rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                      filters.status.includes(st)
                         ? "border-foreground bg-foreground text-background"
-                        : "border-border text-muted-foreground hover:text-foreground"
+                        : "border-border text-text-secondary hover:text-foreground"
                     }`}
                   >
-                    {STATUS_LABEL[s]}
+                    {STATUS_LABEL[st]}
                   </button>
                 ))}
               </div>
             </div>
 
-            <div>
-              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
-                Responsável
-              </label>
+            <Field label="Cliente">
+              <select
+                value={filters.clienteId ?? "todos"}
+                onChange={(e) =>
+                  setF({
+                    clienteId: e.target.value === "todos" ? undefined : e.target.value,
+                    campanhaId: undefined,
+                  })
+                }
+                className={inputCls()}
+              >
+                <option value="todos">Todos</option>
+                {clientes.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.empresa}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            {filters.clienteId && clienteCampanhas.length > 0 && (
+              <Field label="Campanha">
+                <select
+                  value={filters.campanhaId ?? "todas"}
+                  onChange={(e) =>
+                    setF({ campanhaId: e.target.value === "todas" ? undefined : e.target.value })
+                  }
+                  className={inputCls()}
+                >
+                  <option value="todas">Todas</option>
+                  {clienteCampanhas.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nome}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
+
+            <Field label="Categoria">
+              <select
+                value={filters.categoria ?? "todas"}
+                onChange={(e) =>
+                  setF({ categoria: e.target.value === "todas" ? undefined : e.target.value })
+                }
+                className={inputCls()}
+              >
+                <option value="todas">Todas</option>
+                {categoriaOpts.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field label="Responsável">
               <select
                 value={filters.responsavelId ?? ""}
                 onChange={(e) => setF({ responsavelId: e.target.value || undefined })}
-                className={inputCls("w-full")}
+                className={inputCls()}
               >
                 <option value="">Todos</option>
                 {members.map((m) => (
@@ -238,70 +251,58 @@ export function AdvancedFilterBar({ filtered }: { filtered: Filtered }) {
                   </option>
                 ))}
               </select>
-            </div>
+            </Field>
 
             <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
-                  Valor mín.
-                </label>
-                <input
+              <Field label="Valor mínimo">
+                <Input
                   type="number"
                   value={filters.valorMin ?? ""}
                   onChange={(e) =>
                     setF({ valorMin: e.target.value ? Number(e.target.value) : undefined })
                   }
-                  className={inputCls("w-full")}
+                  className="h-9 text-sm"
                 />
-              </div>
-              <div>
-                <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
-                  Valor máx.
-                </label>
-                <input
+              </Field>
+              <Field label="Valor máximo">
+                <Input
                   type="number"
                   value={filters.valorMax ?? ""}
                   onChange={(e) =>
                     setF({ valorMax: e.target.value ? Number(e.target.value) : undefined })
                   }
-                  className={inputCls("w-full")}
+                  className="h-9 text-sm"
                 />
-              </div>
+              </Field>
             </div>
 
-            <div>
-              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
-                Forma de pagamento
-              </label>
-              <input
+            <Field label="Forma de pagamento">
+              <Input
                 value={filters.formaPagamento ?? ""}
                 onChange={(e) => setF({ formaPagamento: e.target.value || undefined })}
                 placeholder="PIX, transferência..."
-                className={inputCls("w-full")}
+                className="h-9 text-sm"
               />
-            </div>
+            </Field>
 
-            <div>
-              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
-                Origem
-              </label>
+            <Field label="Origem">
               <select
                 value={filters.origem ?? ""}
                 onChange={(e) =>
                   setF({ origem: (e.target.value || undefined) as Source | undefined })
                 }
-                className={inputCls("w-full")}
+                className={inputCls()}
               >
                 <option value="">Todas</option>
-                {(Object.keys(SOURCE_LABEL) as Source[]).map((s) => (
-                  <option key={s} value={s}>
-                    {SOURCE_LABEL[s]}
+                {(Object.keys(SOURCE_LABEL) as Source[]).map((so) => (
+                  <option key={so} value={so}>
+                    {SOURCE_LABEL[so]}
                   </option>
                 ))}
               </select>
-            </div>
+            </Field>
 
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 text-sm">
               <label className="flex cursor-pointer items-center gap-1.5">
                 <input
                   type="checkbox"
@@ -319,14 +320,6 @@ export function AdvancedFilterBar({ filtered }: { filtered: Filtered }) {
                 Possui comprovante
               </label>
             </div>
-
-            <button
-              type="button"
-              onClick={() => setMoreOpen(false)}
-              className="w-full cursor-pointer rounded-md bg-foreground py-1.5 text-xs font-medium text-background hover:opacity-90"
-            >
-              Aplicar
-            </button>
           </PopoverContent>
         </Popover>
       </div>
@@ -338,7 +331,8 @@ export function AdvancedFilterBar({ filtered }: { filtered: Filtered }) {
               key={c.key}
               type="button"
               onClick={c.onRemove}
-              className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-brand-subtle px-2.5 py-1 text-xs font-medium text-brand hover:bg-brand-subtle/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              aria-label={`Remover filtro ${c.label}`}
+              className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
             >
               {c.label}
               <X className="h-3 w-3" />
@@ -346,7 +340,9 @@ export function AdvancedFilterBar({ filtered }: { filtered: Filtered }) {
           ))}
           <button
             type="button"
-            onClick={() => setFilters({ ...DEFAULT_FILTERS, tipo: filters.tipo })}
+            onClick={() =>
+              setFilters({ ...DEFAULT_FILTERS, tipo: filters.tipo, query: filters.query })
+            }
             className="cursor-pointer text-xs font-medium text-text-secondary underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
           >
             Limpar filtros

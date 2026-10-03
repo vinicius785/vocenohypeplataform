@@ -19,6 +19,7 @@ export type PeriodMode =
   | "3meses"
   | "6meses"
   | "este_ano"
+  | "tudo"
   | "personalizado";
 
 export const PERIOD_OPTIONS: { value: PeriodMode; label: string }[] = [
@@ -30,6 +31,7 @@ export const PERIOD_OPTIONS: { value: PeriodMode; label: string }[] = [
   { value: "3meses", label: "Últimos 3 meses" },
   { value: "6meses", label: "Últimos 6 meses" },
   { value: "este_ano", label: "Este ano" },
+  { value: "tudo", label: "Todo o período" },
   { value: "personalizado", label: "Período personalizado" },
 ];
 
@@ -89,6 +91,8 @@ export function periodRange(
       const y = new Date().getFullYear();
       return { from: `${y}-01-01`, to: `${y}-12-31` };
     }
+    case "tudo":
+      return { from: "0000-01-01", to: "9999-12-31" };
     case "personalizado":
       return { from: customFrom, to: customTo };
   }

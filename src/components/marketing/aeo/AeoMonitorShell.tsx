@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   loadAeoPrompts,
   loadAeoRespostas,
@@ -14,10 +16,43 @@ import { MonitorTab } from "./monitor/MonitorTab";
 import { ResultadosTab } from "./resultados/ResultadosTab";
 import { PromptsTab } from "./prompts/PromptsTab";
 
-type Tab = "monitor" | "resultados" | "prompts";
+/** Subseção do AEO Monitor — não é navegação (nada de abas): são partes da
+ * MESMA seção do Projeto, empilhadas e recolhíveis. Monitoramento e
+ * Resultados abrem expandidos; Prompts (configuração) fica recolhido. */
+function Part({
+  title,
+  hint,
+  defaultOpen = true,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} className="border-t border-border/60 pt-4">
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-3 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+        >
+          <span>
+            <span className="block text-[15px] font-semibold text-foreground">{title}</span>
+            {hint && <span className="block text-sm text-text-secondary">{hint}</span>}
+          </span>
+          <ChevronDown
+            className={`h-4 w-4 shrink-0 text-text-secondary transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="pt-4">{children}</CollapsibleContent>
+    </Collapsible>
+  );
+}
 
 export function AeoMonitorShell() {
-  const [tab, setTab] = useState<Tab>("monitor");
   const [rodadas, setRodadas] = useState<AeoRodada[]>(() => loadAeoRodadas());
   const [prompts, setPrompts] = useState<AeoPrompt[]>(() => loadAeoPrompts());
   const [respostas, setRespostas] = useState<AeoResposta[]>(() => loadAeoRespostas());
@@ -26,38 +61,17 @@ export function AeoMonitorShell() {
   useEffect(() => onAeoPromptsChange(() => setPrompts(loadAeoPrompts())), []);
   useEffect(() => onAeoRespostasChange(() => setRespostas(loadAeoRespostas())), []);
 
-  const tabs: { key: Tab; label: string }[] = [
-    { key: "monitor", label: "Monitor" },
-    { key: "resultados", label: "Resultados" },
-    { key: "prompts", label: "Prompts" },
-  ];
-
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap gap-1 border-b border-border">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => setTab(t.key)}
-            className={`inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition-colors ${
-              tab === t.key
-                ? "border-foreground text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {tab === "monitor" && (
+      <Part title="Monitoramento" hint="Rodada atual e respostas por IA.">
         <MonitorTab rodadas={rodadas} prompts={prompts} respostas={respostas} />
-      )}
-      {tab === "resultados" && (
+      </Part>
+      <Part title="Resultados" hint="Visibilidade da marca ao longo das rodadas.">
         <ResultadosTab rodadas={rodadas} prompts={prompts} respostas={respostas} />
-      )}
-      {tab === "prompts" && <PromptsTab prompts={prompts} />}
+      </Part>
+      <Part title="Prompts" hint="Perguntas usadas em cada rodada." defaultOpen={false}>
+        <PromptsTab prompts={prompts} />
+      </Part>
     </div>
   );
 }

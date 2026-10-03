@@ -2,17 +2,15 @@ import { SegmentedControl } from "@/components/ui/segmented-control";
 import { ANALISES_VIEWS, type AnalisesView } from "@/lib/section-nav";
 import { RelatoriosTab } from "./RelatoriosTab";
 import { ResultadoPorCampanhaTable } from "./ResultadoPorCampanhaTable";
-import { PeriodPicker } from "./PeriodPicker";
 import type { AdvancedFilters, useFinanceiroFilteredEntries } from "./useFinanceiroFilteredEntries";
 
 type Filtered = ReturnType<typeof useFinanceiroFilteredEntries>;
 
-/** Análises — entender os resultados. Concentra o que antes eram as áreas
- * Relatórios e Campanhas: "Geral" são os indicadores da carteira inteira
- * (evolução mensal, inadimplência, prazo médio, aging…); "Por campanha" é o
- * resultado financeiro de cada campanha NO PERÍODO — uma visão dentro da
- * mesma página, não uma área estrutural. Só "Por campanha" depende do
- * período, então só ela mostra o seletor. */
+/** Análises — entender os resultados. "Geral" são os indicadores da carteira
+ * inteira (evolução mensal, inadimplência, prazo médio, aging…); "Por
+ * campanha" é o resultado de cada campanha NO PERÍODO global da página (só
+ * essa visão depende dele, então só nela o seletor de período aparece —
+ * ver `FinanceiroSection`). */
 export function AnalisesTab({
   filtered,
   view,
@@ -34,7 +32,6 @@ export function AnalisesTab({
           onChange={onViewChange}
           options={ANALISES_VIEWS.map((v) => ({ value: v.key, label: v.label }))}
         />
-        {view === "campanhas" && <PeriodPicker filtered={filtered} />}
       </div>
 
       {view === "geral" ? (

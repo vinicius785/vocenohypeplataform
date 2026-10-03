@@ -12,21 +12,19 @@ import {
   type ProjectionHorizon,
 } from "@/lib/financeiro-entries";
 import { useSaldoInicial } from "@/lib/financeiro-saldo-inicial-store";
-import { SaldoHero, EntradasSaidasResumo, VencidosResumo } from "./PosicaoFinanceira";
+import { PosicaoResumo } from "./PosicaoFinanceira";
 import { RequerAtencaoList } from "./RequerAtencaoList";
 import { SaldoInicialDialog } from "./SaldoInicialDialog";
 import { FluxoCaixaChart } from "./FluxoCaixaChart";
 import { AReceberAPagarPreview } from "./AReceberAPagarPreview";
-import { PeriodPicker } from "./PeriodPicker";
 
 type Filtered = ReturnType<typeof useFinanceiroFilteredEntries>;
 
-/** Bento assimétrico (Etapa 5 — aplicação real do conceito visual
- * validado em `/design-system-finance-concept`): saldo protagonista +
- * requer atenção/entradas-saídas na linha 1; fluxo de caixa protagonista
- * + vencidos/a receber-pagar na linha 2. Nenhum cálculo mudou — só a
- * composição visual de `PosicaoFinanceira` (agora `SaldoHero` +
- * `EntradasSaidasResumo` + `VencidosResumo`, mesmas funções puras). */
+/** Resumo — "como estamos?" numa leitura só, de cima pra baixo:
+ * posição (saldo, entradas, saídas, resultado, projetado) → o que pede
+ * atenção (só aparece se houver) → fluxo de caixa → a receber / a pagar.
+ * O período é o contexto global da página (vive em `FinanceiroSection`),
+ * não um controle próprio deste bloco. */
 export function VisaoGeralTab({
   filtered,
   onApplyFilter,
@@ -73,54 +71,31 @@ export function VisaoGeralTab({
   };
 
   return (
-    <div className="space-y-5">
-      {/* Toolbar compacta (Etapa 6) — só o Resumo tem o período integrado
-       * aqui (largura do conteúdo, não a barra cheia); Movimentações e
-       * Campanhas continuam com a barra de período de largura total em
-       * `FinanceiroSection.tsx`, intocada. */}
-      <div className="inline-flex w-fit max-w-full flex-wrap items-center gap-2 rounded-2xl bg-card px-3 py-2 dark:shadow-none">
-        <PeriodPicker filtered={filtered} />
-      </div>
+    <div className="space-y-8">
+      <PosicaoResumo
+        all={all}
+        visible={visible}
+        previousVisible={previousVisible}
+        range={range}
+        saldoInicial={saldoInicial}
+        horizon={horizon}
+        onHorizonChange={setHorizon}
+        onConfigureSaldo={() => setConfiguringSaldo(true)}
+      />
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-        <div className="lg:col-span-7">
-          <SaldoHero
-            all={all}
-            visible={visible}
-            range={range}
-            saldoInicial={saldoInicial}
-            horizon={horizon}
-            onHorizonChange={setHorizon}
-            onConfigureSaldo={() => setConfiguringSaldo(true)}
-          />
-        </div>
-        <div className="flex flex-col gap-5 lg:col-span-5">
-          <RequerAtencaoList
-            filtered={filtered}
-            saldoProjetado={saldoProjetado}
-            onApplyFilter={applyAlertAndGo}
-          />
-          <EntradasSaidasResumo visible={visible} previousVisible={previousVisible} range={range} />
-        </div>
-      </div>
+      <RequerAtencaoList
+        filtered={filtered}
+        saldoProjetado={saldoProjetado}
+        onApplyFilter={applyAlertAndGo}
+      />
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-        <div className="lg:col-span-8">
-          <FluxoCaixaChart filtered={filtered} />
-        </div>
-        <div className="flex flex-col gap-5 lg:col-span-4">
-          <VencidosResumo
-            all={all}
-            onNavigateToAReceber={onNavigateToAReceber}
-            onNavigateToAPagar={onNavigateToAPagar}
-          />
-          <AReceberAPagarPreview
-            all={all}
-            onVerAReceber={onNavigateToAReceber}
-            onVerAPagar={onNavigateToAPagar}
-          />
-        </div>
-      </div>
+      <FluxoCaixaChart filtered={filtered} />
+
+      <AReceberAPagarPreview
+        all={all}
+        onVerAReceber={onNavigateToAReceber}
+        onVerAPagar={onNavigateToAPagar}
+      />
 
       {configuringSaldo && (
         <SaldoInicialDialog

@@ -19,6 +19,7 @@ import { ImportDialog } from "./ImportDialog";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { useConfirm } from "@/hooks/use-confirm";
 
 type Filtered = ReturnType<typeof useFinanceiroFilteredEntries>;
 
@@ -78,6 +79,7 @@ export function MovimentacoesTab({
   onSyncError: (msg: string | null) => void;
 }) {
   const clientes = useClientes();
+  const { confirm, confirmDialog } = useConfirm();
   const { visible } = filtered;
 
   const [editing, setEditing] = useState<ManualEntry | null>(null);
@@ -133,12 +135,16 @@ export function MovimentacoesTab({
 
   const handleBulkDelete = async () => {
     if (editableSelected.length === 0) return;
-    if (
-      !window.confirm(
-        `Excluir ${editableSelected.length} lançamento${editableSelected.length > 1 ? "s" : ""} selecionado${editableSelected.length > 1 ? "s" : ""}? Esta ação não pode ser desfeita.`,
-      )
-    )
-      return;
+    const n = editableSelected.length;
+    const ok = await confirm(
+      `Você está prestes a excluir ${n} lançamento${n > 1 ? "s" : ""}.\nEsta ação não pode ser desfeita.`,
+      {
+        title: n > 1 ? "Excluir lançamentos?" : "Excluir lançamento?",
+        confirmLabel: n > 1 ? `Excluir ${n} lançamentos` : "Excluir lançamento",
+        destructive: true,
+      },
+    );
+    if (!ok) return;
     for (const id of editableSelected) {
       try {
         await deleteManualEntry(id);
@@ -159,6 +165,7 @@ export function MovimentacoesTab({
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       {syncError && (
         <Alert variant="destructive" className="flex items-start justify-between gap-3">
           <AlertDescription className="pr-2">{syncError}</AlertDescription>

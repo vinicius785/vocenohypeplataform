@@ -18,9 +18,16 @@ describe("resolveFinanceiroTab", () => {
     expect(resolveFinanceiroTab("a-pagar")).toBe("lancamentos");
     expect(resolveFinanceiroTab("campanhas")).toBe("analises");
     expect(resolveFinanceiroTab("relatorios")).toBe("analises");
-    expect(resolveFinanceiroLegacyTarget("a-pagar").segment).toBe("a-pagar");
+    expect(resolveFinanceiroLegacyTarget("a-pagar")).toMatchObject({
+      segment: "saidas",
+      preset: "a-pagar",
+    });
     expect(resolveFinanceiroLegacyTarget("campanhas").view).toBe("campanhas");
-    expect(resolveFinanceiroLegacyTarget(undefined)).toEqual({ segment: "todos", view: "geral" });
+    expect(resolveFinanceiroLegacyTarget(undefined)).toEqual({
+      segment: "todos",
+      view: "geral",
+      preset: undefined,
+    });
   });
 
   it("cai para 'resumo' quando o valor é inválido ou ausente", () => {

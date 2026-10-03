@@ -77,7 +77,9 @@ export function MarkAsPaidDialog({
         className="flex max-h-[90vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-lg max-sm:!h-dvh max-sm:!max-h-dvh max-sm:!max-w-none max-sm:!rounded-none max-sm:!border-0"
       >
         <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-3">
-          <h2 className="text-sm font-semibold text-foreground">{label}</h2>
+          <p role="heading" aria-level={2} className="text-sm font-semibold text-foreground">
+            {label}
+          </p>
           <button
             type="button"
             onClick={onClose}

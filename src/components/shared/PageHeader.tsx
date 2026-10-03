@@ -8,11 +8,10 @@ import type { MetricDelta } from "@/lib/component-utils";
 import type { SemanticTone } from "@/lib/design-tokens";
 
 /**
- * Componente canônico (promovido de `PageHeaderPreview` na rodada
- * corretiva) — mas NÃO substitui `SectionHeader.tsx` ainda: nenhuma tela
- * real importa `PageHeader` até a migração de cada módulo (Etapa 3+).
- * Fica em `components/shared` porque é usado nas composições realistas
- * da própria página `/design-system` (Dashboard, Listagem).
+ * Cabeçalho de página CANÔNICO — título (escala `TYPOGRAPHY.pageHeading`),
+ * descrição e ações. Todo módulo (Clientes, Campanhas, Projetos, Comercial,
+ * Financeiro, Metas, Time, Problemas, Configurações…) usa ESTE componente: não
+ * reimplementar o bloco de título à mão.
  *
  * Sem prop de tabs — navegação, filtro e troca-de-visualização são
  * conceitos separados (ver auditoria §6: menus internos). Filtros e
@@ -68,7 +67,13 @@ export function PageHeader({
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className={cn(TYPOGRAPHY.pageTitle, "text-foreground")}>{title}</p>
+          <p
+            role="heading"
+            aria-level={1}
+            className={cn(TYPOGRAPHY.pageHeading, "text-foreground")}
+          >
+            {title}
+          </p>
           {description && <p className={cn(TYPOGRAPHY.bodySecondary, "mt-1.5")}>{description}</p>}
         </div>
         <div className="flex flex-wrap items-center gap-2">

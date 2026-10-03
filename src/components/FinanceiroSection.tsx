@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { Plus, Upload } from "lucide-react";
-import { PageContainer } from "@/components/shared/PageContainer";
+import { PageCanvas, PageContainer } from "@/components/shared/PageContainer";
+import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import {
   useFinanceiroFilteredEntries,
@@ -10,6 +11,7 @@ import {
 import { VisaoGeralTab } from "./financeiro/VisaoGeralTab";
 import { LancamentosTab } from "./financeiro/LancamentosTab";
 import { AnalisesTab } from "./financeiro/AnalisesTab";
+import { PeriodPicker } from "./financeiro/PeriodPicker";
 import { EntryDialog } from "./financeiro/EntryDialog";
 import { useClientes } from "@/lib/clientes-store";
 import { type ManualEntry, createManualEntry } from "@/lib/financeiro-entries";
@@ -62,6 +64,7 @@ export function FinanceiroSection() {
       search: (prev) => ({ ...prev, financeiroTab: v }),
       replace: true,
     });
+  const legacyPreset = resolveFinanceiroLegacyTarget(search.financeiroTab).preset;
   const [importOpen, setImportOpen] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -81,6 +84,18 @@ export function FinanceiroSection() {
   const applyFilter = (patch: Partial<AdvancedFilters>) =>
     filtered.setFilters((f) => ({ ...f, ...patch }));
 
+  // Link antigo `?financeiroTab=a-receber|a-pagar`: abre Lançamentos já com o
+  // recorte "em aberto" daquele tipo, sobre todo o período (como a tela antiga).
+  useEffect(() => {
+    if (!legacyPreset) return;
+    filtered.setPeriodMode("tudo");
+    filtered.setFilters((f) => ({
+      ...f,
+      status: legacyPreset === "a-receber" ? ["a_receber", "vencido"] : ["a_pagar", "vencido"],
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Levar uma pessoa de Resumo/Análises pra lista já filtrada: aplica o
   // filtro e abre Lançamentos na segmentação que bate com o tipo pedido.
   const goToLancamentos = (patch: Partial<AdvancedFilters>, seg?: LancamentosSegment) => {
@@ -99,30 +114,32 @@ export function FinanceiroSection() {
     // distinguiam do fundo. Reaproveita `--muted` (token já existente) só
     // dentro da área do Financeiro; no escuro `--background`/`--card` já
     // são distintos, por isso `dark:bg-transparent` neutraliza o ajuste.
-    <div className="-m-4 min-h-full bg-muted p-4 dark:bg-transparent md:-m-8 md:p-8">
+    <PageCanvas>
       <PageContainer className="space-y-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-[36px] font-bold leading-[1.05] tracking-tight text-foreground md:text-[42px]">
-              Financeiro
-            </p>
-            <p className="mt-1.5 text-sm text-text-secondary">
-              Posição atual, lançamentos e análises financeiras.
-            </p>
-          </div>
-          {topTab !== "analises" && (
-            <div className="flex flex-wrap items-center gap-2">
-              {topTab === "lancamentos" && (
-                <Button variant="outline" size="comfortable" onClick={() => setImportOpen(true)}>
-                  <Upload className="h-4 w-4" /> Importar
-                </Button>
+        <PageHeader
+          title="Financeiro"
+          description="Posição atual, lançamentos e análises financeiras."
+          actionsSlot={
+            <>
+              {topTab !== "analises" && (
+                <div className="flex flex-wrap items-center gap-2">
+                  {topTab === "lancamentos" && (
+                    <Button
+                      variant="outline"
+                      size="comfortable"
+                      onClick={() => setImportOpen(true)}
+                    >
+                      <Upload className="h-4 w-4" /> Importar
+                    </Button>
+                  )}
+                  <Button variant="primary" size="comfortable" onClick={() => setNewOpen(true)}>
+                    <Plus className="h-4 w-4" /> Novo lançamento
+                  </Button>
+                </div>
               )}
-              <Button variant="primary" size="comfortable" onClick={() => setNewOpen(true)}>
-                <Plus className="h-4 w-4" /> Novo lançamento
-              </Button>
-            </div>
-          )}
-        </div>
+            </>
+          }
+        />
 
         <div className="-mx-4 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:px-0 [&::-webkit-scrollbar]:hidden">
           <SegmentedControl
@@ -133,18 +150,25 @@ export function FinanceiroSection() {
           />
         </div>
 
+        {/* Contexto global: o período vale pro Resumo, pra lista de Lançamentos e
+         * pra visão "Por campanha" — por isso aparece UMA vez, aqui, e não em
+         * cada bloco. Análises → Geral olha todo o histórico, então não o mostra. */}
+        {(topTab !== "analises" || analiseView === "campanhas") && (
+          <PeriodPicker filtered={filtered} />
+        )}
+
         <div>
           {topTab === "resumo" && (
             <VisaoGeralTab
               filtered={filtered}
               onApplyFilter={(patch) => goToLancamentos(patch)}
               onNavigateToAReceber={() => {
-                setSegment("a-receber");
-                setTopTab("lancamentos");
+                filtered.setPeriodMode("tudo");
+                goToLancamentos({ tipo: "receita", status: ["a_receber", "vencido"] });
               }}
               onNavigateToAPagar={() => {
-                setSegment("a-pagar");
-                setTopTab("lancamentos");
+                filtered.setPeriodMode("tudo");
+                goToLancamentos({ tipo: "despesa", status: ["a_pagar", "vencido"] });
               }}
             />
           )}
@@ -181,6 +205,6 @@ export function FinanceiroSection() {
           onSave={(m) => void handleCreate(m)}
         />
       </PageContainer>
-    </div>
+    </PageCanvas>
   );
 }

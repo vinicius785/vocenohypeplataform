@@ -35,13 +35,14 @@ export const FINANCEIRO_TABS: { key: FinanceiroTab; label: string }[] = [
   { key: "analises", label: "Análises" },
 ];
 
-export type LancamentosSegment = "todos" | "entradas" | "saidas" | "a-receber" | "a-pagar";
+/** Tipo da lista de Lançamentos — um filtro de primeiro nível (entradas =
+ * receitas, saídas = despesas). "A receber"/"A pagar"/"Vencido" são STATUS,
+ * dentro de Filtros — não segmentos. */
+export type LancamentosSegment = "todos" | "entradas" | "saidas";
 export const LANCAMENTOS_SEGMENTS: { key: LancamentosSegment; label: string }[] = [
   { key: "todos", label: "Todos" },
   { key: "entradas", label: "Entradas" },
   { key: "saidas", label: "Saídas" },
-  { key: "a-receber", label: "A receber" },
-  { key: "a-pagar", label: "A pagar" },
 ];
 
 export type AnalisesView = "geral" | "campanhas";
@@ -53,16 +54,26 @@ export const ANALISES_VIEWS: { key: AnalisesView; label: string }[] = [
 /** Valores antigos de `?financeiroTab=` (links salvos/compartilhados antes
  * da consolidação em 3 áreas) → a área nova + a segmentação/visão
  * equivalente. Nunca quebra um link antigo. */
+/** Valores antigos de `?financeiroTab=` (antes das 3 áreas) → área nova. Os
+ * antigos "a-receber"/"a-pagar" viram Lançamentos já com o recorte "em aberto"
+ * daquele tipo (`preset`), sobre todo o período. */
 const LEGACY_FINANCEIRO_TAB: Record<
   string,
-  { tab: FinanceiroTab; segment?: LancamentosSegment; view?: AnalisesView }
+  {
+    tab: FinanceiroTab;
+    segment?: LancamentosSegment;
+    view?: AnalisesView;
+    preset?: "a-receber" | "a-pagar";
+  }
 > = {
   movimentacoes: { tab: "lancamentos", segment: "todos" },
-  "a-receber": { tab: "lancamentos", segment: "a-receber" },
-  "a-pagar": { tab: "lancamentos", segment: "a-pagar" },
+  "a-receber": { tab: "lancamentos", segment: "entradas", preset: "a-receber" },
+  "a-pagar": { tab: "lancamentos", segment: "saidas", preset: "a-pagar" },
   campanhas: { tab: "analises", view: "campanhas" },
   relatorios: { tab: "analises", view: "geral" },
 };
+
+export type FinanceiroLegacyPreset = "a-receber" | "a-pagar";
 
 export type MetasTab = "objetivos" | "indicadores";
 
@@ -89,12 +100,18 @@ export function resolveFinanceiroTab(value: string | undefined): FinanceiroTab {
 }
 
 /** Segmentação/visão inicial implícita num valor antigo da URL (ver acima). */
+/** Segmentação/visão/recorte inicial implícitos num valor antigo da URL. */
 export function resolveFinanceiroLegacyTarget(value: string | undefined): {
   segment: LancamentosSegment;
   view: AnalisesView;
+  preset?: FinanceiroLegacyPreset;
 } {
   const legacy = value ? LEGACY_FINANCEIRO_TAB[value] : undefined;
-  return { segment: legacy?.segment ?? "todos", view: legacy?.view ?? "geral" };
+  return {
+    segment: legacy?.segment ?? "todos",
+    view: legacy?.view ?? "geral",
+    preset: legacy?.preset,
+  };
 }
 
 export function resolveMetasTab(value: string | undefined): MetasTab {

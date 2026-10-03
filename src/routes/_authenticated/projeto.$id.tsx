@@ -1,20 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { DateField } from "@/components/ui/date-field";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Plus,
   X,
-  KanbanSquare,
-  Users,
   FileText,
   ImageIcon,
   ExternalLink,
-  CalendarDays,
-  Megaphone,
-  Newspaper,
-  Radar,
-  Bug,
-  Mail,
   Sheet,
   Presentation,
   HardDrive,
@@ -68,7 +60,6 @@ import {
   PROJECT_STATUS_LABEL,
   type FeatureKey,
   type Project,
-  type ProjectLayout,
   type ProjectStatus,
   type Task,
   type DocItem,
@@ -84,6 +75,7 @@ import {
   PROJECT_HEALTH_LABEL,
 } from "@/components/projetos/projeto-ui";
 import { Badge } from "@/components/ui/badge";
+import { TYPOGRAPHY } from "@/lib/design-tokens";
 import { OPEN_STATUSES } from "@/lib/score";
 import { EditorialPanel } from "@/components/marketing/EditorialPanel";
 import { TrafegoPagoPanel } from "@/components/marketing/TrafegoPagoPanel";
@@ -111,17 +103,131 @@ export const Route = createFileRoute("/_authenticated/projeto/$id")({
   head: ({ params }) => ({ meta: [{ title: `Projeto · ${params.id.slice(0, 6)}` }] }),
 });
 
-const ICONS: Record<FeatureKey, React.ComponentType<{ className?: string }>> = {
-  kanban: KanbanSquare,
-  influenciadores: Users,
-  documentos: FileText,
-  calendario_editorial: CalendarDays,
-  trafego_pago: Megaphone,
-  blog: Newspaper,
-  aeo_monitor: Radar,
-  bugs_sugestoes: Bug,
-  fluxos_email: Mail,
+/** Rótulos curtos da navegação por âncora e títulos de seção — Projeto é UMA
+ * página; cada área é uma seção dela (nada de abas trocando o conteúdo). */
+const SECTION_NAV_LABEL: Record<FeatureKey, string> = {
+  kanban: "Tarefas",
+  influenciadores: "Influenciadores",
+  documentos: "Arquivos",
+  calendario_editorial: "Calendário",
+  trafego_pago: "Tráfego",
+  blog: "Blog",
+  aeo_monitor: "AEO",
+  bugs_sugestoes: "Bugs",
+  fluxos_email: "E-mails",
 };
+const SECTION_TITLE: Record<FeatureKey, string> = {
+  kanban: "Tarefas",
+  influenciadores: "Influenciadores",
+  documentos: "Arquivos e links",
+  calendario_editorial: "Calendário editorial",
+  trafego_pago: "Tráfego pago",
+  blog: "Blog",
+  aeo_monitor: "AEO Monitor",
+  bugs_sugestoes: "Bugs & Sugestões",
+  fluxos_email: "E-mails",
+};
+
+/** Monta o conteúdo só quando a seção chega perto da tela (uma vez) — a
+ * página mostra TODAS as seções, mas não carrega Blog/AEO/e-mails etc. de
+ * uma vez só (cada um busca seus próprios dados ao montar). */
+function LazyMount({ children, minHeight = 160 }: { children: ReactNode; minHeight?: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [shown, setShown] = useState(
+    () => typeof window === "undefined" || typeof IntersectionObserver === "undefined",
+  );
+  useEffect(() => {
+    if (shown || !ref.current) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setShown(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: "800px 0px" },
+    );
+    io.observe(ref.current);
+    return () => io.disconnect();
+  }, [shown]);
+  return shown ? <>{children}</> : <div ref={ref} style={{ minHeight }} aria-hidden />;
+}
+
+function ProjectSection({
+  id,
+  title,
+  eager,
+  children,
+}: {
+  id: string;
+  title: string;
+  eager?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <section id={id} className="scroll-mt-14 border-t border-border/60 pt-8">
+      <p role="heading" aria-level={2} className={`${TYPOGRAPHY.sectionTitle} mb-5`}>
+        {title}
+      </p>
+      {eager ? children : <LazyMount>{children}</LazyMount>}
+    </section>
+  );
+}
+
+/** Navegação por âncora (scroll suave) — fixa no topo enquanto se rola, com
+ * a seção visível destacada. Não troca a página nem esconde nenhuma área. */
+function ProjectSectionNav({ items }: { items: { id: string; label: string }[] }) {
+  const [active, setActive] = useState(items[0]?.id ?? "");
+  useEffect(() => {
+    if (typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (visible) setActive(visible.target.id);
+      },
+      { rootMargin: "-20% 0px -65% 0px" },
+    );
+    for (const it of items) {
+      const el = document.getElementById(it.id);
+      if (el) io.observe(el);
+    }
+    return () => io.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items.map((i) => i.id).join("|")]);
+
+  if (items.length < 3) return null;
+  return (
+    <nav
+      aria-label="Seções do projeto"
+      className="sticky top-0 z-20 -mx-4 overflow-x-auto border-b border-border/60 bg-background/90 px-4 backdrop-blur [scrollbar-width:none] md:-mx-8 md:px-8 [&::-webkit-scrollbar]:hidden"
+    >
+      <ul className="flex gap-5">
+        {items.map((it) => (
+          <li key={it.id} className="shrink-0">
+            <button
+              type="button"
+              aria-current={active === it.id ? "true" : undefined}
+              onClick={() =>
+                document
+                  .getElementById(it.id)
+                  ?.scrollIntoView({ behavior: "smooth", block: "start" })
+              }
+              className={`border-b-2 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
+                active === it.id
+                  ? "border-foreground text-foreground"
+                  : "border-transparent text-text-secondary hover:text-foreground"
+              }`}
+            >
+              {it.label}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
 
 function renderPanel(
   k: FeatureKey,
@@ -134,6 +240,7 @@ function renderPanel(
   if (k === "kanban")
     return isMarketingProject ? (
       <MarketingSection
+        embedded
         initialOpenTaskId={initialOpenTaskId}
         onInitialOpenTaskHandled={onInitialOpenTaskHandled}
       />
@@ -161,26 +268,12 @@ function ProjetoPage() {
   const { taskId } = Route.useSearch();
   const navigate = useNavigate();
   const [project, setProject] = useState<Project | null>(() => getProjeto(id) ?? null);
-  const [tab, setTab] = useState<FeatureKey | null>(null);
-
-  useEffect(() => {
-    if (project && !tab)
-      setTab(
-        taskId && project.features.includes("kanban") ? "kanban" : (project.features[0] ?? null),
-      );
-  }, [project, tab, taskId]);
-
-  // Força a troca pra aba Kanban toda vez que chega um `taskId` NOVO via
-  // deep-link (ex.: clique no indicador global de timer ativo) — sem
-  // isso, se a pessoa já estivesse nesta mesma página de projeto numa
-  // aba diferente (ex. Documentos), o efeito acima nunca reagia de novo
-  // (só roda quando `tab` ainda é null, ou seja, só no primeiro
-  // carregamento) e o parâmetro de busca mudava sem a tela visivelmente
-  // reagir — parecia que "clicar não abria nada".
+  // Deep-link `?taskId=` (ex.: indicador global de timer ativo): leva à
+  // seção Tarefas da MESMA página — o próprio board abre a tarefa.
   const prevTaskIdRef = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (taskId && taskId !== prevTaskIdRef.current && project?.features.includes("kanban")) {
-      setTab("kanban");
+      document.getElementById("secao-kanban")?.scrollIntoView({ block: "start" });
     }
     prevTaskIdRef.current = taskId;
   }, [taskId, project]);
@@ -207,8 +300,6 @@ function ProjetoPage() {
   const goToSection = (key: SectionKey) => {
     navigate({ to: "/time", search: { section: key } });
   };
-
-  const layout: ProjectLayout = project?.layout ?? "tabs";
 
   const [editOpen, setEditOpen] = useState(false);
   const { confirm, confirmDialog } = useConfirm();
@@ -302,7 +393,9 @@ function ProjetoPage() {
     isHypeAppProject && !project.features.includes("bugs_sugestoes")
       ? [...project.features, "bugs_sugestoes" as const]
       : project.features;
-  const availableTabs = featuresWithHypeApp;
+  const availableSections = FEATURES.map((f) => f.key).filter((k) =>
+    featuresWithHypeApp.includes(k),
+  );
 
   return (
     <AppShell active="projetos" onSelect={goToSection}>
@@ -324,7 +417,7 @@ function ProjetoPage() {
          * (SummaryStat, componente compartilhado) numa faixa só embaixo do
          * mesmo card. Nada de banner azul — azul fica só como destaque
          * (botão, foco, badges de saúde). */}
-        <div className="space-y-6">
+        <div id="resumo" className="scroll-mt-14 space-y-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex min-w-0 flex-1 items-start gap-4">
               <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-muted">
@@ -462,66 +555,35 @@ function ProjetoPage() {
         )}
         {confirmDialog}
 
-        <div>
-          {availableTabs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Nenhuma funcionalidade habilitada para este projeto.
-            </p>
-          ) : (
-            <>
-              {layout === "tabs" ? (
-                <>
-                  <div className="mb-6 flex flex-wrap gap-1 border-b border-border">
-                    {availableTabs.map((k) => {
-                      const meta = FEATURES.find((x) => x.key === k);
-                      if (!meta) return null;
-                      const Icon = ICONS[k];
-                      const active = tab === k;
-                      return (
-                        <button
-                          key={k}
-                          onClick={() => setTab(k)}
-                          className={`inline-flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors ${
-                            active
-                              ? "border-foreground text-foreground"
-                              : "border-transparent text-text-secondary hover:text-foreground"
-                          }`}
-                        >
-                          <Icon className="h-3.5 w-3.5" />
-                          {meta.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {tab && renderPanel(tab, project, update, taskId, clearTaskId)}
-                </>
-              ) : (
-                <div className="space-y-10">
-                  {availableTabs.map((k) => {
-                    const meta = FEATURES.find((x) => x.key === k);
-                    if (!meta) return null;
-                    const Icon = ICONS[k];
-                    return (
-                      <section key={k} className="scroll-mt-4">
-                        {/* "Arquivos e links" desenha seu próprio cabeçalho
-                            (título + botão "+ Adicionar" na mesma linha) —
-                            suprime só este aqui pra não duplicar. Toda outra
-                            seção continua exatamente como antes. */}
-                        {k !== "documentos" && (
-                          <div className="mb-3 flex items-center gap-2 border-b border-border pb-2">
-                            <Icon className="h-4 w-4 text-muted-foreground" />
-                            <h2 className="text-sm font-semibold text-foreground">{meta.label}</h2>
-                          </div>
-                        )}
-                        {renderPanel(k, project, update, taskId, clearTaskId)}
-                      </section>
-                    );
-                  })}
-                </div>
-              )}
-            </>
-          )}
-        </div>
+        {availableSections.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Nenhuma funcionalidade habilitada para este projeto.
+          </p>
+        ) : (
+          <>
+            <ProjectSectionNav
+              items={[
+                { id: "resumo", label: "Resumo" },
+                ...availableSections.map((k) => ({
+                  id: `secao-${k}`,
+                  label: SECTION_NAV_LABEL[k],
+                })),
+              ]}
+            />
+            <div className="space-y-12">
+              {availableSections.map((k, i) => (
+                <ProjectSection
+                  key={k}
+                  id={`secao-${k}`}
+                  title={SECTION_TITLE[k]}
+                  eager={i === 0 || k === "kanban"}
+                >
+                  {renderPanel(k, project, update, taskId, clearTaskId)}
+                </ProjectSection>
+              ))}
+            </div>
+          </>
+        )}
       </PageContainer>
     </AppShell>
   );
@@ -546,6 +608,7 @@ function KanbanPanel({
         update({ tasks: next as unknown as Task[] });
       }}
       scope={{ kind: "projeto", id: project.id }}
+      title=""
       breadcrumb="Projetos"
       initialOpenTaskId={initialOpenTaskId}
       onInitialOpenTaskHandled={onInitialOpenTaskHandled}
@@ -577,6 +640,7 @@ function InfluencersPanel({
       onChange={persist}
       exportName={project.name}
       allowedFields={project.influencerFeatures}
+      hideTitle
     />
   );
 }
@@ -897,11 +961,9 @@ function DocsPanel({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <FileText className="h-4 w-4 text-muted-foreground" />
-          <h2 className="text-sm font-semibold text-foreground">Arquivos e links</h2>
-          <span className="text-xs text-muted-foreground">({project.docs.length})</span>
-        </div>
+        <p className="text-sm text-text-secondary">
+          {project.docs.length} {project.docs.length === 1 ? "item" : "itens"}
+        </p>
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -933,9 +995,9 @@ function DocsPanel({
             }}
           >
             <PopoverTrigger asChild>
-              <button className="inline-flex items-center gap-1.5 rounded-md bg-brand px-2.5 py-1.5 text-xs font-medium text-brand-foreground hover:bg-brand-hover">
+              <Button variant="primary" size="sm">
                 <Plus className="h-3.5 w-3.5" /> Adicionar
-              </button>
+              </Button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-72 p-0">
               {addStep === "choose" ? (

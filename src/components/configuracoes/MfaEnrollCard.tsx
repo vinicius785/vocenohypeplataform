@@ -1,3 +1,4 @@
+import { useConfirm } from "@/hooks/use-confirm";
 import { useCallback, useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { ShieldCheck, ShieldAlert, Loader2 } from "lucide-react";
@@ -28,6 +29,7 @@ type EnrollState = {
  * password vault; this one gates the user's own login.
  */
 export function MfaEnrollCard({ isAdmin }: { isAdmin: boolean }) {
+  const { confirm, confirmDialog } = useConfirm();
   const checkVerifyRateLimitFn = useServerFn(checkMfaVerifyRateLimit);
   const logEnrolledFn = useServerFn(logMfaEnrolled);
   const logUnenrolledFn = useServerFn(logMfaUnenrolled);
@@ -128,9 +130,11 @@ export function MfaEnrollCard({ isAdmin }: { isAdmin: boolean }) {
   const disable = async () => {
     if (!verifiedFactorId) return;
     if (
-      !window.confirm(
-        "Desativar a autenticação em duas etapas? Você voltará a entrar só com e-mail e senha.",
-      )
+      !(await confirm("Você voltará a entrar só com e-mail e senha.", {
+        title: "Desativar a autenticação em duas etapas?",
+        confirmLabel: "Desativar",
+        destructive: true,
+      }))
     )
       return;
     setUnenrollBusy(true);
@@ -152,6 +156,7 @@ export function MfaEnrollCard({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <SettingsCard title="Autenticação em duas etapas">
+      {confirmDialog}
       <p className="text-xs text-muted-foreground">
         Adicione uma segunda etapa (código de 6 dígitos de um app autenticador) ao entrar na
         plataforma, além do e-mail e senha.

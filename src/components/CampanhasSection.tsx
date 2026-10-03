@@ -75,7 +75,8 @@ import {
 } from "./campanhas/campanha-ui";
 import { buildMesReferenciaOptions } from "@/lib/inscricao-page";
 import { useMyAccess } from "@/lib/permissions";
-import { PageContainer } from "@/components/shared/PageContainer";
+import { PageCanvas, PageContainer } from "@/components/shared/PageContainer";
+import { PageHeader } from "@/components/shared/PageHeader";
 import { SummaryStat } from "@/components/shared/SummaryStat";
 import { OPEN_CAMPANHA_TASK_KEY, OPEN_CAMPANHA_TASK_EVENT } from "./AppShell";
 import { TaskBoard, matchesDeadlinePeriod, type Task } from "./tasks/TaskBoard";
@@ -316,18 +317,9 @@ export function CampanhasSection() {
     // Canvas fix (mesma correção do Financeiro/Reuniões/Metas/Clientes):
     // --background e --card são idênticos no claro, então sem isso os
     // cards de Campanhas não se distinguiam do fundo.
-    <div className="-m-4 min-h-[calc(100vh-4rem)] bg-muted p-4 dark:bg-transparent md:-m-8 md:p-8">
+    <PageCanvas>
       <PageContainer className="space-y-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-[36px] font-bold leading-[1.05] tracking-tight text-foreground md:text-[42px]">
-              Campanhas
-            </p>
-            <p className="mt-1.5 text-sm text-text-secondary">
-              Todas as campanhas vinculadas aos clientes.
-            </p>
-          </div>
-        </div>
+        <PageHeader title="Campanhas" description="Todas as campanhas vinculadas aos clientes." />
 
         {hasAnyCampanha && (
           <PageSummaryPanel title="Visão geral">
@@ -418,7 +410,7 @@ export function CampanhasSection() {
       />
 
       {confirmDialog}
-    </div>
+    </PageCanvas>
   );
 }
 
@@ -903,7 +895,7 @@ function CampanhaDetail({
     // muted por trás dos cards, já que --background e --card são
     // idênticos no claro. Sem min-height artificial (2ª rodada corretiva)
     // — a altura é só a do conteúdo real, nunca força espaço vazio.
-    <div className="-m-4 bg-muted p-4 dark:bg-transparent md:-m-8 md:p-8">
+    <PageCanvas>
       {/* Ritmo vertical das GRANDES seções centralizado aqui — o único
        * `space-y-*` que separa cabeçalho / métricas / informações /
        * tarefas / influenciadores / todas-as-entregas (rodada de
@@ -1712,7 +1704,7 @@ function CampanhaDetail({
           </DialogContent>
         </Dialog>
       </PageContainer>
-    </div>
+    </PageCanvas>
   );
 }
 

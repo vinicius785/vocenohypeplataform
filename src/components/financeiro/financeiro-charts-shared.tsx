@@ -50,9 +50,13 @@ export function ChartCard({
     <div className="flex h-full flex-col rounded-[24px] bg-card p-5 dark:shadow-none md:p-6">
       <div className="mb-3 flex shrink-0 flex-wrap items-start justify-between gap-2">
         <div>
-          <h3 className="text-[20px] font-semibold leading-tight text-foreground md:text-[22px]">
+          <p
+            role="heading"
+            aria-level={3}
+            className="text-[20px] font-semibold leading-tight text-foreground md:text-[22px]"
+          >
             {title}
-          </h3>
+          </p>
           {description && <p className={cn(TYPOGRAPHY.caption, "mt-1")}>{description}</p>}
         </div>
         {action}

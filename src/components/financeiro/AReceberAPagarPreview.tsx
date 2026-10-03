@@ -40,7 +40,7 @@ function Coluna({
         )}
       </div>
       <p className="mt-1 text-[11px] text-text-secondary">
-        toda a carteira, não só o período selecionado
+        toda a carteira em aberto, independente do período
       </p>
 
       {itens.length === 0 ? (
@@ -93,7 +93,7 @@ export function AReceberAPagarPreview({
   const aPagar = build("despesa");
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
       <Coluna
         titulo="A receber"
         total={aReceber.total}

@@ -110,7 +110,9 @@ export function ImportDialog({
         className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border bg-background shadow-lg max-sm:!h-dvh max-sm:!max-h-dvh max-sm:!max-w-none max-sm:!rounded-none max-sm:!border-0"
       >
         <div className="flex items-center justify-between border-b border-border px-5 py-3">
-          <h2 className="text-sm font-semibold">Importar lista (ClickUp ou outra planilha)</h2>
+          <p role="heading" aria-level={2} className="text-sm font-semibold">
+            Importar lista (ClickUp ou outra planilha)
+          </p>
           <button type="button" onClick={onClose} aria-label="Fechar" className="cursor-pointer">
             <X className="h-4 w-4 text-muted-foreground hover:text-foreground" />
           </button>

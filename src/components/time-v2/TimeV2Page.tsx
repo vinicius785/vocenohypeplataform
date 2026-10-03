@@ -30,7 +30,8 @@ import { useOpenMemberDeepLink, useTimeData } from "@/components/team/use-time-d
 import { AttentionTasks, type AttentionTab } from "@/components/team/AttentionTasks";
 import { TeamDeliveriesWeek } from "@/components/team/TeamDeliveriesWeek";
 import { TeamInsights } from "@/components/team/TeamInsights";
-import { PageContainer } from "@/components/shared/PageContainer";
+import { PageCanvas, PageContainer } from "@/components/shared/PageContainer";
+import { PageHeader } from "@/components/shared/PageHeader";
 import { MemberProfileV2 } from "./MemberProfileV2";
 import { TimeMembersTable } from "./TimeMembersTable";
 import { TimeSummaryStrip } from "./TimeSummaryStrip";
@@ -248,23 +249,21 @@ export function TimeV2Page() {
   return (
     <TooltipProvider delayDuration={200}>
       <PageContainer variant="wide">
-        <div className="-m-4 min-h-[calc(100vh-4rem)] space-y-6 bg-muted p-4 dark:bg-transparent md:-m-8 md:p-8">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-[36px] font-bold leading-[1.05] tracking-tight text-foreground md:text-[42px]">
-                Time
-              </p>
-              <p className="mt-1.5 text-sm text-text-secondary">
-                Visão geral da operação, produtividade, carga e indicadores do time.
-              </p>
-            </div>
-            {isAdmin && (
-              <Button variant="primary" size="comfortable" onClick={() => openEdit(null)}>
-                <Plus className="h-4 w-4" />
-                Novo membro
-              </Button>
-            )}
-          </div>
+        <PageCanvas className="space-y-6">
+          <PageHeader
+            title="Time"
+            description="Visão geral da operação, produtividade, carga e indicadores do time."
+            actionsSlot={
+              <>
+                {isAdmin && (
+                  <Button variant="primary" size="comfortable" onClick={() => openEdit(null)}>
+                    <Plus className="h-4 w-4" />
+                    Novo membro
+                  </Button>
+                )}
+              </>
+            }
+          />
 
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative w-full sm:w-64">
@@ -474,7 +473,7 @@ export function TimeV2Page() {
             onReset={(id) => void handleReset(id)}
           />
           {confirmDialog}
-        </div>
+        </PageCanvas>
       </PageContainer>
     </TooltipProvider>
   );

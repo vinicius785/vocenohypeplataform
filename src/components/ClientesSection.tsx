@@ -4,7 +4,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { Plus, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { PageContainer } from "@/components/shared/PageContainer";
+import { PageCanvas, PageContainer } from "@/components/shared/PageContainer";
+import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import {
   PageSummaryPanel,
@@ -255,21 +256,19 @@ export function ClientesSection() {
     // Canvas fix (mesma correção do Financeiro/Reuniões/Metas): --background
     // e --card são idênticos no claro, então sem isso os cards de Clientes
     // não se distinguiam do fundo.
-    <div className="-m-4 min-h-[calc(100vh-4rem)] bg-muted p-4 dark:bg-transparent md:-m-8 md:p-8">
+    <PageCanvas>
       <PageContainer className="space-y-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-[36px] font-bold leading-[1.05] tracking-tight text-foreground md:text-[42px]">
-              Clientes
-            </p>
-            <p className="mt-1.5 text-sm text-text-secondary">
-              Todos os clientes e campanhas vinculadas em um só lugar.
-            </p>
-          </div>
-          <Button variant="primary" size="comfortable" onClick={openNovoCliente}>
-            <Plus className="h-4 w-4" /> Novo cliente
-          </Button>
-        </div>
+        <PageHeader
+          title="Clientes"
+          description="Todos os clientes e campanhas vinculadas em um só lugar."
+          actionsSlot={
+            <>
+              <Button variant="primary" size="comfortable" onClick={openNovoCliente}>
+                <Plus className="h-4 w-4" /> Novo cliente
+              </Button>
+            </>
+          }
+        />
 
         {hasAnyClient && (
           <PageSummaryPanel title="Visão geral">
@@ -376,6 +375,6 @@ export function ClientesSection() {
       />
 
       {confirmDialog}
-    </div>
+    </PageCanvas>
   );
 }

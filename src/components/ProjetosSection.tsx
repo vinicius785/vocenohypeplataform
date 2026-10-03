@@ -37,7 +37,8 @@ import {
   type ProjectFiltersState,
 } from "./projetos/projeto-ui";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { PageContainer } from "@/components/shared/PageContainer";
+import { PageCanvas, PageContainer } from "@/components/shared/PageContainer";
+import { PageHeader } from "@/components/shared/PageHeader";
 import {
   PageSummaryPanel,
   SummaryPrimaryMetric,
@@ -45,7 +46,6 @@ import {
 } from "@/components/shared/PageSummaryPanel";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { useConfirm } from "@/hooks/use-confirm";
 
@@ -210,30 +210,28 @@ export function ProjetosSection() {
     // Canvas fix — mesma correção já usada em Campanhas/Clientes/Financeiro
     // (--background e --card são idênticos no tema claro, então sem isso
     // os cards não se distinguiam do fundo).
-    <div className="-m-4 min-h-[calc(100vh-4rem)] bg-muted p-4 dark:bg-transparent md:-m-8 md:p-8">
+    <PageCanvas>
       <PageContainer className="space-y-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-[36px] font-bold leading-[1.05] tracking-tight text-foreground md:text-[42px]">
-              Projetos
-            </p>
-            <p className="mt-1.5 text-sm text-text-secondary">
-              Organize tarefas e entregas do time.
-            </p>
-          </div>
-          {canEdit && (
-            <Button
-              variant="primary"
-              size="comfortable"
-              onClick={() => {
-                setEditing(null);
-                setWizardOpen(true);
-              }}
-            >
-              <Plus className="h-4 w-4" /> Novo projeto
-            </Button>
-          )}
-        </div>
+        <PageHeader
+          title="Projetos"
+          description="Organize tarefas e entregas do time."
+          actionsSlot={
+            <>
+              {canEdit && (
+                <Button
+                  variant="primary"
+                  size="comfortable"
+                  onClick={() => {
+                    setEditing(null);
+                    setWizardOpen(true);
+                  }}
+                >
+                  <Plus className="h-4 w-4" /> Novo projeto
+                </Button>
+              )}
+            </>
+          }
+        />
 
         {hasAnyProject && (
           <PageSummaryPanel title="Visão geral">
@@ -355,7 +353,7 @@ export function ProjetosSection() {
         )}
         {confirmDialog}
       </PageContainer>
-    </div>
+    </PageCanvas>
   );
 }
 
@@ -439,7 +437,7 @@ export function ProjectWizard({
   const [infFeatures, setInfFeatures] = useState<InfluencerFieldKey[]>(
     initial?.influencerFeatures ?? DEFAULT_INFLUENCER_FIELDS,
   );
-  const [layout, setLayout] = useState<ProjectLayout>(initial?.layout ?? "tabs");
+  const [layout] = useState<ProjectLayout>(initial?.layout ?? "tabs");
   const [status, setStatus] = useState<ProjectStatus>(initial?.status ?? DEFAULT_PROJECT_STATUS);
   const [error, setError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -730,37 +728,6 @@ export function ProjectWizard({
                   </div>
                 </WizardSection>
               )}
-
-              <WizardSection
-                title="Navegação"
-                description="Como o time percorre as áreas dentro do projeto."
-              >
-                <RadioGroup
-                  value={layout}
-                  onValueChange={(v) => setLayout(v as ProjectLayout)}
-                  className="gap-0"
-                >
-                  {(
-                    [
-                      ["tabs", "Em abas", "Uma área por vez, foco em um único contexto."],
-                      ["single", "Página única", "Todas as áreas empilhadas em uma rolagem só."],
-                    ] as const
-                  ).map(([key, label, hint]) => (
-                    <label
-                      key={key}
-                      className="flex cursor-pointer items-start gap-3 rounded-md px-2 py-2 transition-colors hover:bg-muted/50"
-                    >
-                      <RadioGroupItem value={key} className="mt-0.5" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-medium text-foreground">{label}</span>
-                        <span className="block text-xs leading-snug text-text-secondary">
-                          {hint}
-                        </span>
-                      </span>
-                    </label>
-                  ))}
-                </RadioGroup>
-              </WizardSection>
             </div>
 
             <div className="flex items-center justify-between gap-3 border-t border-border/60 px-6 py-4">

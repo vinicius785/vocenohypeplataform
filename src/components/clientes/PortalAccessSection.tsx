@@ -1,3 +1,4 @@
+import { useConfirm } from "@/hooks/use-confirm";
 import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { MoreHorizontal, UserPlus2 } from "lucide-react";
@@ -178,6 +179,7 @@ export function PortalAccessSection({
   clienteNome?: string;
   publicToken?: string;
 }) {
+  const { confirm, confirmDialog } = useConfirm();
   const getOrgIdFn = useServerFn(getClienteOrganizationId);
   const listMembersFn = useServerFn(listOrganizationMembers);
   const listCampaignsFn = useServerFn(listOrganizationCampaigns);
@@ -362,11 +364,13 @@ export function PortalAccessSection({
     withRowBusy(m.id, () => suspendFn({ data: { organizationMemberId: m.id } }).then(() => {}));
   const handleReactivate = (m: Member) =>
     withRowBusy(m.id, () => reactivateFn({ data: { organizationMemberId: m.id } }).then(() => {}));
-  const handleRemove = (m: Member) => {
+  const handleRemove = async (m: Member) => {
     if (
-      !window.confirm(
-        "Remover o acesso ao portal deste usuário? Esta ação pode ser revertida reativando o acesso depois.",
-      )
+      !(await confirm("Esta ação pode ser revertida reativando o acesso depois.", {
+        title: "Remover acesso ao portal?",
+        confirmLabel: "Remover acesso",
+        destructive: true,
+      }))
     )
       return;
     return withRowBusy(m.id, () =>
@@ -376,11 +380,10 @@ export function PortalAccessSection({
 
   const handleDeactivateToken = async () => {
     if (
-      !window.confirm(
-        "Tem certeza? Isso desativa o link antigo do portal (/portal/...) para este cliente — " +
-          "só faça isso depois de confirmar que ele já está usando o novo login. Essa ação não " +
-          "tem volta automática (seria preciso gerar um link novo depois).",
-      )
+      !(await confirm(
+        "Isso desativa o link antigo do portal (/portal/...) para este cliente — só faça isso depois de confirmar que ele já está usando o novo login.\nEssa ação não tem volta automática (seria preciso gerar um link novo depois).",
+        { title: "Desativar o link antigo?", confirmLabel: "Desativar link", destructive: true },
+      ))
     )
       return;
     setDeactivatingToken(true);
@@ -400,6 +403,7 @@ export function PortalAccessSection({
 
   return (
     <div>
+      {confirmDialog}
       {publicToken && (
         <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
           <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">

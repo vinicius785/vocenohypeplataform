@@ -19,11 +19,11 @@ export function PeriodPicker({ filtered }: { filtered: Filtered }) {
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      <span className="text-[11px] text-muted-foreground">Período (por vencimento)</span>
+      <span className="text-sm text-text-secondary">Período</span>
       <select
         value={periodMode}
         onChange={(e) => setPeriodMode(e.target.value as typeof periodMode)}
-        className="h-8 cursor-pointer rounded-md border border-border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+        className="h-9 cursor-pointer rounded-md border border-input bg-background px-2 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-brand"
       >
         {PERIOD_OPTIONS.map((o) => (
           <option key={o.value} value={o.value}>

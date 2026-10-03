@@ -45,6 +45,7 @@ function resolveTasks(standalones: MktStandalone[]): BoardTask[] {
 export function MarketingSection({
   initialOpenTaskId,
   onInitialOpenTaskHandled,
+  embedded = false,
 }: {
   /** Deep-link vindo de "Meu trabalho" (Início) ou do indicador de timer
    * ativo — mesmo search param `taskId` que `/projeto/$id` já usa pra
@@ -52,6 +53,9 @@ export function MarketingSection({
    * board do Marketing usa um id "achatado" só dele. */
   initialOpenTaskId?: string;
   onInitialOpenTaskHandled?: () => void;
+  /** Dentro da página do Projeto: a seção já tem título, então some o
+   * cabeçalho próprio de Marketing. */
+  embedded?: boolean;
 } = {}) {
   const [standalones, setStandalones] = useState<MktStandalone[]>(() => loadStandalone());
 
@@ -124,16 +128,18 @@ export function MarketingSection({
 
   return (
     <div className="space-y-6">
-      <SectionHeader
-        title="Marketing"
-        subtitle="Kanban compartilhado do time de marketing. Crie tarefas aqui."
-      />
+      {!embedded && (
+        <SectionHeader
+          title="Marketing"
+          subtitle="Kanban compartilhado do time de marketing. Crie tarefas aqui."
+        />
+      )}
       <TaskBoard
         tasks={tasks}
         onChange={onChange}
         scope={{ kind: "marketing" }}
         breadcrumb="Marketing"
-        title="Tarefas do Marketing"
+        title={embedded ? "" : "Tarefas do Marketing"}
         initialOpenTaskId={initialOpenTaskId}
         onInitialOpenTaskHandled={onInitialOpenTaskHandled}
       />

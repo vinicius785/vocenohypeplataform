@@ -1,22 +1,21 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { LANCAMENTOS_SEGMENTS, type LancamentosSegment } from "@/lib/section-nav";
+import { DUE_BUCKET_LABEL, fmtBRL, groupByDueBucket } from "@/lib/financeiro-entries";
 import { MovimentacoesTab } from "./MovimentacoesTab";
-import { PendingKindTab } from "./PendingKindTab";
-import { PeriodPicker } from "./PeriodPicker";
 import type { useFinanceiroFilteredEntries } from "./useFinanceiroFilteredEntries";
 
 type Filtered = ReturnType<typeof useFinanceiroFilteredEntries>;
 
-/** Lançamentos — a central operacional do Financeiro. Substitui as antigas
- * áreas Movimentações / A receber / A pagar: agora são só SEGMENTAÇÕES da
- * mesma lista.
- *  - Todos / Entradas / Saídas: lançamentos do período (por vencimento),
- *    com os filtros avançados — Entradas = receitas, Saídas = despesas
- *    (mesmo `filters.tipo` que a barra de filtros já usava).
- *  - A receber / A pagar: TODA a carteira em aberto daquele tipo (não só o
- *    período — uma conta que vence em 40 dias continua aparecendo), então o
- *    seletor de período não se aplica e some. */
+const OPEN_STATUSES = new Set(["a_receber", "a_pagar", "vencido"]);
+
+/** Lançamentos — a central operacional do Financeiro: UMA lista, sob o
+ * contexto global de período (definido em `FinanceiroSection`), com o tipo
+ * (Todos/Entradas/Saídas) no primeiro nível e todo o resto — status
+ * ("A receber", "A pagar", "Vencido"…), cliente, campanha, categoria — dentro
+ * de um único "Filtros". Quando o recorte é só "em aberto", uma linha de
+ * faixas de vencimento resume o que vence quando (o que as antigas telas
+ * A receber/A pagar mostravam em cartões). */
 export function LancamentosTab({
   filtered,
   segment,
@@ -34,47 +33,55 @@ export function LancamentosTab({
   syncError: string | null;
   onSyncError: (msg: string | null) => void;
 }) {
-  const { setFilters } = filtered;
+  const { setFilters, filters, visible } = filtered;
 
-  // Entradas/Saídas ↔ `filters.tipo` (único eixo de tipo da lista). Nas
-  // segmentações da carteira em aberto o tipo vem do próprio segmento.
+  // Entradas/Saídas ↔ `filters.tipo` (único eixo de tipo da lista).
   useEffect(() => {
     const tipo = segment === "entradas" ? "receita" : segment === "saidas" ? "despesa" : "todos";
-    if (segment === "a-receber" || segment === "a-pagar") return;
     setFilters((f) => (f.tipo === tipo ? f : { ...f, tipo }));
   }, [segment, setFilters]);
 
-  const periodScoped = segment !== "a-receber" && segment !== "a-pagar";
+  const onlyOpen = filters.status.length > 0 && filters.status.every((s) => OPEN_STATUSES.has(s));
+  const buckets = useMemo(() => (onlyOpen ? groupByDueBucket(visible) : null), [onlyOpen, visible]);
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="-mx-4 max-w-full overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:px-0 [&::-webkit-scrollbar]:hidden">
-          <SegmentedControl
-            aria-label="Segmentação dos lançamentos"
-            size="sm"
-            value={segment}
-            onChange={onSegmentChange}
-            options={LANCAMENTOS_SEGMENTS.map((s) => ({ value: s.key, label: s.label }))}
-          />
-        </div>
-        {periodScoped && <PeriodPicker filtered={filtered} />}
+      <div className="-mx-4 max-w-full overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:px-0 [&::-webkit-scrollbar]:hidden">
+        <SegmentedControl
+          aria-label="Tipo de lançamento"
+          size="sm"
+          value={segment}
+          onChange={onSegmentChange}
+          options={LANCAMENTOS_SEGMENTS.map((s) => ({ value: s.key, label: s.label }))}
+        />
       </div>
 
-      {periodScoped ? (
-        <MovimentacoesTab
-          filtered={filtered}
-          importOpen={importOpen}
-          onImportOpenChange={onImportOpenChange}
-          syncError={syncError}
-          onSyncError={onSyncError}
-        />
-      ) : (
-        <PendingKindTab
-          filtered={filtered}
-          kind={segment === "a-receber" ? "receita" : "despesa"}
-        />
+      {buckets && (
+        <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-text-secondary">
+          <span>
+            Em aberto{" "}
+            <span className="font-semibold tabular-nums text-foreground">
+              {fmtBRL(Object.values(buckets).reduce((sum, b) => sum + b.total, 0))}
+            </span>
+          </span>
+          {(["vencido", "vence_hoje", "proximos_7", "de_8_a_30", "acima_30"] as const).map((k) =>
+            buckets[k].total > 0 ? (
+              <span key={k} className={k === "vencido" ? "font-medium text-danger" : undefined}>
+                {DUE_BUCKET_LABEL[k]}{" "}
+                <span className="tabular-nums">{fmtBRL(buckets[k].total)}</span>
+              </span>
+            ) : null,
+          )}
+        </p>
       )}
+
+      <MovimentacoesTab
+        filtered={filtered}
+        importOpen={importOpen}
+        onImportOpenChange={onImportOpenChange}
+        syncError={syncError}
+        onSyncError={onSyncError}
+      />
     </div>
   );
 }

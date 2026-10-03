@@ -12,7 +12,12 @@ import {
   ChevronDown,
   ClipboardList,
   FileText,
+  Plus,
 } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { Textarea } from "@/components/ui/textarea";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -73,10 +78,10 @@ export function ProjectBugsPanel({
   const [description, setDescription] = useState("");
   const [screenshot, setScreenshot] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
   // Confirmação visual de que o envio deu certo — sem isso, depois de
   // clicar "Enviar" o formulário só esvaziava silenciosamente, sem
   // nenhum sinal de que o relato realmente foi registrado.
-  const [justSubmittedKind, setJustSubmittedKind] = useState<BugReportKind | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [previews, setPreviews] = useState<Record<string, string>>({});
@@ -121,8 +126,8 @@ export function ProjectBugsPanel({
       setScreenshot(null);
       if (fileRef.current) fileRef.current.value = "";
       await load();
-      setJustSubmittedKind(kind);
-      setTimeout(() => setJustSubmittedKind(null), 2600);
+      toast.success(kind === "bug" ? "Bug enviado" : "Sugestão enviada");
+      setFormOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao enviar.");
     } finally {
@@ -153,7 +158,14 @@ export function ProjectBugsPanel({
   };
 
   const handleDelete = async (r: BugReport) => {
-    const ok = await confirm("Remover este relato?");
+    const ok = await confirm(
+      "Você está prestes a remover este relato.\nEsta ação não pode ser desfeita.",
+      {
+        title: "Remover relato?",
+        confirmLabel: "Remover",
+        destructive: true,
+      },
+    );
     if (!ok) return;
     try {
       await deleteBugReport(r.id, r.screenshotPath);
@@ -195,203 +207,162 @@ export function ProjectBugsPanel({
   const resolvidos = reports.filter((r) => r.resolved);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {confirmDialog}
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold text-foreground">Bugs & Sugestões</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Reporte problemas ou ideias sobre o HypeApp — visíveis pro time todo, com status de
-            resolução.
-          </p>
-          {!loading && reports.length > 0 && (
-            <p className="mt-1.5 flex items-center gap-3 text-[11px] text-muted-foreground">
-              <span className="font-medium text-foreground">{abertos.length}</span> em aberto
-              <span className="font-medium text-foreground">{resolvidos.length}</span> resolvido
-              {resolvidos.length === 1 ? "" : "s"}
-            </p>
+      {/* A seção já tem título (cabeçalho do Projeto): aqui só o resumo e as
+       * ações — "Reportar problema" abre o formulário sob demanda. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-text-secondary">
+          {loading
+            ? "Carregando..."
+            : reports.length === 0
+              ? "Nenhum relato ainda."
+              : `${abertos.length} em aberto · ${resolvidos.length} ${resolvidos.length === 1 ? "resolvido" : "resolvidos"}`}
+        </p>
+        <div className="flex items-center gap-2">
+          {project && update && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm">
+                  <LinkIcon className="h-3.5 w-3.5" /> {linkCopied ? "Copiado!" : "Copiar link"}
+                  <ChevronDown className="h-3 w-3 opacity-70" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuItem onClick={() => void copyPublicLink(false)} className="gap-2">
+                  <FileText className="h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    <span className="block">Só o formulário</span>
+                    <span className="block text-[11px] text-text-secondary">
+                      Pra quem só deve reportar, sem ver os relatos de todo mundo.
+                    </span>
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => void copyPublicLink(true)} className="gap-2">
+                  <ClipboardList className="h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    <span className="block">Formulário + lista de bugs</span>
+                    <span className="block text-[11px] text-text-secondary">
+                      Mostra também os relatos já enviados e o status de cada um.
+                    </span>
+                  </span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          {!formOpen && (
+            <Button variant="outline" size="sm" onClick={() => setFormOpen(true)}>
+              <Plus className="h-3.5 w-3.5" /> Reportar problema
+            </Button>
           )}
         </div>
-        {project && update && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
-              >
-                <LinkIcon className="h-3.5 w-3.5" /> {linkCopied ? "Copiado!" : "Copiar link"}
-                <ChevronDown className="h-3 w-3 opacity-70" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64">
-              <DropdownMenuItem onClick={() => void copyPublicLink(false)} className="gap-2">
-                <FileText className="h-3.5 w-3.5 shrink-0" />
-                <span>
-                  <span className="block">Só o formulário</span>
-                  <span className="block text-[11px] text-muted-foreground">
-                    Pra quem só deve reportar, sem ver os relatos de todo mundo.
-                  </span>
-                </span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => void copyPublicLink(true)} className="gap-2">
-                <ClipboardList className="h-3.5 w-3.5 shrink-0" />
-                <span>
-                  <span className="block">Formulário + lista de bugs</span>
-                  <span className="block text-[11px] text-muted-foreground">
-                    Mostra também os relatos já enviados e o status de cada um.
-                  </span>
-                </span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
       </div>
 
-      <form
-        onSubmit={submit}
-        className="max-w-2xl space-y-3 rounded-2xl border border-border bg-muted/40 p-4"
-      >
-        <div className="flex flex-wrap gap-4">
-          <div className="space-y-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Tipo</span>
-            <div className="flex gap-1.5">
-              {KIND_OPTS.map((opt) => {
-                const Icon = opt.icon;
-                const active = kind === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setKind(opt.value)}
-                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                      active
-                        ? "border-brand bg-brand text-brand-foreground"
-                        : "border-border text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    <Icon className="h-3.5 w-3.5" /> {opt.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Onde</span>
-            <div className="flex gap-1.5">
-              {SCOPE_OPTS.map((opt) => {
-                const active = scope === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setScope(opt.value)}
-                    className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                      active
-                        ? "border-brand bg-brand text-brand-foreground"
-                        : "border-border text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        <label className="block space-y-1">
-          <span className="text-xs font-medium text-muted-foreground">Descrição</span>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={3}
-            placeholder={
-              kind === "bug"
-                ? "O que aconteceu? Quais os passos pra reproduzir?"
-                : "Qual a ideia? Por que ajudaria?"
-            }
-            className="w-full resize-none rounded-md border border-border bg-background px-2.5 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-            maxLength={2000}
-            required
-          />
-        </label>
-
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            {screenshot ? (
-              <div className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground">
-                <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
-                {screenshot.name}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setScreenshot(null);
-                    if (fileRef.current) fileRef.current.value = "";
-                  }}
-                  aria-label="Remover anexo"
-                  className="rounded p-0.5 hover:bg-muted"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            ) : (
-              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-dashed border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:border-foreground hover:text-foreground">
-                <Paperclip className="h-3.5 w-3.5" />
-                Anexar (opcional)
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*,.pdf"
-                  className="hidden"
-                  onChange={(e) => setScreenshot(e.target.files?.[0] ?? null)}
+      {formOpen && (
+        <form onSubmit={submit} className="max-w-2xl space-y-4 border-y border-border/60 py-5">
+          <div className="flex flex-wrap gap-x-6 gap-y-3">
+            <div className="space-y-1.5">
+              <span className="text-sm font-medium text-foreground">Tipo</span>
+              <div>
+                <SegmentedControl
+                  aria-label="Tipo do relato"
+                  size="sm"
+                  value={kind}
+                  onChange={setKind}
+                  options={KIND_OPTS.map((o) => ({ value: o.value, label: o.label }))}
                 />
-              </label>
-            )}
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <span className="text-sm font-medium text-foreground">Onde</span>
+              <div>
+                <SegmentedControl
+                  aria-label="Onde aconteceu"
+                  size="sm"
+                  value={scope}
+                  onChange={setScope}
+                  options={SCOPE_OPTS.map((o) => ({ value: o.value, label: o.label }))}
+                />
+              </div>
+            </div>
           </div>
-          <button
-            type="submit"
-            disabled={submitting || (!description.trim() && !justSubmittedKind)}
-            className={`inline-flex items-center gap-1.5 rounded-full border-2 px-4 py-1.5 text-xs font-medium transition-colors duration-200 disabled:opacity-50 ${
-              justSubmittedKind
-                ? "border-success-border bg-success text-brand-foreground"
-                : "border-brand bg-brand text-brand-foreground hover:bg-brand-hover"
-            }`}
-          >
-            {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            {justSubmittedKind ? (
-              <>
-                <Check className="h-3.5 w-3.5 duration-300 animate-in zoom-in-50" /> Enviado!
-              </>
-            ) : (
-              "Enviar"
-            )}
-          </button>
-        </div>
-      </form>
 
-      {justSubmittedKind && (
-        <div className="flex items-center gap-2 rounded-xl border border-success-border bg-success-soft px-3 py-2 text-xs font-medium text-success-soft-foreground duration-300 animate-in fade-in-0 slide-in-from-top-1">
-          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success text-brand-foreground duration-500 animate-in zoom-in-50">
-            <Check className="h-3 w-3" />
-          </span>
-          {justSubmittedKind === "bug" ? "Bug enviado!" : "Sugestão enviada!"} Nosso time vai dar
-          uma olhada.
-        </div>
+          <label className="block space-y-1.5">
+            <span className="text-sm font-medium text-foreground">Descrição</span>
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              autoFocus
+              placeholder={
+                kind === "bug"
+                  ? "O que aconteceu? Quais os passos pra reproduzir?"
+                  : "Qual a ideia? Por que ajudaria?"
+              }
+              className="resize-none"
+              maxLength={2000}
+              required
+            />
+          </label>
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              {screenshot ? (
+                <div className="inline-flex items-center gap-2 text-sm text-foreground">
+                  <Paperclip className="h-3.5 w-3.5 text-text-secondary" />
+                  {screenshot.name}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setScreenshot(null);
+                      if (fileRef.current) fileRef.current.value = "";
+                    }}
+                    aria-label="Remover anexo"
+                    className="rounded p-0.5 hover:bg-muted"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ) : (
+                <label className="inline-flex cursor-pointer items-center gap-1.5 text-sm text-text-secondary hover:text-foreground">
+                  <Paperclip className="h-3.5 w-3.5" />
+                  Anexar (opcional)
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept="image/*,.pdf"
+                    className="hidden"
+                    onChange={(e) => setScreenshot(e.target.files?.[0] ?? null)}
+                  />
+                </label>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="ghost" size="sm" onClick={() => setFormOpen(false)}>
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                size="sm"
+                disabled={submitting || !description.trim()}
+              >
+                {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Enviar
+              </Button>
+            </div>
+          </div>
+        </form>
       )}
 
       {error && (
-        <div className="flex items-center gap-2 rounded-xl border border-danger-border bg-danger-soft px-3 py-2 text-xs text-danger-soft-foreground">
+        <p role="alert" className="flex items-center gap-2 text-sm text-destructive">
           <X className="h-3.5 w-3.5 shrink-0" /> {error}
-        </div>
+        </p>
       )}
 
-      {loading ? (
-        <p className="text-xs text-muted-foreground">Carregando...</p>
-      ) : reports.length === 0 ? (
-        <p className="text-xs text-muted-foreground">Nenhum relato ainda.</p>
-      ) : (
-        <div className="space-y-4">
+      {!loading && reports.length > 0 && (
+        <div className="space-y-5">
           <ReportList
             title="Em aberto"
             items={abertos}
@@ -447,22 +418,17 @@ function ReportList({
 
   return (
     <div>
-      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <p className="mb-1 text-xs font-medium text-text-secondary">
         {title} ({items.length})
       </p>
-      <ul className="space-y-2">
+      <ul className="divide-y divide-border/60">
         {visibleItems.map((r) => (
-          <li
-            key={r.id}
-            className={`rounded-xl border border-border p-3 ${muted ? "opacity-60" : ""}`}
-          >
+          <li key={r.id} className={`py-3 ${muted ? "opacity-60" : ""}`}>
             <div className="flex flex-wrap items-start justify-between gap-2">
-              <div className="flex flex-wrap items-center gap-1.5">
+              <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-text-secondary">
                 <span
-                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${
-                    r.kind === "bug"
-                      ? "border-danger-border bg-danger-soft text-danger-soft-foreground"
-                      : "border-brand/30 bg-brand-subtle text-brand"
+                  className={`inline-flex items-center gap-1 font-medium ${
+                    r.kind === "bug" ? "text-danger" : "text-foreground"
                   }`}
                 >
                   {r.kind === "bug" ? (
@@ -473,11 +439,9 @@ function ReportList({
                   {r.kind === "bug" ? "Bug" : "Sugestão"}
                 </span>
                 {r.scope && (
-                  <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                    {r.scope === "influenciador" ? "Influenciador" : "Backoffice"}
-                  </span>
+                  <span>{r.scope === "influenciador" ? "Influenciador" : "Backoffice"}</span>
                 )}
-                <span className="text-[11px] text-muted-foreground">
+                <span>
                   {r.reporterName || r.clientLabel || "—"} ·{" "}
                   {new Date(r.createdAt).toLocaleString("pt-BR", {
                     day: "2-digit",
@@ -487,28 +451,24 @@ function ReportList({
                     minute: "2-digit",
                   })}
                 </span>
-              </div>
+              </p>
               <div className="flex shrink-0 items-center gap-1">
                 {isAdmin && (
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => onToggleResolved(r)}
                     disabled={busyId === r.id}
-                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors disabled:opacity-50 ${
-                      r.resolved
-                        ? "border-border text-muted-foreground hover:text-foreground"
-                        : "border-success-border bg-success-soft text-success-soft-foreground hover:bg-success-soft/70"
-                    }`}
                   >
                     <Check className="h-3 w-3" />
                     {r.resolved ? "Reabrir" : "Marcar como resolvido"}
-                  </button>
+                  </Button>
                 )}
                 {isAdmin && (
                   <button
                     type="button"
                     onClick={() => onDelete(r)}
-                    className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+                    className="rounded p-1 text-text-secondary hover:bg-muted hover:text-destructive"
                     aria-label="Remover"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -516,7 +476,7 @@ function ReportList({
                 )}
               </div>
             </div>
-            <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">{r.description}</p>
+            <p className="mt-1.5 whitespace-pre-wrap text-sm text-foreground">{r.description}</p>
             {r.screenshotPath && (
               <button
                 type="button"

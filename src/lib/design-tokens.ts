@@ -27,6 +27,9 @@
 export const TYPOGRAPHY = {
   display: "text-3xl font-bold tracking-tight md:text-5xl break-words",
   pageTitle: "text-2xl font-bold tracking-tight md:text-4xl break-words",
+  /** Título de PÁGINA de módulo (Campanhas, Projetos, Financeiro, Metas…) —
+   * escala única do `PageHeader`, a mesma em todos os módulos. */
+  pageHeading: "text-[36px] font-bold leading-[1.05] tracking-tight md:text-[42px] break-words",
   sectionTitle: "text-xl font-semibold tracking-tight md:text-2xl break-words",
   cardTitle: "text-[15px] font-semibold break-words",
   // `break-words` é defensivo aqui de propósito: texto corrido com termos

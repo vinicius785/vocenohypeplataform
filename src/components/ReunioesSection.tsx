@@ -9,7 +9,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SegmentedControl } from "@/components/ui/segmented-control";
-import { PageContainer } from "@/components/shared/PageContainer";
+import { PageCanvas, PageContainer } from "@/components/shared/PageContainer";
+import { PageHeader } from "@/components/shared/PageHeader";
 import {
   type Meeting,
   loadMeetings,
@@ -323,24 +324,20 @@ export function ReunioesSection() {
   };
 
   return (
-    <div className="-m-4 min-h-[calc(100vh-4rem)] bg-muted p-4 dark:bg-transparent md:-m-8 md:p-8">
+    <PageCanvas>
       <PageContainer className="space-y-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-[28px] font-bold leading-[1.1] tracking-tight text-foreground md:text-[32px]">
-              Reuniões
-            </p>
-            <p className="mt-1 text-sm text-text-secondary">
-              Organize seus compromissos e acompanhe sua agenda.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <JoinByLinkDialog />
-            <Button variant="primary" size="comfortable" onClick={() => openNewMeeting()}>
-              <Plus className="h-4 w-4" /> Nova reunião
-            </Button>
-          </div>
-        </div>
+        <PageHeader
+          title="Reuniões"
+          description="Organize seus compromissos e acompanhe sua agenda."
+          actionsSlot={
+            <>
+              <JoinByLinkDialog />
+              <Button variant="primary" size="comfortable" onClick={() => openNewMeeting()}>
+                <Plus className="h-4 w-4" /> Nova reunião
+              </Button>
+            </>
+          }
+        />
 
         {/* Controles de visualização — pertencem só ao conteúdo desta
          * página, nunca uma barra de navegação global nova. O
@@ -483,6 +480,6 @@ export function ReunioesSection() {
         {deleteChoiceDialog}
         {seriesChoiceDialog}
       </PageContainer>
-    </div>
+    </PageCanvas>
   );
 }

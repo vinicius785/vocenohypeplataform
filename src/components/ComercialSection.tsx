@@ -31,7 +31,8 @@ import {
 import { loadTeamMembers, type TeamMemberLite } from "@/lib/projetos";
 import { supabase } from "@/integrations/supabase/client";
 import { useConfirm } from "@/hooks/use-confirm";
-import { PageContainer } from "@/components/shared/PageContainer";
+import { PageCanvas, PageContainer } from "@/components/shared/PageContainer";
+import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PipelineSummary } from "./comercial/PipelineSummary";
@@ -248,21 +249,19 @@ export function ComercialSection() {
   );
 
   return (
-    <div className="-m-4 min-h-full bg-muted p-4 dark:bg-transparent md:-m-8 md:p-8">
+    <PageCanvas>
       <PageContainer variant="wide" className="space-y-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-[36px] font-bold leading-[1.05] tracking-tight text-foreground md:text-[42px]">
-              Comercial
-            </p>
-            <p className="mt-1.5 text-sm text-text-secondary">
-              Pipeline e acompanhamento de oportunidades.
-            </p>
-          </div>
-          <Button variant="primary" size="comfortable" onClick={() => openNewLead()}>
-            <Plus className="h-4 w-4" /> Novo lead
-          </Button>
-        </div>
+        <PageHeader
+          title="Comercial"
+          description="Pipeline e acompanhamento de oportunidades."
+          actionsSlot={
+            <>
+              <Button variant="primary" size="comfortable" onClick={() => openNewLead()}>
+                <Plus className="h-4 w-4" /> Novo lead
+              </Button>
+            </>
+          }
+        />
 
         {/* Toolbar simplificada: Período · Busca · Filtros · Ordenar —
          * "Novo lead" fica só no cabeçalho, "Visualizações" foi removido
@@ -392,6 +391,6 @@ export function ComercialSection() {
         )}
         {confirmDialog}
       </PageContainer>
-    </div>
+    </PageCanvas>
   );
 }

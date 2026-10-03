@@ -1628,6 +1628,7 @@ export function InfluencerBoard({
   defaultCicloMes,
   cicloMesOptions,
   nps,
+  hideTitle = false,
 }: {
   influs: Influ[];
   onChange: (next: Influ[]) => void;
@@ -1654,6 +1655,8 @@ export function InfluencerBoard({
    * `cicloMes` manualmente (mover pra outro mês). `undefined`/vazio em
    * campanhas não-recorrentes: sem seletor, nada muda. */
   cicloMesOptions?: { value: string; label: string }[];
+  /** Quando o board vive numa seção que já tem título (página do Projeto). */
+  hideTitle?: boolean;
 }) {
   const fields = allowedFields ?? ALL_INFLUENCER_FIELDS;
   const access = useMyAccess();
@@ -2002,14 +2005,16 @@ export function InfluencerBoard({
     <section className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p
-            role="heading"
-            aria-level={2}
-            className="text-xs font-semibold uppercase tracking-widest text-muted-foreground"
-          >
-            Influenciadores
-          </p>
-          <p className="mt-1 text-sm text-muted-foreground">
+          {!hideTitle && (
+            <p
+              role="heading"
+              aria-level={2}
+              className="text-xs font-semibold uppercase tracking-widest text-muted-foreground"
+            >
+              Influenciadores
+            </p>
+          )}
+          <p className={`${hideTitle ? "" : "mt-1 "}text-sm text-muted-foreground`}>
             {influs.length} {influs.length === 1 ? "adicionado" : "adicionados"}
           </p>
           {statusSummary.length > 0 && (
@@ -2362,6 +2367,8 @@ function InfluCard({
   onStatus: (s: InfluStatus) => void;
   onRemove: () => void;
   nps?: InfluNpsBoardProp;
+  /** Quando o board vive numa seção que já tem título (página do Projeto). */
+  hideTitle?: boolean;
 }) {
   const npsLink = nps?.linksByInfluId[influ.id];
   // Selo de aprovação do cliente (etapa 1 do link público) — derivado
