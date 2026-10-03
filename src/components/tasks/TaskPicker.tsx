@@ -162,7 +162,7 @@ export function TaskPicker({
           e.stopPropagation();
         }}
       >
-        <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
           {hasQuery ? "Resultados" : "Tarefas recentes"}
         </p>
         {results.length === 0 ? (

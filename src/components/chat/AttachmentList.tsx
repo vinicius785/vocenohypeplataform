@@ -175,7 +175,7 @@ function PdfAttachmentCard({ attachment }: { attachment: ChatAttachment }) {
         <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
           <p className="truncate font-medium text-foreground">{attachment.name}</p>
-          <p className="text-[10px] text-muted-foreground">PDF · {formatBytes(attachment.size)}</p>
+          <p className="text-[11px] text-muted-foreground">PDF · {formatBytes(attachment.size)}</p>
         </div>
         <button
           type="button"
@@ -279,7 +279,7 @@ export function AttachmentList({
           >
             <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
             <span className="flex-1 truncate">{a.name}</span>
-            <span className="text-[10px] text-muted-foreground">{formatBytes(a.size)}</span>
+            <span className="text-[11px] text-muted-foreground">{formatBytes(a.size)}</span>
             <Download className="h-3 w-3 text-muted-foreground" />
           </a>
         );

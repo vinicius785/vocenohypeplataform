@@ -124,10 +124,7 @@ export function ClientCampaignResources({
             </p>
             <div className="space-y-1.5">
               {files.map((f) => (
-                <div
-                  key={f.id}
-                  className="flex items-center gap-3 rounded-2xl bg-card px-3 py-2.5 dark:shadow-none"
-                >
+                <div key={f.id} className="surface-card flex items-center gap-3 px-3 py-2.5">
                   <Paperclip className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
                     {f.nome}

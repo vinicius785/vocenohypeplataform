@@ -27,9 +27,8 @@
 export const TYPOGRAPHY = {
   display: "text-3xl font-bold tracking-tight md:text-5xl break-words",
   pageTitle: "text-2xl font-bold tracking-tight md:text-4xl break-words",
-  /** Título de PÁGINA de módulo (Campanhas, Projetos, Financeiro, Metas…) —
-   * escala única do `PageHeader`, a mesma em todos os módulos. */
-  pageHeading: "text-[36px] font-bold leading-[1.05] tracking-tight md:text-[42px] break-words",
+  /** Título de PÁGINA de módulo — escala oficial do Design System (C2). */
+  pageHeading: "text-2xl font-semibold tracking-tight md:text-[26px] break-words",
   sectionTitle: "text-xl font-semibold tracking-tight md:text-2xl break-words",
   cardTitle: "text-[15px] font-semibold break-words",
   // `break-words` é defensivo aqui de propósito: texto corrido com termos
@@ -42,6 +41,14 @@ export const TYPOGRAPHY = {
   label:
     "text-xs font-semibold text-text-secondary uppercase tracking-wide md:text-[13px] break-words",
   caption: "text-xs text-text-secondary break-words",
+  /** Metadado / complemento de KPI (11px, secundário). */
+  metadata: "text-[11px] text-text-secondary break-words",
+  /** Rótulo em caixa-alta de coluna ou KPI (11px). */
+  labelCaps: "text-[11px] font-medium uppercase tracking-wide text-text-secondary",
+  /** Valor de KPI lead (um número dominante). */
+  kpiLead: "text-3xl font-bold leading-tight tabular-nums tracking-tight md:text-4xl",
+  /** Valor de KPI de strip. */
+  kpiValue: "text-xl font-semibold tabular-nums md:text-2xl",
   numberLarge: "text-3xl font-bold tabular-nums tracking-tight md:text-4xl",
   numberMedium: "text-xl font-semibold tabular-nums md:text-2xl",
 } as const;
@@ -77,8 +84,7 @@ export const SPACING = {
  * entre 14-18px: `--radius-xl` = 0.625rem+4px = 14px, bate certo. */
 export const RADIUS = {
   control: "rounded-md", // input, button, select
-  card: "rounded-xl", // ~14px desktop
-  cardMobile: "rounded-2xl", // ~18px — só quando o card ocupa a largura toda no mobile
+  card: "rounded-2xl", // card (C7) — borda /60, sem sombra, ver `SURFACE.raised`
   overlay: "rounded-2xl", // modal, drawer (canto que aparece, no desktop)
   pill: "rounded-full", // badge, avatar, chip, segmented control
 } as const;
@@ -99,8 +105,14 @@ export const ELEVATION = {
  * superfície (branco/cinza muito claro no tema claro com borda discreta,
  * carvão elevado — mais claro que `--background` mas mais escuro que
  * `--card` — no escuro, sem borda). */
+const SURFACE_RAISED = "border border-border/60 bg-card dark:border-0 dark:bg-[oklch(0.17_0_0)]";
+
 export const SURFACE = {
-  raised: "border border-border/60 bg-card dark:border-0 dark:bg-[oklch(0.17_0_0)]",
+  raised: SURFACE_RAISED,
+  /** Card canônico (C7): superfície elevada + `rounded-2xl`, sem sombra. É o
+   * que `ui/card` aplica; use direto só em elementos que não podem ser um
+   * `<div>` (ex.: `<section>`, `<article>`, `<header>`). */
+  card: "surface-card",
 } as const;
 
 /** Movimento — só o que já existe (`tw-animate-css`, já usado em todo
@@ -125,7 +137,7 @@ export type SemanticTone = "neutral" | "brand" | "success" | "warning" | "danger
  * helpers antigos continuam intocados até a migração de cada módulo. */
 export const TONE_SOFT_BG: Record<SemanticTone, string> = {
   neutral: "bg-muted text-muted-foreground",
-  brand: "bg-brand-subtle text-brand",
+  brand: "bg-brand-subtle text-text-brand",
   success: "bg-success-soft text-success-soft-foreground",
   warning: "bg-warning-soft text-warning-soft-foreground",
   danger: "bg-danger-soft text-danger-soft-foreground",

@@ -112,7 +112,7 @@ export function ChatV2NewConversationDialog({
                   {m.photo ? (
                     <img src={m.photo} alt="" className="h-5 w-5 rounded-full object-cover" />
                   ) : (
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[10px] font-semibold">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[11px] font-semibold">
                       {m.name.slice(0, 1).toUpperCase()}
                     </span>
                   )}
@@ -156,7 +156,7 @@ export function ChatV2NewConversationDialog({
                 {m.photo ? (
                   <img src={m.photo} alt="" className="h-5 w-5 rounded-full object-cover" />
                 ) : (
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[10px] font-semibold">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[11px] font-semibold">
                     {m.name.slice(0, 1).toUpperCase()}
                   </span>
                 )}

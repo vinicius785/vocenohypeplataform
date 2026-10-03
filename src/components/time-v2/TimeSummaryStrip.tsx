@@ -35,7 +35,7 @@ function Item({
         : "text-foreground";
   const body = (
     <>
-      <p className="flex min-w-0 items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-text-secondary">
+      <p className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
         <span className="shrink-0">{icon}</span>
         <span className="truncate">{label}</span>
       </p>
@@ -47,7 +47,7 @@ function Item({
       )}
     </>
   );
-  const cls = "min-w-0 rounded-2xl bg-card px-4 py-3 text-left dark:shadow-none";
+  const cls = "surface-card min-w-0 px-4 py-3 text-left";
   return onClick ? (
     <button
       type="button"

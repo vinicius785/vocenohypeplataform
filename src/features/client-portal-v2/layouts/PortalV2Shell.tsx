@@ -67,7 +67,7 @@ function NavButton({
       aria-current={active ? "page" : undefined}
       className={`relative flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
         collapsed ? "justify-center" : ""
-      } ${active ? "bg-brand-subtle font-medium text-brand" : "pill-nav-item text-muted-foreground"}`}
+      } ${active ? "bg-brand-subtle font-medium text-text-brand" : "pill-nav-item text-muted-foreground"}`}
     >
       {active && (
         <span
@@ -378,14 +378,14 @@ export function PortalV2ShellBackdrop() {
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="space-y-3 rounded-xl border border-border bg-card p-5">
+              <div key={i} className="surface-card space-y-3 p-5">
                 <Skeleton className="h-3 w-20" />
                 <Skeleton className="h-7 w-16" />
               </div>
             ))}
           </div>
           <div className="grid gap-4 lg:grid-cols-3">
-            <div className="space-y-4 rounded-xl border border-border bg-card p-5 lg:col-span-2">
+            <div className="surface-card space-y-4 p-5 lg:col-span-2">
               <Skeleton className="h-4 w-40" />
               {[0, 1, 2].map((i) => (
                 <div key={i} className="flex items-center gap-3">
@@ -397,7 +397,7 @@ export function PortalV2ShellBackdrop() {
                 </div>
               ))}
             </div>
-            <div className="space-y-3 rounded-xl border border-border bg-card p-5">
+            <div className="surface-card space-y-3 p-5">
               <Skeleton className="h-4 w-32" />
               {[0, 1, 2, 3].map((i) => (
                 <Skeleton key={i} className="h-3 w-full" />

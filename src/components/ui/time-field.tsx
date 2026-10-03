@@ -166,7 +166,7 @@ export function TimeField({
                   onClick={() => pick(t)}
                   className={cn(
                     "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left text-sm tabular-nums transition-colors",
-                    disabled ? "cursor-not-allowed text-muted-foreground/40" : "hover:bg-muted",
+                    disabled ? "cursor-not-allowed text-text-secondary" : "hover:bg-muted",
                     selected && "bg-muted font-medium text-foreground",
                   )}
                 >

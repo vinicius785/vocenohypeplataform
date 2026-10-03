@@ -12,6 +12,7 @@ import {
 } from "@/lib/financeiro-entries";
 import { parseCsv, parseFlexibleDate } from "@/lib/csv";
 import { Field } from "./shared";
+import { NativeSelect } from "@/components/ui/native-select";
 
 type ColRole = "ignore" | "description" | "amount" | "date" | "status";
 const COL_ROLE_LABEL: Record<ColRole, string> = {
@@ -150,10 +151,10 @@ export function ImportDialog({
                 <div className="flex flex-wrap gap-2">
                   {roles.map((role, i) => (
                     <label key={i} className="flex flex-col gap-1">
-                      <span className="truncate text-[10px] text-muted-foreground">
+                      <span className="truncate text-[11px] text-muted-foreground">
                         Coluna {i + 1}: "{(rows[0][i] ?? "").slice(0, 20) || "—"}"
                       </span>
-                      <select
+                      <NativeSelect
                         value={role}
                         onChange={(e) =>
                           setRoles((prev) =>
@@ -167,7 +168,7 @@ export function ImportDialog({
                             {COL_ROLE_LABEL[r]}
                           </option>
                         ))}
-                      </select>
+                      </NativeSelect>
                     </label>
                   ))}
                 </div>
@@ -186,14 +187,14 @@ export function ImportDialog({
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Field label="Tipo padrão">
-                  <select
+                  <NativeSelect
                     value={defaultKind}
                     onChange={(e) => setDefaultKind(e.target.value as Kind)}
                     className="h-9 w-full cursor-pointer rounded-md border border-input bg-background px-2 text-sm outline-none focus:ring-2 focus:ring-ring"
                   >
                     <option value="despesa">Despesa</option>
                     <option value="receita">Receita</option>
-                  </select>
+                  </NativeSelect>
                 </Field>
                 <Field label="Categoria padrão">
                   <input

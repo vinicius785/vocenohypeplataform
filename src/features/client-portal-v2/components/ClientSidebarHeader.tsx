@@ -30,7 +30,7 @@ export function ClientSidebarHeader({
 
   const content = (
     <div className={`flex items-center gap-3 ${collapsed ? "justify-center" : ""}`}>
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-foreground text-sm font-bold text-background">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-foreground text-sm font-semibold text-background">
         {logoUrl ? <img src={logoUrl} alt="" className="h-full w-full object-cover" /> : initials}
       </div>
       {!collapsed && (

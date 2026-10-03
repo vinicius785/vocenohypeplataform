@@ -7,6 +7,7 @@ import { respondCampanhaInfluSession } from "@/lib/portal-auth.functions";
 import { PERFIL_REJEICAO_MOTIVOS } from "@/lib/campanha-status";
 import { usePortalSessionData } from "@/components/portal/portal-session-context";
 import type { PublicInfluencer } from "@/lib/portal-types";
+import { NativeSelect } from "@/components/ui/native-select";
 
 /**
  * Status e ações — só mostra botão quando existe uma decisão real
@@ -59,7 +60,7 @@ export function ClientInfluencerStatusActions({
   if (rejecting) {
     return (
       <div className="flex flex-col gap-2 rounded-lg border border-border bg-background p-3">
-        <select
+        <NativeSelect
           value={motivo}
           onChange={(e) => setMotivo(e.target.value as (typeof PERFIL_REJEICAO_MOTIVOS)[number])}
           className="rounded-md border border-border bg-card px-2 py-1.5 text-sm"
@@ -70,7 +71,7 @@ export function ClientInfluencerStatusActions({
               {m}
             </option>
           ))}
-        </select>
+        </NativeSelect>
         {motivo === "Outro" && (
           <textarea
             value={comentario}

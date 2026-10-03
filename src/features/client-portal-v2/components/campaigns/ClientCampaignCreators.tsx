@@ -36,7 +36,7 @@ export function ClientCampaignCreators({
           <button
             type="button"
             onClick={() => setExpanded((v) => !v)}
-            className="text-xs font-medium text-brand hover:underline"
+            className="text-xs font-medium text-text-brand hover:underline"
           >
             {expanded ? "Ver menos" : "Ver todos"}
           </button>
@@ -57,7 +57,7 @@ export function ClientCampaignCreators({
               type="button"
               onClick={() => onOpenInfluencer(influencer.id)}
               aria-label={`Ver detalhes de ${influencer.nome}, ${influencer.statusCliente}`}
-              className="flex items-center gap-3 rounded-2xl bg-card p-3 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand dark:shadow-none"
+              className="surface-card flex items-center gap-3 p-3 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
             >
               <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-xs font-semibold text-muted-foreground">
                 {influencer.foto ? (

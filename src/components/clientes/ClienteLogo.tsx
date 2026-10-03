@@ -42,7 +42,7 @@ export function ClienteLogo({
     <div
       className={cn(
         "flex shrink-0 items-center justify-center overflow-hidden p-1.5",
-        photo ? "bg-muted" : "bg-brand-subtle text-brand",
+        photo ? "bg-muted" : "bg-brand-subtle text-text-brand",
         SIZE_CLASS[size],
         className,
       )}

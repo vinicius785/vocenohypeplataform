@@ -12,6 +12,7 @@ import {
 } from "@/lib/pricing";
 import { loadPricing, fetchPricing, type PricingSettings } from "@/lib/pricing-store";
 import { formatBRL, type PropostaSnapshot } from "@/lib/comercial";
+import { NativeSelect } from "@/components/ui/native-select";
 
 function newLinha(): PacoteLinha {
   return { id: crypto.randomUUID(), tier: TIERS[1].id, formato: FORMATOS[0].id, qtd: 1 };
@@ -112,7 +113,7 @@ export function SimuladorPropostaForm({
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-background text-[11px] font-semibold text-muted-foreground">
               {i + 1}
             </span>
-            <select
+            <NativeSelect
               value={l.tier}
               onChange={(e) => updateLinha(l.id, { tier: e.target.value as TierId })}
               className={selectCls}
@@ -122,8 +123,8 @@ export function SimuladorPropostaForm({
                   {t.label}
                 </option>
               ))}
-            </select>
-            <select
+            </NativeSelect>
+            <NativeSelect
               value={l.formato}
               onChange={(e) => updateLinha(l.id, { formato: e.target.value as FormatoId })}
               className={selectCls}
@@ -133,7 +134,7 @@ export function SimuladorPropostaForm({
                   {f.label}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
             <input
               type="number"
               min={1}
@@ -200,7 +201,7 @@ export function SimuladorPropostaForm({
 
       {/* Preço final + ação de aplicar na mesma superfície azul — visualmente
        * ligados (Etapa 7), sem borda grossa. */}
-      <div className="rounded-[20px] bg-brand p-5">
+      <div className="rounded-2xl bg-brand p-5">
         <div className="flex items-center justify-between gap-2">
           <label className="text-xs font-semibold uppercase tracking-wide text-brand-foreground-secondary">
             Preço final ao cliente
@@ -226,7 +227,7 @@ export function SimuladorPropostaForm({
           mode="currency"
           value={precoManual ?? Math.round(precoCalculado)}
           onValueChange={(v) => setPrecoManual(v ?? null)}
-          className="mt-2 h-14 w-full rounded-2xl border border-black/10 bg-background px-4 text-[28px] font-bold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-brand-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-brand"
+          className="mt-2 h-14 w-full rounded-2xl border border-black/10 bg-background px-4 text-[28px] font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-brand-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-brand"
         />
         <p className="mt-2 text-[11px] text-brand-foreground-secondary">
           {editadoManualmente
@@ -306,7 +307,7 @@ function BreakdownRow({
       className={`flex items-center justify-between ${emphasis ? "font-medium text-foreground" : "text-muted-foreground"}`}
     >
       <span>
-        {label} <span className="text-muted-foreground/70">({(pct * 100).toFixed(1)}%)</span>
+        {label} <span className="text-text-secondary">({(pct * 100).toFixed(1)}%)</span>
       </span>
       <span>{formatBRL(value)}</span>
     </div>

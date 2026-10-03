@@ -77,10 +77,7 @@ export function ClientCampaignDeliverables({ items }: { items: ContentItem[] }) 
 
             if (naoEnviado) {
               return (
-                <div
-                  key={item.entrega.id}
-                  className="flex items-center gap-3 rounded-2xl bg-card p-3 dark:shadow-none"
-                >
+                <div key={item.entrega.id} className="surface-card flex items-center gap-3 p-3">
                   {cardContent}
                 </div>
               );
@@ -108,7 +105,7 @@ export function ClientCampaignDeliverables({ items }: { items: ContentItem[] }) 
                     }),
                   })
                 }
-                className="flex items-center gap-3 rounded-2xl bg-card p-3 text-left hover:bg-muted/40 dark:shadow-none"
+                className="surface-card flex items-center gap-3 p-3 text-left hover:bg-muted/40"
               >
                 {cardContent}
                 <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />

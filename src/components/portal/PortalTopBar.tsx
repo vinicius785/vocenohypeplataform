@@ -78,7 +78,7 @@ export function PortalTopBar({
           {ws.logo ? (
             <img src={ws.logo} alt="" className="h-full w-full object-cover" />
           ) : (
-            <span className="text-[11px] font-bold">{ws.nome.charAt(0).toUpperCase()}</span>
+            <span className="text-[11px] font-semibold">{ws.nome.charAt(0).toUpperCase()}</span>
           )}
         </div>
       )}
@@ -96,7 +96,7 @@ export function PortalTopBar({
                 {!!pendingItems?.length && (
                   <Badge
                     variant="warning"
-                    className="absolute -right-1 -top-1 h-4 min-w-[16px] justify-center rounded-full px-1 text-[9px]"
+                    className="absolute -right-1 -top-1 h-4 min-w-[16px] justify-center rounded-full px-1 text-[11px]"
                   >
                     {pendingItems.length}
                   </Badge>

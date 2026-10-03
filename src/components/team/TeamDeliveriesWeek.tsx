@@ -278,7 +278,7 @@ function SortableHeader({
     <button
       type="button"
       onClick={() => onSort(sortKey)}
-      className={`shrink-0 cursor-pointer text-right text-[10px] font-medium uppercase tracking-wide hover:text-foreground ${currentKey === sortKey ? "text-foreground" : "text-text-secondary"} ${className ?? ""}`}
+      className={`shrink-0 cursor-pointer text-right text-[11px] font-medium uppercase tracking-wide hover:text-foreground ${currentKey === sortKey ? "text-foreground" : "text-text-secondary"} ${className ?? ""}`}
     >
       {label}
     </button>
@@ -376,7 +376,7 @@ export function TeamDeliveriesWeek({
   };
 
   return (
-    <div className="rounded-[24px] bg-card p-5 dark:shadow-none">
+    <div className="surface-card p-5">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h3 className="text-[15px] font-semibold text-foreground">Entregas da Semana</h3>
@@ -459,7 +459,7 @@ export function TeamDeliveriesWeek({
         <div className="mt-4 border-t border-border pt-3">
           <div className="flex items-center gap-3 px-3 pb-1.5">
             <span className="w-3.5 shrink-0" />
-            <span className="flex-1 text-[10px] font-medium uppercase tracking-wide text-text-secondary">
+            <span className="flex-1 text-[11px] font-medium uppercase tracking-wide text-text-secondary">
               Membro
             </span>
             <SortableHeader

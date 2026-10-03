@@ -46,6 +46,7 @@ import {
   buildMesReferenciaOptions,
   type InscricaoSobre,
 } from "@/lib/inscricao-page";
+import { NativeSelect } from "@/components/ui/native-select";
 
 const FIELD_KEYS: InscricaoFieldKey[] = ["nicho", "redes", "mensagem", "midiaKit"];
 const QUESTION_TYPES: CustomQuestionType[] = [
@@ -416,7 +417,7 @@ export function InscricaoPageDialog({
                 {isRecorrente && (
                   <label className="inline-flex items-center gap-1.5">
                     Mês de referência
-                    <select
+                    <NativeSelect
                       value={mesReferencia}
                       onChange={(e) => setMesReferencia(e.target.value)}
                       className="h-7 rounded-md border border-border bg-background px-1.5 text-xs font-medium text-foreground outline-none focus:ring-1 focus:ring-ring"
@@ -426,7 +427,7 @@ export function InscricaoPageDialog({
                           {o.label}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </label>
                 )}
               </p>
@@ -781,7 +782,7 @@ export function InscricaoPageDialog({
                                   placeholder="Ex: Você mora em qual cidade?"
                                   className="sm:flex-1"
                                 />
-                                <select
+                                <NativeSelect
                                   value={q.type}
                                   onChange={(e) =>
                                     patchQuestion(q.id, {
@@ -795,7 +796,7 @@ export function InscricaoPageDialog({
                                       {CUSTOM_QUESTION_TYPE_LABEL[t]}
                                     </option>
                                   ))}
-                                </select>
+                                </NativeSelect>
                               </div>
                               <RowActions
                                 canUp={i > 0}
@@ -849,7 +850,7 @@ export function InscricaoPageDialog({
               <button
                 type="button"
                 onClick={handlePreview}
-                className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline"
+                className="inline-flex items-center gap-1 text-xs font-medium text-text-brand hover:underline"
               >
                 <ExternalLink className="h-3 w-3" /> Abrir página
               </button>

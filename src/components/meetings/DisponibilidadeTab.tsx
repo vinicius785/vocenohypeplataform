@@ -209,7 +209,7 @@ export function DisponibilidadeTab({
           {scheduleGroups.map((g, i) => (
             <div key={i} className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">{g.label}</span>
-              <span className={g.active ? "text-foreground" : "text-muted-foreground/70"}>
+              <span className={g.active ? "text-foreground" : "text-text-secondary"}>
                 {g.active ? `${avail.inicio} – ${avail.fim}` : "Indisponível"}
               </span>
             </div>
@@ -233,7 +233,7 @@ export function DisponibilidadeTab({
         </div>
 
         {bloqueios.length === 0 ? (
-          <p className="mt-4 text-sm text-muted-foreground/70">
+          <p className="mt-4 text-sm text-text-secondary">
             Nenhum bloqueio programado. Sua agenda seguirá normalmente o horário padrão.
           </p>
         ) : (
@@ -293,7 +293,7 @@ export function DisponibilidadeTab({
                   type="button"
                   onClick={() => setScheduleDraft((s) => ({ ...s, dias: { ...s.dias, [d]: !on } }))}
                   className={`flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-sm transition-colors ${
-                    on ? "bg-muted text-foreground" : "text-muted-foreground/60 hover:bg-muted/50"
+                    on ? "bg-muted text-foreground" : "text-text-secondary hover:bg-muted/50"
                   }`}
                 >
                   <span className="font-medium">{DIAS_LABEL[idx]}</span>
@@ -494,7 +494,7 @@ function ExceptionRow({
             <p className="text-base font-semibold leading-none text-foreground">
               {String(dateLabel.getDate()).padStart(2, "0")}
             </p>
-            <p className="mt-0.5 text-[10px] font-medium text-muted-foreground">
+            <p className="mt-0.5 text-[11px] font-medium text-muted-foreground">
               {MES_ABREV[dateLabel.getMonth()]}
             </p>
           </div>
@@ -507,7 +507,7 @@ function ExceptionRow({
         <p className="text-xs text-muted-foreground">
           {block.inicio} – {block.fim}
         </p>
-        <p className="text-[11px] text-muted-foreground/70">{secondary}</p>
+        <p className="text-[11px] text-text-secondary">{secondary}</p>
       </div>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

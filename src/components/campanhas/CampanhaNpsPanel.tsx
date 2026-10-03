@@ -388,7 +388,7 @@ function RespostaDoCliente({ current }: { current: CampanhaNpsMonthSummary }) {
       <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {items.map((i) => (
           <div key={i.label}>
-            <dt className="text-[10px] font-medium uppercase tracking-wide text-text-secondary">
+            <dt className="text-[11px] font-medium uppercase tracking-wide text-text-secondary">
               {i.label}
             </dt>
             <dd className="mt-0.5 text-sm font-semibold text-foreground">{i.value}</dd>
@@ -396,7 +396,7 @@ function RespostaDoCliente({ current }: { current: CampanhaNpsMonthSummary }) {
         ))}
       </dl>
       <div className="mt-4 rounded-lg bg-muted/60 p-3">
-        <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-text-secondary">
+        <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-text-secondary">
           <MessageSquareQuote className="h-3.5 w-3.5" /> Comentário
         </p>
         {e.comment ? (

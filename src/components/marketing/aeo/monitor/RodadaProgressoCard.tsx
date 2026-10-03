@@ -3,7 +3,7 @@ import { fmtDate } from "../aeo-ui-utils";
 
 export function RodadaProgressoCard({ rodada }: { rodada: AeoRodadaComputada }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-4">
+    <div className="surface-card p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-semibold text-foreground">Rodada {fmtDate(rodada.dataRodada)}</p>
         <span

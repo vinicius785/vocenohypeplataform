@@ -255,7 +255,7 @@ export function MeetingSummaryDialog({
             (status, origem, recorrência, sincronização) sem depender só de
             cor pra comunicar cada estado — sempre com ícone + texto. */}
         <div className="flex items-start gap-3 border-b border-border/60 px-6 pb-4 pt-6">
-          <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-subtle text-brand">
+          <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-subtle text-text-brand">
             <Video className="h-4 w-4" />
           </span>
           <div className="min-w-0 flex-1">
@@ -401,7 +401,7 @@ export function MeetingSummaryDialog({
                       )}
                     </div>
                     <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${participantBadge(kind)}`}
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${participantBadge(kind)}`}
                     >
                       {label}
                     </span>
@@ -628,7 +628,7 @@ export function MeetingSummaryDialog({
                 )}
                 {meeting.transcricao && !editingAttendance && (
                   <div className="mt-2 rounded-lg bg-muted/40 p-2.5">
-                    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
+                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-text-secondary">
                       Transcrição
                     </p>
                     <p className="max-h-32 overflow-y-auto whitespace-pre-wrap break-words text-xs text-foreground">

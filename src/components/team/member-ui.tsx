@@ -56,7 +56,7 @@ export function MiniStat({
         : "text-foreground";
   return (
     <div className="min-w-0 rounded-lg border border-border/60 bg-muted/10 px-3 py-2.5">
-      <p className="truncate text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+      <p className="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
       <p className={`mt-1 text-lg font-semibold tabular-nums ${valueTone}`}>{value}</p>

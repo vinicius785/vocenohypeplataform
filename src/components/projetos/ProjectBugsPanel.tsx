@@ -493,7 +493,7 @@ function ReportList({
         <button
           type="button"
           onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
-          className="mt-2 text-xs font-medium text-brand hover:underline"
+          className="mt-2 text-xs font-medium text-text-brand hover:underline"
         >
           Carregar mais ({remaining})
         </button>

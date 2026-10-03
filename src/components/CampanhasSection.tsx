@@ -75,7 +75,7 @@ import {
 } from "./campanhas/campanha-ui";
 import { buildMesReferenciaOptions } from "@/lib/inscricao-page";
 import { useMyAccess } from "@/lib/permissions";
-import { PageCanvas, PageContainer } from "@/components/shared/PageContainer";
+import { PageContainer } from "@/components/shared/PageContainer";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { SummaryStat } from "@/components/shared/SummaryStat";
 import { OPEN_CAMPANHA_TASK_KEY, OPEN_CAMPANHA_TASK_EVENT } from "./AppShell";
@@ -121,6 +121,7 @@ import {
   deleteCampanhaScopedData,
   type CronogramaItem,
 } from "@/lib/campanha-scoped-store";
+import { NativeSelect } from "@/components/ui/native-select";
 
 export { BankFields, type BankInfo };
 
@@ -317,7 +318,7 @@ export function CampanhasSection() {
     // Canvas fix (mesma correção do Financeiro/Reuniões/Metas/Clientes):
     // --background e --card são idênticos no claro, então sem isso os
     // cards de Campanhas não se distinguiam do fundo.
-    <PageCanvas>
+    <>
       <PageContainer className="space-y-6">
         <PageHeader title="Campanhas" description="Todas as campanhas vinculadas aos clientes." />
 
@@ -410,7 +411,7 @@ export function CampanhasSection() {
       />
 
       {confirmDialog}
-    </PageCanvas>
+    </>
   );
 }
 
@@ -422,7 +423,7 @@ export function CampanhasSection() {
 /** Entregas visíveis na caixa Entregas antes de "Ver todas as entregas →". */
 const ENTREGAS_BOX_PREVIEW = 3;
 /** Container único das 4 caixas fixas da região inferior do detalhe. */
-const BOTTOM_BOX = "flex flex-col rounded-2xl bg-card p-4 dark:shadow-none";
+const BOTTOM_BOX = "surface-card flex flex-col p-4";
 const BOTTOM_BOX_TITLE = "text-xs font-semibold uppercase tracking-widest text-muted-foreground";
 
 function pagTipoResumo(t: PagTipo, cfg: PagamentoConfig): string {
@@ -895,7 +896,7 @@ function CampanhaDetail({
     // muted por trás dos cards, já que --background e --card são
     // idênticos no claro. Sem min-height artificial (2ª rodada corretiva)
     // — a altura é só a do conteúdo real, nunca força espaço vazio.
-    <PageCanvas>
+    <>
       {/* Ritmo vertical das GRANDES seções centralizado aqui — o único
        * `space-y-*` que separa cabeçalho / métricas / informações /
        * tarefas / influenciadores / todas-as-entregas (rodada de
@@ -940,7 +941,7 @@ function CampanhaDetail({
                 <p
                   role="heading"
                   aria-level={1}
-                  className="truncate text-2xl font-bold tracking-tight text-foreground md:text-3xl"
+                  className="truncate text-2xl font-semibold tracking-tight text-foreground md:text-3xl"
                 >
                   {c.nome}
                 </p>
@@ -991,7 +992,7 @@ function CampanhaDetail({
                       : `Prazo ${fmtDate(c.prazo)}`}
                   </span>
                   {isRecorrente && (
-                    <select
+                    <NativeSelect
                       value={monthFilter}
                       onChange={(e) => setMonthFilter(e.target.value)}
                       aria-label="Mês de referência"
@@ -1002,7 +1003,7 @@ function CampanhaDetail({
                           {m.label}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   )}
                 </div>
               </div>
@@ -1143,7 +1144,7 @@ function CampanhaDetail({
         {/* KPIs — barra horizontal única: label + valor principal + contexto
          * secundário. Todos os números vêm do modelo existente (mês
          * selecionado em campanhas recorrentes). */}
-        <div className="rounded-2xl bg-card dark:shadow-none">
+        <div className="surface-card">
           <div className="flex flex-wrap">
             <SummaryStat
               label="Influenciadores"
@@ -1215,7 +1216,7 @@ function CampanhaDetail({
                   <button
                     type="button"
                     onClick={item.onAction}
-                    className="shrink-0 whitespace-nowrap text-xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                    className="shrink-0 whitespace-nowrap text-xs font-medium text-text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                   >
                     {item.action} <span aria-hidden>→</span>
                   </button>
@@ -1280,7 +1281,7 @@ function CampanhaDetail({
                 className={`${BOTTOM_BOX_TITLE} flex items-center gap-2`}
               >
                 Entregas
-                <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
+                <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
                   {allEntregas.length}
                 </span>
               </p>
@@ -1323,7 +1324,7 @@ function CampanhaDetail({
                 <button
                   type="button"
                   onClick={() => setEntregasDialogOpen(true)}
-                  className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                 >
                   Ver todas as entregas <span aria-hidden>→</span>
                 </button>
@@ -1355,7 +1356,7 @@ function CampanhaDetail({
                   <button
                     type="button"
                     onClick={() => setEditOpen(true)}
-                    className="shrink-0 text-xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                    className="shrink-0 text-xs font-medium text-text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                   >
                     Adicionar briefing
                   </button>
@@ -1365,7 +1366,7 @@ function CampanhaDetail({
                 <button
                   type="button"
                   onClick={() => setBriefingExpanded((v) => !v)}
-                  className="mt-1.5 text-xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                  className="mt-1.5 text-xs font-medium text-text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                 >
                   {briefingExpanded ? "Ver menos" : "Ver mais"}
                 </button>
@@ -1377,7 +1378,7 @@ function CampanhaDetail({
                   <a
                     href={c.briefingFile}
                     download
-                    className="inline-flex items-center gap-1.5 text-xs font-medium text-brand underline underline-offset-2"
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-text-brand underline underline-offset-2"
                   >
                     <Paperclip className="h-3.5 w-3.5" /> Anexo
                   </a>
@@ -1388,7 +1389,7 @@ function CampanhaDetail({
                     href={url}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex min-w-0 items-center gap-1.5 truncate text-xs font-medium text-brand underline underline-offset-2"
+                    className="inline-flex min-w-0 items-center gap-1.5 truncate text-xs font-medium text-text-brand underline underline-offset-2"
                   >
                     <LinkIcon className="h-3.5 w-3.5 shrink-0" /> {url}
                   </a>
@@ -1487,14 +1488,14 @@ function CampanhaDetail({
               <button
                 type="button"
                 onClick={() => setOpenPanel("composicao")}
-                className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                className="inline-flex items-center gap-1 text-xs font-medium text-text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
               >
                 <Wallet className="h-3 w-3" /> Formas de pagamento <span aria-hidden>→</span>
               </button>
               <button
                 type="button"
                 onClick={() => setOpenPanel("direitos")}
-                className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                className="inline-flex items-center gap-1 text-xs font-medium text-text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
               >
                 <ShieldCheck className="h-3 w-3" /> Direitos de imagem <span aria-hidden>→</span>
               </button>
@@ -1550,7 +1551,7 @@ function CampanhaDetail({
                           href={entrega.url}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-brand hover:underline"
+                          className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-text-brand hover:underline"
                         >
                           <ExternalLink className="h-3 w-3" /> Ver publicação
                         </a>
@@ -1704,7 +1705,7 @@ function CampanhaDetail({
           </DialogContent>
         </Dialog>
       </PageContainer>
-    </PageCanvas>
+    </>
   );
 }
 
@@ -1781,7 +1782,7 @@ function GaleriaConteudosSection({ influs }: { influs: Influ[] }) {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-xs font-medium text-foreground">{influ.nome}</p>
-                  <p className="truncate text-[10px] text-muted-foreground">
+                  <p className="truncate text-[11px] text-muted-foreground">
                     {entrega.titulo || entrega.tipo}
                   </p>
                 </div>

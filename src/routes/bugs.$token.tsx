@@ -48,7 +48,7 @@ function Header({ logo, nome }: { logo?: string; nome: string }) {
         {logo ? (
           <img src={logo} alt="" className="h-full w-full object-cover" />
         ) : (
-          <span className="text-[11px] font-bold">{nome.charAt(0).toUpperCase()}</span>
+          <span className="text-[11px] font-semibold">{nome.charAt(0).toUpperCase()}</span>
         )}
       </div>
       <span className="text-sm font-semibold text-foreground">{nome}</span>
@@ -332,7 +332,7 @@ function ReportList({
   if (items.length === 0) return null;
   return (
     <div>
-      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
         {title} ({items.length})
       </p>
       <ul className="space-y-2">
@@ -343,7 +343,7 @@ function ReportList({
           >
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="flex flex-wrap items-center gap-1.5">
-                <span className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[10px] font-medium text-foreground">
+                <span className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-foreground">
                   {r.kind === "bug" ? (
                     <Bug className="h-3 w-3" />
                   ) : (
@@ -352,7 +352,7 @@ function ReportList({
                   {r.kind === "bug" ? "Bug" : "Sugestão"}
                 </span>
                 {r.scope && (
-                  <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                     {r.scope === "influenciador" ? "Influenciador" : "Backoffice"}
                   </span>
                 )}

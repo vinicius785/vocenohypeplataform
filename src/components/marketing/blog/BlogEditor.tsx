@@ -186,11 +186,11 @@ export function BlogEditor({
         >
           ← Voltar
         </button>
-        <span className="text-sm font-light tracking-tight text-foreground">
+        <span className="text-sm font-normal tracking-tight text-foreground">
           {p.title || "Novo artigo"}
         </span>
         <StatusHeader post={p} />
-        <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+        <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
           {saveState === "saving" ? (
             <>
               <Loader2 className="h-3 w-3 animate-spin" /> Salvando...
@@ -284,7 +284,7 @@ export function BlogEditor({
               <Eye className="h-3.5 w-3.5" /> Pré-visualização
             </p>
             {destinosDisponiveis.length > 1 && (
-              <div className="flex gap-1 rounded-md bg-background p-0.5 text-[10px]">
+              <div className="flex gap-1 rounded-md bg-background p-0.5 text-[11px]">
                 {destinosDisponiveis.map((d) => (
                   <button
                     key={d}
@@ -314,11 +314,11 @@ export function BlogEditor({
               />
             )}
             {p.category && (
-              <span className="mb-1.5 inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+              <span className="mb-1.5 inline-block rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                 {p.category}
               </span>
             )}
-            <h1 className="text-xl font-light leading-tight tracking-tight">
+            <h1 className="text-xl font-normal leading-tight tracking-tight">
               {p.title || "Sem título"}
             </h1>
             <div className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
@@ -326,7 +326,7 @@ export function BlogEditor({
                 <img src={authorPhoto} alt="" className="h-5 w-5 rounded-full object-cover" />
               ) : (
                 <span
-                  className={`flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-semibold ${colorFor(p.authorName || "?")}`}
+                  className={`flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold ${colorFor(p.authorName || "?")}`}
                 >
                   {initialsOf(p.authorName || "") || "?"}
                 </span>

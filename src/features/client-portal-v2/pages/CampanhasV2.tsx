@@ -60,7 +60,7 @@ export function CampanhasV2() {
       />
 
       {campaigns.length > 0 && (
-        <div className="flex flex-wrap rounded-2xl bg-card dark:shadow-none">
+        <div className="surface-card flex flex-wrap">
           <SummaryStat label="Ativas" value={counts.ativas.toString()} />
           <SummaryStat label="Planejadas" value={counts.planejadas.toString()} />
           <SummaryStat label="Encerradas" value={counts.encerradas.toString()} />

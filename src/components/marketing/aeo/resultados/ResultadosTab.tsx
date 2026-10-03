@@ -8,6 +8,7 @@ import { EvolucaoChart } from "./EvolucaoChart";
 import { OportunidadesSection } from "./OportunidadesSection";
 import { ConcorrentesSection } from "./ConcorrentesSection";
 import { PromptsSemPresencaCard } from "./PromptsSemPresencaCard";
+import { NativeSelect } from "@/components/ui/native-select";
 
 export function ResultadosTab({
   rodadas,
@@ -41,7 +42,7 @@ export function ResultadosTab({
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
           <label className="text-xs text-muted-foreground">Rodada</label>
-          <select
+          <NativeSelect
             value={rodadaAtualId}
             onChange={(e) => setRodadaId(e.target.value)}
             className={inputCls}
@@ -51,11 +52,11 @@ export function ResultadosTab({
                 {fmtDate(r.dataRodada)}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
         <div className="flex items-center gap-2">
           <label className="text-xs text-muted-foreground">Comparar com</label>
-          <select
+          <NativeSelect
             value={comparacaoAtualId}
             onChange={(e) => setComparacaoId(e.target.value)}
             className={inputCls}
@@ -68,7 +69,7 @@ export function ResultadosTab({
                   {fmtDate(r.dataRodada)}
                 </option>
               ))}
-          </select>
+          </NativeSelect>
         </div>
       </div>
 

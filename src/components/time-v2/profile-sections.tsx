@@ -180,7 +180,7 @@ export function ProfileSummary({ items }: { items: SummaryItem[] }) {
           aria-label={`${i.label}: ${i.value}. Ir para a seção`}
           className="min-w-0 cursor-pointer rounded-lg border border-border bg-card px-3 py-2 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <p className="flex items-center gap-1.5 truncate text-[10px] font-medium uppercase tracking-wide text-text-secondary">
+          <p className="flex items-center gap-1.5 truncate text-[11px] font-medium uppercase tracking-wide text-text-secondary">
             <span className="shrink-0">{i.icon}</span>
             <span className="truncate">{i.label}</span>
           </p>
@@ -189,7 +189,7 @@ export function ProfileSummary({ items }: { items: SummaryItem[] }) {
           >
             {i.value}
           </p>
-          {i.hint && <p className="truncate text-[10px] text-text-secondary">{i.hint}</p>}
+          {i.hint && <p className="truncate text-[11px] text-text-secondary">{i.hint}</p>}
         </button>
       ))}
     </div>
@@ -326,7 +326,7 @@ export function ProfileWorkload({ stats, load }: { stats: MemberTaskStats; load:
   return (
     <div className="rounded-lg border border-border/60 bg-muted/10 px-3 py-2.5">
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-text-secondary">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
           Carga atual
         </span>
         <LoadBadge load={load} withTooltip={false} />
@@ -417,7 +417,7 @@ export function ProfileJourney({
         <EmptyLine>Nenhum registro de jornada neste período.</EmptyLine>
       ) : (
         <div className="overflow-hidden rounded-lg border border-border">
-          <div className="grid grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))] gap-2 border-b border-border bg-muted/30 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-text-secondary sm:grid-cols-[minmax(0,1.4fr)_repeat(4,minmax(0,1fr))]">
+          <div className="grid grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))] gap-2 border-b border-border bg-muted/30 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-text-secondary sm:grid-cols-[minmax(0,1.4fr)_repeat(4,minmax(0,1fr))]">
             <span>Dia</span>
             <span>Entrada</span>
             <span>Saída</span>
@@ -484,7 +484,7 @@ function MetricBlock({
 }) {
   return (
     <div className="min-w-0 rounded-lg border border-border/60 bg-muted/10 px-3 py-2.5">
-      <p className="truncate text-[10px] font-medium uppercase tracking-wide text-text-secondary">
+      <p className="truncate text-[11px] font-medium uppercase tracking-wide text-text-secondary">
         {label}
       </p>
       <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{value}</p>
@@ -524,7 +524,7 @@ export function ProfileScoreSummary({
     <div className="rounded-lg border border-border/60 bg-muted/10 px-3 py-2.5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-text-secondary">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-text-secondary">
             Score operacional
           </p>
           {score.score == null || score.dataState === "sem_dados" ? (
@@ -576,7 +576,7 @@ export function ProfileScoreSummary({
           </span>
         </p>
       )}
-      <p className="mt-1 text-[10px] text-text-secondary">
+      <p className="mt-1 text-[11px] text-text-secondary">
         Indicador de gestão do período, não uma nota da pessoa. Não compara membros.
       </p>
     </div>
@@ -779,7 +779,7 @@ export function ProfileInsights({ insights }: { insights: MemberInsight[] }) {
       {insights.map((i, idx) => (
         <li key={`${i.kind}-${idx}`} className="flex items-start gap-3 px-3 py-2">
           <span
-            className={`w-20 shrink-0 pt-0.5 text-[10px] font-semibold uppercase tracking-wide ${INSIGHT_TONE[i.kind]}`}
+            className={`w-20 shrink-0 pt-0.5 text-[11px] font-semibold uppercase tracking-wide ${INSIGHT_TONE[i.kind]}`}
           >
             {MEMBER_INSIGHT_LABEL[i.kind]}
           </span>

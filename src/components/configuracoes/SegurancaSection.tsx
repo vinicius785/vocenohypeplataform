@@ -34,6 +34,7 @@ import { useVerifyVaultAccessCode } from "@/lib/vault-access";
 import { getVaultTotpStatus, enrollVaultTotp } from "@/lib/vault-totp.functions";
 import { MfaEnrollCard } from "./MfaEnrollCard";
 import { SettingsCard, SettingsSectionHeader } from "./settings-shared";
+import { NativeSelect } from "@/components/ui/native-select";
 
 type Senha = {
   id: string;
@@ -633,7 +634,7 @@ function SenhaDialog({
           </label>
           <label className="block space-y-1">
             <span className="text-xs font-medium">Categoria</span>
-            <select
+            <NativeSelect
               value={categoria}
               onChange={(e) => setCategoria(e.target.value)}
               className={inputCls}
@@ -648,7 +649,7 @@ function SenhaDialog({
               <option value="Anúncios">Anúncios</option>
               <option value="Design">Design</option>
               <option value="Outros">Outros</option>
-            </select>
+            </NativeSelect>
           </label>
           <label className="block space-y-1">
             <span className="text-xs font-medium">Usuário / e-mail</span>

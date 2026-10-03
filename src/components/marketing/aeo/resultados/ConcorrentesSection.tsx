@@ -16,7 +16,7 @@ export function ConcorrentesSection({
   const [aberto, setAberto] = useState<string | null>(null);
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-4">
+    <div className="surface-card p-4">
       <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
         Concorrentes mais citados
       </h3>

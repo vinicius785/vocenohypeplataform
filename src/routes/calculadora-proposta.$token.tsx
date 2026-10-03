@@ -10,6 +10,7 @@ import {
   calcPropostaPublica,
   savePropostaPublica,
 } from "@/lib/proposta-publica.functions";
+import { NativeSelect } from "@/components/ui/native-select";
 
 /**
  * Calculadora de proposta EXTERNA (`/calculadora-proposta/$token`) — link à
@@ -68,7 +69,7 @@ function TopBar({ ws }: { ws: Workspace }) {
         {ws.logo ? (
           <img src={ws.logo} alt="" className="h-full w-full object-cover" />
         ) : (
-          <span className="text-[11px] font-bold">{ws.nome.charAt(0).toUpperCase()}</span>
+          <span className="text-[11px] font-semibold">{ws.nome.charAt(0).toUpperCase()}</span>
         )}
       </div>
       <span className="text-sm font-semibold text-foreground">{ws.nome}</span>
@@ -177,13 +178,13 @@ function CalculadoraPropostaPage() {
 
         <div className="space-y-3">
           {linhas.map((l, i) => (
-            <div key={l.id} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+            <div key={l.id} className="surface-card p-4">
               <div className="flex items-center gap-3">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
                   {i + 1}
                 </span>
                 <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row">
-                  <select
+                  <NativeSelect
                     value={l.tier}
                     onChange={(e) => updateLinha(l.id, { tier: e.target.value as TierId })}
                     className={selectCls}
@@ -194,8 +195,8 @@ function CalculadoraPropostaPage() {
                         {t.label}
                       </option>
                     ))}
-                  </select>
-                  <select
+                  </NativeSelect>
+                  <NativeSelect
                     value={l.formato}
                     onChange={(e) => updateLinha(l.id, { formato: e.target.value as FormatoId })}
                     className={selectCls}
@@ -206,7 +207,7 @@ function CalculadoraPropostaPage() {
                         {f.label}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                   <input
                     type="number"
                     min={1}
@@ -260,7 +261,7 @@ function CalculadoraPropostaPage() {
                 {totalItens === 1 ? "" : "s"}
               </p>
             </div>
-            <p className="flex items-center gap-2 text-3xl font-bold tabular-nums text-foreground sm:text-4xl">
+            <p className="flex items-center gap-2 text-3xl font-semibold tabular-nums text-foreground sm:text-4xl">
               {calculando && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
               {precoFinal != null ? formatBRL(precoFinal) : "—"}
             </p>

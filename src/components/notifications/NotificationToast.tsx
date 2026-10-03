@@ -136,7 +136,7 @@ export function NotificationToastContent({
       <div className="mt-1.5 flex items-center justify-between gap-2 pl-[46px]">
         <span className={TYPOGRAPHY.caption}>{timeLabel}</span>
         {actionLabel && onAction && (
-          <span className="text-sm font-medium text-brand">{actionLabel} →</span>
+          <span className="text-sm font-medium text-text-brand">{actionLabel} →</span>
         )}
       </div>
     </div>

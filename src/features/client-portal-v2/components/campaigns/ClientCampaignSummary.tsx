@@ -7,7 +7,7 @@ import type { CampaignSummary } from "../../types/attention";
  * nunca mostra um traço num card vazio. */
 export function ClientCampaignSummary({ campaign }: { campaign: CampaignSummary }) {
   return (
-    <div className="flex flex-wrap rounded-2xl bg-card dark:shadow-none">
+    <div className="surface-card flex flex-wrap">
       <SummaryStat
         label="Progresso"
         value={`${campaign.progressPercent}%`}

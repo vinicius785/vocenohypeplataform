@@ -25,6 +25,7 @@ import { PortalListPanel, PortalListRow } from "../components/shared/PortalListP
 import { portalFieldBase } from "../components/shared/portal-field-styles";
 import { ClientFileViewer } from "../components/files/ClientFileViewer";
 import type { ClientFile } from "../types/files";
+import { NativeSelect } from "@/components/ui/native-select";
 
 type FileRow = {
   id: string;
@@ -184,7 +185,7 @@ export function ArquivosV2({ openFileId }: { openFileId?: string }) {
               className={`${portalFieldBase} w-56 pl-9`}
             />
           </div>
-          <select
+          <NativeSelect
             value={campaignFilter}
             onChange={(e) => setCampaignFilter(e.target.value)}
             className={portalFieldBase}
@@ -195,8 +196,8 @@ export function ArquivosV2({ openFileId }: { openFileId?: string }) {
                 {c.nome}
               </option>
             ))}
-          </select>
-          <select
+          </NativeSelect>
+          <NativeSelect
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
             className={portalFieldBase}
@@ -207,7 +208,7 @@ export function ArquivosV2({ openFileId }: { openFileId?: string }) {
             {availableTypes.has("videos") && <option value="videos">Vídeos</option>}
             {availableTypes.has("audios") && <option value="audios">Áudios</option>}
             <option value="relatorios">Relatórios</option>
-          </select>
+          </NativeSelect>
         </div>
       )}
 

@@ -15,7 +15,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { PageCanvas, PageContainer } from "@/components/shared/PageContainer";
+import { Skeleton } from "@/components/ui/skeleton";
+import { PageContainer } from "@/components/shared/PageContainer";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,7 +47,8 @@ import {
   listOrganizationMembers,
 } from "@/lib/organization-invites.functions";
 import { accessAuditActionLabel } from "@/lib/access-audit-labels";
-import { formatIsoDate } from "@/lib/utils";
+import { cn, formatIsoDate } from "@/lib/utils";
+import { SURFACE, TYPOGRAPHY } from "@/lib/design-tokens";
 
 /**
  * Full client-detail page (Part 2 of the client-detail-page rebuild — Part 1
@@ -194,9 +196,9 @@ export function ClienteDetailPage({ clienteId }: { clienteId: string }) {
     // encontrado" antes da hora.
     return (
       <PageContainer className="space-y-4 py-10">
-        <div className="h-6 w-40 animate-pulse rounded bg-muted" />
-        <div className="h-24 w-full animate-pulse rounded-2xl bg-muted" />
-        <div className="h-40 w-full animate-pulse rounded-2xl bg-muted" />
+        <Skeleton className="h-6 w-40" />
+        <Skeleton className="h-24 w-full rounded-2xl" />
+        <Skeleton className="h-40 w-full rounded-2xl" />
       </PageContainer>
     );
   }
@@ -228,8 +230,8 @@ export function ClienteDetailPage({ clienteId }: { clienteId: string }) {
   }
 
   return (
-    <PageCanvas>
-      <PageContainer className="space-y-6">
+    <>
+      <PageContainer className="space-y-6 md:space-y-8">
         {/* Breadcrumb simples (mesmo padrão de "Voltar para X" de
          * projeto.$id.tsx — não existe componente de breadcrumb dedicado). */}
         <button
@@ -243,12 +245,18 @@ export function ClienteDetailPage({ clienteId }: { clienteId: string }) {
         </button>
 
         {/* ===== Cabeçalho ===== */}
-        <div className="rounded-2xl bg-card p-5 dark:shadow-none md:p-6">
+        <div className={cn(SURFACE.card, "p-5 md:p-6")}>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex min-w-0 items-start gap-3">
               <ClienteLogo photo={cliente.photo} empresa={cliente.empresa} size="lg" />
               <div className="min-w-0">
-                <p className="truncate text-xl font-bold text-foreground">{cliente.empresa}</p>
+                <p
+                  role="heading"
+                  aria-level={1}
+                  className={cn("truncate", TYPOGRAPHY.pageHeading, "text-foreground")}
+                >
+                  {cliente.empresa}
+                </p>
                 <p className="truncate text-sm text-text-secondary">
                   {cliente.responsavel || "Contato não informado"}
                 </p>
@@ -352,7 +360,7 @@ export function ClienteDetailPage({ clienteId }: { clienteId: string }) {
         </div>
 
         {/* ===== Informações do cliente ===== */}
-        <section className="rounded-2xl bg-card p-5 dark:shadow-none md:p-6">
+        <section className={cn(SURFACE.card, "p-5 md:p-6")}>
           <h2 className="text-sm font-semibold text-foreground">Informações do cliente</h2>
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <InfoField label="Contato principal" value={cliente.responsavel || "Não informado"} />
@@ -387,7 +395,7 @@ export function ClienteDetailPage({ clienteId }: { clienteId: string }) {
          * de reconstrução do domínio Comercial/Clientes/Campanhas/Contratos/
          * Financeiro) ===== */}
         {clienteStatus(cliente) === "capture" && (
-          <section className="rounded-2xl bg-card p-5 dark:shadow-none md:p-6">
+          <section className={cn(SURFACE.card, "p-5 md:p-6")}>
             <h2 className="text-sm font-semibold text-foreground">Comercial</h2>
             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
               <InfoField label="Próximo passo" value={cliente.proximoPasso || "Não definido"} />
@@ -411,7 +419,7 @@ export function ClienteDetailPage({ clienteId }: { clienteId: string }) {
         )}
 
         {/* ===== Campanhas ===== */}
-        <section className="rounded-2xl bg-card p-5 dark:shadow-none md:p-6">
+        <section className={cn(SURFACE.card, "p-5 md:p-6")}>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-foreground">Campanhas</h2>
             <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-text-secondary">
@@ -480,7 +488,7 @@ export function ClienteDetailPage({ clienteId }: { clienteId: string }) {
         <ClienteFinancialSummary clienteId={cliente.id} />
 
         {/* ===== Acessos ao portal ===== */}
-        <section id="acessos-ao-portal" className="rounded-2xl bg-card p-5 dark:shadow-none md:p-6">
+        <section id="acessos-ao-portal" className={cn(SURFACE.card, "p-5 md:p-6")}>
           <PortalAccessSection
             clienteId={cliente.id}
             clienteNome={cliente.empresa}
@@ -489,7 +497,7 @@ export function ClienteDetailPage({ clienteId }: { clienteId: string }) {
         </section>
 
         {/* ===== Histórico (colapsável, fechado por padrão) ===== */}
-        <section className="rounded-2xl bg-card p-5 dark:shadow-none md:p-6">
+        <section className={cn(SURFACE.card, "p-5 md:p-6")}>
           <button
             type="button"
             onClick={() => {
@@ -573,7 +581,7 @@ export function ClienteDetailPage({ clienteId }: { clienteId: string }) {
         onSave={saveCampaign}
       />
       {confirmDialog}
-    </PageCanvas>
+    </>
   );
 }
 
@@ -596,7 +604,7 @@ function InfoField({
           href={href}
           target={href.startsWith("mailto:") ? undefined : "_blank"}
           rel="noopener noreferrer"
-          className="mt-0.5 flex items-center gap-1.5 truncate text-sm font-medium text-brand hover:underline"
+          className="mt-0.5 flex items-center gap-1.5 truncate text-sm font-medium text-text-brand hover:underline"
         >
           {icon}
           {value}

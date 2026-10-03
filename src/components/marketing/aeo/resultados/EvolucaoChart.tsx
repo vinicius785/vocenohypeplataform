@@ -11,6 +11,7 @@ import {
 import { AEO_IAS, type AeoIa, type AeoResposta, type AeoRodada } from "@/lib/aeo-store";
 import { serieEvolucao } from "@/lib/aeo-engine";
 import { inputCls, fmtDate } from "../aeo-ui-utils";
+import { NativeSelect } from "@/components/ui/native-select";
 
 export function EvolucaoChart({
   rodadas,
@@ -27,12 +28,12 @@ export function EvolucaoChart({
   const data = serie.map((s) => ({ label: fmtDate(s.label), pct: s.pct }));
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-4">
+    <div className="surface-card p-4">
       <div className="flex items-center justify-between">
         <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
           Evolução da visibilidade
         </h3>
-        <select
+        <NativeSelect
           value={filtro}
           onChange={(e) => setFiltro(e.target.value as AeoIa | "Geral")}
           className={inputCls}
@@ -43,7 +44,7 @@ export function EvolucaoChart({
               {ia}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </div>
       {data.length < 2 ? (
         <p className="mt-4 text-xs text-muted-foreground">

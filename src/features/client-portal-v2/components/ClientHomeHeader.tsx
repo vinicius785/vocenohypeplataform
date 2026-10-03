@@ -98,11 +98,11 @@ export function HeaderStatCell({
       <span
         className={`text-xl font-semibold tabular-nums md:text-2xl ${
           isZero
-            ? "text-muted-foreground/50"
+            ? "text-text-secondary"
             : tone === "warning" && value > 0
               ? "text-warning"
               : active
-                ? "text-brand"
+                ? "text-text-brand"
                 : "text-foreground"
         }`}
       >

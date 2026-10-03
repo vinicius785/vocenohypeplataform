@@ -56,7 +56,7 @@ export function ClientCampaignHeader({
           <p className="truncate text-xs font-medium uppercase tracking-wide text-text-secondary">
             {clientName}
           </p>
-          <p className="mt-0.5 truncate text-2xl font-bold tracking-tight text-foreground md:text-[28px]">
+          <p className="mt-0.5 truncate text-2xl font-semibold tracking-tight text-foreground md:text-[28px]">
             {campaign.nome}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">

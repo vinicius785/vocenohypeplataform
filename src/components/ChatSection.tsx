@@ -660,7 +660,7 @@ export function ChatSection() {
           <div className="ml-auto flex shrink-0 items-center gap-2">
             <Link
               to="/chat-v2"
-              className="hidden shrink-0 whitespace-nowrap text-[11px] font-medium text-brand hover:underline md:inline"
+              className="hidden shrink-0 whitespace-nowrap text-[11px] font-medium text-text-brand hover:underline md:inline"
             >
               Experimentar novo Chat (beta)
             </Link>
@@ -731,7 +731,7 @@ export function ChatSection() {
 
         {!activeId ? (
           <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 text-center">
-            <MessageSquare className="h-10 w-10 text-muted-foreground/40" strokeWidth={1.5} />
+            <MessageSquare className="h-10 w-10 text-text-secondary" strokeWidth={1.5} />
             <p className="text-sm text-muted-foreground">
               Selecione uma conversa pra começar a conversar.
             </p>
@@ -875,7 +875,7 @@ export function ChatSection() {
                               />
                             </span>
                             <span className="flex-1 truncate">{m.name}</span>
-                            <span className="text-[10px] text-muted-foreground">
+                            <span className="text-[11px] text-muted-foreground">
                               {STATUS_LABEL[s]}
                             </span>
                           </button>
@@ -1003,7 +1003,7 @@ function ChatListRow({
         </span>
       </button>
       {item.unread > 0 && (
-        <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-brand px-1.5 text-[10px] font-semibold text-brand-foreground">
+        <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-brand px-1.5 text-[11px] font-semibold text-brand-foreground">
           {item.unread > 9 ? "9+" : item.unread}
         </span>
       )}
@@ -1075,14 +1075,14 @@ function SidebarGroupSection({
         <button
           type="button"
           onClick={() => setCollapsed(toggleChatSidebarGroup(group))}
-          className="flex min-w-0 flex-1 items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+          className="flex min-w-0 flex-1 items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
         >
           {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
           <span className="truncate">{label}</span>
           {collapsed && <span className="normal-case tracking-normal">({count})</span>}
         </button>
         {!!unread && unread > 0 && (
-          <span className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-brand px-1 text-[9px] font-semibold text-brand-foreground">
+          <span className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-brand px-1 text-[11px] font-semibold text-brand-foreground">
             {unread > 9 ? "9+" : unread}
           </span>
         )}
@@ -1234,7 +1234,7 @@ function ChatConversationList({
           aria-pressed={onlyUnread}
           className={`mt-2 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
             onlyUnread
-              ? "border-brand/50 bg-brand-subtle text-brand"
+              ? "border-brand/50 bg-brand-subtle text-text-brand"
               : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
           }`}
         >
@@ -1442,7 +1442,7 @@ function MessageBody({
           }`}
         >
           {renderText(text, mentions, onOpenMention)}
-          {editedAt && <span className="ml-1 text-[10px] text-muted-foreground">(editado)</span>}
+          {editedAt && <span className="ml-1 text-[11px] text-muted-foreground">(editado)</span>}
         </p>
         {collapsed && (
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-background/95 to-transparent md:from-muted/70" />
@@ -1788,7 +1788,7 @@ function MessageList({
               const dayDividerEl = showDayDivider && (
                 <div className="my-4 flex items-center gap-3">
                   <div className="h-px flex-1 bg-border" />
-                  <span className="rounded-full border border-border bg-background px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <span className="rounded-full border border-border bg-background px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                     {formatDayLabel(m.createdAt)}
                   </span>
                   <div className="h-px flex-1 bg-border" />
@@ -1828,13 +1828,13 @@ function MessageList({
                           )}
                           <PhoneMissed className="h-3 w-3 shrink-0 opacity-70" />
                           <span>{groupMsgs.length} tentativas de chamada</span>
-                          <span className="text-[10px] opacity-60">{range}</span>
+                          <span className="text-[11px] opacity-60">{range}</span>
                         </button>
                         {expanded && (
                           <div className="flex flex-col gap-0.5 rounded-md border border-border/60 bg-card/50 px-3 py-2 text-[11px] text-muted-foreground">
                             {groupMsgs.map((gm) => (
                               <div key={gm.id} className="flex items-center gap-1.5">
-                                <span className="text-[10px] opacity-60">
+                                <span className="text-[11px] opacity-60">
                                   {fmtTime(gm.createdAt)}
                                 </span>
                                 <span>·</span>
@@ -1888,7 +1888,7 @@ function MessageList({
                             aria-hidden="true"
                           />
                         )}
-                        <span className="text-[10px] opacity-60">{fmtTime(m.createdAt)}</span>
+                        <span className="text-[11px] opacity-60">{fmtTime(m.createdAt)}</span>
                       </button>
                       {detailsOpen && kind === "answered" && (
                         <div className="rounded-md border border-border/60 bg-card/50 px-3 py-2 text-[11px] text-muted-foreground">
@@ -1913,7 +1913,7 @@ function MessageList({
                   <div className="my-2 flex items-center justify-center gap-2 text-[11px] text-muted-foreground">
                     <span className="rounded-full border border-border bg-muted/40 px-3 py-1">
                       {m.text}
-                      <span className="ml-2 text-[10px] opacity-70">
+                      <span className="ml-2 text-[11px] opacity-70">
                         {new Date(m.createdAt).toLocaleTimeString("pt-BR", {
                           hour: "2-digit",
                           minute: "2-digit",
@@ -1929,7 +1929,7 @@ function MessageList({
                 {showDayDivider && (
                   <div className="my-4 flex items-center gap-3">
                     <div className="h-px flex-1 bg-border" />
-                    <span className="rounded-full border border-border bg-background px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <span className="rounded-full border border-border bg-background px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                       {formatDayLabel(m.createdAt)}
                     </span>
                     <div className="h-px flex-1 bg-border" />
@@ -1960,11 +1960,11 @@ function MessageList({
                     {!grouped && (
                       <div className="mb-1 flex items-baseline gap-2">
                         <span
-                          className={`text-xs font-semibold ${mine ? "text-brand" : "text-foreground"}`}
+                          className={`text-xs font-semibold ${mine ? "text-text-brand" : "text-foreground"}`}
                         >
                           {m.authorName}
                         </span>
-                        <span className="text-[10px] text-muted-foreground">
+                        <span className="text-[11px] text-muted-foreground">
                           {new Date(m.createdAt).toLocaleTimeString("pt-BR", {
                             hour: "2-digit",
                             minute: "2-digit",
@@ -2074,11 +2074,11 @@ function MessageList({
                                   key={r.authorId}
                                   photo={r.authorPhoto}
                                   name={r.authorName}
-                                  className="h-5 w-5 border border-background text-[9px]"
+                                  className="h-5 w-5 border border-background text-[11px]"
                                 />
                               ))}
                             </span>
-                            <span className="font-medium text-brand">
+                            <span className="font-medium text-text-brand">
                               {replies.length} {replies.length === 1 ? "resposta" : "respostas"}
                             </span>
                             <span>
@@ -2093,7 +2093,7 @@ function MessageList({
                       })()}
                     {!editing && mine && isDm && lastOfGroup && (
                       <div className="mt-0.5 flex items-center gap-1">
-                        <span className="text-[10px] text-muted-foreground">
+                        <span className="text-[11px] text-muted-foreground">
                           {new Date(m.createdAt).toLocaleTimeString("pt-BR", {
                             hour: "2-digit",
                             minute: "2-digit",
@@ -2278,11 +2278,11 @@ function ThreadPanel({
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
           <span
-            className={`text-xs font-semibold ${m.authorId === meId ? "text-brand" : "text-foreground"}`}
+            className={`text-xs font-semibold ${m.authorId === meId ? "text-text-brand" : "text-foreground"}`}
           >
             {m.authorName}
           </span>
-          <span className="text-[10px] text-muted-foreground">
+          <span className="text-[11px] text-muted-foreground">
             {new Date(m.createdAt).toLocaleTimeString("pt-BR", {
               hour: "2-digit",
               minute: "2-digit",
@@ -2821,7 +2821,7 @@ function Composer({
           </div>
         )}
         {!voiceMode && (
-          <p className="mt-1 flex items-center gap-1 px-1 text-[10px] text-muted-foreground">
+          <p className="mt-1 flex items-center gap-1 px-1 text-[11px] text-muted-foreground">
             <AtSign className="h-3 w-3" /> mencione tarefas{allowUserMentions ? " e pessoas" : ""}{" "}
             com @ • Enter envia
             {uploading && <span className="ml-2">• enviando anexo...</span>}

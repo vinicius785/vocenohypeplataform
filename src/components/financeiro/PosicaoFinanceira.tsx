@@ -12,6 +12,7 @@ import {
 import type { DateRange } from "@/components/financeiro/useFinanceiroFilteredEntries";
 import type { SaldoInicialConfig } from "@/lib/financeiro-saldo-inicial-store";
 import { Button } from "@/components/ui/button";
+import { NativeSelect } from "@/components/ui/native-select";
 
 function pctDelta(current: number, previous: number): number | null {
   if (previous === 0) return null;
@@ -101,7 +102,7 @@ export function PosicaoResumo({
         </div>
         {saldoAtual != null ? (
           <>
-            <p className="mt-1 whitespace-nowrap text-4xl font-bold tabular-nums tracking-tight text-foreground md:text-5xl">
+            <p className="mt-1 whitespace-nowrap text-4xl font-semibold tabular-nums tracking-tight text-foreground md:text-5xl">
               {fmtBRL(saldoAtual)}
             </p>
             <p className="mt-1.5 text-sm text-text-secondary">
@@ -139,7 +140,7 @@ export function PosicaoResumo({
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <p className="text-xs text-text-secondary">Projetado</p>
-            <select
+            <NativeSelect
               value={horizon}
               onChange={(e) => onHorizonChange(e.target.value as ProjectionHorizon)}
               aria-label="Horizonte da projeção"
@@ -150,7 +151,7 @@ export function PosicaoResumo({
                   {o.label}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
           <p className="mt-0.5 whitespace-nowrap text-xl font-semibold tabular-nums text-foreground md:text-2xl">
             {saldoProjetado == null ? "—" : fmtBRL(saldoProjetado)}

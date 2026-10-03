@@ -66,12 +66,12 @@ export function PipelineSummary({
       <button
         type="button"
         onClick={() => onFilter({})}
-        className="rounded-[28px] border border-border/60 border-l-[3px] border-l-brand bg-card p-7 text-left dark:shadow-none md:p-8 lg:col-span-7"
+        className="rounded-2xl border border-border/60 border-l-[3px] border-l-brand bg-card p-7 text-left dark:shadow-none md:p-8 lg:col-span-7"
       >
         <span className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
           Pipeline total
         </span>
-        <p className="mt-5 whitespace-nowrap text-[40px] font-bold leading-none tracking-tight text-foreground sm:text-[48px] md:text-[56px]">
+        <p className="mt-5 whitespace-nowrap text-[40px] font-semibold leading-none tracking-tight text-foreground sm:text-[48px] md:text-[56px]">
           {formatBRL(kpis.pipelineTotal)}
         </p>
         <p className="mt-3 text-sm text-text-secondary">
@@ -94,10 +94,10 @@ export function PipelineSummary({
                     style={{ height: `${Math.max(18, (b.value / maxValue) * 100)}%` }}
                   />
                 </div>
-                <span className="line-clamp-2 text-center text-[10px] leading-tight text-text-secondary">
+                <span className="line-clamp-2 text-center text-[11px] leading-tight text-text-secondary">
                   {OPPORTUNITY_STAGE_LABEL[b.stage]}
                 </span>
-                <span className="text-[10px] font-semibold tabular-nums text-foreground">
+                <span className="text-[11px] font-semibold tabular-nums text-foreground">
                   {b.count}
                 </span>
               </div>
@@ -112,7 +112,7 @@ export function PipelineSummary({
         <button
           type="button"
           onClick={() => onFilter(ganhoAtivo ? {} : { stages: ["GANHO"] })}
-          className={`rounded-[22px] ${SECONDARY_SURFACE} p-5 text-left transition-colors hover:bg-muted/40 ${
+          className={`rounded-2xl ${SECONDARY_SURFACE} p-5 text-left transition-colors hover:bg-muted/40 ${
             ganhoAtivo ? "ring-2 ring-brand" : ""
           }`}
         >
@@ -121,7 +121,7 @@ export function PipelineSummary({
               <TrendingUp className="h-4 w-4" />
             </span>
             {ganhoAtivo && (
-              <span className="rounded-full bg-brand-subtle px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand">
+              <span className="rounded-full bg-brand-subtle px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-text-brand">
                 Filtrando
               </span>
             )}
@@ -129,7 +129,7 @@ export function PipelineSummary({
           <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-text-secondary">
             Ganho no período
           </p>
-          <p className="mt-1 whitespace-nowrap text-[22px] font-bold tabular-nums leading-none text-foreground">
+          <p className="mt-1 whitespace-nowrap text-[22px] font-semibold tabular-nums leading-none text-foreground">
             {formatBRL(kpis.valorGanhoNoPeriodo)}
           </p>
           <p className="mt-1 text-[11px] text-text-secondary">
@@ -141,7 +141,7 @@ export function PipelineSummary({
           <button
             type="button"
             onClick={() => onFilter(semAcaoAtivo ? {} : { activity: ["sem_proxima_acao"] })}
-            className={`rounded-[22px] ${SECONDARY_SURFACE} p-4 text-left transition-colors hover:bg-muted/40 ${
+            className={`rounded-2xl ${SECONDARY_SURFACE} p-4 text-left transition-colors hover:bg-muted/40 ${
               semAcaoAtivo ? "ring-2 ring-brand" : ""
             }`}
           >
@@ -151,17 +151,17 @@ export function PipelineSummary({
             <p className="mt-2.5 text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
               Sem próxima ação
             </p>
-            <p className="mt-1 whitespace-nowrap text-[19px] font-bold tabular-nums leading-none text-foreground">
+            <p className="mt-1 whitespace-nowrap text-[19px] font-semibold tabular-nums leading-none text-foreground">
               {kpis.oportunidadesSemProximaAcao}
             </p>
-            <p className="mt-1 truncate text-[10px] text-text-secondary">
+            <p className="mt-1 truncate text-[11px] text-text-secondary">
               {formatBRL(kpis.valorSemProximaAcao)}
             </p>
           </button>
           <button
             type="button"
             onClick={() => onFilter(paradasAtivo ? {} : { activity: ["parado_5d"] })}
-            className={`rounded-[22px] ${SECONDARY_SURFACE} p-4 text-left transition-colors hover:bg-muted/40 ${
+            className={`rounded-2xl ${SECONDARY_SURFACE} p-4 text-left transition-colors hover:bg-muted/40 ${
               paradasAtivo ? "ring-2 ring-brand" : ""
             }`}
           >
@@ -171,10 +171,10 @@ export function PipelineSummary({
             <p className="mt-2.5 text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
               Paradas 5+ dias
             </p>
-            <p className="mt-1 whitespace-nowrap text-[19px] font-bold tabular-nums leading-none text-foreground">
+            <p className="mt-1 whitespace-nowrap text-[19px] font-semibold tabular-nums leading-none text-foreground">
               {kpis.oportunidadesParadas}
             </p>
-            <p className="mt-1 truncate text-[10px] text-text-secondary">
+            <p className="mt-1 truncate text-[11px] text-text-secondary">
               {formatBRL(kpis.valorParadas)}
             </p>
           </button>

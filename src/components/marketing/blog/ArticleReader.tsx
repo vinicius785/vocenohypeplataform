@@ -173,7 +173,7 @@ function ArticleCommentsPanel({
                 className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs hover:bg-muted"
               >
                 <span
-                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold ${colorFor(m.name)}`}
+                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${colorFor(m.name)}`}
                 >
                   {initialsOf(m.name) || "?"}
                 </span>
@@ -207,7 +207,7 @@ function ArticleCommentsPanel({
 
       {comments.length === 0 ? (
         <div className="flex flex-col items-center gap-1 py-4 text-center">
-          <MessageCircle className="h-6 w-6 text-muted-foreground/40" />
+          <MessageCircle className="h-6 w-6 text-text-secondary" />
           <p className="text-xs text-muted-foreground">Nenhum comentário ainda.</p>
           <p className="text-[11px] text-muted-foreground">Seja a primeira pessoa a comentar.</p>
         </div>
@@ -216,7 +216,7 @@ function ArticleCommentsPanel({
           {comments.map((c) => (
             <li key={c.id} className="group flex gap-2.5">
               <span
-                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${colorFor(c.authorLabel)}`}
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${colorFor(c.authorLabel)}`}
               >
                 {initialsOf(c.authorLabel) || "?"}
               </span>
@@ -224,11 +224,11 @@ function ArticleCommentsPanel({
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs font-semibold">{c.authorLabel}</span>
                   {c.authorKind === "cliente" && (
-                    <span className="rounded bg-muted px-1 py-0.5 text-[9px] text-muted-foreground">
+                    <span className="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">
                       Cliente
                     </span>
                   )}
-                  <span className="text-[10px] text-muted-foreground">
+                  <span className="text-[11px] text-muted-foreground">
                     {fmtRelative(c.createdAt)}
                   </span>
                   {onDeleteComment && (
@@ -298,7 +298,7 @@ export function ArticleReader({
         {(category || metaExtra) && (
           <div className="mt-4 flex flex-wrap items-center gap-2">
             {category && (
-              <span className="inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+              <span className="inline-block rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                 {category}
               </span>
             )}
@@ -310,7 +310,7 @@ export function ArticleReader({
             )}
           </div>
         )}
-        <h1 className="mt-2 text-2xl font-light leading-tight tracking-tight text-foreground">
+        <h1 className="mt-2 text-2xl font-normal leading-tight tracking-tight text-foreground">
           {title}
         </h1>
         <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -318,7 +318,7 @@ export function ArticleReader({
             <img src={authorPhoto} alt="" className="h-5 w-5 rounded-full object-cover" />
           ) : (
             <span
-              className={`flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-semibold ${colorFor(authorLabel)}`}
+              className={`flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold ${colorFor(authorLabel)}`}
             >
               {initialsOf(authorLabel) || "?"}
             </span>

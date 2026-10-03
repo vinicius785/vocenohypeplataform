@@ -208,7 +208,7 @@ export function ClientInfluencerDeliverables({
 
   return (
     <InfluencerDrawerSection icon={<Film className="h-4 w-4" />} title="Entregas e conteúdos">
-      <div className="space-y-1.5 rounded-2xl bg-card p-2 dark:shadow-none">
+      <div className="surface-card space-y-1.5 p-2">
         {entregas.map((entrega) => {
           const canDecide = CAN_DECIDE_STAGES.has(entrega.stage) && !readOnly;
           const hasDetails = entregaTemDetalhes(entrega, canDecide);
@@ -363,7 +363,7 @@ export function ClientInfluencerDeliverables({
                           href={entrega.url}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-block text-xs font-medium text-brand hover:underline"
+                          className="inline-block text-xs font-medium text-text-brand hover:underline"
                         >
                           Ver publicação
                         </a>

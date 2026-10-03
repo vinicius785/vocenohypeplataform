@@ -85,7 +85,7 @@ export function ObjetivoSummaryCard({
     <button
       type="button"
       onClick={onOpen}
-      className="flex w-full flex-col gap-3 rounded-[20px] bg-card p-5 text-left transition-colors hover:bg-muted/40 dark:shadow-none"
+      className="surface-card flex w-full flex-col gap-3 p-5 text-left transition-colors hover:bg-muted/40"
     >
       {!compact && (
         <div className="flex items-center gap-2">
@@ -108,7 +108,7 @@ export function ObjetivoSummaryCard({
       </div>
 
       <div className="flex items-baseline gap-1.5">
-        <span className="text-3xl font-bold tracking-tight text-foreground">
+        <span className="text-3xl font-semibold tracking-tight text-foreground">
           {progresso == null ? "—" : Math.round(progresso)}
         </span>
         {progresso != null && <span className="text-sm text-text-secondary">%</span>}

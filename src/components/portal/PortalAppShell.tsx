@@ -12,7 +12,7 @@ const COLLAPSED_KEY = "portal:sidebar:collapsed";
  * Shell do Portal do Cliente — volta a usar sidebar (mesmo padrão visual/
  * estrutural do `AppShell.tsx` interno: `w-64`/`md:w-[68px]` recolhida,
  * `border-r border-border bg-background`, item ativo `bg-brand-subtle
- * text-brand`) em vez da topbar+bottom-nav da correção anterior. Mobile
+ * text-text-brand`) em vez da topbar+bottom-nav da correção anterior. Mobile
  * vira `Sheet` (drawer) — foco preso/Escape/scroll-lock de graça via
  * Radix, sem precisar replicar o mecanismo manual do AppShell interno.
  * Topbar volta a ser só uma barra de apoio (toggle de sidebar + título +

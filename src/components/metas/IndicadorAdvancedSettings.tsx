@@ -15,6 +15,7 @@ import {
   type IndicadorMarcoStatus,
 } from "@/lib/metas-store";
 import { CADENCE_LABEL, CADENCE_OPTIONS } from "./metas-ui-utils";
+import { NativeSelect } from "@/components/ui/native-select";
 
 type Member = { name: string; photo?: string };
 
@@ -204,7 +205,7 @@ export function IndicadorAdvancedSettings({
         </div>
         <div>
           <label className={LABEL_CLS}>Área</label>
-          <select
+          <NativeSelect
             value={area}
             onChange={(e) => setArea(e.target.value as MetaArea)}
             className={FIELD_CLS}
@@ -214,7 +215,7 @@ export function IndicadorAdvancedSettings({
                 {a}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
       </div>
 
@@ -223,7 +224,7 @@ export function IndicadorAdvancedSettings({
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className={LABEL_CLS}>Tipo</label>
-            <select
+            <NativeSelect
               value={tipo}
               onChange={(e) => setTipo(e.target.value as MetricType)}
               className={FIELD_CLS}
@@ -233,12 +234,12 @@ export function IndicadorAdvancedSettings({
                   {METRIC_TYPE_LABEL[t]}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
           {NUMERIC_TYPES.includes(tipo) && (
             <div>
               <label className={LABEL_CLS}>Direção</label>
-              <select
+              <NativeSelect
                 value={direcao}
                 onChange={(e) => setDirecao(e.target.value as MetricDirection)}
                 className={FIELD_CLS}
@@ -248,7 +249,7 @@ export function IndicadorAdvancedSettings({
                     {METRIC_DIRECTION_LABEL[d]}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
           )}
         </div>
@@ -264,7 +265,7 @@ export function IndicadorAdvancedSettings({
           </label>
         )}
         {tipo === "marco" && (
-          <select
+          <NativeSelect
             value={marcoStatus}
             onChange={(e) => setMarcoStatus(e.target.value as IndicadorMarcoStatus)}
             className={FIELD_CLS}
@@ -274,7 +275,7 @@ export function IndicadorAdvancedSettings({
                 {MARCO_STATUS_LABEL[s]}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         )}
       </div>
 
@@ -352,18 +353,22 @@ export function IndicadorAdvancedSettings({
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className={LABEL_CLS}>Responsável pela atualização</label>
-            <select value={dono} onChange={(e) => setDono(e.target.value)} className={FIELD_CLS}>
+            <NativeSelect
+              value={dono}
+              onChange={(e) => setDono(e.target.value)}
+              className={FIELD_CLS}
+            >
               <option value="">Sem responsável</option>
               {members.map((m) => (
                 <option key={m.name} value={m.name}>
                   {m.name}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
           <div>
             <label className={LABEL_CLS}>Cadência de atualização</label>
-            <select
+            <NativeSelect
               value={frequencia}
               onChange={(e) => setFrequencia(e.target.value as TrackingFrequency)}
               className={FIELD_CLS}
@@ -373,7 +378,7 @@ export function IndicadorAdvancedSettings({
                   {CADENCE_LABEL[f]}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
         </div>
         {members.length > 0 && (
@@ -389,7 +394,7 @@ export function IndicadorAdvancedSettings({
                     onClick={() => toggleColaborador(m.name)}
                     className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
                       active
-                        ? "bg-brand-subtle text-brand"
+                        ? "bg-brand-subtle text-text-brand"
                         : "bg-muted text-text-secondary hover:text-foreground"
                     }`}
                   >
@@ -427,7 +432,7 @@ export function IndicadorAdvancedSettings({
           <button
             type="button"
             onClick={() => setDataSource("manual")}
-            className="flex-1 rounded-md bg-brand-subtle px-3 py-1.5 text-xs font-medium text-brand"
+            className="flex-1 rounded-md bg-brand-subtle px-3 py-1.5 text-xs font-medium text-text-brand"
           >
             Manual
           </button>

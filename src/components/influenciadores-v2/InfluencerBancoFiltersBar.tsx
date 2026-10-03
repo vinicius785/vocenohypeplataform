@@ -1,5 +1,11 @@
-import { Search, Filter, ArrowUpDown, X, LayoutGrid, List } from "lucide-react";
+import { Filter, ArrowUpDown, LayoutGrid, List } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  FilterChips,
+  FilterRow,
+  FilterSearch,
+  FilterToolbar,
+} from "@/components/shared/FilterToolbar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { NICHOS } from "@/components/influenciadores/InfluencerBoard";
@@ -70,17 +76,13 @@ export function InfluencerBancoFiltersBar({
     onFiltersChange({ ...filters, [key]: DEFAULT_INFLUENCER_BANCO_FILTERS[key] });
 
   return (
-    <div className="rounded-2xl bg-card p-3 dark:shadow-none">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[200px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-secondary" />
-          <input
-            value={query}
-            onChange={(e) => onQueryChange(e.target.value)}
-            placeholder="Buscar por nome, @handle, telefone ou e-mail..."
-            className="h-9 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-brand"
-          />
-        </div>
+    <FilterToolbar>
+      <FilterRow>
+        <FilterSearch
+          value={query}
+          onChange={onQueryChange}
+          placeholder="Buscar por nome, @handle, telefone ou e-mail..."
+        />
 
         <Popover>
           <PopoverTrigger asChild>
@@ -88,7 +90,7 @@ export function InfluencerBancoFiltersBar({
               <Filter className="h-3.5 w-3.5" />
               Filtros
               {activeCount > 0 && (
-                <Badge variant="secondary" className="ml-0.5 h-5 px-1.5 text-[10px]">
+                <Badge variant="secondary" className="ml-0.5 h-5 px-1.5 text-[11px]">
                   {activeCount}
                 </Badge>
               )}
@@ -251,23 +253,12 @@ export function InfluencerBancoFiltersBar({
             <List className="h-4 w-4" />
           </button>
         </div>
-      </div>
+      </FilterRow>
 
-      {chips.length > 0 && (
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          {chips.map((c) => (
-            <button
-              key={c.key}
-              type="button"
-              onClick={() => clearChip(c.key)}
-              className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] text-text-secondary hover:bg-muted/70"
-            >
-              {c.label}
-              <X className="h-3 w-3" />
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+      <FilterChips
+        chips={chips.map((c) => ({ id: c.key, label: c.label, onRemove: () => clearChip(c.key) }))}
+        onClear={() => onFiltersChange(DEFAULT_INFLUENCER_BANCO_FILTERS)}
+      />
+    </FilterToolbar>
   );
 }

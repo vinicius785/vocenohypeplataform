@@ -133,7 +133,7 @@ export function ObjetivoPage({
             <p
               role="heading"
               aria-level={1}
-              className="text-2xl font-bold leading-tight tracking-tight text-foreground md:text-3xl"
+              className="text-2xl font-semibold leading-tight tracking-tight text-foreground md:text-3xl"
             >
               {objetivo.titulo}
             </p>
@@ -180,7 +180,7 @@ export function ObjetivoPage({
         </div>
 
         <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
-          <p className="whitespace-nowrap text-4xl font-bold leading-none tracking-tight text-foreground">
+          <p className="whitespace-nowrap text-4xl font-semibold leading-none tracking-tight text-foreground">
             {progresso == null ? "—" : Math.round(progresso)}
             {progresso != null && <span className="text-xl text-text-secondary">%</span>}
           </p>

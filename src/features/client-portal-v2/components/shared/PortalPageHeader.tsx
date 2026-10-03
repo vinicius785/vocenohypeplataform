@@ -11,7 +11,7 @@
 export function PortalPageHeader({ title, description }: { title: string; description: string }) {
   return (
     <div>
-      <p className="text-[28px] font-bold leading-tight tracking-tight text-foreground md:text-[32px]">
+      <p className="text-[28px] font-semibold leading-tight tracking-tight text-foreground md:text-[32px]">
         {title}
       </p>
       <p className="mt-1.5 text-sm text-text-secondary">{description}</p>

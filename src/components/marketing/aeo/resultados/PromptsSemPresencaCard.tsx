@@ -19,11 +19,11 @@ export function PromptsSemPresencaCard({
   const lista = promptsSemPresencaLista(respostas, prompts, rodadaId);
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-4">
+    <div className="surface-card p-4">
       <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
         Prompts sem presença
       </h3>
-      <p className="mt-2 text-2xl font-light tracking-tighter text-foreground">{lista.length}</p>
+      <p className="mt-2 text-2xl font-normal tracking-tighter text-foreground">{lista.length}</p>
       <Button variant="outline" size="sm" className="mt-2" onClick={() => setOpen(true)}>
         Ver prompts
       </Button>

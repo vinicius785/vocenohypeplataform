@@ -100,7 +100,7 @@ export const PROBLEM_PRIORITY_TONE: Record<ProblemPriority, string> = {
   critica: "text-red-600 dark:text-red-400",
   alta: "text-amber-600 dark:text-amber-400",
   normal: "text-muted-foreground",
-  baixa: "text-muted-foreground/70",
+  baixa: "text-text-secondary",
 };
 
 export function ProblemPriorityFlag({

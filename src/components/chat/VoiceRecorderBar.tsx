@@ -241,12 +241,12 @@ export function VoiceRecorderBar({
         ))}
       </div>
       {remaining < WARN_BEFORE_MS && (
-        <span className="shrink-0 whitespace-nowrap text-[10px] text-destructive">
+        <span className="shrink-0 whitespace-nowrap text-[11px] text-destructive">
           {fmtTimer(Math.max(0, remaining))}
         </span>
       )}
       {state === "paused" && (
-        <span className="shrink-0 whitespace-nowrap text-[10px] text-muted-foreground">
+        <span className="shrink-0 whitespace-nowrap text-[11px] text-muted-foreground">
           Pausado
         </span>
       )}

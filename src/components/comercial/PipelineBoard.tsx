@@ -94,7 +94,7 @@ export function PipelineBoard({
                   setDragId(null);
                   setDragOverCol(null);
                 }}
-                className={`flex ${isMobile ? "w-full" : "w-[320px] shrink-0"} flex-col rounded-[20px] bg-muted/40 transition-colors dark:bg-white/[0.03] ${
+                className={`flex ${isMobile ? "w-full" : "w-[320px] shrink-0"} flex-col rounded-2xl bg-muted/40 transition-colors dark:bg-white/[0.03] ${
                   dragOverCol === stage ? `ring-2 ${OPPORTUNITY_STAGE_RING[stage]}` : ""
                 }`}
               >
@@ -113,7 +113,7 @@ export function PipelineBoard({
                       />
                       <h3
                         title={OPPORTUNITY_STAGE_LABEL[stage]}
-                        className="truncate text-[13px] font-semibold text-foreground"
+                        className="truncate text-sm font-semibold text-foreground"
                       >
                         {OPPORTUNITY_STAGE_LABEL[stage]}
                       </h3>
@@ -134,7 +134,7 @@ export function PipelineBoard({
 
                 <div className="space-y-2.5 p-3 pt-1">
                   {items.length === 0 ? (
-                    <div className="rounded-[16px] bg-card/40 py-5 text-center text-xs text-text-secondary">
+                    <div className="rounded-2xl bg-card/40 py-5 text-center text-xs text-text-secondary">
                       Sem oportunidades
                     </div>
                   ) : (

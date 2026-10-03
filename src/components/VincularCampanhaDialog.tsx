@@ -20,6 +20,7 @@ import { DateField } from "@/components/ui/date-field";
 import { useConfirm } from "@/hooks/use-confirm";
 import type { InscricaoPageConfig } from "@/lib/inscricao-page";
 import type { RelatorioMensal } from "@/lib/relatorio-mensal";
+import { NativeSelect } from "@/components/ui/native-select";
 
 const TIPOS = ["Digital", "Celebridade", "Local", "Nicho", "Embaixador"] as const;
 const TAMANHOS = ["Nano", "Micro", "Médio", "Macro", "Mega"] as const;
@@ -230,7 +231,7 @@ function Section({
   return (
     <section className="space-y-5">
       <div>
-        <h3 className="text-2xl font-light tracking-tighter text-foreground">{title}</h3>
+        <h3 className="text-2xl font-normal tracking-tighter text-foreground">{title}</h3>
         {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
       </div>
       <div className="space-y-4">{children}</div>
@@ -683,7 +684,7 @@ export function VincularCampanhaDialog({
                           active
                             ? "bg-brand text-brand-foreground"
                             : done
-                              ? "bg-brand/20 text-brand"
+                              ? "bg-brand/20 text-text-brand"
                               : "bg-muted text-text-secondary group-enabled:group-hover:bg-muted-foreground/20"
                         }`}
                       >
@@ -956,7 +957,7 @@ export function VincularCampanhaDialog({
                         className="grid grid-cols-2 items-end gap-2 rounded-lg border border-border/70 bg-muted/30 p-3 sm:grid-cols-[1fr_1fr_90px_90px_auto]"
                       >
                         <Field label="Tipo">
-                          <select
+                          <NativeSelect
                             value={l.tipo}
                             onChange={(e) => updateLinha(l.id, { tipo: e.target.value })}
                             className={inputCls}
@@ -967,10 +968,10 @@ export function VincularCampanhaDialog({
                                 {t}
                               </option>
                             ))}
-                          </select>
+                          </NativeSelect>
                         </Field>
                         <Field label="Tamanho">
-                          <select
+                          <NativeSelect
                             value={l.tamanho}
                             onChange={(e) => updateLinha(l.id, { tamanho: e.target.value })}
                             className={inputCls}
@@ -981,7 +982,7 @@ export function VincularCampanhaDialog({
                                 {t}
                               </option>
                             ))}
-                          </select>
+                          </NativeSelect>
                         </Field>
                         <Field label="Qtd.">
                           <input

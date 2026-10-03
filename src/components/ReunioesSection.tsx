@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SegmentedControl } from "@/components/ui/segmented-control";
-import { PageCanvas, PageContainer } from "@/components/shared/PageContainer";
+import { PageContainer } from "@/components/shared/PageContainer";
 import { PageHeader } from "@/components/shared/PageHeader";
 import {
   type Meeting,
@@ -324,7 +324,7 @@ export function ReunioesSection() {
   };
 
   return (
-    <PageCanvas>
+    <>
       <PageContainer className="space-y-6">
         <PageHeader
           title="Reuniões"
@@ -360,7 +360,7 @@ export function ReunioesSection() {
           >
             <Inbox className="h-3.5 w-3.5" /> Solicitações
             {pendentes > 0 && (
-              <Badge variant="destructive" className="ml-0.5 px-1.5 py-0 text-[10px]">
+              <Badge variant="destructive" className="ml-0.5 px-1.5 py-0 text-[11px]">
                 {pendentes}
               </Badge>
             )}
@@ -480,6 +480,6 @@ export function ReunioesSection() {
         {deleteChoiceDialog}
         {seriesChoiceDialog}
       </PageContainer>
-    </PageCanvas>
+    </>
   );
 }

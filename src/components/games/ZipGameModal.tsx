@@ -510,7 +510,7 @@ export function ZipGameModal({
                         data-zip-cell={`${cell.row},${cell.column}`}
                         role="gridcell"
                         aria-label={`Célula ${cell.row},${cell.column}, número ${value}`}
-                        className={`absolute flex items-center justify-center rounded-md text-lg font-bold transition-colors ${
+                        className={`absolute flex items-center justify-center rounded-md text-lg font-semibold transition-colors ${
                           isVisited ? "text-brand-foreground" : "text-foreground"
                         } ${isStartHint ? "ring-2 ring-brand/60" : ""} ${
                           isHint ? "ring-2 ring-warning" : ""

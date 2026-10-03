@@ -16,6 +16,7 @@ import {
   type AeoPrompt,
 } from "@/lib/aeo-store";
 import { inputCls } from "../aeo-ui-utils";
+import { NativeSelect } from "@/components/ui/native-select";
 
 export function PromptFormDialog({
   open,
@@ -72,7 +73,7 @@ export function PromptFormDialog({
               <label className="block text-[11px] font-medium text-muted-foreground">
                 Categoria
               </label>
-              <select
+              <NativeSelect
                 value={categoria}
                 onChange={(e) => setCategoria(e.target.value as AeoCategoria)}
                 className={`${inputCls} mt-1 w-full`}
@@ -82,11 +83,11 @@ export function PromptFormDialog({
                     {c} — {AEO_CATEGORIA_LABEL[c]}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
             <div>
               <label className="block text-[11px] font-medium text-muted-foreground">Idioma</label>
-              <select
+              <NativeSelect
                 value={idioma}
                 onChange={(e) => setIdioma(e.target.value as AeoIdioma)}
                 className={`${inputCls} mt-1 w-full`}
@@ -96,7 +97,7 @@ export function PromptFormDialog({
                     {i}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
           </div>
           {prompt && (

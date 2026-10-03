@@ -39,7 +39,7 @@ export function LoginScreenShell({
       <div className="flex flex-1 flex-col items-center justify-center gap-7 px-6 py-12 sm:gap-8 lg:py-16">
         {eyebrow && <p className="text-sm font-medium tracking-tight text-white/55">{eyebrow}</p>}
 
-        <div className="w-full max-w-[420px] rounded-[28px] bg-white px-7 py-9 shadow-[0_32px_80px_-24px_rgba(0,0,0,0.6)] sm:px-9 sm:py-10">
+        <div className="w-full max-w-[420px] rounded-2xl bg-white px-7 py-9 shadow-[0_32px_80px_-24px_rgba(0,0,0,0.6)] sm:px-9 sm:py-10">
           {children}
         </div>
 

@@ -58,7 +58,7 @@ export const SlashMenu = forwardRef<SuggestionListHandle, SuggestionProps<SlashC
       <div className="max-h-80 w-64 overflow-y-auto rounded-md border border-border bg-popover py-1 shadow-md">
         {groups.map(([group, groupItems]) => (
           <div key={group} className="py-0.5">
-            <p className="px-2.5 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <p className="px-2.5 pb-0.5 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               {group}
             </p>
             {groupItems.map((item) => {

@@ -287,7 +287,7 @@ function Tile({
 export function StatusBadge({ status }: { status: CampaignStatus }) {
   return (
     <span
-      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${CAMPAIGN_STATUS_TONE[status]}`}
+      className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${CAMPAIGN_STATUS_TONE[status]}`}
     >
       {CAMPAIGN_STATUS_LABEL[status]}
     </span>

@@ -130,7 +130,7 @@ export function CreateChannelModal({
                 />
               </div>
               {normalized && (
-                <p className="mt-1 text-[10px] text-muted-foreground">
+                <p className="mt-1 text-[11px] text-muted-foreground">
                   Será criado como #{normalized}
                 </p>
               )}
@@ -180,7 +180,7 @@ export function CreateChannelModal({
                               className="h-5 w-5 rounded-full object-cover"
                             />
                           ) : (
-                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[10px] font-semibold">
+                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[11px] font-semibold">
                               {m.name.slice(0, 1).toUpperCase()}
                             </span>
                           )}

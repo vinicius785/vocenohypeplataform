@@ -17,6 +17,7 @@ import {
 } from "@/lib/social-profiles";
 import { fetchWorkspace } from "@/lib/workspace-store";
 import type { CustomQuestion } from "@/lib/inscricao-page";
+import { NativeSelect } from "@/components/ui/native-select";
 
 type InscricaoData = Awaited<ReturnType<typeof getInscricaoCampanhaData>>;
 
@@ -54,7 +55,7 @@ function Header({ logo, nome }: { logo?: string; nome: string }) {
         {logo ? (
           <img src={logo} alt="" className="h-full w-full object-cover" />
         ) : (
-          <span className="text-[11px] font-bold">{nome.charAt(0).toUpperCase()}</span>
+          <span className="text-[11px] font-semibold">{nome.charAt(0).toUpperCase()}</span>
         )}
       </div>
       <span className="text-sm font-semibold text-foreground">{nome}</span>
@@ -246,7 +247,7 @@ function InscricaoPage() {
 
       <div className="mx-auto w-full max-w-3xl px-5 py-10">
         {done ? (
-          <div className="flex flex-col items-center gap-3 rounded-2xl border border-border bg-card py-16 text-center">
+          <div className="surface-card flex flex-col items-center gap-3 py-16 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background">
               <Check className="h-6 w-6" />
             </div>
@@ -286,7 +287,7 @@ function InscricaoPage() {
             )}
 
             {page.description && (
-              <section className="mt-6 rounded-2xl border border-border bg-card p-5">
+              <section className="surface-card mt-6 p-5">
                 <p className="whitespace-pre-wrap text-sm text-foreground">{page.description}</p>
               </section>
             )}
@@ -298,7 +299,7 @@ function InscricaoPage() {
               page.sobre.requisitos ||
               page.sobre.publicoDesejado ||
               page.sobre.infoImportante) && (
-              <section className="mt-6 space-y-3 rounded-2xl border border-border bg-card p-5">
+              <section className="surface-card mt-6 space-y-3 p-5">
                 <p
                   role="heading"
                   aria-level={2}
@@ -325,7 +326,7 @@ function InscricaoPage() {
             {(page.showDos && page.dos.length > 0) || (page.showDonts && page.donts.length > 0) ? (
               <section className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {page.showDos && page.dos.length > 0 && (
-                  <div className="rounded-2xl border border-border bg-card p-5">
+                  <div className="surface-card p-5">
                     <p
                       role="heading"
                       aria-level={2}
@@ -344,7 +345,7 @@ function InscricaoPage() {
                   </div>
                 )}
                 {page.showDonts && page.donts.length > 0 && (
-                  <div className="rounded-2xl border border-border bg-card p-5">
+                  <div className="surface-card p-5">
                     <p
                       role="heading"
                       aria-level={2}
@@ -366,16 +367,13 @@ function InscricaoPage() {
             ) : null}
 
             {encerrada ? (
-              <section className="mt-6 rounded-2xl border border-border bg-card p-8 text-center">
+              <section className="surface-card mt-6 p-8 text-center">
                 <p className="text-sm font-medium text-foreground">
                   As inscrições para esta campanha estão encerradas.
                 </p>
               </section>
             ) : (
-              <form
-                onSubmit={submit}
-                className="mt-6 space-y-6 rounded-2xl border border-border bg-card p-5 sm:p-6"
-              >
+              <form onSubmit={submit} className="surface-card mt-6 space-y-6 p-5 sm:p-6">
                 <FormSection title="Seus dados">
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
@@ -413,7 +411,7 @@ function InscricaoPage() {
                         <label className="text-xs font-medium text-muted-foreground">
                           Nicho{page.fields.nicho.required ? " *" : ""}
                         </label>
-                        <select
+                        <NativeSelect
                           value={nicho}
                           onChange={(e) => setNicho(e.target.value)}
                           required={page.fields.nicho.required}
@@ -425,7 +423,7 @@ function InscricaoPage() {
                               {n}
                             </option>
                           ))}
-                        </select>
+                        </NativeSelect>
                       </div>
                     )}
                   </div>
@@ -745,7 +743,7 @@ function CustomQuestionField({
     return (
       <div>
         <label className="text-xs font-medium text-muted-foreground">{label}</label>
-        <select
+        <NativeSelect
           value={(value as string) ?? ""}
           onChange={(e) => onChange(e.target.value)}
           required={question.required}
@@ -757,7 +755,7 @@ function CustomQuestionField({
               {opt}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </div>
     );
   }

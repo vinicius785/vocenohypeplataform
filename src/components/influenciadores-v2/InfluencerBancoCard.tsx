@@ -46,7 +46,7 @@ function Truncated({ text, className }: { text: string; className?: string }) {
 function AvaliacaoLine({ enrichment }: { enrichment?: InfluencerBancoEnrichment }) {
   if (enrichment && enrichment.avaliacoesCount > 0) {
     return (
-      <span className="inline-flex min-w-0 items-center gap-1 text-[13px] font-medium text-foreground">
+      <span className="inline-flex min-w-0 items-center gap-1 text-sm font-medium text-foreground">
         <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-400" />
         <span className="tabular-nums">
           {enrichment.mediaAvaliacao?.toFixed(1).replace(".", ",")}
@@ -57,7 +57,7 @@ function AvaliacaoLine({ enrichment }: { enrichment?: InfluencerBancoEnrichment 
       </span>
     );
   }
-  return <span className="text-[13px] text-text-secondary">Ainda não avaliado</span>;
+  return <span className="text-sm text-text-secondary">Ainda não avaliado</span>;
 }
 
 /** Estado B do item 3 do pedido: diferente de "ainda não avaliado" — só
@@ -155,7 +155,7 @@ export function InfluencerBancoCard({
         <div className="hidden w-20 shrink-0 items-center text-xs text-text-secondary sm:flex">
           {seguidoresLabel ?? "—"}
         </div>
-        <Badge variant="outline" className="hidden shrink-0 text-[10px] md:inline-flex">
+        <Badge variant="outline" className="hidden shrink-0 text-[11px] md:inline-flex">
           {historico} campanha{historico === 1 ? "" : "s"}
         </Badge>
         <div className="hidden w-44 shrink-0 flex-col lg:flex">
@@ -192,12 +192,12 @@ export function InfluencerBancoCard({
 
       <div className="mt-3 flex min-w-0 items-center gap-1.5 overflow-hidden">
         {influ.nicho && (
-          <Badge variant="secondary" className="shrink-0 text-[10px]">
+          <Badge variant="secondary" className="shrink-0 text-[11px]">
             <span className="max-w-[88px] truncate">{influ.nicho}</span>
           </Badge>
         )}
         {rede && (
-          <Badge variant="outline" className="shrink-0 text-[10px]">
+          <Badge variant="outline" className="shrink-0 text-[11px]">
             {rede.plataforma}
           </Badge>
         )}

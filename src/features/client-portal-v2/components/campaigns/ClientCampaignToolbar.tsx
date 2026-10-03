@@ -42,7 +42,7 @@ export function ClientCampaignToolbar({
             onClick={() => onStatusChange(opt.key)}
             className={`h-7 rounded-md px-2.5 text-xs font-medium transition-colors ${
               status === opt.key
-                ? "bg-brand-subtle text-brand"
+                ? "bg-brand-subtle text-text-brand"
                 : "text-text-secondary hover:bg-muted hover:text-foreground"
             }`}
           >

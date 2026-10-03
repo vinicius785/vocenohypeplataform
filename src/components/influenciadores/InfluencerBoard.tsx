@@ -576,6 +576,7 @@ import {
   applyEntregaAction,
   type EntregaEngineActionKind,
 } from "@/lib/entrega-engine";
+import { NativeSelect } from "@/components/ui/native-select";
 export {
   INFLU_STATUSES,
   INFLU_KANBAN_ORDER,
@@ -1300,7 +1301,7 @@ function MetricsEditor({
     <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-6">
       {METRICS_FIELDS.map((f) => (
         <label key={f.key} className="flex flex-col gap-0.5">
-          <span className="text-[9px] uppercase tracking-wide text-muted-foreground">
+          <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
             {f.label}
           </span>
           <FormattedNumberInput
@@ -2065,7 +2066,7 @@ export function InfluencerBoard({
             </button>
             {viewMenu.open && (
               <div className="absolute right-0 top-full z-20 mt-1 w-56 rounded-md border border-border bg-popover p-1 shadow-md">
-                <p className="px-2 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <p className="px-2 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Exibir como
                 </p>
                 <button
@@ -2101,7 +2102,7 @@ export function InfluencerBoard({
                     >
                       <XCircle className="h-3.5 w-3.5" />
                       Ocultar reprovados
-                      <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold">
+                      <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-semibold">
                         {reprovadosCount}
                       </span>
                       {hideReprovados && <Check className="h-3.5 w-3.5 shrink-0" />}
@@ -2109,7 +2110,7 @@ export function InfluencerBoard({
                   </>
                 )}
                 <div className="my-1 border-t border-border" />
-                <p className="px-2 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <p className="px-2 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Ordenar por
                 </p>
                 {(
@@ -2443,7 +2444,7 @@ function InfluCard({
                     <span className="shrink-0">{platformIcon(principal.plataforma)}</span>
                     <span className="truncate">@{label || principal.plataforma}</span>
                     {extra > 0 && (
-                      <span className="shrink-0 text-[10px] font-medium">+{extra}</span>
+                      <span className="shrink-0 text-[11px] font-medium">+{extra}</span>
                     )}
                   </span>
                 );
@@ -2710,7 +2711,7 @@ function ChecklistSection({
 }
 
 /** Pill do status individual de uma entrega — dropdown customizado (não um
- * `<select>` nativo, que renderia como uma caixa cinza do navegador). */
+ * `<NativeSelect>` nativo, que renderia como uma caixa cinza do navegador). */
 /** Status individual da entrega, no resumo — abre um popup (não um menu
  * suspenso, que ficava apertado dentro do card) pra escolher a etapa. */
 /** Status geral do influenciador, no cabeçalho do resumo — também abre um
@@ -2728,7 +2729,7 @@ function InfluStatusPill({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold shadow-sm ${INFLU_STATUS_TONE[value]}`}
+        className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold shadow-sm ${INFLU_STATUS_TONE[value]}`}
       >
         {INFLU_STATUS_LABEL[value]}
         <ChevronDown className="h-2.5 w-2.5" />
@@ -2772,13 +2773,13 @@ function NextActionBadge({ actor }: { actor: NextActor }) {
   const tone: Record<Exclude<NextActor, null>, string> = {
     // Azul só quando a bola está com o time (é a nossa ação); cliente e
     // influenciador são só contexto, em neutro.
-    hype: "bg-brand-subtle text-brand",
+    hype: "bg-brand-subtle text-text-brand",
     cliente: "bg-muted text-muted-foreground",
     influenciador: "bg-muted text-muted-foreground",
   };
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${tone[actor]}`}
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${tone[actor]}`}
     >
       <span className="h-1.5 w-1.5 rounded-full bg-current" />
       Próxima ação: {NEXT_ACTOR_LABEL[actor]}
@@ -2919,7 +2920,7 @@ function EntregasEditor({
 
                 <div className="flex items-center gap-1.5 text-xs">
                   <span
-                    className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${ENTREGA_STAGE_TONE[stage]}`}
+                    className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[11px] font-medium ${ENTREGA_STAGE_TONE[stage]}`}
                   >
                     {fase.fase}
                   </span>
@@ -2937,7 +2938,7 @@ function EntregasEditor({
                       Aguardando aprovação do cliente
                     </span>
                   ) : (
-                    <span className="text-muted-foreground/60">—</span>
+                    <span className="text-text-secondary">—</span>
                   )}
                 </div>
 
@@ -2950,7 +2951,7 @@ function EntregasEditor({
                     type="button"
                     onClick={() => void removeEntrega(e)}
                     aria-label="Remover entrega"
-                    className="rounded p-1.5 text-muted-foreground/60 hover:bg-destructive/10 hover:text-destructive"
+                    className="rounded p-1.5 text-text-secondary hover:bg-destructive/10 hover:text-destructive"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -3038,7 +3039,7 @@ function PagamentoInfluSection({
       {value && (
         <div className="flex justify-end">
           <span
-            className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${APROVACAO_TONE[value.aprovacao]}`}
+            className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium ${APROVACAO_TONE[value.aprovacao]}`}
           >
             {APROVACAO_LABEL[value.aprovacao]}
           </span>
@@ -3218,9 +3219,9 @@ function RedesEditor({ redes, onChange }: { redes: Rede[]; onChange: (next: Rede
                           <button
                             type="button"
                             onClick={() => setPrimary(plataforma, r.id)}
-                            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                            className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${
                               r.isPrimary
-                                ? "bg-brand-subtle text-brand"
+                                ? "bg-brand-subtle text-text-brand"
                                 : "text-muted-foreground hover:bg-muted"
                             }`}
                           >
@@ -3343,7 +3344,7 @@ function EntregaAnexosPopup({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground"
+        className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground hover:text-foreground"
       >
         <Paperclip className="h-3 w-3" /> Anexos{anexos.length > 0 ? ` (${anexos.length})` : ""}
       </button>
@@ -3410,7 +3411,7 @@ function EntregaSituacaoBanner({
         : "border-border bg-muted/40 text-foreground";
   return (
     <div className={`space-y-1 rounded-md border p-3 ${tone}`}>
-      <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide">
+      <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide">
         <Icon className="h-3.5 w-3.5 shrink-0" />
         {ENTREGA_STAGE_LABEL[stage]}
       </p>
@@ -3603,7 +3604,7 @@ function EntregaDetailBody({
               {influNome && (
                 <p className="truncate text-xs font-medium text-muted-foreground">{influNome}</p>
               )}
-              <p className="truncate text-lg font-bold text-foreground">
+              <p className="truncate text-lg font-semibold text-foreground">
                 {entrega.tipo || "Sem tipo"}
                 {!entrega.grupoId && (
                   <span className="ml-1.5 text-sm font-normal text-muted-foreground">
@@ -3710,8 +3711,8 @@ function EntregaDetailBody({
                   }`}
                 />
                 <span
-                  className={`text-center text-[9px] font-medium ${
-                    i === colunaAtualIndex ? "text-foreground" : "text-muted-foreground/70"
+                  className={`text-center text-[11px] font-medium ${
+                    i === colunaAtualIndex ? "text-foreground" : "text-text-secondary"
                   }`}
                 >
                   {ENTREGA_FASE_COLUNA_LABEL[c]}
@@ -3832,7 +3833,7 @@ function EntregaDetailBody({
                 <div key={a.id} className="text-xs leading-relaxed">
                   <span className="font-medium text-foreground">{a.author}</span>{" "}
                   <span className="text-muted-foreground">{a.action}</span>
-                  <div className="text-[10px] text-muted-foreground/70">
+                  <div className="text-[11px] text-text-secondary">
                     {new Date(a.createdAt).toLocaleString("pt-BR", {
                       day: "2-digit",
                       month: "2-digit",
@@ -4325,7 +4326,7 @@ function WorkspaceDetailHeader({
                   autoFocus
                   className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm font-semibold outline-none focus:ring-1 focus:ring-ring"
                 />
-                <select
+                <NativeSelect
                   value={draft.nicho}
                   onChange={(e) => setDraft((d) => ({ ...d, nicho: e.target.value }))}
                   className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
@@ -4336,7 +4337,7 @@ function WorkspaceDetailHeader({
                       {n}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
                 <input
                   value={draft.telefone}
                   onChange={(e) =>
@@ -4372,7 +4373,7 @@ function WorkspaceDetailHeader({
           ) : (
             <>
               <div className="group/name flex flex-wrap items-center gap-1.5">
-                <p className="truncate text-base font-bold tracking-tight text-foreground">
+                <p className="truncate text-base font-semibold tracking-tight text-foreground">
                   {influ.nome || "Sem nome"}
                 </p>
                 {influ.nicho && (
@@ -4392,7 +4393,7 @@ function WorkspaceDetailHeader({
               <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-none text-muted-foreground">
                 {has("status") && <InfluStatusPill value={influ.status} onChange={onSetStatus} />}
                 {cicloMesOptions && cicloMesOptions.length > 0 && (
-                  <select
+                  <NativeSelect
                     value={influ.cicloMes ?? ""}
                     onChange={(e) => onPatch({ cicloMes: e.target.value })}
                     aria-label="Mês de referência"
@@ -4404,7 +4405,7 @@ function WorkspaceDetailHeader({
                         {o.label}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 )}
                 {has("redes") && influ.redes[0] && (
                   <span className="inline-flex items-center gap-1">
@@ -4432,7 +4433,7 @@ function WorkspaceDetailHeader({
             <MessageSquare className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Atividade</span>
             {activityCount > 0 && (
-              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums">
+              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] tabular-nums">
                 {activityCount}
               </span>
             )}
@@ -4959,7 +4960,7 @@ function EntregasOperationalList({
                   </p>
                   <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                     <span
-                      className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${ENTREGA_STAGE_TONE[stage]}`}
+                      className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[11px] font-medium ${ENTREGA_STAGE_TONE[stage]}`}
                     >
                       {fase.fase}
                     </span>
@@ -4977,7 +4978,7 @@ function EntregasOperationalList({
                   ) : aguardandoCliente ? (
                     <span className="text-muted-foreground">Aguardando cliente</span>
                   ) : (
-                    <span className="text-muted-foreground/60">—</span>
+                    <span className="text-text-secondary">—</span>
                   )}
                 </div>
                 <div onClick={(ev) => ev.stopPropagation()} className="shrink-0">
@@ -4986,7 +4987,7 @@ function EntregasOperationalList({
                       <button
                         type="button"
                         aria-label="Mais ações da entrega"
-                        className="flex h-7 w-7 items-center justify-center rounded p-1 text-muted-foreground/70 hover:bg-muted hover:text-foreground"
+                        className="flex h-7 w-7 items-center justify-center rounded p-1 text-text-secondary hover:bg-muted hover:text-foreground"
                       >
                         <MoreVertical className="h-3.5 w-3.5" />
                       </button>
@@ -5233,10 +5234,10 @@ function WorkspaceDetailBody({
             key={s.label}
             className={`flex-1 px-3 py-2.5 ${i > 0 ? "border-l border-border" : ""}`}
           >
-            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
               {s.label}
             </p>
-            <p className="mt-0.5 truncate text-sm font-bold text-foreground">{s.value}</p>
+            <p className="mt-0.5 truncate text-sm font-semibold text-foreground">{s.value}</p>
           </div>
         ))}
       </div>
@@ -5506,7 +5507,7 @@ function WorkspaceActivityBody({
             {items.map((e) => (
               <div key={e.item.id} className="flex min-w-0 items-start gap-2">
                 <span
-                  className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[9px] font-semibold ${e.item.color}`}
+                  className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[11px] font-semibold ${e.item.color}`}
                 >
                   {e.item.initials}
                 </span>
@@ -5514,7 +5515,7 @@ function WorkspaceActivityBody({
                   <div className="min-w-0 flex-1 break-words text-xs leading-relaxed [overflow-wrap:anywhere]">
                     <span className="font-medium text-foreground">{e.item.author}</span>{" "}
                     <span className="text-muted-foreground">{e.item.action}</span>
-                    <div className="text-[10px] text-muted-foreground/70">
+                    <div className="text-[11px] text-text-secondary">
                       {new Date(e.item.createdAt).toLocaleString("pt-BR", {
                         day: "2-digit",
                         month: "2-digit",
@@ -5527,7 +5528,7 @@ function WorkspaceActivityBody({
                   <div className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-2">
                     <div className="mb-0.5 flex items-baseline gap-1.5">
                       <span className="text-xs font-medium">{e.item.author}</span>
-                      <span className="text-[10px] text-muted-foreground/70">
+                      <span className="text-[11px] text-text-secondary">
                         {new Date(e.item.createdAt).toLocaleString("pt-BR", {
                           day: "2-digit",
                           month: "2-digit",
@@ -5565,7 +5566,7 @@ function WorkspaceActivityBody({
           }}
           rows={2}
           placeholder="Escreva um comentário..."
-          className="w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none placeholder:text-muted-foreground/70 focus:border-primary"
+          className="w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none placeholder:text-text-secondary focus:border-primary"
         />
         <div className="mt-1 flex justify-end">
           <button
@@ -5723,7 +5724,7 @@ function InfluenciadorDialog({
               <label className="block text-xs font-semibold uppercase tracking-tight text-foreground/80">
                 Nicho
               </label>
-              <select
+              <NativeSelect
                 value={nicho}
                 onChange={(e) => setNicho(e.target.value)}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
@@ -5734,7 +5735,7 @@ function InfluenciadorDialog({
                     {n}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
@@ -5934,7 +5935,7 @@ function MotivoSelecaoField({ value, onSave }: { value: string; onSave: (v: stri
           <button
             type="button"
             onClick={startEdit}
-            className="shrink-0 text-xs font-medium text-brand hover:underline"
+            className="shrink-0 text-xs font-medium text-text-brand hover:underline"
           >
             Editar
           </button>
@@ -5997,7 +5998,7 @@ function MotivoSelecaoField({ value, onSave }: { value: string; onSave: (v: stri
           <button
             type="button"
             onClick={startEdit}
-            className="shrink-0 text-sm font-medium text-brand hover:underline"
+            className="shrink-0 text-sm font-medium text-text-brand hover:underline"
           >
             Adicionar motivo
           </button>
@@ -6196,22 +6197,20 @@ export function BankFields({
         </div>
         <div>
           <label className={lbl}>Tipo</label>
-          <select
-            className={inp}
+          <NativeSelect
             value={value.tipoConta ?? ""}
             onChange={(e) => set({ tipoConta: e.target.value as BankInfo["tipoConta"] })}
           >
             <option value="">—</option>
             <option value="corrente">Corrente</option>
             <option value="poupanca">Poupança</option>
-          </select>
+          </NativeSelect>
         </div>
       </div>
       <div className="grid grid-cols-[140px_1fr] gap-2">
         <div>
           <label className={lbl}>Tipo PIX</label>
-          <select
-            className={inp}
+          <NativeSelect
             value={value.pixTipo ?? ""}
             onChange={(e) => set({ pixTipo: e.target.value as BankInfo["pixTipo"] })}
           >
@@ -6221,7 +6220,7 @@ export function BankFields({
             <option value="email">E-mail</option>
             <option value="telefone">Telefone</option>
             <option value="aleatoria">Aleatória</option>
-          </select>
+          </NativeSelect>
         </div>
         <div>
           <label className={lbl}>Chave PIX</label>
@@ -6437,7 +6436,7 @@ function PagamentoEditor({
         )}
       </div>
 
-      <p className="text-[10px] text-muted-foreground">
+      <p className="text-[11px] text-muted-foreground">
         Some como <b>Pendente</b> — só vira despesa no Financeiro depois de aceito (Aceitar/Recusar
         fica logo abaixo, quando esse campo estiver habilitado).
       </p>
@@ -6465,7 +6464,7 @@ function PrazoField({
 }) {
   return (
     <label className="flex min-w-0 flex-col gap-1">
-      <span className="truncate text-[10px] font-medium text-muted-foreground">{label}</span>
+      <span className="truncate text-[11px] font-medium text-muted-foreground">{label}</span>
       <DateField
         value={value ?? undefined}
         onChange={onChange}
@@ -6677,7 +6676,7 @@ function EntregaAnexosEditor({
                 <Icon className="h-3.5 w-3.5" />
                 {c}
                 {count > 0 && (
-                  <span className="ml-auto text-[10px] text-muted-foreground">{count}</span>
+                  <span className="ml-auto text-[11px] text-muted-foreground">{count}</span>
                 )}
               </DropdownMenuItem>
             );
@@ -6717,7 +6716,7 @@ function EntregaAnexosEditor({
                               {a.nome}
                             </a>
                             {totalNaCategoria > 1 && (
-                              <span className="mt-0.5 inline-block rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                              <span className="mt-0.5 inline-block rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
                                 v{a.versao ?? 1}
                               </span>
                             )}
@@ -6739,7 +6738,7 @@ function EntregaAnexosEditor({
           )}
         </div>
       ) : (
-        <p className="text-[11px] text-muted-foreground/70">Nenhum anexo ainda.</p>
+        <p className="text-[11px] text-text-secondary">Nenhum anexo ainda.</p>
       )}
     </div>
   );
@@ -6831,7 +6830,7 @@ function BankPickerDialog({
               className="w-full bg-transparent py-1.5 text-sm outline-none"
             />
           </div>
-          <select
+          <NativeSelect
             value={nicho}
             onChange={(e) => setNicho(e.target.value)}
             className="rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none"
@@ -6842,7 +6841,7 @@ function BankPickerDialog({
                 {n}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -6882,7 +6881,7 @@ function BankPickerDialog({
                         </p>
                       </div>
                       {alreadyInCampanha ? (
-                        <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                           Já está nesta campanha
                         </span>
                       ) : (
@@ -7137,7 +7136,7 @@ function DownloadInflusDialog({
         <div className="mt-3 flex items-center justify-between gap-3">
           <label className="inline-flex items-center gap-2 text-xs">
             <span className="text-muted-foreground">Formato:</span>
-            <select
+            <NativeSelect
               value={format}
               onChange={(e) => setFormat(e.target.value as "csv" | "json" | "pdf")}
               className="h-8 rounded-md border border-border bg-background px-2 text-xs"
@@ -7145,7 +7144,7 @@ function DownloadInflusDialog({
               <option value="csv">CSV (Excel)</option>
               <option value="json">JSON</option>
               <option value="pdf">PDF</option>
-            </select>
+            </NativeSelect>
           </label>
           <div className="flex gap-2">
             <button

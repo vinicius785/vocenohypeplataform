@@ -340,7 +340,7 @@ function RecentRow({
   return (
     <div className="group flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted/40">
       <span
-        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-medium ${member?.color ?? "bg-muted text-foreground"}`}
+        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-medium ${member?.color ?? "bg-muted text-foreground"}`}
       >
         {member?.initials ?? "?"}
       </span>
@@ -434,7 +434,7 @@ function AllEntriesDialog({
                     <td className="py-1.5 pr-2">
                       <div className="flex items-center gap-1.5">
                         <span
-                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-medium ${member?.color ?? "bg-muted"}`}
+                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-medium ${member?.color ?? "bg-muted"}`}
                         >
                           {member?.initials ?? "?"}
                         </span>
@@ -692,7 +692,7 @@ export function TimeTrackingPanel({ taskId, taskOrigin, members }: Props) {
 
               {!loading && recent.length > 0 && (
                 <div className="-mx-3 mt-3 border-t border-border pt-2">
-                  <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                     Registros recentes
                   </p>
                   <div className="space-y-0.5">

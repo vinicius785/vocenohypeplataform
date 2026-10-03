@@ -30,11 +30,11 @@ export function ClientCampaignCard({
     : "Sem prazo definido";
 
   return (
-    <div className="group relative flex w-full max-w-[500px] flex-col rounded-[20px] border border-transparent bg-card p-4 transition-colors duration-150 hover:border-border hover:bg-accent/40 dark:shadow-none">
+    <div className="group relative flex w-full max-w-[500px] flex-col rounded-2xl border border-transparent bg-card p-4 transition-colors duration-150 hover:border-border hover:bg-accent/40 dark:shadow-none">
       <button
         type="button"
         onClick={onOpen}
-        className="absolute inset-0 rounded-[20px] transition-transform duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand active:scale-[0.99]"
+        className="absolute inset-0 rounded-2xl transition-transform duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand active:scale-[0.99]"
         aria-label={`Ver campanha ${campaign.nome}, ${status.label}`}
       />
 
@@ -85,7 +85,9 @@ export function ClientCampaignCard({
         <span className="truncate text-text-secondary">
           {campaign.nextMilestoneLabel ? `Próximo marco: ${campaign.nextMilestoneLabel}` : ""}
         </span>
-        <span className="shrink-0 font-medium text-brand group-hover:underline">Ver campanha</span>
+        <span className="shrink-0 font-medium text-text-brand group-hover:underline">
+          Ver campanha
+        </span>
       </div>
     </div>
   );

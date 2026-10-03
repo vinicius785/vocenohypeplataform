@@ -105,7 +105,7 @@ export function SettingsSectionHeader({
   return (
     <div className="flex flex-wrap items-start justify-between gap-2 pb-1">
       <div className="flex items-start gap-3">
-        <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-subtle text-brand">
+        <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-subtle text-text-brand">
           {icon}
         </div>
         <div>

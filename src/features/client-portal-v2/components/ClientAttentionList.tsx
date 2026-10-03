@@ -59,7 +59,7 @@ export function ClientAttentionList({ items }: { items: AttentionItem[] }) {
                   {item.dueLabel ? ` · ${item.dueLabel}` : ""}
                 </p>
               </div>
-              <span className="flex shrink-0 items-center gap-1 whitespace-nowrap text-xs font-medium text-brand">
+              <span className="flex shrink-0 items-center gap-1 whitespace-nowrap text-xs font-medium text-text-brand">
                 {item.ctaLabel}
                 <ArrowRight className="h-3.5 w-3.5" />
               </span>

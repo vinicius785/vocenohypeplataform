@@ -145,7 +145,7 @@ function renderTextWithMentions(
         <button
           type="button"
           onClick={(e) => e.stopPropagation()}
-          className={`rounded px-0.5 font-medium text-brand hover:underline ${
+          className={`rounded px-0.5 font-medium text-text-brand hover:underline ${
             isSelf ? "bg-brand/10" : ""
           }`}
         >
@@ -496,7 +496,7 @@ export function ChatV2Message({
           <button
             type="button"
             onClick={() => onReply(message)}
-            className="mt-1 flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium text-brand hover:bg-brand-subtle"
+            className="mt-1 flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium text-text-brand hover:bg-brand-subtle"
           >
             <MessageSquare className="h-3.5 w-3.5" />
             {replyCount} resposta{replyCount === 1 ? "" : "s"}

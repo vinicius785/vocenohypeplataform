@@ -106,7 +106,7 @@ export function MoveTaskDialog({
 
           {filteredProjetos.length > 0 && (
             <>
-              <p className="px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Projetos
               </p>
               {filteredProjetos.map((p) => (
@@ -126,7 +126,7 @@ export function MoveTaskDialog({
 
           {filteredCampanhas.length > 0 && (
             <>
-              <p className="px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Campanhas
               </p>
               {filteredCampanhas.map((c) => (

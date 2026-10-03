@@ -35,7 +35,7 @@ function NotFoundComponent() {
         {ws?.logo ? (
           <img src={ws.logo} alt="" className="h-full w-full object-cover" />
         ) : (
-          <span className="text-lg font-bold">
+          <span className="text-lg font-semibold">
             {(ws?.nome || "V").trim().charAt(0).toUpperCase()}
           </span>
         )}

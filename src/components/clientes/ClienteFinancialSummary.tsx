@@ -1,4 +1,6 @@
 import { useMemo } from "react";
+import { cn } from "@/lib/utils";
+import { SURFACE } from "@/lib/design-tokens";
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowRight, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -51,7 +53,7 @@ export function ClienteFinancialSummary({ clienteId }: { clienteId: string }) {
   const hasAnyMovement = clienteEntries.length > 0;
 
   return (
-    <section className="rounded-2xl bg-card p-5 dark:shadow-none md:p-6">
+    <section className={cn(SURFACE.card, "p-5 md:p-6")}>
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-foreground">Financeiro</h2>
         <Button variant="ghost" size="sm" onClick={openFinanceiro}>

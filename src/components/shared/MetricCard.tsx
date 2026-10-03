@@ -8,7 +8,7 @@ import { formatMetricDelta, type MetricDelta } from "@/lib/component-utils";
 
 const TONE_VALUE_CLASS: Record<SemanticTone, string> = {
   neutral: "text-foreground",
-  brand: "text-brand",
+  brand: "text-text-brand",
   success: "text-success",
   warning: "text-warning",
   danger: "text-danger",
@@ -22,7 +22,7 @@ const DIRECTION_CLASS: Record<"up" | "down" | "flat", string> = {
 };
 
 const TONE_SOFT_CLASS: Record<Exclude<SemanticTone, "neutral">, string> = {
-  brand: "bg-brand-subtle text-brand",
+  brand: "bg-brand-subtle text-text-brand",
   success: "bg-success-soft text-success-soft-foreground",
   warning: "bg-warning-soft text-warning-soft-foreground",
   danger: "bg-danger-soft text-danger-soft-foreground",
@@ -130,7 +130,7 @@ export function MetricCard({
                 ev.stopPropagation();
                 action.onClick();
               }}
-              className="text-xs font-medium text-brand underline-offset-2 hover:underline"
+              className="text-xs font-medium text-text-brand underline-offset-2 hover:underline"
             >
               {action.label}
             </button>

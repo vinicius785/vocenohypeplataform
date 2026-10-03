@@ -100,7 +100,7 @@ export function UpcomingMeetingAlert({
       <div className="relative animate-in fade-in slide-in-from-bottom-2 overflow-hidden rounded-2xl border border-border/60 bg-card p-4 shadow-xl duration-300 motion-reduce:animate-none sm:slide-in-from-bottom-0 sm:slide-in-from-right-4 sm:p-5">
         <div className="relative flex items-start gap-3">
           <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-subtle ring-2 ring-card sm:h-10 sm:w-10">
-            <Bell className="h-4 w-4 text-brand" aria-hidden="true" />
+            <Bell className="h-4 w-4 text-text-brand" aria-hidden="true" />
           </div>
           <div className="min-w-0 flex-1 pt-0.5">
             <p className="text-xs font-semibold text-foreground">Reunião em breve</p>

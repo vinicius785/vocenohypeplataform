@@ -18,6 +18,7 @@ import {
   type LeadActivityFilterKey,
 } from "@/lib/comercial-filters";
 import type { TeamMemberLite } from "@/lib/projetos";
+import { NativeSelect } from "@/components/ui/native-select";
 
 /**
  * Filtros + ordenação do Pipe Comercial — SIMPLIFICADO (correção pedida
@@ -147,7 +148,7 @@ export function FilterPanel({
           <Filter className="h-3.5 w-3.5" />
           Filtros
           {activeCount > 0 && (
-            <Badge variant="brand" className="px-1.5 py-0 text-[10px] leading-4">
+            <Badge variant="brand" className="px-1.5 py-0 text-[11px] leading-4">
               {activeCount}
             </Badge>
           )}
@@ -168,7 +169,7 @@ export function FilterPanel({
         <div className="flex-1 space-y-4 overflow-y-auto p-4">
           <div>
             <p className="mb-1.5 text-[11px] font-semibold text-foreground">Responsável</p>
-            <select
+            <NativeSelect
               value={responsavelAtual}
               onChange={(e) => setResponsavel(e.target.value)}
               className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
@@ -180,7 +181,7 @@ export function FilterPanel({
                 </option>
               ))}
               <option value="sem_responsavel">Sem responsável</option>
-            </select>
+            </NativeSelect>
           </div>
 
           <div>
@@ -201,7 +202,7 @@ export function FilterPanel({
 
           <div>
             <p className="mb-1.5 text-[11px] font-semibold text-foreground">Situação</p>
-            <select
+            <NativeSelect
               value={situacaoAtual}
               onChange={(e) =>
                 setSituacao(e.target.value as (typeof SITUACAO_OPTIONS)[number]["key"])
@@ -213,7 +214,7 @@ export function FilterPanel({
                   {o.label}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
 
           <div>

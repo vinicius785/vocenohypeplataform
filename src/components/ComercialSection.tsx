@@ -31,7 +31,7 @@ import {
 import { loadTeamMembers, type TeamMemberLite } from "@/lib/projetos";
 import { supabase } from "@/integrations/supabase/client";
 import { useConfirm } from "@/hooks/use-confirm";
-import { PageCanvas, PageContainer } from "@/components/shared/PageContainer";
+import { PageContainer } from "@/components/shared/PageContainer";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +40,7 @@ import { SortSelect, FilterPanel, LeadFiltersSummary } from "./comercial/LeadFil
 import { PipelineBoard } from "./comercial/PipelineBoard";
 import { LeadDrawer, type OpportunityActionInput } from "./comercial/LeadDrawer";
 import { FollowUpDialog, type FollowUpInput } from "./comercial/FollowUpDialog";
+import { NativeSelect } from "@/components/ui/native-select";
 
 /** Debounce simples — evita 1 request por tecla na busca. */
 function useDebouncedValue<T>(value: T, delayMs: number): T {
@@ -249,7 +250,7 @@ export function ComercialSection() {
   );
 
   return (
-    <PageCanvas>
+    <>
       <PageContainer variant="wide" className="space-y-6">
         <PageHeader
           title="Comercial"
@@ -266,8 +267,8 @@ export function ComercialSection() {
         {/* Toolbar simplificada: Período · Busca · Filtros · Ordenar —
          * "Novo lead" fica só no cabeçalho, "Visualizações" foi removido
          * (correção pedida — a operação é pequena, não precisa disso). */}
-        <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-card p-2 dark:shadow-none">
-          <select
+        <div className="surface-card flex flex-wrap items-center gap-2 p-2">
+          <NativeSelect
             value={period}
             onChange={(e) => patchSearch({ cPeriod: e.target.value as ComercialPeriodMode })}
             className="h-9 shrink-0 cursor-pointer rounded-md border border-border bg-background px-2.5 text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-brand"
@@ -277,7 +278,7 @@ export function ComercialSection() {
                 {o.label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           <div className="relative min-w-40 flex-1 sm:max-w-72">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-text-secondary" />
             <Input
@@ -318,7 +319,7 @@ export function ComercialSection() {
         />
 
         {isError ? (
-          <div className="rounded-[24px] bg-card p-10 text-center dark:shadow-none">
+          <div className="surface-card p-10 text-center">
             <p className="text-sm text-text-secondary">
               Não foi possível carregar as oportunidades.
             </p>
@@ -337,12 +338,12 @@ export function ComercialSection() {
                 {Array.from({ length: 5 }).map((_, i) => (
                   <div
                     key={i}
-                    className="h-64 w-[300px] shrink-0 animate-pulse rounded-[20px] bg-card/60"
+                    className="h-64 w-[300px] shrink-0 animate-pulse rounded-2xl bg-card/60"
                   />
                 ))}
               </div>
             ) : leads.length === 0 ? (
-              <div className="rounded-[24px] bg-card p-10 text-center dark:shadow-none">
+              <div className="surface-card p-10 text-center">
                 <p className="text-sm text-text-secondary">
                   Nenhuma oportunidade encontrada com esses filtros.
                 </p>
@@ -391,6 +392,6 @@ export function ComercialSection() {
         )}
         {confirmDialog}
       </PageContainer>
-    </PageCanvas>
+    </>
   );
 }

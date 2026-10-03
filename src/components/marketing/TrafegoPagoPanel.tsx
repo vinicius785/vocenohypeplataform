@@ -5,6 +5,7 @@ import { resizeImageToDataUrl } from "@/lib/image-upload";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { DateField } from "@/components/ui/date-field";
 import { useConfirm } from "@/hooks/use-confirm";
+import { NativeSelect } from "@/components/ui/native-select";
 
 const PLATFORMS: CampaignPlatform[] = ["Meta", "Google", "TikTok", "LinkedIn", "Outro"];
 const STATUS: { key: CampaignStatus; label: string; cls: string }[] = [
@@ -89,9 +90,9 @@ export function TrafegoPagoPanel({
                   <Megaphone className="h-3.5 w-3.5 text-muted-foreground" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-xs font-medium">{c.name}</p>
-                    <p className="truncate text-[10px] text-muted-foreground">{c.platform}</p>
+                    <p className="truncate text-[11px] text-muted-foreground">{c.platform}</p>
                   </div>
-                  <span className={`rounded px-1.5 py-0.5 text-[9px] ${s.cls}`}>{s.label}</span>
+                  <span className={`rounded px-1.5 py-0.5 text-[11px] ${s.cls}`}>{s.label}</span>
                 </button>
               </li>
             );
@@ -201,7 +202,7 @@ function CampaignEditor({
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <label className="space-y-1">
           <span className="text-[11px] font-medium text-muted-foreground">Plataforma</span>
-          <select
+          <NativeSelect
             value={c.platform}
             onChange={(e) => onChange({ platform: e.target.value as CampaignPlatform })}
             className={inputCls}
@@ -211,11 +212,11 @@ function CampaignEditor({
                 {p}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </label>
         <label className="space-y-1">
           <span className="text-[11px] font-medium text-muted-foreground">Status</span>
-          <select
+          <NativeSelect
             value={c.status}
             onChange={(e) => onChange({ status: e.target.value as CampaignStatus })}
             className={inputCls}
@@ -225,7 +226,7 @@ function CampaignEditor({
                 {s.label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </label>
         <label className="space-y-1">
           <span className="text-[11px] font-medium text-muted-foreground">Início</span>
@@ -350,7 +351,7 @@ function CampaignEditor({
                   </div>
                 )}
                 <div className="flex items-center gap-1 border-t border-border bg-background px-1.5 py-1">
-                  <span className="min-w-0 flex-1 truncate text-[10px]">{cr.name}</span>
+                  <span className="min-w-0 flex-1 truncate text-[11px]">{cr.name}</span>
                   <a
                     href={cr.url}
                     target="_blank"

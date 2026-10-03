@@ -106,13 +106,13 @@ export function ScoreOperacionalPanel({
     <TooltipProvider delayDuration={200}>
       <section className="rounded-lg border border-border p-5">
         <div className="flex items-start justify-between gap-3">
-          <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-text-secondary">
+          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-text-secondary">
             <Gauge className="h-3.5 w-3.5" /> Score Operacional
             <InfoTip text="Este indicador analisa execução operacional, prazos e compromissos. Ele não representa sozinho a performance completa do profissional." />
           </p>
           <div className="text-right">
             <p
-              className={`flex items-center justify-end gap-1.5 text-4xl font-light tracking-tight ${scoreTone}`}
+              className={`flex items-center justify-end gap-1.5 text-4xl font-normal tracking-tight ${scoreTone}`}
             >
               {score.score == null ? "—" : score.score}
               {score.score != null && <span className="text-base text-text-secondary">/100</span>}
@@ -159,7 +159,7 @@ export function ScoreOperacionalPanel({
         <div className="mt-5 space-y-5">
           <div>
             <div className="mb-2.5 flex items-center justify-between gap-2">
-              <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-text-secondary">
+              <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-text-secondary">
                 <CheckCircle2 className="h-3 w-3" /> Entrega
               </p>
               <span className="text-xs font-semibold tabular-nums text-foreground">
@@ -183,7 +183,7 @@ export function ScoreOperacionalPanel({
           </div>
           <div className="border-t border-border pt-5">
             <div className="mb-2.5 flex items-center justify-between gap-2">
-              <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-text-secondary">
+              <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-text-secondary">
                 <RefreshCcw className="h-3 w-3" /> Previsibilidade
                 <InfoTip text="Mede a estabilidade do planejamento considerando alterações de prazo e o momento em que ocorreram." />
               </p>
@@ -214,7 +214,7 @@ export function ScoreOperacionalPanel({
           </div>
           <div className="border-t border-border pt-5">
             <div className="mb-2.5 flex items-center justify-between gap-2">
-              <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-text-secondary">
+              <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-text-secondary">
                 <CalendarClock className="h-3 w-3" /> Compromissos
                 {!score.compromissosAplicavel && (
                   <InfoTip text="Sem reunião esperada desta pessoa no período — a dimensão não entra no cálculo do score (nem soma, nem penaliza)." />
@@ -307,7 +307,7 @@ export function ScoreOperacionalPanel({
 
               {entrega.overdueDetails.filter((d) => d.weightedContribution > 0).length > 0 && (
                 <div className="mt-2 rounded-md bg-background/60 p-2">
-                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-text-secondary">
+                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
                     Tarefas que causaram desconto na saúde atual
                   </p>
                   <ul className="space-y-1 text-text-secondary">
@@ -349,7 +349,7 @@ export function ScoreOperacionalPanel({
 
               {entrega.overdueDetails.filter((d) => d.externallyBlocked).length > 0 && (
                 <div className="mt-2 rounded-md bg-background/60 p-2">
-                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-text-secondary">
+                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
                     Dependências externas desconsideradas (bloqueio ativo)
                   </p>
                   <ul className="space-y-0.5 text-text-secondary">
@@ -404,7 +404,7 @@ export function ScoreOperacionalPanel({
 
             {deadlineChanges.length > 0 && (
               <div className="border-t border-border pt-2">
-                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-text-secondary">
+                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
                   Replanejamentos considerados no período
                 </p>
                 <ul className="space-y-0.5">
@@ -484,7 +484,7 @@ export function ScoreOperacionalPanel({
             </div>
 
             <div className="border-t border-border pt-2 text-text-secondary">
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide">
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide">
                 Dados desconsiderados nesta composição
               </p>
               <ul className="space-y-0.5">
@@ -501,14 +501,14 @@ export function ScoreOperacionalPanel({
               </ul>
             </div>
 
-            <p className="border-t border-border pt-2 text-[10px] text-text-secondary/70">
+            <p className="border-t border-border pt-2 text-[11px] text-text-secondary/70">
               Fórmula v{score.version} · Score Operacional (
               {OPERATIONAL_SCORE_VERSION === score.version ? "atual" : "versão anterior"})
             </p>
 
             {completions.length > 0 && (
               <div className="border-t border-border pt-2">
-                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-text-secondary">
+                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
                   Tarefas concluídas no período
                 </p>
                 <ul className="space-y-0.5">
@@ -550,7 +550,7 @@ export function ScoreOperacionalPanel({
                   })}
                 </ul>
                 {completions.length > 8 && (
-                  <p className="mt-1 text-[10px] text-text-secondary">
+                  <p className="mt-1 text-[11px] text-text-secondary">
                     +{completions.length - 8} outra{completions.length - 8 === 1 ? "" : "s"}
                   </p>
                 )}
@@ -559,7 +559,7 @@ export function ScoreOperacionalPanel({
 
             {deadlineChanges.length > 0 && (
               <div className="border-t border-border pt-2">
-                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-text-secondary">
+                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
                   Replanejamentos no período
                 </p>
                 <ul className="space-y-0.5">

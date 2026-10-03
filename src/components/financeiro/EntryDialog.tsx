@@ -16,6 +16,7 @@ import {
   todayISO,
 } from "@/lib/financeiro-entries";
 import { Field, inputCls, FinanceiroAnexoBox } from "./shared";
+import { NativeSelect } from "@/components/ui/native-select";
 
 type ClienteOpt = { id: string; nome: string; campanhas: { id: string; nome: string }[] };
 
@@ -102,7 +103,7 @@ export function EntryDialog({
   // Trocar receita/despesa muda a lista de categorias válidas — se a
   // categoria atual não existe mais nessa lista, limpa (menos no caso de
   // um lançamento antigo sendo editado, onde a categoria "estranha" some
-  // do campo <select> como opção extra, então nunca fica inválida).
+  // do campo <NativeSelect> como opção extra, então nunca fica inválida).
   const categoriaOpts = categoriasFor(kind);
   useEffect(() => {
     if (category && !categoriaOpts.includes(category) && category !== initial?.category) {
@@ -239,7 +240,7 @@ export function EntryDialog({
             </div>
 
             <Field label="Categoria">
-              <select
+              <NativeSelect
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 className={inputCls}
@@ -257,12 +258,12 @@ export function EntryDialog({
                     {c}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </Field>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Cliente (opcional)">
-                <select
+                <NativeSelect
                   value={clienteId}
                   onChange={(e) => setClienteId(e.target.value)}
                   className={inputCls}
@@ -273,10 +274,10 @@ export function EntryDialog({
                       {c.nome}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </Field>
               <Field label="Campanha (opcional)">
-                <select
+                <NativeSelect
                   value={campanhaId}
                   onChange={(e) => setCampanhaId(e.target.value)}
                   disabled={!clienteId || campanhas.length === 0}
@@ -288,7 +289,7 @@ export function EntryDialog({
                       {c.nome}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </Field>
             </div>
 
@@ -318,7 +319,7 @@ export function EntryDialog({
                       />
                     </Field>
                     <Field label="Responsável (opcional)">
-                      <select
+                      <NativeSelect
                         value={responsavelId}
                         onChange={(e) => setResponsavelId(e.target.value)}
                         className={inputCls}
@@ -329,7 +330,7 @@ export function EntryDialog({
                             {m.name}
                           </option>
                         ))}
-                      </select>
+                      </NativeSelect>
                     </Field>
                   </div>
 
@@ -344,7 +345,7 @@ export function EntryDialog({
 
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <Field label="Recorrência">
-                      <select
+                      <NativeSelect
                         value={recurrenceFreq}
                         onChange={(e) =>
                           setRecurrenceFreq(e.target.value as "" | RecurrenceFrequency)
@@ -357,7 +358,7 @@ export function EntryDialog({
                             {o.label}
                           </option>
                         ))}
-                      </select>
+                      </NativeSelect>
                     </Field>
                     {recurrenceFreq === "personalizado" && (
                       <Field label="A cada quantos dias">

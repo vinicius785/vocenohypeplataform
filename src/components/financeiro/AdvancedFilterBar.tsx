@@ -1,7 +1,8 @@
-import { Search, X, SlidersHorizontal } from "lucide-react";
+import { SlidersHorizontal } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FilterChips, FilterSearch } from "@/components/shared/FilterToolbar";
 import { useClientes } from "@/lib/clientes-store";
 import {
   type EntryStatus,
@@ -15,6 +16,7 @@ import {
   type useFinanceiroFilteredEntries,
 } from "./useFinanceiroFilteredEntries";
 import { STATUS_LABEL } from "./shared";
+import { NativeSelect } from "@/components/ui/native-select";
 
 type Filtered = ReturnType<typeof useFinanceiroFilteredEntries>;
 
@@ -143,15 +145,11 @@ export function AdvancedFilterBar({ filtered }: { filtered: Filtered }) {
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative w-full max-w-xs sm:flex-1">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-secondary" />
-          <Input
-            value={filters.query}
-            onChange={(e) => setF({ query: e.target.value })}
-            placeholder="Buscar lançamentos..."
-            className="h-9 pl-8 text-sm"
-          />
-        </div>
+        <FilterSearch
+          value={filters.query}
+          onChange={(v) => setF({ query: v })}
+          placeholder="Buscar lançamentos..."
+        />
 
         <Popover>
           <PopoverTrigger asChild>
@@ -183,7 +181,7 @@ export function AdvancedFilterBar({ filtered }: { filtered: Filtered }) {
             </div>
 
             <Field label="Cliente">
-              <select
+              <NativeSelect
                 value={filters.clienteId ?? "todos"}
                 onChange={(e) =>
                   setF({
@@ -199,12 +197,12 @@ export function AdvancedFilterBar({ filtered }: { filtered: Filtered }) {
                     {c.empresa}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </Field>
 
             {filters.clienteId && clienteCampanhas.length > 0 && (
               <Field label="Campanha">
-                <select
+                <NativeSelect
                   value={filters.campanhaId ?? "todas"}
                   onChange={(e) =>
                     setF({ campanhaId: e.target.value === "todas" ? undefined : e.target.value })
@@ -217,12 +215,12 @@ export function AdvancedFilterBar({ filtered }: { filtered: Filtered }) {
                       {c.nome}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </Field>
             )}
 
             <Field label="Categoria">
-              <select
+              <NativeSelect
                 value={filters.categoria ?? "todas"}
                 onChange={(e) =>
                   setF({ categoria: e.target.value === "todas" ? undefined : e.target.value })
@@ -235,11 +233,11 @@ export function AdvancedFilterBar({ filtered }: { filtered: Filtered }) {
                     {c}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </Field>
 
             <Field label="Responsável">
-              <select
+              <NativeSelect
                 value={filters.responsavelId ?? ""}
                 onChange={(e) => setF({ responsavelId: e.target.value || undefined })}
                 className={inputCls()}
@@ -250,7 +248,7 @@ export function AdvancedFilterBar({ filtered }: { filtered: Filtered }) {
                     {m.name}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </Field>
 
             <div className="grid grid-cols-2 gap-2">
@@ -286,7 +284,7 @@ export function AdvancedFilterBar({ filtered }: { filtered: Filtered }) {
             </Field>
 
             <Field label="Origem">
-              <select
+              <NativeSelect
                 value={filters.origem ?? ""}
                 onChange={(e) =>
                   setF({ origem: (e.target.value || undefined) as Source | undefined })
@@ -299,7 +297,7 @@ export function AdvancedFilterBar({ filtered }: { filtered: Filtered }) {
                     {SOURCE_LABEL[so]}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </Field>
 
             <div className="flex items-center gap-4 text-sm">
@@ -324,31 +322,10 @@ export function AdvancedFilterBar({ filtered }: { filtered: Filtered }) {
         </Popover>
       </div>
 
-      {chips.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          {chips.map((c) => (
-            <button
-              key={c.key}
-              type="button"
-              onClick={c.onRemove}
-              aria-label={`Remover filtro ${c.label}`}
-              className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-            >
-              {c.label}
-              <X className="h-3 w-3" />
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={() =>
-              setFilters({ ...DEFAULT_FILTERS, tipo: filters.tipo, query: filters.query })
-            }
-            className="cursor-pointer text-xs font-medium text-text-secondary underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-          >
-            Limpar filtros
-          </button>
-        </div>
-      )}
+      <FilterChips
+        chips={chips.map((c) => ({ id: c.key, label: c.label, onRemove: c.onRemove }))}
+        onClear={() => setFilters({ ...DEFAULT_FILTERS, tipo: filters.tipo, query: filters.query })}
+      />
     </div>
   );
 }

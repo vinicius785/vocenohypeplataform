@@ -61,7 +61,7 @@ function NavGroup({
                 aria-current={active ? "page" : undefined}
                 className={`relative flex items-center gap-2.5 rounded-md px-2.5 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 focus-visible:ring-offset-background md:py-2 ${
                   active
-                    ? "bg-brand-subtle font-medium text-brand"
+                    ? "bg-brand-subtle font-medium text-text-brand"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
               >

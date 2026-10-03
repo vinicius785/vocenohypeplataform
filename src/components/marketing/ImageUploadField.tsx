@@ -67,7 +67,7 @@ export function CoverUploadField({
           </button>
         )}
       </div>
-      {error && <p className="text-[10px] text-rose-600">{error}</p>}
+      {error && <p className="text-[11px] text-rose-600">{error}</p>}
     </div>
   );
 }

@@ -14,6 +14,7 @@ import {
   CAMPAIGN_OBJETIVO_LABEL,
   type CampaignObjetivo,
 } from "@/lib/email-campaigns-constants";
+import { NativeSelect } from "@/components/ui/native-select";
 
 /**
  * Criação (ou edição dos campos básicos) de campanha — uma tela só,
@@ -76,7 +77,7 @@ export function NovaCampanhaDialog({
           </label>
           <label className="block space-y-1">
             <span className="text-xs font-medium text-foreground">Objetivo</span>
-            <select
+            <NativeSelect
               value={objetivo}
               onChange={(e) => setObjetivo(e.target.value as CampaignObjetivo)}
               className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
@@ -86,7 +87,7 @@ export function NovaCampanhaDialog({
                   {CAMPAIGN_OBJETIVO_LABEL[o]}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </label>
           {showDescription ? (
             <label className="block space-y-1">

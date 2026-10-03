@@ -31,6 +31,7 @@ import {
   initialsOf,
 } from "@/components/portal/portal-widgets";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { NativeSelect } from "@/components/ui/native-select";
 
 const searchSchema = z.object({
   influ: z.string().optional(),
@@ -303,7 +304,7 @@ function PortalCampanhaPage() {
         }
         rightSlot={
           activeCampanha.isRecorrente ? (
-            <select
+            <NativeSelect
               value={portalMonth}
               onChange={(e) => setPortalMonth(e.target.value)}
               className="h-9 rounded-md border border-border bg-background px-2 text-xs font-medium text-foreground outline-none focus:ring-1 focus:ring-ring"
@@ -313,7 +314,7 @@ function PortalCampanhaPage() {
                   {o.label}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           ) : undefined
         }
         indicators={[
@@ -441,13 +442,13 @@ function PortalCampanhaPage() {
                 <div className="flex items-center gap-2 p-2.5">
                   <Avatar className="h-6 w-6 shrink-0">
                     {inf.foto && <AvatarImage src={inf.foto} alt={inf.nome} />}
-                    <AvatarFallback className="text-[10px] font-semibold">
+                    <AvatarFallback className="text-[11px] font-semibold">
                       {initialsOf(inf.nome)}
                     </AvatarFallback>
                   </Avatar>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-xs font-medium text-foreground">{inf.nome}</p>
-                    <p className="truncate text-[10px] text-muted-foreground">{entrega.tipo}</p>
+                    <p className="truncate text-[11px] text-muted-foreground">{entrega.tipo}</p>
                   </div>
                 </div>
               </button>
@@ -500,7 +501,7 @@ function PortalCampanhaPage() {
             <button
               type="button"
               onClick={() => setCronogramaExpandido((v) => !v)}
-              className="mt-3 text-xs font-semibold text-brand underline-offset-2 hover:underline"
+              className="mt-3 text-xs font-semibold text-text-brand underline-offset-2 hover:underline"
             >
               {cronogramaExpandido ? "Ver menos" : "Ver cronograma completo"}
             </button>

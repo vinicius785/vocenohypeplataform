@@ -85,7 +85,7 @@ function HistoricoItem({
         <div className="space-y-3 border-t border-border/60 px-3 py-3">
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-md bg-muted/40 p-2.5">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-text-secondary">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-text-secondary">
                 Avaliação do time
               </p>
               {avaliacao ? (
@@ -111,7 +111,7 @@ function HistoricoItem({
               )}
             </div>
             <div className="rounded-md bg-muted/40 p-2.5">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-text-secondary">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-text-secondary">
                 NPS do influenciador
               </p>
               {nps?.respondido ? (
@@ -230,7 +230,7 @@ export function InfluencerBancoDrawer({
                   </SheetDescription>
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {influ.nicho && (
-                      <Badge variant="secondary" className="max-w-[160px] text-[10px]">
+                      <Badge variant="secondary" className="max-w-[160px] text-[11px]">
                         <span className="truncate">{influ.nicho}</span>
                       </Badge>
                     )}
@@ -263,7 +263,7 @@ export function InfluencerBancoDrawer({
 
           <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div className="rounded-lg border border-border/60 p-3">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-text-secondary">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-text-secondary">
                 Seguidores
               </p>
               <p className="mt-0.5 inline-flex items-center gap-1 text-lg font-semibold text-foreground">
@@ -272,13 +272,13 @@ export function InfluencerBancoDrawer({
               </p>
             </div>
             <div className="rounded-lg border border-border/60 p-3">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-text-secondary">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-text-secondary">
                 Campanhas
               </p>
               <p className="mt-0.5 text-lg font-semibold text-foreground">{participacoes.length}</p>
             </div>
             <div className="rounded-lg border border-border/60 p-3">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-text-secondary">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-text-secondary">
                 Avaliação do time
               </p>
               {mediaGeral !== null ? (
@@ -294,7 +294,7 @@ export function InfluencerBancoDrawer({
               )}
             </div>
             <div className="rounded-lg border border-border/60 p-3">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-text-secondary">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-text-secondary">
                 Entregas totais
               </p>
               <p className="mt-0.5 text-lg font-semibold text-foreground">{totalEntregas}</p>

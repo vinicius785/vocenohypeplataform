@@ -41,7 +41,7 @@ function ScoreCell({ score }: { score: ScoreOperacionalV2 | undefined }) {
     <span className={`font-semibold tabular-nums ${tone}`}>
       {score.score}
       {score.dataState === "provisorio" && (
-        <span className="ml-1 text-[10px] font-normal">prov.</span>
+        <span className="ml-1 text-[11px] font-normal">prov.</span>
       )}
     </span>
   );
@@ -116,9 +116,9 @@ export function TimeMembersTable({
 }) {
   const hp = { sort, onSort };
   return (
-    <section className="overflow-hidden rounded-[22px] bg-card dark:shadow-none">
+    <section className="surface-card overflow-hidden">
       <div
-        className={`hidden items-center gap-3 border-b border-border px-5 py-3 text-[10px] font-semibold uppercase tracking-wide text-text-secondary md:grid ${GRID}`}
+        className={`hidden items-center gap-3 border-b border-border px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-text-secondary md:grid ${GRID}`}
       >
         <HeaderCell label="Pessoa" sortKey="nome" {...hp} />
         <HeaderCell label="Carga" title="Carga atual — passe o mouse no selo para ver o motivo" />

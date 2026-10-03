@@ -23,13 +23,13 @@ function Coluna({
   onVerTodos: () => void;
 }) {
   return (
-    <div className={`rounded-[22px] ${SECONDARY_SURFACE} p-5`}>
+    <div className={`rounded-2xl ${SECONDARY_SURFACE} p-5`}>
       <div className="flex items-baseline justify-between gap-2">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
             {titulo}
           </p>
-          <p className="mt-1 whitespace-nowrap text-[22px] font-bold tabular-nums leading-none text-foreground">
+          <p className="mt-1 whitespace-nowrap text-[22px] font-semibold tabular-nums leading-none text-foreground">
             {fmtBRL(total)}
           </p>
         </div>

@@ -69,7 +69,7 @@ export function AttentionTasks({
   const findMember = (name: string) => members.find((m) => m.name === name);
 
   return (
-    <div className="flex h-full flex-col rounded-[22px] bg-card p-5 dark:shadow-none">
+    <div className="surface-card flex h-full flex-col p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-[15px] font-semibold text-foreground">
           Tarefas que precisam de atenção
@@ -110,7 +110,7 @@ export function AttentionTasks({
                           >
                             {member?.photo && <AvatarImage src={member.photo} alt="" />}
                             <AvatarFallback
-                              className={`text-[10px] ${avatarAccent(member?.id ?? name)}`}
+                              className={`text-[11px] ${avatarAccent(member?.id ?? name)}`}
                             >
                               {initialsOf(member?.name ?? "", name)}
                             </AvatarFallback>
@@ -118,7 +118,7 @@ export function AttentionTasks({
                         );
                       })}
                       {assignees.length > 3 && (
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[9px] font-medium text-text-secondary ring-2 ring-card">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-text-secondary ring-2 ring-card">
                           +{assignees.length - 3}
                         </span>
                       )}
@@ -127,7 +127,7 @@ export function AttentionTasks({
                     <div className="min-w-0 flex-1">
                       <p className="flex min-w-0 items-center gap-1.5 truncate text-sm text-foreground group-hover:underline">
                         {t.parentTitle && (
-                          <span className="inline-flex shrink-0 items-center rounded border border-border bg-muted/60 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-wide text-text-secondary">
+                          <span className="inline-flex shrink-0 items-center rounded border border-border bg-muted/60 px-1 py-0.5 text-[11px] font-semibold uppercase leading-none tracking-wide text-text-secondary">
                             Sub
                           </span>
                         )}

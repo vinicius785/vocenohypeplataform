@@ -147,7 +147,7 @@ export function FluxoVisual({
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                  <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                     {STEP_STATUS_LABEL[step.status] ?? step.status}
                   </span>
                   <Trash2

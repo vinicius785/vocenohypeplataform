@@ -182,7 +182,7 @@ export function AgendaView({
       {/* Resumo operacional — faixa compacta de apoio, nunca 3 cards
        * grandes equivalentes. "Pendentes" só ganha destaque amarelo
        * quando há de fato solicitações aguardando resposta. */}
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 rounded-2xl bg-card px-4 py-3 text-sm dark:shadow-none">
+      <div className="surface-card flex flex-wrap items-center gap-x-5 gap-y-1.5 px-4 py-3 text-sm">
         <span>
           <span className="text-base font-semibold text-foreground">{hojeCount}</span>{" "}
           <span className="text-text-secondary">
@@ -202,7 +202,7 @@ export function AgendaView({
       </div>
 
       {isEmpty ? (
-        <div className="rounded-[24px] bg-card p-10 text-center dark:shadow-none">
+        <div className="surface-card p-10 text-center">
           <CalendarDays className="mx-auto h-8 w-8 text-text-secondary/50" />
           <p className="mt-3 text-sm font-medium text-foreground">Nenhuma reunião agendada</p>
           <p className="mt-1 text-sm text-text-secondary">
@@ -239,13 +239,13 @@ export function AgendaView({
                     <span className="text-success">Agora</span>
                   </>
                 ) : (
-                  <span className="text-brand">Próxima reunião</span>
+                  <span className="text-text-brand">Próxima reunião</span>
                 )}
               </div>
 
               <div className="mt-2.5 flex flex-wrap items-center gap-5">
                 <div className="shrink-0">
-                  <div className="text-2xl font-bold tabular-nums tracking-tight text-foreground">
+                  <div className="text-2xl font-semibold tabular-nums tracking-tight text-foreground">
                     {hero.hora}
                   </div>
                   {heroRelative && (
@@ -298,7 +298,7 @@ export function AgendaView({
             </div>
           )}
 
-          <div className="rounded-[24px] bg-card p-5 dark:shadow-none">
+          <div className="surface-card p-5">
             <div className="flex items-baseline gap-2">
               <h2 className="text-[15px] font-semibold text-foreground">Hoje</h2>
               <span className="text-xs text-text-secondary">{formatBR(today)}</span>

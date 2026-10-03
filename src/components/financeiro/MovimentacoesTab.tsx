@@ -218,7 +218,7 @@ export function MovimentacoesTab({
       </div>
 
       {/* Lista */}
-      <div className="overflow-hidden rounded-[24px] bg-card dark:shadow-none">
+      <div className="surface-card overflow-hidden">
         {pagedOpen.length === 0 ? (
           <EmptyState
             icon={<Inbox className="h-5 w-5" />}
@@ -287,7 +287,7 @@ export function MovimentacoesTab({
       )}
 
       {concludedEntries.length > 0 && (
-        <div className="overflow-hidden rounded-[24px] bg-card dark:shadow-none">
+        <div className="surface-card overflow-hidden">
           <button
             type="button"
             onClick={() => setShowConcluded((v) => !v)}

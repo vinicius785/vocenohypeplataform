@@ -405,7 +405,7 @@ export function AppShell({
               className={showFull ? "mb-3" : "mb-2 border-b border-border/50 pb-2 last:border-0"}
             >
               {showFull && (
-                <div className="px-2.5 pb-1 pt-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">
+                <div className="px-2.5 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wider text-text-secondary">
                   {group.title}
                 </div>
               )}
@@ -443,8 +443,8 @@ export function AppShell({
                                 aria-label={`${chatUnread} mensagens não lidas`}
                                 className={
                                   showFull
-                                    ? "flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-semibold leading-none text-brand-foreground"
-                                    : "absolute right-0.5 top-0.5 flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-brand px-1 text-[9px] font-semibold leading-none text-brand-foreground"
+                                    ? "flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-brand px-1 text-[11px] font-semibold leading-none text-brand-foreground"
+                                    : "absolute right-0.5 top-0.5 flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-brand px-1 text-[11px] font-semibold leading-none text-brand-foreground"
                                 }
                               >
                                 {chatUnread > 99 ? "99+" : chatUnread}
@@ -475,8 +475,8 @@ export function AppShell({
                                 aria-hidden
                                 className={
                                   showFull
-                                    ? "h-3 w-3 shrink-0 text-muted-foreground/60"
-                                    : "absolute right-1 top-1 h-2.5 w-2.5 text-muted-foreground/60"
+                                    ? "h-3 w-3 shrink-0 text-text-secondary"
+                                    : "absolute right-1 top-1 h-2.5 w-2.5 text-text-secondary"
                                 }
                               />
                             )}
@@ -601,7 +601,7 @@ function NavButton({
         collapsed ? "justify-center" : ""
       } ${
         disabled
-          ? "cursor-not-allowed text-muted-foreground/40"
+          ? "cursor-not-allowed text-text-secondary"
           : active
             ? "bg-muted font-medium text-foreground"
             : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
@@ -1911,7 +1911,7 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
       {total > 0 && (
         <span
           aria-hidden="true"
-          className="absolute -right-0.5 -top-0.5 inline-flex min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold leading-4 text-destructive-foreground"
+          className="absolute -right-0.5 -top-0.5 inline-flex min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[11px] font-semibold leading-4 text-destructive-foreground"
         >
           {total > 99 ? "99+" : total}
         </span>
@@ -1944,7 +1944,7 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
   // plugin novo — `[&::-webkit-scrollbar]:hidden` + `scrollbarWidth`
   // inline cobrem Chrome/Safari e Firefox) em vez de cortar/comprimir os
   // 4 nomes; a categoria ativa nunca fica de fora graças ao
-  // `scrollIntoView` acima. `bg-brand-subtle`/`text-brand` na ativa —
+  // `scrollIntoView` acima. `bg-brand-subtle`/`text-text-brand` na ativa —
   // nunca mais o fundo quase-branco (`bg-foreground`) de antes.
   const tabsRow = (
     <div
@@ -1969,14 +1969,14 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
             onClick={() => setTab(t.key)}
             className={cn(
               "flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              active ? "bg-brand-subtle text-brand" : "text-muted-foreground hover:bg-muted",
+              active ? "bg-brand-subtle text-text-brand" : "text-muted-foreground hover:bg-muted",
             )}
           >
             {t.label}
             {t.count > 0 && (
               <span
                 className={cn(
-                  "inline-flex h-4 min-w-[16px] shrink-0 items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-none",
+                  "inline-flex h-4 min-w-[16px] shrink-0 items-center justify-center rounded-full px-1 text-[11px] font-semibold leading-none",
                   active ? "bg-brand text-brand-foreground" : "bg-foreground/10 text-foreground",
                 )}
               >

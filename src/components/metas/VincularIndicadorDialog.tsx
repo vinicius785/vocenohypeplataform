@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { COMPARISON_OPERATORS, type ComparisonOperator, type Indicador } from "@/lib/metas-store";
 import { COMPARISON_OPERATOR_LABEL, direcaoParaComparadorPadrao } from "@/lib/metas-engine";
 import { formatValorAtual, timeAgo } from "./metas-ui-utils";
+import { NativeSelect } from "@/components/ui/native-select";
 
 const FIELD_CLS =
   "mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-brand";
@@ -154,7 +155,7 @@ export function VincularIndicadorDialog({
                 >
                   Condição
                 </Label>
-                <select
+                <NativeSelect
                   id="vincular-comparador"
                   value={comparador}
                   onChange={(e) => setComparador(e.target.value as ComparisonOperator)}
@@ -165,7 +166,7 @@ export function VincularIndicadorDialog({
                       {COMPARISON_OPERATOR_LABEL[op]}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>

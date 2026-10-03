@@ -21,7 +21,7 @@ export function TeamInsights({
   onOpenMember: (m: Member) => void;
 }) {
   return (
-    <div className="rounded-[22px] bg-card p-5 dark:shadow-none">
+    <div className="surface-card p-5">
       <h3 className="flex items-center gap-1.5 text-[15px] font-semibold text-foreground">
         <Sparkles className="h-3.5 w-3.5 text-foreground/70" /> Insights do Time
       </h3>

@@ -113,7 +113,7 @@ export function DetailRow({
 }) {
   return (
     <div className="min-w-0">
-      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="flex items-center gap-1.5 truncate text-foreground">
         {icon && <span className="shrink-0 text-muted-foreground">{icon}</span>}
         {value}

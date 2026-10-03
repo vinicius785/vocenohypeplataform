@@ -58,7 +58,7 @@ function IntegracoesCategoria({
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-sm font-semibold text-foreground">{title}</h2>
             {badge && (
-              <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+              <Badge variant="secondary" className="text-[11px] uppercase tracking-wide">
                 {badge}
               </Badge>
             )}
@@ -613,7 +613,7 @@ function OutgoingWebhooksCard() {
                   {h.events.map((e) => (
                     <span
                       key={e}
-                      className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                      className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground"
                     >
                       {OUTGOING_WEBHOOK_EVENTS.find((x) => x.key === e)?.label ?? e}
                     </span>
@@ -625,7 +625,7 @@ function OutgoingWebhooksCard() {
                 onClick={() =>
                   void toggleFn({ data: { id: h.id, active: !h.active } }).then(refresh)
                 }
-                className={`shrink-0 rounded-md border px-2 py-1 text-[10px] font-medium ${
+                className={`shrink-0 rounded-md border px-2 py-1 text-[11px] font-medium ${
                   h.active
                     ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
                     : "border-border text-muted-foreground"

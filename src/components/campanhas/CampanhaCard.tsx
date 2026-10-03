@@ -54,11 +54,11 @@ export function CampanhaCard({
       : "Sem prazo definido";
 
   return (
-    <div className="group relative cursor-pointer rounded-[20px] border border-transparent bg-card p-4 text-left transition-colors duration-150 hover:border-border hover:bg-accent/40 dark:shadow-none">
+    <div className="group relative cursor-pointer rounded-2xl border border-transparent bg-card p-4 text-left transition-colors duration-150 hover:border-border hover:bg-accent/40 dark:shadow-none">
       <button
         type="button"
         onClick={onOpen}
-        className="absolute inset-0 cursor-pointer rounded-[20px] transition-transform duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand active:scale-[0.99]"
+        className="absolute inset-0 cursor-pointer rounded-2xl transition-transform duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand active:scale-[0.99]"
         aria-label={`Abrir campanha ${c.nome} — ${cliente.empresa}, ${CAMPANHA_STATUS_LABEL[status]}, ${influCount} influenciador(es)`}
       />
 

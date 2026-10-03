@@ -28,6 +28,7 @@ import {
 } from "@/lib/reunioes-store";
 import { toISODate, parseISODate, statusTone } from "./meeting-status";
 import { loadTeam, type TeamMember } from "./team";
+import { NativeSelect } from "@/components/ui/native-select";
 
 const DIAS_LABEL = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -501,7 +502,7 @@ export function MeetingDialog({
                         {t.photo ? (
                           <img src={t.photo} alt="" className="h-5 w-5 rounded-full object-cover" />
                         ) : (
-                          <span className="grid h-5 w-5 place-items-center rounded-full bg-muted text-[10px]">
+                          <span className="grid h-5 w-5 place-items-center rounded-full bg-muted text-[11px]">
                             {t.name.trim()[0]?.toUpperCase() ?? "?"}
                           </span>
                         )}
@@ -584,7 +585,7 @@ export function MeetingDialog({
                   <div>
                     <div className="flex items-center justify-between gap-2">
                       <Label className="text-sm text-foreground">Recorrência</Label>
-                      <select
+                      <NativeSelect
                         value={repeat}
                         onChange={(e) => setRepeat(e.target.value as typeof repeat)}
                         className="h-8 rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-brand"
@@ -593,7 +594,7 @@ export function MeetingDialog({
                         <option value="daily">Diariamente</option>
                         <option value="weekly">Semanalmente</option>
                         <option value="monthly">Mensalmente</option>
-                      </select>
+                      </NativeSelect>
                     </div>
                     {repeat !== "none" && (
                       <div className="mt-2 space-y-2">

@@ -30,7 +30,7 @@ export function ClientCampaignInfo({ campaign }: { campaign: PublicCampanha }) {
 
   return (
     <CampaignSection icon={<Info className="h-4 w-4" />} title="Informações da campanha">
-      <div className="grid grid-cols-2 gap-3 rounded-2xl bg-card p-4 dark:shadow-none sm:grid-cols-3">
+      <div className="surface-card grid grid-cols-2 gap-3 p-4 sm:grid-cols-3">
         {items.map((item) => (
           <div key={item.label}>
             <p className="text-xs text-text-secondary">{item.label}</p>

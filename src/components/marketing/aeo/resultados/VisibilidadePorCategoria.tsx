@@ -22,7 +22,7 @@ export function VisibilidadePorCategoria({
   const [aberta, setAberta] = useState<AeoCategoria | null>(null);
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-4">
+    <div className="surface-card p-4">
       <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
         Visibilidade por categoria
       </h3>

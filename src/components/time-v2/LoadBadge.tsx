@@ -18,7 +18,7 @@ export function LoadBadge({
 }) {
   const badge = (
     <span
-      className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${TONE[load.level]}`}
+      className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${TONE[load.level]}`}
     >
       {LOAD_LEVEL_LABEL[load.level]}
     </span>

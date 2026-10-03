@@ -34,23 +34,3 @@ export function PageContainer({
 }) {
   return <div className={cn(VARIANT_CLASS[variant], className)}>{children}</div>;
 }
-
-/**
- * Canvas de página de módulo — o fundo `muted` por trás dos cards (no tema
- * claro `--background` e `--card` são iguais, então sem isso os cards não se
- * distinguiriam do fundo) que cancela o padding do `<main>` do AppShell.
- * Antes cada módulo repetia esta string à mão, com variações (`min-h-full`,
- * `min-h-[calc(…)]`, sem `min-h`): agora é uma só.
- */
-export function PageCanvas({ className, children }: { className?: string; children: ReactNode }) {
-  return (
-    <div
-      className={cn(
-        "-m-4 min-h-[calc(100vh-4rem)] bg-muted p-4 dark:bg-transparent md:-m-8 md:p-8",
-        className,
-      )}
-    >
-      {children}
-    </div>
-  );
-}

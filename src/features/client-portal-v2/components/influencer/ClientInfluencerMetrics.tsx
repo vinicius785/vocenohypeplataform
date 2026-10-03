@@ -45,7 +45,7 @@ export function ClientInfluencerMetrics({ influencer }: { influencer: PublicInfl
           {redeEntries.map(({ plataforma, metrics: m }) => (
             <div
               key={plataforma}
-              className="grid grid-cols-2 gap-3 rounded-2xl bg-card p-4 dark:shadow-none sm:grid-cols-4"
+              className="surface-card grid grid-cols-2 gap-3 p-4 sm:grid-cols-4"
             >
               <p className="col-span-2 text-xs font-medium text-foreground sm:col-span-4">
                 {plataforma}
@@ -68,7 +68,7 @@ export function ClientInfluencerMetrics({ influencer }: { influencer: PublicInfl
             const hasDemographics = m.genero || m.faixaEtaria || m.paises || m.cidades;
             if (!hasDemographics) return null;
             return (
-              <div key={plataforma} className="space-y-3 rounded-2xl bg-card p-4 dark:shadow-none">
+              <div key={plataforma} className="surface-card space-y-3 p-4">
                 <p className="text-xs font-medium text-foreground">{plataforma}</p>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <DemographicChart title="Gênero" entries={m.genero} chartType="pie" />
@@ -87,7 +87,7 @@ export function ClientInfluencerMetrics({ influencer }: { influencer: PublicInfl
           <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
             Resultados nesta campanha
           </p>
-          <div className="grid grid-cols-2 gap-3 rounded-2xl bg-card p-4 dark:shadow-none sm:grid-cols-4">
+          <div className="surface-card grid grid-cols-2 gap-3 p-4 sm:grid-cols-4">
             <Metric label="Alcance" value={campaignTotals.reach} />
             <Metric label="Visualizações" value={campaignTotals.views} />
             <Metric label="Curtidas" value={campaignTotals.likes} />

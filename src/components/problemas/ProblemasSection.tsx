@@ -22,7 +22,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { PageCanvas, PageContainer } from "@/components/shared/PageContainer";
+import { PageContainer } from "@/components/shared/PageContainer";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { TaskOptionPicker } from "@/components/tasks/task-ui";
 import { useMyAccess } from "@/lib/permissions";
@@ -217,7 +217,7 @@ export function ProblemasSection() {
   const statTile = (label: string, value: number, onClick?: () => void, hint?: string) => {
     const body = (
       <>
-        <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-text-secondary">
+        <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
           {label}
         </p>
         <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">
@@ -226,7 +226,7 @@ export function ProblemasSection() {
         {hint && <p className="truncate text-[11px] text-text-secondary">{hint}</p>}
       </>
     );
-    const cls = "min-w-0 rounded-2xl bg-card px-4 py-3 text-left dark:shadow-none";
+    const cls = "surface-card min-w-0 px-4 py-3 text-left";
     return onClick ? (
       <button
         type="button"
@@ -242,7 +242,7 @@ export function ProblemasSection() {
 
   return (
     <PageContainer variant="wide">
-      <PageCanvas className="space-y-6">
+      <div className="space-y-6">
         <PageHeader
           title="Problemas"
           description="Reporte problemas, acompanhe solicitações e veja o que já foi identificado."
@@ -443,7 +443,7 @@ export function ProblemasSection() {
           </div>
         </div>
 
-        <section className="overflow-hidden rounded-[22px] bg-card dark:shadow-none">
+        <section className="surface-card overflow-hidden">
           {state === "error" ? (
             <div className="flex flex-col items-center gap-2 px-5 py-12 text-center">
               <p className="text-sm text-text-secondary">Não foi possível carregar os problemas.</p>
@@ -544,7 +544,7 @@ export function ProblemasSection() {
           }}
           onChanged={() => void load()}
         />
-      </PageCanvas>
+      </div>
     </PageContainer>
   );
 }

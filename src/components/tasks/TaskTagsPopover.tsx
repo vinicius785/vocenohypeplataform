@@ -100,7 +100,7 @@ export function TaskTagsPopover({
       {overflow.length > 0 && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+            <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
               +{overflow.length}
             </span>
           </TooltipTrigger>

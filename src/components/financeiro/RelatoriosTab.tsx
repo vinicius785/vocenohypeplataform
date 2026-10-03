@@ -59,7 +59,7 @@ export function RelatoriosTab({
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-border text-left text-[10px] uppercase tracking-wide text-muted-foreground">
+                <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-muted-foreground">
                   <th className="py-1.5 pr-3 font-medium">Mês</th>
                   <th className="py-1.5 pr-3 text-right font-medium">Receitas</th>
                   <th className="py-1.5 pr-3 text-right font-medium">Despesas</th>
@@ -140,13 +140,13 @@ export function RelatoriosTab({
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             {(Object.keys(agingReceber) as (keyof typeof agingReceber)[]).map((k) => (
               <div key={k} className="rounded-lg border border-border p-2.5">
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
                   {AGING_BUCKET_LABEL[k]}
                 </p>
                 <p className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">
                   {fmtBRL(agingReceber[k].total)}
                 </p>
-                <p className="text-[10px] text-muted-foreground">{agingReceber[k].count} lanç.</p>
+                <p className="text-[11px] text-muted-foreground">{agingReceber[k].count} lanç.</p>
               </div>
             ))}
           </div>

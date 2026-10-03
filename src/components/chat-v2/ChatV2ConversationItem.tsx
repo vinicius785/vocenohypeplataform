@@ -91,7 +91,7 @@ export function ChatV2ConversationItem({
         </span>
       </span>
       {hasMention && (
-        <Badge variant="brand" className="h-5 shrink-0 px-1.5 text-[10px]">
+        <Badge variant="brand" className="h-5 shrink-0 px-1.5 text-[11px]">
           @
         </Badge>
       )}

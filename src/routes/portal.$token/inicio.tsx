@@ -320,7 +320,7 @@ function PortalInicioPage() {
                   <div className="flex items-center gap-2 p-2.5">
                     <Avatar className="h-6 w-6 shrink-0">
                       {item.inf.foto && <AvatarImage src={item.inf.foto} alt={item.inf.nome} />}
-                      <AvatarFallback className="text-[10px] font-semibold">
+                      <AvatarFallback className="text-[11px] font-semibold">
                         {initialsOf(item.inf.nome)}
                       </AvatarFallback>
                     </Avatar>
@@ -328,7 +328,7 @@ function PortalInicioPage() {
                       <p className="truncate text-xs font-medium text-foreground">
                         {item.inf.nome}
                       </p>
-                      <p className="truncate text-[10px] text-muted-foreground">
+                      <p className="truncate text-[11px] text-muted-foreground">
                         {item.campanhaNome}
                       </p>
                     </div>
@@ -392,7 +392,7 @@ function PortalInicioPage() {
                 >
                   <Avatar className="h-7 w-7 shrink-0">
                     {item.inf.foto && <AvatarImage src={item.inf.foto} alt={item.inf.nome} />}
-                    <AvatarFallback className="text-[10px] font-semibold">
+                    <AvatarFallback className="text-[11px] font-semibold">
                       {initialsOf(item.inf.nome)}
                     </AvatarFallback>
                   </Avatar>
@@ -453,13 +453,13 @@ function PortalInicioPage() {
                 )}
                 <div className="min-w-0 flex-1 space-y-0.5">
                   {a.category && (
-                    <Badge variant="secondary" className="text-[9px]">
+                    <Badge variant="secondary" className="text-[11px]">
                       {a.category}
                     </Badge>
                   )}
                   <p className="truncate text-xs font-semibold text-foreground">{a.title}</p>
                   {a.publishDate && (
-                    <p className="text-[10px] text-muted-foreground">{fmtDate(a.publishDate)}</p>
+                    <p className="text-[11px] text-muted-foreground">{fmtDate(a.publishDate)}</p>
                   )}
                 </div>
               </button>

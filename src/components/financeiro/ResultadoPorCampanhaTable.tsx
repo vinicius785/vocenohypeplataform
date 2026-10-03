@@ -4,6 +4,7 @@ import { groupByCampanha, fmtBRL, type CampanhaResultado } from "@/lib/financeir
 import { ChartCard, ChartEmptyState } from "./financeiro-charts-shared";
 import type { AdvancedFilters, useFinanceiroFilteredEntries } from "./useFinanceiroFilteredEntries";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import { NativeSelect } from "@/components/ui/native-select";
 
 type Filtered = ReturnType<typeof useFinanceiroFilteredEntries>;
 type SortKey = "receita" | "custos" | "resultado" | "margem";
@@ -48,7 +49,7 @@ export function ResultadoPorCampanhaTable({
               { value: "realizado", label: "Realizado" },
             ]}
           />
-          <select
+          <NativeSelect
             value={sortKey}
             onChange={(e) => setSortKey(e.target.value as SortKey)}
             className="h-7 cursor-pointer rounded-md border border-border bg-background px-1.5 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-brand"
@@ -58,7 +59,7 @@ export function ResultadoPorCampanhaTable({
                 {o.label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           <button
             type="button"
             onClick={() => setAscending((v) => !v)}
@@ -81,7 +82,7 @@ export function ResultadoPorCampanhaTable({
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-border text-left text-[10px] uppercase tracking-wide text-muted-foreground">
+              <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-muted-foreground">
                 <th className="py-1.5 pr-3 font-medium">Campanha</th>
                 <th className="py-1.5 pr-3 font-medium">Cliente</th>
                 <th className="py-1.5 pr-3 text-right font-medium">Receita</th>

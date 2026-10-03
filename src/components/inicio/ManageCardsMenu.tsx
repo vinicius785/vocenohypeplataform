@@ -95,7 +95,7 @@ function ToggleRow({
     >
       {draggable && (
         <GripVertical
-          className="h-4 w-4 shrink-0 cursor-grab text-muted-foreground/50 active:cursor-grabbing"
+          className="h-4 w-4 shrink-0 cursor-grab text-text-secondary active:cursor-grabbing"
           aria-hidden="true"
         />
       )}

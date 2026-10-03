@@ -1,5 +1,11 @@
-import { Search, Filter, ArrowUpDown, X } from "lucide-react";
+import { Filter, ArrowUpDown } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  FilterChips,
+  FilterRow,
+  FilterSearch,
+  FilterToolbar,
+} from "@/components/shared/FilterToolbar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { FEATURES } from "@/lib/projetos";
@@ -52,17 +58,13 @@ export function ProjetoFiltersBar({
   const activeCount = countActiveProjectFilters(filters);
 
   return (
-    <div className="rounded-2xl bg-card p-3 dark:shadow-none">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[200px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-secondary" />
-          <input
-            value={query}
-            onChange={(e) => onQueryChange(e.target.value)}
-            placeholder="Buscar por projeto, descrição ou responsável..."
-            className="h-9 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-brand"
-          />
-        </div>
+    <FilterToolbar>
+      <FilterRow>
+        <FilterSearch
+          value={query}
+          onChange={onQueryChange}
+          placeholder="Buscar por projeto, descrição ou responsável..."
+        />
 
         <Popover>
           <PopoverTrigger asChild>
@@ -70,7 +72,7 @@ export function ProjetoFiltersBar({
               <Filter className="h-3.5 w-3.5" />
               Filtros
               {activeCount > 0 && (
-                <Badge variant="brand" className="px-1.5 py-0 text-[10px] leading-4">
+                <Badge variant="secondary" className="px-1.5 py-0 text-[11px] leading-4">
                   {activeCount}
                 </Badge>
               )}
@@ -195,10 +197,10 @@ export function ProjetoFiltersBar({
             ))}
           </PopoverContent>
         </Popover>
-      </div>
+      </FilterRow>
 
       <ProjetoFilterChips filters={filters} onChange={onFiltersChange} />
-    </div>
+    </FilterToolbar>
   );
 }
 
@@ -248,30 +250,5 @@ function ProjetoFilterChips({
       : []),
   ];
 
-  if (chips.length === 0) return null;
-
-  return (
-    <div className="mt-2 flex flex-wrap items-center gap-2">
-      {chips.map((chip) => (
-        <Badge key={chip.id} variant="brand" className="gap-1 py-1 pl-2.5 pr-1.5">
-          {chip.label}
-          <button
-            type="button"
-            onClick={chip.onRemove}
-            aria-label={`Remover filtro ${chip.label}`}
-            className="flex h-4 w-4 items-center justify-center rounded-full hover:bg-brand/20"
-          >
-            <X className="h-3 w-3" />
-          </button>
-        </Badge>
-      ))}
-      <button
-        type="button"
-        onClick={() => onChange(DEFAULT_PROJECT_FILTERS)}
-        className="text-[11px] font-medium text-text-secondary hover:text-foreground"
-      >
-        Limpar filtros
-      </button>
-    </div>
-  );
+  return <FilterChips chips={chips} onClear={() => onChange(DEFAULT_PROJECT_FILTERS)} />;
 }

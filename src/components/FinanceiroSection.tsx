@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { Plus, Upload } from "lucide-react";
-import { PageCanvas, PageContainer } from "@/components/shared/PageContainer";
+import { PageContainer } from "@/components/shared/PageContainer";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import {
@@ -114,7 +114,7 @@ export function FinanceiroSection() {
     // distinguiam do fundo. Reaproveita `--muted` (token já existente) só
     // dentro da área do Financeiro; no escuro `--background`/`--card` já
     // são distintos, por isso `dark:bg-transparent` neutraliza o ajuste.
-    <PageCanvas>
+    <>
       <PageContainer className="space-y-6">
         <PageHeader
           title="Financeiro"
@@ -205,6 +205,6 @@ export function FinanceiroSection() {
           onSave={(m) => void handleCreate(m)}
         />
       </PageContainer>
-    </PageCanvas>
+    </>
   );
 }

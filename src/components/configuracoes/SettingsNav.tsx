@@ -87,7 +87,7 @@ export function SettingsNav({
                     className={cn(
                       "relative flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 focus-visible:ring-offset-background",
                       isActive
-                        ? "bg-brand-subtle font-medium text-brand"
+                        ? "bg-brand-subtle font-medium text-text-brand"
                         : "text-muted-foreground hover:bg-muted hover:text-foreground",
                     )}
                   >

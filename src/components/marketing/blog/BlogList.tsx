@@ -12,6 +12,7 @@ import {
 import { useConfirm } from "@/hooks/use-confirm";
 import { BlogEditor } from "./BlogEditor";
 import { destinoLabel, statusInfo, STATUS } from "./types";
+import { NativeSelect } from "@/components/ui/native-select";
 
 type DestinoFilter = "todos" | "site" | "mural" | "portal";
 type SortKey = "recentes" | "titulo";
@@ -170,7 +171,7 @@ export function BlogPanel({
             className="h-8 w-full rounded-md border border-border bg-background pl-8 pr-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-brand sm:w-48"
           />
         </div>
-        <select
+        <NativeSelect
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as BlogStatus | "todos")}
           aria-label="Filtrar por status"
@@ -182,8 +183,8 @@ export function BlogPanel({
               {s.label}
             </option>
           ))}
-        </select>
-        <select
+        </NativeSelect>
+        <NativeSelect
           value={destinoFilter}
           onChange={(e) => setDestinoFilter(e.target.value as DestinoFilter)}
           aria-label="Filtrar por destino"
@@ -193,8 +194,8 @@ export function BlogPanel({
           <option value="site">Site</option>
           <option value="mural">Mural interno</option>
           <option value="portal">Portal do cliente</option>
-        </select>
-        <select
+        </NativeSelect>
+        <NativeSelect
           value={sort}
           onChange={(e) => setSort(e.target.value as SortKey)}
           aria-label="Ordenar artigos"
@@ -202,7 +203,7 @@ export function BlogPanel({
         >
           <option value="recentes">Mais recentes</option>
           <option value="titulo">Título (A–Z)</option>
-        </select>
+        </NativeSelect>
       </div>
 
       {posts.length === 0 ? (
@@ -246,13 +247,13 @@ export function BlogPanel({
                     </div>
                   )}
                   <span
-                    className={`absolute right-2 top-2 rounded px-1.5 py-0.5 text-[10px] ${s.cls}`}
+                    className={`absolute right-2 top-2 rounded px-1.5 py-0.5 text-[11px] ${s.cls}`}
                   >
                     {p.status === "agendado" && p.publishDate
                       ? `Agendado · ${fmtScheduled(p.publishDate)}`
                       : s.label}
                   </span>
-                  <span className="absolute left-2 top-2 rounded bg-background/90 px-1.5 py-0.5 text-[10px] font-medium text-foreground shadow">
+                  <span className="absolute left-2 top-2 rounded bg-background/90 px-1.5 py-0.5 text-[11px] font-medium text-foreground shadow">
                     {destinoLabel(p)}
                   </span>
                 </div>
@@ -264,7 +265,7 @@ export function BlogPanel({
                     <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">
                       {p.excerpt || "Sem resumo."}
                     </p>
-                    <div className="mt-2 flex items-center justify-between text-[10px] text-muted-foreground">
+                    <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
                       <span className="truncate">{p.authorName || "Sem autor"}</span>
                       {p.status === "publicado" && p.publishedAt && (
                         <span className="inline-flex items-center gap-1">

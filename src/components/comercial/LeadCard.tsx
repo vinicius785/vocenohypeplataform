@@ -93,7 +93,7 @@ export function LeadCard({
       draggable={draggable}
       onDragStart={draggable ? onDragStart : undefined}
       onDragEnd={draggable ? onDragEnd : undefined}
-      className={`rounded-[18px] bg-card p-4 text-sm transition-all dark:shadow-none ${
+      className={`rounded-2xl bg-card p-4 text-sm transition-all dark:shadow-none ${
         dragging ? "scale-[0.98] opacity-50 shadow-lg" : "shadow-sm"
       }`}
     >
@@ -123,13 +123,13 @@ export function LeadCard({
         </div>
 
         <div className="mt-3 flex items-center justify-between gap-2">
-          <span className="whitespace-nowrap text-[15px] font-bold tabular-nums text-foreground">
+          <span className="whitespace-nowrap text-[15px] font-semibold tabular-nums text-foreground">
             {formatBRL(lead.value || 0)}
           </span>
           {lead.responsible ? (
             <span
               title={lead.responsible}
-              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${avatarAccent(
+              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${avatarAccent(
                 lead.responsible,
               )}`}
             >
@@ -138,7 +138,7 @@ export function LeadCard({
           ) : (
             <span
               title="Sem responsável"
-              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-text-secondary"
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-text-secondary"
             >
               —
             </span>

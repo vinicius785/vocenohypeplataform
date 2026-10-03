@@ -4,14 +4,10 @@ import { useServerFn } from "@tanstack/react-start";
 import { Plus, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { PageCanvas, PageContainer } from "@/components/shared/PageContainer";
+import { PageContainer } from "@/components/shared/PageContainer";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
-import {
-  PageSummaryPanel,
-  SummaryPrimaryMetric,
-  SummaryMetric,
-} from "@/components/shared/PageSummaryPanel";
+import { KpiLead, KpiLeadItem, KpiLeadValue } from "@/components/shared/Kpi";
 import { clientesStore, useClientes, type Cliente } from "@/lib/clientes-store";
 import { createClienteComOrganizacao } from "@/lib/clientes.functions";
 import { listContratosProximosDoVencimento } from "@/lib/contratos-alertas.functions";
@@ -228,21 +224,13 @@ export function ClientesSection() {
   // Indicadores de campanha consideram só o que está "em operação" (sem
   // arquivados), coerente com a listagem padrão.
   const operacaoClientes = clientes.filter((c) => matchesClienteStatusFilter(c, "operacao"));
-  const comCampanha = operacaoClientes.filter((c) => (c.campanhas?.length ?? 0) > 0).length;
-  const semCampanha = operacaoClientes.length - comCampanha;
+  const semCampanha = operacaoClientes.filter((c) => (c.campanhas?.length ?? 0) === 0).length;
   // Fase 4: indicadores de status clicáveis. "Em operação" (default) =
   // Negociando + Ativos + Encerrados; Arquivados só aparecem quando o
   // indicador "Arquivados" é escolhido explicitamente.
   const statusCounts = countClientesByStatusFilter(clientes);
   const setStatusFilter = (s: ClienteStatusFilter) =>
     setFilters((f) => ({ ...f, status: f.status === s && s !== "operacao" ? "operacao" : s }));
-  const STATUS_METRICS: { key: ClienteStatusFilter; label: string }[] = [
-    { key: "capture", label: "Captação" },
-    { key: "active", label: "Ativos" },
-    { key: "closed", label: "Encerrados" },
-    { key: "archived", label: "Arquivados" },
-  ];
-
   const hasAnyClient = totalClientes > 0;
   const hasResults = visibleClientes.length > 0;
   const hasActiveSearchOrFilter =
@@ -253,11 +241,8 @@ export function ClientesSection() {
     filters.responsavelInterno.length > 0;
 
   return (
-    // Canvas fix (mesma correção do Financeiro/Reuniões/Metas): --background
-    // e --card são idênticos no claro, então sem isso os cards de Clientes
-    // não se distinguiam do fundo.
-    <PageCanvas>
-      <PageContainer className="space-y-6">
+    <>
+      <PageContainer className="space-y-6 md:space-y-8">
         <PageHeader
           title="Clientes"
           description="Todos os clientes e campanhas vinculadas em um só lugar."
@@ -271,29 +256,30 @@ export function ClientesSection() {
         />
 
         {hasAnyClient && (
-          <PageSummaryPanel title="Visão geral">
-            <SummaryPrimaryMetric value={String(statusCounts.operacao)} label="em operação" />
-            <SummaryMetric
-              label="Em operação"
-              value={statusCounts.operacao}
-              active={filters.status === "operacao"}
-              onClick={() => setStatusFilter("operacao")}
+          <KpiLead aria-label="Resumo de clientes">
+            <KpiLeadValue value={statusCounts.operacao} label="em operação" />
+            <KpiLeadItem
+              label="Em captação"
+              value={statusCounts.capture}
+              active={filters.status === "capture"}
+              onClick={() => setStatusFilter("capture")}
             />
-            {STATUS_METRICS.map((m) => (
-              <SummaryMetric
-                key={m.key}
-                label={m.label}
-                value={statusCounts[m.key]}
-                active={filters.status === m.key}
-                onClick={() => setStatusFilter(m.key)}
+            <KpiLeadItem
+              label="Sem campanha"
+              value={semCampanha}
+              active={filters.campanha === "sem"}
+              onClick={() =>
+                setFilters((f) => ({ ...f, campanha: f.campanha === "sem" ? "todos" : "sem" }))
+              }
+            />
+            {contratosVencendo !== null && (
+              <KpiLeadItem
+                label="Contratos vencendo (30 dias)"
+                value={contratosVencendo}
+                tone="warning"
               />
-            ))}
-            <SummaryMetric label="Com campanha" value={comCampanha} />
-            <SummaryMetric label="Sem campanha" value={semCampanha} />
-            {contratosVencendo !== null && contratosVencendo > 0 && (
-              <SummaryMetric label="Contratos vencendo (30 dias)" value={contratosVencendo} />
             )}
-          </PageSummaryPanel>
+          </KpiLead>
         )}
 
         {hasAnyClient && (
@@ -330,14 +316,14 @@ export function ClientesSection() {
                     label: "Limpar filtros",
                     onClick: () => {
                       setQuery("");
-                      setFilters(DEFAULT_CLIENTE_FILTERS);
+                      setFilters((f) => ({ ...DEFAULT_CLIENTE_FILTERS, sort: f.sort }));
                     },
                   }
                 : undefined
             }
           />
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6 xl:grid-cols-3">
             {visibleClientes.map((c) => (
               <ClienteCard
                 key={c.id}
@@ -375,6 +361,6 @@ export function ClientesSection() {
       />
 
       {confirmDialog}
-    </PageCanvas>
+    </>
   );
 }

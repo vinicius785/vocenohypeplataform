@@ -312,7 +312,7 @@ export function ChatV2Timeline({
                           className="my-3 flex items-center gap-3"
                         >
                           <span className="h-px flex-1 bg-brand-border" />
-                          <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-brand">
+                          <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-text-brand">
                             Novas mensagens
                           </span>
                           <span className="h-px flex-1 bg-brand-border" />

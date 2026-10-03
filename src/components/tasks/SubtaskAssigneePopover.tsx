@@ -63,7 +63,7 @@ export function SubtaskAssigneePopover({
                     />
                   ))}
                   {overflow.length > 0 && (
-                    <span className="z-10 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-muted text-[9px] font-medium text-muted-foreground ring-2 ring-card">
+                    <span className="z-10 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-muted-foreground ring-2 ring-card">
                       +{overflow.length}
                     </span>
                   )}
@@ -101,7 +101,7 @@ export function SubtaskAssigneePopover({
               >
                 <Avatar member={m} size={20} />
                 <span className="min-w-0 flex-1 truncate">{m.name}</span>
-                {checked && <Check className="h-3.5 w-3.5 shrink-0 text-brand" />}
+                {checked && <Check className="h-3.5 w-3.5 shrink-0 text-text-brand" />}
               </button>
             );
           })

@@ -13,6 +13,7 @@ import {
 } from "@/lib/aeo-store";
 import { inputCls } from "../aeo-ui-utils";
 import { PromptFormDialog } from "./PromptFormDialog";
+import { NativeSelect } from "@/components/ui/native-select";
 
 type StatusFiltro = "todos" | "ativo" | "inativo";
 
@@ -87,7 +88,7 @@ export function PromptsTab({ prompts }: { prompts: AeoPrompt[] }) {
               className={`${inputCls} w-52 pl-7`}
             />
           </div>
-          <select
+          <NativeSelect
             value={categoriaFiltro}
             onChange={(e) => setCategoriaFiltro(e.target.value as AeoCategoria | "")}
             className={inputCls}
@@ -98,8 +99,8 @@ export function PromptsTab({ prompts }: { prompts: AeoPrompt[] }) {
                 {c} — {AEO_CATEGORIA_LABEL[c]}
               </option>
             ))}
-          </select>
-          <select
+          </NativeSelect>
+          <NativeSelect
             value={idiomaFiltro}
             onChange={(e) => setIdiomaFiltro(e.target.value as AeoIdioma | "")}
             className={inputCls}
@@ -110,8 +111,8 @@ export function PromptsTab({ prompts }: { prompts: AeoPrompt[] }) {
                 {i}
               </option>
             ))}
-          </select>
-          <select
+          </NativeSelect>
+          <NativeSelect
             value={statusFiltro}
             onChange={(e) => setStatusFiltro(e.target.value as StatusFiltro)}
             className={inputCls}
@@ -119,7 +120,7 @@ export function PromptsTab({ prompts }: { prompts: AeoPrompt[] }) {
             <option value="todos">Todos status</option>
             <option value="ativo">Ativo</option>
             <option value="inativo">Inativo</option>
-          </select>
+          </NativeSelect>
         </div>
         <Button
           size="sm"

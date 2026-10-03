@@ -177,7 +177,7 @@ export function CalendarTool({
               {DIAS_LABEL.map((d) => (
                 <div
                   key={d}
-                  className="px-1 py-1.5 text-center text-[10px] font-medium uppercase tracking-wider text-text-secondary"
+                  className="px-1 py-1.5 text-center text-[11px] font-medium uppercase tracking-wider text-text-secondary"
                 >
                   {d}
                 </div>
@@ -198,7 +198,7 @@ export function CalendarTool({
                     aria-pressed={isSelected}
                     aria-label={`${fmtDate(iso)}${items.length ? ` — ${items.length} evento${items.length === 1 ? "" : "s"}` : ""}`}
                     className={`h-14 overflow-hidden border-b border-r border-border p-1 text-left align-top transition-colors hover:bg-muted/40 focus-visible:relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand sm:h-20 sm:p-1.5 ${
-                      inMonth ? "" : "bg-background/40 text-muted-foreground/50"
+                      inMonth ? "" : "bg-background/40 text-text-secondary"
                     } ${isSelected ? "bg-muted/60" : ""}`}
                   >
                     <span
@@ -216,7 +216,7 @@ export function CalendarTool({
                     </div>
                     <div className="mt-1 hidden space-y-0.5 sm:block">
                       {items.slice(0, 2).map((ev, i) => (
-                        <div key={i} className="flex items-center gap-1 truncate text-[10px]">
+                        <div key={i} className="flex items-center gap-1 truncate text-[11px]">
                           <span
                             className={`h-1.5 w-1.5 shrink-0 rounded-full ${TONE_DOT[ev.tone]}`}
                           />
@@ -224,7 +224,7 @@ export function CalendarTool({
                         </div>
                       ))}
                       {items.length > 2 && (
-                        <div className="text-[9px] font-medium text-text-secondary">
+                        <div className="text-[11px] font-medium text-text-secondary">
                           +{items.length - 2} evento{items.length - 2 === 1 ? "" : "s"}
                         </div>
                       )}

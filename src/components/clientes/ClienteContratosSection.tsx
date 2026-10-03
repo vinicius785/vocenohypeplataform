@@ -37,7 +37,8 @@ import {
 } from "@/lib/contratos";
 import type { Campaign } from "@/components/VincularCampanhaDialog";
 import { CAMPANHA_STATUS_LABEL, campanhaStatus } from "@/components/campanhas/campanha-ui";
-import { formatIsoDate } from "@/lib/utils";
+import { cn, formatIsoDate } from "@/lib/utils";
+import { SURFACE, TYPOGRAPHY } from "@/lib/design-tokens";
 
 const STATUS_BADGE_VARIANT: Record<ContratoStatus, "outline" | "success" | "secondary"> = {
   rascunho: "outline",
@@ -186,7 +187,7 @@ export function ClienteContratosSection({
   };
 
   return (
-    <section className="rounded-2xl bg-card p-5 dark:shadow-none md:p-6">
+    <section className={cn(SURFACE.card, "p-5 md:p-6")}>
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-foreground">Contratos</h2>
         {canManage && (contratos?.length ?? 0) > 0 && (

@@ -21,7 +21,7 @@ export function ChatV2Shortcuts({
         <Inbox className="h-3.5 w-3.5" />
         Não lidas
         {unreadCount > 0 && (
-          <Badge className="ml-auto h-4 min-w-4 justify-center bg-brand px-1 text-[10px] text-brand-foreground">
+          <Badge className="ml-auto h-4 min-w-4 justify-center bg-brand px-1 text-[11px] text-brand-foreground">
             {unreadCount}
           </Badge>
         )}
@@ -33,7 +33,7 @@ export function ChatV2Shortcuts({
         <AtSign className="h-3.5 w-3.5" />
         Menções
         {mentionCount > 0 && (
-          <Badge className="ml-auto h-4 min-w-4 justify-center bg-brand px-1 text-[10px] text-brand-foreground">
+          <Badge className="ml-auto h-4 min-w-4 justify-center bg-brand px-1 text-[11px] text-brand-foreground">
             {mentionCount}
           </Badge>
         )}

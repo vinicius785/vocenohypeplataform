@@ -402,7 +402,7 @@ export function MemberDialog({
                           if (items.length === 0) return null;
                           return (
                             <div key={group.label}>
-                              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                                 {group.label}
                               </p>
                               <ul className="mt-1 space-y-0.5">
@@ -498,7 +498,7 @@ export function MemberDialog({
                             {group.label === "Administração" &&
                               permissions.includes("configuracoes") && (
                                 <div className="mt-2 border-t border-border/60 pt-2">
-                                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/80">
+                                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
                                     Abas de Configurações
                                   </p>
                                   <div className="space-y-1">
@@ -523,7 +523,7 @@ export function MemberDialog({
                               )}
                             {group.label === "Gestão" && canSeeTime && (
                               <div className="mt-2 border-t border-border/60 pt-2">
-                                <p className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/80">
+                                <p className="mb-1 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
                                   <Eye className="h-2.5 w-2.5" /> Visibilidade na aba Time
                                 </p>
                                 <div className="space-y-1">

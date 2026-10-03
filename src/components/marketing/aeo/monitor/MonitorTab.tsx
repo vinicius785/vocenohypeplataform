@@ -15,6 +15,7 @@ import { NovaRodadaDialog } from "./NovaRodadaDialog";
 import { IaTabs } from "./IaTabs";
 import { PromptTable } from "./PromptTable";
 import { RespostaDrawer } from "./RespostaDrawer";
+import { NativeSelect } from "@/components/ui/native-select";
 
 export function MonitorTab({
   rodadas,
@@ -66,7 +67,7 @@ export function MonitorTab({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <label className="text-xs text-muted-foreground">Rodada</label>
-          <select
+          <NativeSelect
             value={rodadaAtualId}
             onChange={(e) => setRodadaId(e.target.value)}
             className={inputCls}
@@ -76,7 +77,7 @@ export function MonitorTab({
                 {fmtDate(r.dataRodada)}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
         <Button size="sm" variant="primary" onClick={() => setNovaRodadaOpen(true)}>
           <Plus className="h-3.5 w-3.5" /> Nova rodada

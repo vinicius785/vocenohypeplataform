@@ -18,7 +18,7 @@ export function ClientCampaignTimeline({ items }: { items: PublicCronogramaItem[
           title="Nenhum marco cadastrado ainda"
         />
       ) : (
-        <ol className="space-y-2 rounded-2xl bg-card p-2 dark:shadow-none">
+        <ol className="surface-card space-y-2 p-2">
           {sorted.map((item) => {
             const isPast = new Date(item.date).getTime() < now;
             return (
@@ -34,7 +34,7 @@ export function ClientCampaignTimeline({ items }: { items: PublicCronogramaItem[
                       className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
                         isPast
                           ? "bg-success-soft text-success-soft-foreground"
-                          : "bg-brand-subtle text-brand"
+                          : "bg-brand-subtle text-text-brand"
                       }`}
                     >
                       {isPast ? "Concluído" : "Planejado"}

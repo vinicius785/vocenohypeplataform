@@ -13,6 +13,7 @@ import {
   type MetricDirection,
   type MetricType,
 } from "@/lib/metas-store";
+import { NativeSelect } from "@/components/ui/native-select";
 
 type Member = { name: string; photo?: string };
 
@@ -293,7 +294,7 @@ export function IndicadorQuickCreateDialog({
                     <Label htmlFor="indicador-dono" className={LABEL_CLS}>
                       Responsável
                     </Label>
-                    <select
+                    <NativeSelect
                       id="indicador-dono"
                       value={dono}
                       onChange={(e) => setDono(e.target.value)}
@@ -305,13 +306,13 @@ export function IndicadorQuickCreateDialog({
                           {m.name}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </div>
                   <div>
                     <Label htmlFor="indicador-area" className={LABEL_CLS}>
                       Área
                     </Label>
-                    <select
+                    <NativeSelect
                       id="indicador-area"
                       value={area}
                       onChange={(e) => setArea(e.target.value as MetaArea)}
@@ -322,7 +323,7 @@ export function IndicadorQuickCreateDialog({
                           {a}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </div>
                 </div>
                 <div>

@@ -2,13 +2,11 @@ import type { ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 
 /** Painel de lista — mesmo fundo/raio/sombra que qualquer superfície do
- * Portal V2 (`rounded-2xl bg-card dark:shadow-none`, igual à faixa de
+ * Portal V2 (`surface-card`, igual à faixa de
  * `SummaryStat` e aos cards de `ClientCampaignCard`). Linhas separadas
  * por divisor sutil, nunca cada uma com sua própria borda. */
 export function PortalListPanel({ children }: { children: ReactNode }) {
-  return (
-    <div className="divide-y divide-border/70 rounded-2xl bg-card dark:shadow-none">{children}</div>
-  );
+  return <div className="surface-card divide-y divide-border/70">{children}</div>;
 }
 
 /**
@@ -62,7 +60,7 @@ export function PortalListRow({
         </div>
       )}
       <ChevronRight
-        className="h-4 w-4 shrink-0 text-muted-foreground/60 transition-transform group-hover:translate-x-0.5"
+        className="h-4 w-4 shrink-0 text-text-secondary transition-transform group-hover:translate-x-0.5"
         aria-hidden="true"
       />
     </div>

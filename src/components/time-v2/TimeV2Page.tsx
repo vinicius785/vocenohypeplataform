@@ -30,7 +30,7 @@ import { useOpenMemberDeepLink, useTimeData } from "@/components/team/use-time-d
 import { AttentionTasks, type AttentionTab } from "@/components/team/AttentionTasks";
 import { TeamDeliveriesWeek } from "@/components/team/TeamDeliveriesWeek";
 import { TeamInsights } from "@/components/team/TeamInsights";
-import { PageCanvas, PageContainer } from "@/components/shared/PageContainer";
+import { PageContainer } from "@/components/shared/PageContainer";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { MemberProfileV2 } from "./MemberProfileV2";
 import { TimeMembersTable } from "./TimeMembersTable";
@@ -249,7 +249,7 @@ export function TimeV2Page() {
   return (
     <TooltipProvider delayDuration={200}>
       <PageContainer variant="wide">
-        <PageCanvas className="space-y-6">
+        <div className="space-y-6">
           <PageHeader
             title="Time"
             description="Visão geral da operação, produtividade, carga e indicadores do time."
@@ -473,7 +473,7 @@ export function TimeV2Page() {
             onReset={(id) => void handleReset(id)}
           />
           {confirmDialog}
-        </PageCanvas>
+        </div>
       </PageContainer>
     </TooltipProvider>
   );

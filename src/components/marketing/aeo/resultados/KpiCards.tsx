@@ -43,28 +43,28 @@ export function KpiCards({
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      <div className="rounded-2xl border border-border bg-card p-4">
+      <div className="surface-card p-4">
         <p className="text-xs font-medium text-muted-foreground">Visibilidade geral</p>
-        <p className="mt-1 text-3xl font-light tracking-tighter text-foreground">
+        <p className="mt-1 text-3xl font-normal tracking-tighter text-foreground">
           {visibilidade.valor}%
         </p>
         <DeltaBadge delta={visibilidade.deltaPP} unidade="pp" />
       </div>
-      <div className="rounded-2xl border border-border bg-card p-4">
+      <div className="surface-card p-4">
         <p className="text-xs font-medium text-muted-foreground">Top 3</p>
-        <p className="mt-1 text-3xl font-light tracking-tighter text-foreground">{top3.valor}%</p>
+        <p className="mt-1 text-3xl font-normal tracking-tighter text-foreground">{top3.valor}%</p>
         <DeltaBadge delta={top3.deltaPP} unidade="pp" />
       </div>
-      <div className="rounded-2xl border border-border bg-card p-4">
+      <div className="surface-card p-4">
         <p className="text-xs font-medium text-muted-foreground">1º lugar</p>
-        <p className="mt-1 text-3xl font-light tracking-tighter text-foreground">
+        <p className="mt-1 text-3xl font-normal tracking-tighter text-foreground">
           {primeiro.valor}%
         </p>
         <DeltaBadge delta={primeiro.deltaPP} unidade="pp" />
       </div>
-      <div className="rounded-2xl border border-border bg-card p-4">
+      <div className="surface-card p-4">
         <p className="text-xs font-medium text-muted-foreground">Prompts sem presença</p>
-        <p className="mt-1 text-3xl font-light tracking-tighter text-foreground">
+        <p className="mt-1 text-3xl font-normal tracking-tighter text-foreground">
           {semPresenca.valor}
         </p>
         <DeltaBadge delta={semPresenca.delta} unidade="" />

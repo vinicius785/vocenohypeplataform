@@ -166,7 +166,7 @@ export function IndicadorPage({
             <p
               role="heading"
               aria-level={1}
-              className="text-2xl font-bold leading-tight tracking-tight text-foreground md:text-3xl"
+              className="text-2xl font-semibold leading-tight tracking-tight text-foreground md:text-3xl"
             >
               {indicador.titulo}
             </p>
@@ -203,7 +203,7 @@ export function IndicadorPage({
         </div>
 
         <div>
-          <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 whitespace-nowrap text-4xl font-bold leading-none tracking-tight text-foreground">
+          <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 whitespace-nowrap text-4xl font-semibold leading-none tracking-tight text-foreground">
             {valorPrincipal}
             {tendencia && (
               <span className={`text-sm font-medium ${TENDENCIA_TONE[tendencia.trend]}`}>

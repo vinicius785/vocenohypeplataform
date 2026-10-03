@@ -117,7 +117,7 @@ export function RemindersCard({
         <button
           type="button"
           onClick={onViewAll}
-          className="flex w-full items-center justify-center gap-1 border-t border-border/70 px-4 py-2.5 text-xs font-medium text-brand hover:underline"
+          className="flex w-full items-center justify-center gap-1 border-t border-border/70 px-4 py-2.5 text-xs font-medium text-text-brand hover:underline"
         >
           Ver todos ({reminders.length})
         </button>

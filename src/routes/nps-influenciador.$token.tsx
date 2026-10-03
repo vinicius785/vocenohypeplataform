@@ -76,7 +76,7 @@ function Header({ logo, nome }: { logo?: string; nome: string }) {
         {logo ? (
           <img src={logo} alt="" className="h-full w-full object-cover" />
         ) : (
-          <span className="text-[11px] font-bold">{nome.charAt(0).toUpperCase()}</span>
+          <span className="text-[11px] font-semibold">{nome.charAt(0).toUpperCase()}</span>
         )}
       </div>
       <span className="text-sm font-semibold text-foreground">{nome}</span>
@@ -223,7 +223,7 @@ function InfluNpsPage() {
       {/* HERO — marca + headline, mesmo peso de título usado pela Home
        * (`TYPOGRAPHY.pageTitle`), nunca o display XL de uma landing. */}
       <div className="space-y-1.5 text-center sm:text-left">
-        <p className={cn(TYPOGRAPHY.label, "text-brand")}>{ws.nome || "Você no Hype"}</p>
+        <p className={cn(TYPOGRAPHY.label, "text-text-brand")}>{ws.nome || "Você no Hype"}</p>
         <p className={TYPOGRAPHY.pageTitle}>Como foi sua experiência?</p>
         <p className={TYPOGRAPHY.bodySecondary}>
           Sua opinião ajuda a gente a melhorar cada campanha e a experiência dos nossos creators.
@@ -371,7 +371,7 @@ function InfluNpsPage() {
                     onClick={() => setWouldWorkAgain(o.value)}
                     className={`h-10 rounded-md border text-sm font-medium transition-colors ${
                       wouldWorkAgain === o.value
-                        ? "border-brand bg-brand-subtle text-brand"
+                        ? "border-brand bg-brand-subtle text-text-brand"
                         : "border-border bg-background text-foreground hover:bg-muted"
                     }`}
                   >

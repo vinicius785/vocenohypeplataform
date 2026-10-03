@@ -71,6 +71,10 @@
   --color-brand-foreground: var(--brand-foreground);
   --color-brand-foreground-secondary: var(--brand-foreground-secondary);
   --color-brand-border: var(--brand-border);
+  /* Texto de marca (links, ação em texto, pill ativa). Distinto de `brand`
+   * (fundo/borda): no claro é um tom mais escuro da mesma matiz pra passar
+   * WCAG AA sobre branco e sobre `brand-subtle`. */
+  --color-text-brand: var(--text-brand);
   /* Texto secundário com contraste garantido pro design system novo —
    * NÃO é o `--muted-foreground` global (esse continua intocado, ainda
    * usado por toda tela real hoje). Ver comentário junto do valor. */
@@ -107,7 +111,9 @@
   --secondary: oklch(0.968 0.007 247.896);
   --secondary-foreground: oklch(0.208 0.042 265.755);
   --muted: oklch(0.968 0.007 247.896);
-  --muted-foreground: oklch(0.554 0.046 257.417);
+  /* Alinhado a `--text-secondary` (antes 4.33:1 sobre o fundo de página):
+   * os ~1.500 usos de `text-muted-foreground` passam a atender AA. */
+  --muted-foreground: oklch(0.4461 0.0263 256.8);
   --accent: oklch(0.968 0.007 247.896);
   --accent-foreground: oklch(0.208 0.042 265.755);
   --destructive: oklch(0.577 0.245 27.325);
@@ -152,6 +158,14 @@
     0.2936 0.066 267.94
   ); /* #1E2A4D — 4.97:1 sobre a marca (texto normal) */
   --brand-border: oklch(0.3958 0.0751 265.53); /* #33456F — 3.34:1 sobre a marca (borda/controle) */
+  /* Texto em cor de marca sobre fundo claro (decisão P2). `brand` sobre
+   * branco mede 2.83:1 e sobre `brand-subtle` 2.61:1 (reprova AA); este tom
+   * (mesma matiz) mede 5.72:1 sobre branco, 5.27:1 sobre `brand-subtle` e
+   * 5.22:1 sobre `muted`. */
+  --text-brand: oklch(0.52 0.17 267.26);
+  /* Superfície de card (C7): igual a `card` no claro; no escuro um carvão mais
+   * escuro que o `card`. Usada pela utilidade `surface-card`. */
+  --card-raised: var(--card);
   --success: oklch(0.6959 0.1491 162.48); /* #10B981 */
   --success-soft: oklch(0.6959 0.1491 162.48 / 12%);
   --success-soft-foreground: oklch(0.4 0.1 162.48);
@@ -191,7 +205,7 @@
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
+  --muted-foreground: oklch(0.7137 0.0192 261.32);
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
@@ -226,6 +240,9 @@
   /* Mesmos valores do claro — ver comentário no bloco `:root`. */
   --brand-foreground-secondary: oklch(0.2936 0.066 267.94); /* #1E2A4D — 4.97:1 sobre a marca */
   --brand-border: oklch(0.3958 0.0751 265.53); /* #33456F — 3.34:1 sobre a marca */
+  /* No escuro a própria marca já passa AA sobre o fundo (> 6:1). */
+  --text-brand: oklch(0.6907 0.1616 267.26);
+  --card-raised: oklch(0.17 0 0);
   --success: oklch(0.7729 0.1535 163.223); /* #34D399 */
   --success-soft: oklch(0.7729 0.1535 163.223 / 14%);
   --success-soft-foreground: oklch(0.85 0.14 163.223);
@@ -244,6 +261,17 @@
   --info-border: oklch(0.7137 0.1434 254.624 / 30%);
   /* 7.8:1 sobre o fundo escuro real — mesma lógica do claro. */
   --text-secondary: oklch(0.7137 0.0192 261.32); /* #9CA3AF */
+}
+
+/* Card canônico como utilidade: `rounded-2xl`, borda `/60` (some no escuro),
+ * sem sombra. Mesma superfície de `ui/card` e de `SURFACE.card`. */
+@utility surface-card {
+  border-radius: var(--radius-2xl);
+  border: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+  background-color: var(--card-raised);
+  &:is(.dark *) {
+    border-color: transparent;
+  }
 }
 
 @layer base {

@@ -21,6 +21,7 @@ import { useSaldoInicial } from "@/lib/financeiro-saldo-inicial-store";
 import { ChartCard, ChartEmptyState } from "./financeiro-charts-shared";
 import type { useFinanceiroFilteredEntries } from "./useFinanceiroFilteredEntries";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import { NativeSelect } from "@/components/ui/native-select";
 
 type Filtered = ReturnType<typeof useFinanceiroFilteredEntries>;
 
@@ -91,7 +92,7 @@ function DiarioTooltip({ active, payload }: TooltipProps<number, string>) {
     row.receitaRealizada + row.receitaProjetada - (row.despesaRealizada + row.despesaProjetada);
   return (
     <div className="rounded-xl border border-border bg-popover px-4 py-3 text-xs shadow-lg">
-      <p className="mb-1.5 text-[13px] font-semibold text-foreground">{row.label}</p>
+      <p className="mb-1.5 text-sm font-semibold text-foreground">{row.label}</p>
       {row.receitaRealizada > 0 && (
         <p className="text-muted-foreground">
           Entradas realizadas{" "}
@@ -138,7 +139,7 @@ function AcumuladoTooltip({ active, payload }: TooltipProps<number, string>) {
   const saldo = row.saldoRealizado ?? row.saldoProjetado ?? 0;
   return (
     <div className="rounded-xl border border-border bg-popover px-4 py-3 text-xs shadow-lg">
-      <p className="mb-1.5 text-[13px] font-semibold text-foreground">{row.label}</p>
+      <p className="mb-1.5 text-sm font-semibold text-foreground">{row.label}</p>
       <p className={saldo >= 0 ? "text-success" : "text-danger"}>Saldo acumulado {fmtBRL(saldo)}</p>
       <p className="text-muted-foreground">
         {row.natureza === "realizado" ? "Realizado" : "Projetado"}
@@ -235,7 +236,7 @@ export function FluxoCaixaChart({ filtered }: { filtered: Filtered }) {
               { value: "acumulado", label: "Saldo acumulado" },
             ]}
           />
-          <select
+          <NativeSelect
             value={horizon}
             onChange={(e) => setHorizon(e.target.value as FlowHorizon)}
             className="h-7 cursor-pointer rounded-md border border-border bg-background px-1.5 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-brand"
@@ -245,7 +246,7 @@ export function FluxoCaixaChart({ filtered }: { filtered: Filtered }) {
                 {o.label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
       }
     >

@@ -382,7 +382,7 @@ export function SidebarProfile() {
 
           <div className="min-w-0 flex-1">
             <p className="truncate text-xs font-medium">{perfil.nome || "Sem nome"}</p>
-            <p className="truncate text-[10px] text-muted-foreground">
+            <p className="truncate text-[11px] text-muted-foreground">
               {meta.label}
               {ausenteInfo ? ` · ${ausenteInfo}` : ""}
             </p>

@@ -39,7 +39,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Badge } from "@/components/ui/badge";
 import { IconButton } from "@/components/ui/icon-button";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { SURFACE, TYPOGRAPHY } from "@/lib/design-tokens";
+import { Card as UiCard, CardHeader } from "@/components/ui/card";
 import { AvatarStack } from "@/components/meetings/AvatarStack";
 import { useConfirm } from "@/hooks/use-confirm";
 import {
@@ -874,7 +874,7 @@ export function InicioDashboard() {
                   <WeatherIcon
                     condition={weather.condition}
                     isDay={weather.isDay}
-                    className="h-7 w-7 shrink-0 text-muted-foreground/70"
+                    className="h-7 w-7 shrink-0 text-text-secondary"
                   />
                   <div className="text-right leading-tight">
                     <p className="text-4xl font-semibold tracking-tight text-foreground">
@@ -989,7 +989,7 @@ export function InicioDashboard() {
                         {t.parentTitle && (
                           <span
                             title={`Subtarefa de "${t.parentTitle}"`}
-                            className="inline-flex shrink-0 items-center rounded-full border border-border bg-muted/60 px-1.5 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-wide text-muted-foreground"
+                            className="inline-flex shrink-0 items-center rounded-full border border-border bg-muted/60 px-1.5 py-0.5 text-[11px] font-semibold uppercase leading-none tracking-wide text-muted-foreground"
                           >
                             Sub
                           </span>
@@ -1013,7 +1013,7 @@ export function InicioDashboard() {
                   <button
                     type="button"
                     onClick={() => setWorkExpanded((v) => !v)}
-                    className="flex w-full items-center justify-center gap-1 px-4 py-2.5 text-xs font-medium text-brand hover:underline"
+                    className="flex w-full items-center justify-center gap-1 px-4 py-2.5 text-xs font-medium text-text-brand hover:underline"
                   >
                     {workExpanded ? "Ver menos" : `Ver todas (${filteredTasks.length})`}
                     <ChevronDown
@@ -1060,7 +1060,7 @@ export function InicioDashboard() {
                             onClick={() => setMeetingSummary(m)}
                             className="flex w-full items-start gap-3 rounded-xl border border-brand/30 bg-brand-subtle px-3 py-2.5 text-left transition-colors hover:bg-brand-subtle/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           >
-                            <div className="shrink-0 pt-0.5 text-sm font-semibold tabular-nums text-brand">
+                            <div className="shrink-0 pt-0.5 text-sm font-semibold tabular-nums text-text-brand">
                               {m.hora}
                             </div>
                             <div className="min-w-0 flex-1">
@@ -1167,7 +1167,7 @@ export function InicioDashboard() {
                                   mencionou você em {c.context}
                                 </span>
                               </p>
-                              <span className="shrink-0 text-[10px] text-muted-foreground">
+                              <span className="shrink-0 text-[11px] text-muted-foreground">
                                 {fmtCommentAt(c.at)}
                               </span>
                             </div>
@@ -1184,7 +1184,7 @@ export function InicioDashboard() {
                           label={`Limpar menção de ${c.author}`}
                           tone="neutral"
                           onClick={c.onDismiss}
-                          className="h-7 w-7 shrink-0 text-muted-foreground/60 opacity-60 transition-opacity hover:text-foreground focus-visible:opacity-100"
+                          className="h-7 w-7 shrink-0 text-text-secondary opacity-60 transition-opacity hover:text-foreground focus-visible:opacity-100"
                         >
                           <X className="h-3.5 w-3.5" />
                         </IconButton>
@@ -1195,7 +1195,7 @@ export function InicioDashboard() {
                     <button
                       type="button"
                       onClick={() => setCommentsExpanded((v) => !v)}
-                      className="flex w-full items-center justify-center gap-1 border-t border-border/70 px-4 py-2.5 text-xs font-medium text-brand hover:underline"
+                      className="flex w-full items-center justify-center gap-1 border-t border-border/70 px-4 py-2.5 text-xs font-medium text-text-brand hover:underline"
                     >
                       {commentsExpanded ? "Ver menos" : `Ver todos (${assignedComments.length})`}
                       <ChevronDown
@@ -1279,7 +1279,7 @@ export function InicioDashboard() {
                 onClick={() =>
                   navigate({ to: "/time", search: { section: "financeiro" as SectionKey } })
                 }
-                className="flex w-full items-center justify-center gap-1 border-t border-border/70 px-4 py-2.5 text-xs font-medium text-brand hover:underline"
+                className="flex w-full items-center justify-center gap-1 border-t border-border/70 px-4 py-2.5 text-xs font-medium text-text-brand hover:underline"
               >
                 Abrir Financeiro
                 <ArrowUpRight className="h-3.5 w-3.5" />
@@ -1325,7 +1325,7 @@ export function InicioDashboard() {
                 onClick={() =>
                   navigate({ to: "/time", search: { section: "comercial" as SectionKey } })
                 }
-                className="flex w-full items-center justify-center gap-1 border-t border-border/70 px-4 py-2.5 text-xs font-medium text-brand hover:underline"
+                className="flex w-full items-center justify-center gap-1 border-t border-border/70 px-4 py-2.5 text-xs font-medium text-text-brand hover:underline"
               >
                 Abrir Comercial
                 <ArrowUpRight className="h-3.5 w-3.5" />
@@ -1370,11 +1370,11 @@ export function InicioDashboard() {
   );
 }
 
-/** Superfície de seção da Home — mesmo tratamento em todos os 5 cards
- * (`Meu trabalho`, `Agenda`, `Mural`, `Comentários`, `Lembretes`) e
- * mesmo raio do cabeçalho climático aprovado (`rounded-2xl`), pra tudo
- * parecer parte de um único produto em vez de caixas isoladas com
- * tratamentos divergentes. */
+/** Card e cabeçalho de card da Home — são os componentes CANÔNICOS de
+ * `ui/card` (`rounded-2xl` + `SURFACE.raised`, sem sombra); a Home só
+ * acrescenta `overflow-hidden` para cortar listas nos cantos. Mantidos aqui
+ * como re-export porque outros módulos (portal, lembretes) já importam
+ * daqui. */
 export const Card = ({
   children,
   className = "",
@@ -1384,36 +1384,12 @@ export const Card = ({
   className?: string;
   ref?: React.Ref<HTMLDivElement>;
 }) => (
-  <div ref={ref} className={`overflow-hidden rounded-2xl ${SURFACE.raised} ${className}`}>
+  <UiCard ref={ref} className={`overflow-hidden ${className}`}>
     {children}
-  </div>
+  </UiCard>
 );
 
-/** Cabeçalho integrado ao próprio card — sem barra retangular separada
- * (sem `border-b`), ícone e título com o mesmo peso/tamanho em toda a
- * Home, ação alinhada à direita e livre pra quebrar numa segunda linha
- * em telas estreitas em vez de comprimir. */
-export function CardHeader({
-  icon,
-  title,
-  action,
-}: {
-  icon: ReactNode;
-  title: string;
-  action?: ReactNode;
-}) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3.5 md:px-5">
-      <div className="flex items-center gap-2 text-foreground">
-        <span className="text-muted-foreground" aria-hidden="true">
-          {icon}
-        </span>
-        <p className={TYPOGRAPHY.cardTitle}>{title}</p>
-      </div>
-      {action}
-    </div>
-  );
-}
+export { CardHeader };
 
 /** Grupo de tabs em pill — usado só em "Meu trabalho". Ativo com fundo
  * de marca bem sutil (`bg-brand-subtle`, mesmo tom que badges/chips de
@@ -1434,7 +1410,7 @@ function Tab({
       onClick={onClick}
       className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
         active
-          ? "bg-brand-subtle text-brand"
+          ? "bg-brand-subtle text-text-brand"
           : "text-muted-foreground hover:bg-muted hover:text-foreground"
       }`}
     >
@@ -1472,17 +1448,17 @@ function HeaderIndicatorCell({
       <span
         className={`text-xl font-semibold tabular-nums ${
           isZero
-            ? "text-muted-foreground/50"
+            ? "text-text-secondary"
             : tone === "danger" && value > 0
               ? "text-danger"
               : active
-                ? "text-brand"
+                ? "text-text-brand"
                 : "text-foreground"
         }`}
       >
         {value.toString().padStart(2, "0")}
       </span>
-      <span className="whitespace-nowrap text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+      <span className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
         {label}
       </span>
     </button>
@@ -1495,7 +1471,7 @@ function HeaderIndicatorCell({
 function PriorityFlag({ priority }: { priority?: DashTask["priority"] }) {
   return (
     <Flag
-      className={`h-3.5 w-3.5 shrink-0 ${priority ? PRIORITY_TONE[priority] : "text-muted-foreground/40"}`}
+      className={`h-3.5 w-3.5 shrink-0 ${priority ? PRIORITY_TONE[priority] : "text-text-secondary"}`}
       fill="currentColor"
       strokeWidth={1.5}
       aria-label={`Prioridade: ${priority ?? "sem prioridade"}`}
@@ -1641,7 +1617,7 @@ function MuralNovidades() {
                 label="Dispensar"
                 tone="neutral"
                 onClick={() => dismiss(featured.id)}
-                className="h-7 w-7 shrink-0 text-muted-foreground/60 opacity-60 transition-opacity hover:text-foreground focus-visible:opacity-100"
+                className="h-7 w-7 shrink-0 text-text-secondary opacity-60 transition-opacity hover:text-foreground focus-visible:opacity-100"
               >
                 <X className="h-3.5 w-3.5" />
               </IconButton>
@@ -1671,7 +1647,7 @@ function MuralNovidades() {
                     {p.excerpt}
                   </p>
                 )}
-                <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground">
+                <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
                   <span>{p.authorName || "Sem autor"}</span>
                   <span>· {p.projectName}</span>
                   {p.publishDate && <span>· {fmtPublishDate(p.publishDate)}</span>}
@@ -1681,7 +1657,7 @@ function MuralNovidades() {
                 label="Dispensar"
                 tone="neutral"
                 onClick={() => dismiss(p.id)}
-                className="h-7 w-7 shrink-0 self-start text-muted-foreground/60 opacity-60 transition-opacity hover:text-foreground focus-visible:opacity-100"
+                className="h-7 w-7 shrink-0 self-start text-text-secondary opacity-60 transition-opacity hover:text-foreground focus-visible:opacity-100"
               >
                 <X className="h-3.5 w-3.5" />
               </IconButton>

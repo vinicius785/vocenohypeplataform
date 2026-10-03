@@ -47,7 +47,7 @@ export function ClientInfluencerHeader({ influencer }: { influencer: PublicInflu
                 href={profileUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline"
+                className="inline-flex items-center gap-1 text-xs font-medium text-text-brand hover:underline"
               >
                 Abrir perfil <ExternalLink className="h-3 w-3" />
               </a>

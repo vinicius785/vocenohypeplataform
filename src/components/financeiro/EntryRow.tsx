@@ -114,7 +114,7 @@ export function EntryRow({
             </span>
           )}
           {e.source !== "manual" && (
-            <span className="rounded bg-muted/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
+            <span className="rounded bg-muted/60 px-1.5 py-0.5 text-[11px] uppercase tracking-wide">
               auto
             </span>
           )}

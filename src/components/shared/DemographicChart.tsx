@@ -164,7 +164,7 @@ export function DemographicChart({
   if (data.length === 0) return null;
   return (
     <div>
-      <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+      <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
         {title}
       </p>
       <DemographicMiniChart data={data} chartType={chartType} />

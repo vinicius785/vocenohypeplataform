@@ -174,7 +174,7 @@ function ClientAccessSettingsContent({ clienteName }: { clienteName: string }) {
       )}
 
       {members && members.length === 0 && (
-        <div className="rounded-2xl bg-card p-6 text-center dark:shadow-none">
+        <div className="surface-card p-6 text-center">
           <Users className="mx-auto h-6 w-6 text-muted-foreground" />
           <p className="mt-2 text-sm font-medium text-foreground">
             Nenhuma outra pessoa possui acesso
@@ -212,7 +212,7 @@ function ClientAccessSettingsContent({ clienteName }: { clienteName: string }) {
             />
           )}
 
-          <div className="divide-y divide-border/70 rounded-2xl bg-card dark:shadow-none">
+          <div className="surface-card divide-y divide-border/70">
             {filtered.map((m) => {
               const pending = m.status === "invited";
               const isSelf = currentUser?.email?.toLowerCase() === m.email.toLowerCase();

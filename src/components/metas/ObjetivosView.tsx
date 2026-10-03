@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Filter, Search, Target, X } from "lucide-react";
+import { Filter, Search, Target } from "lucide-react";
 import { META_AREAS, type Indicador, type MetaArea, type Objetivo } from "@/lib/metas-store";
 import {
   type IndicadorSaude,
@@ -8,12 +8,13 @@ import {
   objetivoResumoSaude,
   objetivoStats,
 } from "@/lib/metas-engine";
-import { Input } from "@/components/ui/input";
+import { FilterChips, FilterSearch } from "@/components/shared/FilterToolbar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { fmtMonthYear } from "./metas-ui-utils";
 import { Avatar } from "./Avatar";
 import { ObjetivoSummaryCard } from "./ObjetivoSummaryCard";
+import { NativeSelect } from "@/components/ui/native-select";
 
 type Member = { name: string; photo?: string };
 
@@ -160,7 +161,7 @@ export function ObjetivosView({
        * aparece: é o estado normal e não pede decisão nenhuma. */}
       <div className="space-y-2">
         <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm text-text-secondary">
-          <span className="text-2xl font-bold tracking-tight text-foreground">
+          <span className="text-2xl font-semibold tracking-tight text-foreground">
             {resumo.progressoMedio == null ? "—" : `${resumo.progressoMedio}%`}
           </span>
           <span>
@@ -197,15 +198,7 @@ export function ObjetivosView({
 
       {/* Toolbar única — busca + filtros, sincronizados com a mesma lista. */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative w-full max-w-xs sm:flex-1">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-secondary" />
-          <Input
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            placeholder="Buscar objetivos..."
-            className="h-9 pl-8 text-sm"
-          />
-        </div>
+        <FilterSearch value={busca} onChange={setBusca} placeholder="Buscar objetivos..." />
         <Popover>
           <PopoverTrigger asChild>
             <button
@@ -220,7 +213,7 @@ export function ObjetivosView({
           </PopoverTrigger>
           <PopoverContent align="end" className="w-72 space-y-2 p-3">
             {donosEmUso.length > 0 && (
-              <select
+              <NativeSelect
                 value={donoFilter}
                 onChange={(e) => setDonoFilter(e.target.value)}
                 className="h-9 w-full rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
@@ -231,9 +224,9 @@ export function ObjetivosView({
                     {d}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             )}
-            <select
+            <NativeSelect
               value={areaFilter}
               onChange={(e) => setAreaFilter(e.target.value as typeof areaFilter)}
               className="h-9 w-full rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
@@ -244,8 +237,8 @@ export function ObjetivosView({
                   {a}
                 </option>
               ))}
-            </select>
-            <select
+            </NativeSelect>
+            <NativeSelect
               value={saudeFilter}
               onChange={(e) => setSaudeFilter(e.target.value as typeof saudeFilter)}
               className="h-9 w-full rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
@@ -256,9 +249,9 @@ export function ObjetivosView({
                   {INDICADOR_SAUDE_LABEL[s]}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
             {periodosEmUso.length > 0 && (
-              <select
+              <NativeSelect
                 value={periodoFilter}
                 onChange={(e) => setPeriodoFilter(e.target.value)}
                 className="h-9 w-full rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
@@ -269,36 +262,19 @@ export function ObjetivosView({
                     {p.label}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             )}
           </PopoverContent>
         </Popover>
       </div>
 
-      {activeChips.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          {activeChips.map((c) => (
-            <button
-              key={c.key}
-              type="button"
-              onClick={c.clear}
-              className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted/70"
-            >
-              {c.label} <X className="h-3 w-3" />
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={clearAllFilters}
-            className="text-xs font-medium text-text-secondary hover:text-foreground"
-          >
-            Limpar filtros
-          </button>
-        </div>
-      )}
+      <FilterChips
+        chips={activeChips.map((c) => ({ id: c.key, label: c.label, onRemove: c.clear }))}
+        onClear={clearAllFilters}
+      />
 
       {objetivos.length === 0 ? (
-        <div className="rounded-[24px] bg-card p-10 text-center dark:shadow-none">
+        <div className="surface-card p-10 text-center">
           <Target className="mx-auto h-8 w-8 text-text-secondary/50" />
           <p className="mt-3 text-sm font-medium text-foreground">Nenhum objetivo cadastrado</p>
           <p className="mt-1 text-sm text-text-secondary">
@@ -400,7 +376,7 @@ export function ObjetivosView({
           )}
 
           {meusObjetivos.length === 0 && outrosObjetivos.length === 0 && (
-            <div className="rounded-[24px] bg-card p-10 text-center dark:shadow-none">
+            <div className="surface-card p-10 text-center">
               <Search className="mx-auto h-8 w-8 text-text-secondary/50" />
               <p className="mt-3 text-sm font-medium text-foreground">Nenhum objetivo encontrado</p>
               <p className="mt-1 text-sm text-text-secondary">

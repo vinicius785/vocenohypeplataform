@@ -221,7 +221,7 @@ export function KpiCard({
   }[tone];
   return (
     <div className="rounded-xl border border-border bg-background p-4">
-      <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+      <p className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
         {label}
       </p>
       <p className={`mt-1.5 text-2xl font-semibold tabular-nums ${toneClass}`}>{value}</p>
@@ -232,7 +232,7 @@ export function KpiCard({
 export function MetricStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
       <p className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">{value}</p>
@@ -487,7 +487,7 @@ export function ReprovacaoBanner({
           <XCircle className="h-3.5 w-3.5 shrink-0" />
           {t(lang, "reprovouAviso")}
         </p>
-        <span className="text-[10px] text-rose-700/70 dark:text-rose-400/70">
+        <span className="text-[11px] text-rose-700/70 dark:text-rose-400/70">
           {fmtDateTime(v.respondedAt)}
         </span>
       </div>
@@ -772,7 +772,7 @@ function EntregaStepper({
 }) {
   const current = entregaStepperIndex(stage, perfilAprovado);
   return (
-    <ol className="flex flex-wrap items-center gap-x-1 gap-y-1.5 text-[10px]">
+    <ol className="flex flex-wrap items-center gap-x-1 gap-y-1.5 text-[11px]">
       {ENTREGA_STEPPER_LABELS.map((label, i) => {
         const done = i < current;
         const active = i === current;
@@ -790,7 +790,7 @@ function EntregaStepper({
               {label}
             </span>
             {i < ENTREGA_STEPPER_LABELS.length - 1 && (
-              <span className="text-muted-foreground/40">→</span>
+              <span className="text-text-secondary">→</span>
             )}
           </li>
         );
@@ -1061,8 +1061,8 @@ export function InfluencerGalleryCard({
         <MetricStat label="Entregas" value={inf.entregas.length.toString()} />
       </div>
 
-      <StatusBadge inf={inf} lang={lang} className="mt-1.5 px-2 py-0 text-[10px]" />
-      <p className="text-[10px] text-muted-foreground">{nextActionLabel(inf, lang)}</p>
+      <StatusBadge inf={inf} lang={lang} className="mt-1.5 px-2 py-0 text-[11px]" />
+      <p className="text-[11px] text-muted-foreground">{nextActionLabel(inf, lang)}</p>
     </button>
   );
 }
@@ -1893,7 +1893,7 @@ export function InfluencerDetail({
                 </h3>
               </div>
               {briefingSaving && (
-                <span className="text-[10px] font-medium text-muted-foreground">
+                <span className="text-[11px] font-medium text-muted-foreground">
                   {t(lang, "saving")}
                 </span>
               )}
@@ -1907,7 +1907,7 @@ export function InfluencerDetail({
                 rows={5}
                 readOnly={readOnly}
                 disabled={readOnly}
-                className="w-full flex-1 resize-none rounded-xl border border-border bg-muted/20 px-3 py-2.5 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-ring focus:bg-background focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-70"
+                className="w-full flex-1 resize-none rounded-xl border border-border bg-muted/20 px-3 py-2.5 text-sm leading-relaxed text-foreground outline-none placeholder:text-text-secondary focus:border-ring focus:bg-background focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-70"
               />
               {inf.briefingAnexoUrl ? (
                 <AnexoChip
@@ -1959,7 +1959,7 @@ export function InfluencerDetail({
                 rows={5}
                 readOnly={readOnly}
                 disabled={readOnly}
-                className="w-full flex-1 resize-none rounded-xl border border-border bg-muted/20 px-3 py-2.5 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-ring focus:bg-background focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-70"
+                className="w-full flex-1 resize-none rounded-xl border border-border bg-muted/20 px-3 py-2.5 text-sm leading-relaxed text-foreground outline-none placeholder:text-text-secondary focus:border-ring focus:bg-background focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-70"
               />
               {!readOnly && (
                 <Button

@@ -98,7 +98,7 @@ export function PublicoManager({
                   {r.email} · {RECIPIENT_SOURCE_LABEL[r.source as RecipientSource]}
                 </p>
               </button>
-              <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+              <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                 {RECIPIENT_STATUS_LABEL[r.status] ?? r.status}
               </span>
               {r.status === "active" && (

@@ -30,7 +30,7 @@ export function ChatV2Section({
               return next;
             });
           }}
-          className="flex min-w-0 flex-1 items-center gap-1.5 rounded px-1 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground"
+          className="flex min-w-0 flex-1 items-center gap-1.5 rounded px-1 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground"
         >
           <ChevronDown
             className={`h-3 w-3 shrink-0 transition-transform ${collapsed ? "-rotate-90" : ""}`}
@@ -41,7 +41,7 @@ export function ChatV2Section({
           <button
             type="button"
             onClick={action.onClick}
-            className="shrink-0 px-1 py-1 text-[10px] font-medium text-brand hover:underline"
+            className="shrink-0 px-1 py-1 text-[11px] font-medium text-text-brand hover:underline"
           >
             {action.label}
           </button>

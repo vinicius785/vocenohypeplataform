@@ -93,7 +93,7 @@ export function CalendarView({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-card p-2 dark:shadow-none">
+      <div className="surface-card flex flex-wrap items-center justify-between gap-3 p-2">
         <div className="flex items-center gap-1.5 px-1">
           <button
             type="button"
@@ -362,7 +362,7 @@ function MonthAgendaMobile({
 
   if (daysWithMeetings.length === 0) {
     return (
-      <div className="rounded-[24px] bg-card p-8 text-center dark:shadow-none">
+      <div className="surface-card p-8 text-center">
         <CalendarDays className="mx-auto h-7 w-7 text-text-secondary/50" />
         <p className="mt-3 text-sm font-medium text-foreground">
           Nenhuma reunião em {monthLabel(cursor)}
@@ -374,7 +374,7 @@ function MonthAgendaMobile({
   return (
     <div className="space-y-3">
       {daysWithMeetings.map(({ iso, items }) => (
-        <div key={iso} className="rounded-2xl bg-card p-4 dark:shadow-none">
+        <div key={iso} className="surface-card p-4">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
             {iso === today ? "Hoje · " : ""}
             {formatBR(iso)}
@@ -430,7 +430,7 @@ function MonthGrid({
   const byDate = useMemo(() => groupByDate(meetings), [meetings]);
 
   return (
-    <div className="overflow-hidden rounded-[24px] bg-card dark:shadow-none">
+    <div className="surface-card overflow-hidden">
       <div className="grid grid-cols-7 border-b border-border/60">
         {DIAS_LABEL.map((d) => (
           <div
@@ -468,7 +468,7 @@ function MonthGrid({
               >
                 <span
                   className={`inline-flex h-7 min-w-7 items-center justify-center rounded-full px-1 text-sm font-medium tabular-nums ${
-                    isToday ? "bg-brand text-brand-foreground" : isSelected ? "text-brand" : ""
+                    isToday ? "bg-brand text-brand-foreground" : isSelected ? "text-text-brand" : ""
                   }`}
                 >
                   {d.getDate()}
@@ -504,7 +504,7 @@ function MonthGrid({
                     <PopoverTrigger asChild>
                       <button
                         type="button"
-                        className="px-0.5 text-[10px] font-medium text-text-secondary hover:text-foreground hover:underline"
+                        className="px-0.5 text-[11px] font-medium text-text-secondary hover:text-foreground hover:underline"
                       >
                         +{restCount}
                       </button>
@@ -671,7 +671,7 @@ function WeekGrid({
   };
 
   return (
-    <div className="overflow-x-auto rounded-[24px] bg-card dark:shadow-none">
+    <div className="surface-card overflow-x-auto">
       <div className="min-w-[720px]">
         <div className="grid grid-cols-[3.5rem_repeat(7,1fr)] border-b border-border/60">
           <div />
@@ -753,11 +753,11 @@ function WeekGrid({
                           className="absolute inset-x-0.5 overflow-hidden rounded-sm border-l-2 border-warning bg-warning-soft px-1.5 py-0.5 text-left transition-colors hover:bg-warning-soft/80"
                           style={{ top, height }}
                         >
-                          <p className="flex items-center gap-1 truncate text-[10px] font-medium text-warning-soft-foreground">
+                          <p className="flex items-center gap-1 truncate text-[11px] font-medium text-warning-soft-foreground">
                             <Ban className="h-2.5 w-2.5 shrink-0" /> {item.ownerName}
                           </p>
                           {height > 30 && (
-                            <p className="truncate text-[10px] text-warning-soft-foreground/80">
+                            <p className="truncate text-[11px] text-warning-soft-foreground/80">
                               {motivoFor(item.block)}
                             </p>
                           )}

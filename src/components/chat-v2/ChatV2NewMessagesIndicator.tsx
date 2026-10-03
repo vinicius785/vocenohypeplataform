@@ -24,7 +24,7 @@ export function ChatV2NewMessagesIndicator({
           onClick={onClick}
           className="pointer-events-auto flex h-8 items-center gap-1 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground shadow-md hover:bg-muted"
         >
-          <ChevronDown className="h-3.5 w-3.5 text-brand" />
+          <ChevronDown className="h-3.5 w-3.5 text-text-brand" />
           {label}
         </button>
       </div>

@@ -57,7 +57,7 @@ export function ClientCampaignResults({ entregas }: { entregas: PublicEntrega[] 
           : undefined
       }
     >
-      <div className="grid grid-cols-2 gap-3 rounded-2xl bg-card p-4 dark:shadow-none sm:grid-cols-3">
+      <div className="surface-card grid grid-cols-2 gap-3 p-4 sm:grid-cols-3">
         {cards.map((c) => (
           <div key={c.label}>
             <p className="text-xs text-text-secondary">{c.label}</p>

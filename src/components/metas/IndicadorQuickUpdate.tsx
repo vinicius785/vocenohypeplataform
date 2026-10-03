@@ -10,6 +10,7 @@ import {
   type IndicadorMarcoStatus,
   type Objetivo,
 } from "@/lib/metas-store";
+import { NativeSelect } from "@/components/ui/native-select";
 
 const MARCO_STATUS_LABEL: Record<IndicadorMarcoStatus, string> = {
   nao_iniciado: "Não iniciado",
@@ -144,7 +145,7 @@ export function IndicadorQuickUpdate({
           ) : indicador.tipo === "marco" ? (
             <div>
               <label className="block text-xs font-medium text-text-secondary">Etapa atual</label>
-              <select
+              <NativeSelect
                 value={marcoStatus}
                 onChange={(e) => setMarcoStatus(e.target.value as IndicadorMarcoStatus)}
                 autoFocus
@@ -155,7 +156,7 @@ export function IndicadorQuickUpdate({
                     {MARCO_STATUS_LABEL[s]}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
           ) : (
             <div>
@@ -166,7 +167,7 @@ export function IndicadorQuickUpdate({
                     onClick={() => setCalcMode(false)}
                     className={`flex-1 rounded-md px-2.5 py-1.5 text-xs font-medium ${
                       !calcMode
-                        ? "bg-brand-subtle text-brand"
+                        ? "bg-brand-subtle text-text-brand"
                         : "bg-muted text-text-secondary hover:text-foreground"
                     }`}
                   >
@@ -177,7 +178,7 @@ export function IndicadorQuickUpdate({
                     onClick={() => setCalcMode(true)}
                     className={`flex-1 rounded-md px-2.5 py-1.5 text-xs font-medium ${
                       calcMode
-                        ? "bg-brand-subtle text-brand"
+                        ? "bg-brand-subtle text-text-brand"
                         : "bg-muted text-text-secondary hover:text-foreground"
                     }`}
                   >

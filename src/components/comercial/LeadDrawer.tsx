@@ -48,6 +48,7 @@ import type { TeamMemberLite } from "@/lib/projetos";
 import { useServerFn } from "@tanstack/react-start";
 import { generatePropostaPublicToken } from "@/lib/comercial.functions";
 import { convertLeadToClienteEProjeto } from "./convertLead";
+import { NativeSelect } from "@/components/ui/native-select";
 
 const inputCls =
   "h-9 w-full rounded-md border border-border bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring";
@@ -284,7 +285,7 @@ export function LeadDrawer({
         <div className="bg-card pr-10 dark:shadow-none">
           <div className="flex items-start justify-between gap-3 px-6 pt-6">
             <div className="min-w-0">
-              <h3 className="truncate text-[22px] font-bold tracking-tight text-foreground">
+              <h3 className="truncate text-[22px] font-semibold tracking-tight text-foreground">
                 {company.trim() || name.trim() || "Nova oportunidade"}
               </h3>
               {contact.trim() && (
@@ -307,7 +308,7 @@ export function LeadDrawer({
           </div>
 
           <div className="flex flex-wrap items-center gap-3 px-6 pt-3">
-            <span className="whitespace-nowrap text-[28px] font-bold tabular-nums leading-none text-foreground">
+            <span className="whitespace-nowrap text-[28px] font-semibold tabular-nums leading-none text-foreground">
               {formatBRL(parsedValue)}
             </span>
             <span
@@ -322,7 +323,7 @@ export function LeadDrawer({
             <div className="min-w-0">
               {liveLead && nextStep && (
                 <>
-                  <div className="text-[10px] font-medium uppercase tracking-wide text-text-secondary">
+                  <div className="text-[11px] font-medium uppercase tracking-wide text-text-secondary">
                     Próxima ação
                   </div>
                   <div className="text-sm font-medium text-foreground">
@@ -330,7 +331,7 @@ export function LeadDrawer({
                       (nextStep.actor === "CLIENTE" ? "Aguardar retorno do cliente" : "Nenhuma")}
                   </div>
                   {nextStep.actor && (
-                    <span className="mt-1 inline-block rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-text-secondary">
+                    <span className="mt-1 inline-block rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-medium text-text-secondary">
                       {OPPORTUNITY_ACTOR_LABEL[nextStep.actor]}
                     </span>
                   )}
@@ -438,7 +439,7 @@ export function LeadDrawer({
                         <p className="mb-1 px-2 text-[11px] font-medium text-text-secondary">
                           Alterar etapa manualmente
                         </p>
-                        <select
+                        <NativeSelect
                           value={nextStep.stage}
                           onChange={(e) => {
                             setShowEtapaMenu(false);
@@ -453,7 +454,7 @@ export function LeadDrawer({
                               {OPPORTUNITY_STAGE_LABEL[s]}
                             </option>
                           ))}
-                        </select>
+                        </NativeSelect>
                       </div>
                       {onDelete && (
                         <div className="border-t border-border pt-1">
@@ -536,7 +537,7 @@ export function LeadDrawer({
                 {!liveLead && (
                   <label className={labelCls}>
                     <span>Etapa inicial</span>
-                    <select
+                    <NativeSelect
                       value={stage}
                       onChange={(e) => setStage(e.target.value as OpportunityStage)}
                       className={inputCls}
@@ -546,7 +547,7 @@ export function LeadDrawer({
                           {OPPORTUNITY_STAGE_LABEL[s]}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </label>
                 )}
               </Section>
@@ -653,7 +654,7 @@ export function LeadDrawer({
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <label className={labelCls}>
                     <span>Origem</span>
-                    <select
+                    <NativeSelect
                       value={source}
                       onChange={(e) => setSource(e.target.value)}
                       onBlur={autosaveField}
@@ -665,11 +666,11 @@ export function LeadDrawer({
                           {s}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </label>
                   <label className={labelCls}>
                     <span>Responsável</span>
-                    <select
+                    <NativeSelect
                       value={responsible}
                       onChange={(e) => setResponsible(e.target.value)}
                       onBlur={autosaveField}
@@ -681,7 +682,7 @@ export function LeadDrawer({
                           {m.name}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </label>
                   <label className={labelCls}>
                     <span>Setor</span>
@@ -1008,11 +1009,11 @@ function ProposalTabContent({
         <Section title="Proposta atual" icon={<Calculator className="h-4 w-4" />}>
           {/* Preço final protagonista (Etapa 7) — o valor que mais importa
            * na aba, não mais um MiniStat igual aos outros. */}
-          <div className="rounded-[20px] bg-brand p-5">
+          <div className="rounded-2xl bg-brand p-5">
             <p className="text-xs font-semibold uppercase tracking-wide text-brand-foreground-secondary">
               Preço final ao cliente
             </p>
-            <p className="mt-1 whitespace-nowrap text-[32px] font-bold tabular-nums leading-none text-brand-foreground">
+            <p className="mt-1 whitespace-nowrap text-[32px] font-semibold tabular-nums leading-none text-brand-foreground">
               {formatBRL(proposta.precoFinal)}
             </p>
           </div>
@@ -1259,7 +1260,7 @@ function MiniActionDialog({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-sm rounded-[22px] bg-card p-5 shadow-2xl dark:shadow-none"
+        className="w-full max-w-sm rounded-2xl bg-card p-5 shadow-2xl dark:shadow-none"
       >
         <h4 className="mb-3 text-[15px] font-semibold text-foreground">{title}</h4>
         <div className="space-y-3">{children}</div>
@@ -1303,7 +1304,7 @@ function Section({
   return (
     <div className="space-y-3 border-b border-border/60 pb-5">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-[13px] font-semibold uppercase tracking-wide text-text-secondary">
+        <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-text-secondary">
           <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-text-secondary">
             {icon}
           </span>
@@ -1327,7 +1328,7 @@ function MiniStat({
 }) {
   return (
     <div>
-      <p className="text-[10px] uppercase tracking-wide text-text-secondary">{label}</p>
+      <p className="text-[11px] uppercase tracking-wide text-text-secondary">{label}</p>
       <p
         className={`mt-0.5 text-sm font-semibold tabular-nums ${
           tone === "danger" ? "text-destructive" : "text-foreground"

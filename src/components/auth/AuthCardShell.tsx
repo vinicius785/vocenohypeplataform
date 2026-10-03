@@ -66,7 +66,7 @@ export function AuthCardShell({
         {showHeader && (
           <div className="mb-6 flex items-center gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-foreground text-background">
-              <span className="text-sm font-bold tracking-tight" aria-hidden="true">
+              <span className="text-sm font-semibold tracking-tight" aria-hidden="true">
                 VH
               </span>
             </div>

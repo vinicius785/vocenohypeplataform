@@ -6,7 +6,7 @@ import { CheckCircle2, AlertTriangle, XCircle, Info } from "lucide-react";
 import { TYPOGRAPHY } from "@/lib/design-tokens";
 import { MetricCard } from "@/components/shared/MetricCard";
 
-const CARD_VARIANTS = ["default", "interactive", "elevated", "selected", "muted"] as const;
+const CARD_VARIANTS = ["default", "interactive", "selected", "muted"] as const;
 const BADGE_VARIANTS = [
   "default",
   "brand",

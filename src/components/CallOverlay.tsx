@@ -61,6 +61,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { NativeSelect } from "@/components/ui/native-select";
 
 /** Estado que já tem `CallBase` (participantes, mudo, câmera, etc) — usado
  * pela tela unificada de chamando/em-chamada e pelo player compacto, que
@@ -945,7 +946,7 @@ function SelfPreviewCard({
           <TileAvatar name={me.name} photo={me.photo} speaking={speaking} />
         </div>
       )}
-      <span className="absolute bottom-1 left-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-zinc-100">
+      <span className="absolute bottom-1 left-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[11px] font-medium text-zinc-100">
         Você
       </span>
       {hovering && (
@@ -1092,7 +1093,7 @@ function CompactCallPlayer({
           <TileAvatar name={title} photo={primaryPhoto} large />
         )}
         {anySharing && (
-          <span className="absolute left-1.5 top-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-zinc-100">
+          <span className="absolute left-1.5 top-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[11px] text-zinc-100">
             Compartilhando tela
           </span>
         )}
@@ -1382,7 +1383,7 @@ function QualityDot({ peerId }: { peerId: string }) {
   const label = quality === "bad" ? "Conexão ruim" : "Conexão instável";
   return (
     <span
-      className={`absolute right-1.5 top-1.5 flex items-center gap-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] ${quality === "bad" ? "text-rose-400" : "text-amber-400"}`}
+      className={`absolute right-1.5 top-1.5 flex items-center gap-1 rounded bg-black/60 px-1.5 py-0.5 text-[11px] ${quality === "bad" ? "text-rose-400" : "text-amber-400"}`}
       title={label}
     >
       {quality === "bad" ? <WifiOff className="h-3 w-3" /> : <Wifi className="h-3 w-3" />}
@@ -1437,7 +1438,7 @@ function VideoTile({
         {name}
       </span>
       {statusLabel && (
-        <span className="absolute right-1.5 top-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-amber-400">
+        <span className="absolute right-1.5 top-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[11px] text-amber-400">
           {statusLabel}
         </span>
       )}
@@ -1587,8 +1588,8 @@ function DeviceSelect({
   return (
     <label className="relative space-y-1 text-xs text-zinc-200">
       <span className="font-medium">{label}</span>
-      <select
-        className="h-9 w-full cursor-pointer appearance-none rounded-md border border-white/10 bg-zinc-800 px-2 pr-7 text-xs text-zinc-100"
+      <NativeSelect
+        className="w-full"
         value={value}
         onChange={(event) => {
           setValue(event.target.value);
@@ -1601,7 +1602,7 @@ function DeviceSelect({
             {device.label}
           </option>
         ))}
-      </select>
+      </NativeSelect>
       <ChevronDown className="pointer-events-none absolute bottom-2.5 right-2 h-3.5 w-3.5 text-zinc-400" />
     </label>
   );

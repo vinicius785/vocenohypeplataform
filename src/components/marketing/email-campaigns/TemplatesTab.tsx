@@ -158,7 +158,7 @@ function TemplateEditor({
                 type="button"
                 onClick={() => setBodyHtml((v) => `${v}{{${t.token}}}`)}
                 title={t.label}
-                className="rounded-full border border-dashed border-border px-2 py-0.5 text-[10px] font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+                className="rounded-full border border-dashed border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground"
               >
                 {`{{${t.token}}}`}
               </button>

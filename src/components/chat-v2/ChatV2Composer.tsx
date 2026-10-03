@@ -204,7 +204,7 @@ export function ChatV2Composer({
       <div className={`pb-3 pt-2.5 ${CHAT_V2_READING_COLUMN_CLASS}`}>
         {replyPreview && (
           <div className="mb-1.5 flex items-start gap-2 rounded-md border border-border bg-background/60 px-2.5 py-1.5">
-            <Reply className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand" />
+            <Reply className="mt-0.5 h-3.5 w-3.5 shrink-0 text-text-brand" />
             <div className="min-w-0 flex-1">
               <p className="text-xs font-semibold text-foreground">
                 Respondendo a {replyPreview.authorName}
@@ -254,7 +254,7 @@ export function ChatV2Composer({
                     className="flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 py-1 text-xs"
                   >
                     <span className="max-w-[160px] truncate">{pf.file.name}</span>
-                    <span className="shrink-0 text-[10px] text-muted-foreground">
+                    <span className="shrink-0 text-[11px] text-muted-foreground">
                       {(pf.file.size / 1024).toFixed(0)} KB
                     </span>
                     <button

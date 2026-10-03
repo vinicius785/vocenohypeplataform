@@ -32,7 +32,7 @@ function StarPicker({ value, onChange }: { value: number; onChange: (v: number) 
           aria-label={`${n} estrelas`}
         >
           <Star
-            className={`h-5 w-5 ${n <= value ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40"}`}
+            className={`h-5 w-5 ${n <= value ? "fill-amber-400 text-amber-400" : "text-text-secondary"}`}
           />
         </button>
       ))}

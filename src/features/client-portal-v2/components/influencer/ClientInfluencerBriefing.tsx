@@ -11,7 +11,7 @@ export function ClientInfluencerBriefing({ influencer }: { influencer: PublicInf
 
   return (
     <InfluencerDrawerSection icon={<FileText className="h-4 w-4" />} title="Briefing">
-      <div className="space-y-2 rounded-2xl bg-card p-4 dark:shadow-none">
+      <div className="surface-card space-y-2 p-4">
         {influencer.briefingPersonalizado && (
           <p className="whitespace-pre-wrap text-sm text-foreground">
             {influencer.briefingPersonalizado}
@@ -22,7 +22,7 @@ export function ClientInfluencerBriefing({ influencer }: { influencer: PublicInf
             href={influencer.briefingAnexoUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-block text-xs font-medium text-brand hover:underline"
+            className="inline-block text-xs font-medium text-text-brand hover:underline"
           >
             {influencer.briefingAnexoNome || "Ver anexo do briefing"}
           </a>

@@ -19,7 +19,7 @@ export function PreparingEnvironmentScreen() {
     <div className="flex min-h-[100dvh] w-full items-center justify-center bg-background p-6">
       <div className="flex flex-col items-center gap-4 text-center">
         <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-foreground text-background shadow-lg ring-1 ring-border">
-          <span className="text-sm font-bold tracking-tight" aria-hidden="true">
+          <span className="text-sm font-semibold tracking-tight" aria-hidden="true">
             VH
           </span>
         </div>

@@ -269,7 +269,7 @@ export function VoiceMessagePlayer({
           );
         })}
       </div>
-      <span className="shrink-0 whitespace-nowrap text-right text-[10px] tabular-nums text-muted-foreground">
+      <span className="shrink-0 whitespace-nowrap text-right text-[11px] tabular-nums text-muted-foreground">
         {timeLabel}
       </span>
       <Popover open={ratePopoverOpen} onOpenChange={setRatePopoverOpen}>
@@ -277,7 +277,7 @@ export function VoiceMessagePlayer({
           <button
             type="button"
             aria-label="Velocidade de reprodução"
-            className={`shrink-0 cursor-pointer rounded-full border px-1.5 py-0.5 text-[10px] font-semibold tabular-nums transition-colors ${
+            className={`shrink-0 cursor-pointer rounded-full border px-1.5 py-0.5 text-[11px] font-semibold tabular-nums transition-colors ${
               rate !== 1
                 ? "border-foreground bg-foreground text-background"
                 : "border-border text-muted-foreground hover:text-foreground"

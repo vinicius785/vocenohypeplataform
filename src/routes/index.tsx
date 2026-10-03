@@ -438,7 +438,7 @@ function LoginPage() {
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-              <label className="inline-flex cursor-pointer items-center gap-2 text-[13px] text-[#6b6862]">
+              <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-[#6b6862]">
                 <input
                   type="checkbox"
                   checked={remember}

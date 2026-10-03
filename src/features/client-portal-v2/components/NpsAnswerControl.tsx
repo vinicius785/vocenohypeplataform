@@ -10,7 +10,7 @@ export type NpsChoiceOption = { value: string; label: string };
  * (0-10, satisfação 1-5, qualidade, atendimento). Base: o primitivo Radix
  * `RadioGroup` (mesmo de `src/components/ui/radio-group.tsx`), com o visual
  * de "opção selecionável" do Portal do Time → Início (`bg-brand-subtle
- * text-brand` selecionado, `hover:bg-muted`). Só o CONTEÚDO das opções muda
+ * text-text-brand` selecionado, `hover:bg-muted`). Só o CONTEÚDO das opções muda
  * entre perguntas; altura, radius, borda, padding, tipografia e estados são
  * sempre os mesmos. As colunas = nº de opções (11 ou 5), sempre numa linha
  * só (`minmax(0,1fr)` — nunca quebra, nunca alarga).
@@ -49,7 +49,7 @@ export function NpsChoiceRow({
               "flex h-10 w-full min-w-0 items-center justify-center rounded-md border px-0.5 text-[11px] font-medium tabular-nums leading-tight transition-colors min-[400px]:text-xs sm:text-sm",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
               "border-border bg-background text-foreground hover:bg-muted",
-              "data-[state=checked]:border-brand data-[state=checked]:bg-brand-subtle data-[state=checked]:text-brand data-[state=checked]:hover:bg-brand-subtle",
+              "data-[state=checked]:border-brand data-[state=checked]:bg-brand-subtle data-[state=checked]:text-text-brand data-[state=checked]:hover:bg-brand-subtle",
             )}
           >
             <span className="line-clamp-2 break-words text-center">{o.label}</span>

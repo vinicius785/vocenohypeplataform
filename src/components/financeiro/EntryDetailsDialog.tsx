@@ -82,12 +82,12 @@ export function EntryDetailsDialog({
             <p className="text-base font-semibold text-foreground">{entry.description}</p>
             <div className="mt-1 flex items-center gap-2">
               <span
-                className={`text-2xl font-bold tabular-nums ${entry.kind === "receita" ? "text-emerald-600" : "text-rose-600"}`}
+                className={`text-2xl font-semibold tabular-nums ${entry.kind === "receita" ? "text-emerald-600" : "text-rose-600"}`}
               >
                 {entry.kind === "receita" ? "+" : "−"} {fmtBRL(entry.amount)}
               </span>
               <span
-                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusTone(entry.status)}`}
+                className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusTone(entry.status)}`}
               >
                 {STATUS_LABEL[entry.status]}
               </span>

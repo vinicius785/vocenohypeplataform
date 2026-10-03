@@ -16,7 +16,7 @@ export function ClientInfluencerProfileInfo({ influencer }: { influencer: Public
 
   return (
     <InfluencerDrawerSection icon={<User className="h-4 w-4" />} title="Informações do perfil">
-      <dl className="grid grid-cols-1 gap-x-4 gap-y-2 rounded-2xl bg-card p-4 dark:shadow-none sm:grid-cols-2">
+      <dl className="surface-card grid grid-cols-1 gap-x-4 gap-y-2 p-4 sm:grid-cols-2">
         {items.map((item) => (
           <div key={item.label}>
             <dt className="text-xs text-text-secondary">{item.label}</dt>
@@ -38,7 +38,7 @@ export function ClientInfluencerRecommendation({ influencer }: { influencer: Pub
       icon={<Sparkles className="h-4 w-4" />}
       title="Por que escolhemos este influenciador?"
     >
-      <p className="whitespace-pre-wrap rounded-2xl bg-card p-4 text-sm text-foreground dark:shadow-none">
+      <p className="surface-card whitespace-pre-wrap p-4 text-sm text-foreground">
         {influencer.justificativaTime}
       </p>
     </InfluencerDrawerSection>

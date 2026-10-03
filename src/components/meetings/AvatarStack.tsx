@@ -19,7 +19,7 @@ export function AvatarStack({
   const shown = people.slice(0, max);
   const rest = people.slice(max);
   const dim = size === "sm" ? "h-6 w-6" : "h-8 w-8";
-  const textSize = size === "sm" ? "text-[10px]" : "text-xs";
+  const textSize = size === "sm" ? "text-[11px]" : "text-xs";
 
   return (
     <TooltipProvider delayDuration={200}>

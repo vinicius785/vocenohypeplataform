@@ -160,7 +160,7 @@ const ToolbarIconButton = forwardRef<
       onClick={onClick}
       className={cn(
         "h-8 w-8 shrink-0",
-        active && "bg-brand-subtle text-brand hover:bg-brand-subtle hover:text-brand",
+        active && "bg-brand-subtle text-text-brand hover:bg-brand-subtle hover:text-text-brand",
         className,
       )}
       {...rest}
@@ -416,13 +416,13 @@ export function EditorToolbar({
             {!visible.has("underline") && (
               <DropdownMenuItem onSelect={() => editor.chain().focus().toggleUnderline().run()}>
                 <Underline className="h-3.5 w-3.5" /> Sublinhado
-                {state.underline && <Check className="ml-auto h-3.5 w-3.5 text-brand" />}
+                {state.underline && <Check className="ml-auto h-3.5 w-3.5 text-text-brand" />}
               </DropdownMenuItem>
             )}
             {!visible.has("strike") && (
               <DropdownMenuItem onSelect={() => editor.chain().focus().toggleStrike().run()}>
                 <Strikethrough className="h-3.5 w-3.5" /> Tachado
-                {state.strike && <Check className="ml-auto h-3.5 w-3.5 text-brand" />}
+                {state.strike && <Check className="ml-auto h-3.5 w-3.5 text-text-brand" />}
               </DropdownMenuItem>
             )}
             {!visible.has("link") && (
@@ -433,31 +433,31 @@ export function EditorToolbar({
                 }}
               >
                 <LinkIcon className="h-3.5 w-3.5" /> Link
-                {state.link && <Check className="ml-auto h-3.5 w-3.5 text-brand" />}
+                {state.link && <Check className="ml-auto h-3.5 w-3.5 text-text-brand" />}
               </DropdownMenuItem>
             )}
             {!visible.has("bulletList") && (
               <DropdownMenuItem onSelect={() => editor.chain().focus().toggleBulletList().run()}>
                 <List className="h-3.5 w-3.5" /> Lista com marcadores
-                {state.bulletList && <Check className="ml-auto h-3.5 w-3.5 text-brand" />}
+                {state.bulletList && <Check className="ml-auto h-3.5 w-3.5 text-text-brand" />}
               </DropdownMenuItem>
             )}
             {!visible.has("orderedList") && (
               <DropdownMenuItem onSelect={() => editor.chain().focus().toggleOrderedList().run()}>
                 <ListOrdered className="h-3.5 w-3.5" /> Lista numerada
-                {state.orderedList && <Check className="ml-auto h-3.5 w-3.5 text-brand" />}
+                {state.orderedList && <Check className="ml-auto h-3.5 w-3.5 text-text-brand" />}
               </DropdownMenuItem>
             )}
             {!visible.has("taskList") && (
               <DropdownMenuItem onSelect={() => editor.chain().focus().toggleTaskList().run()}>
                 <ListTodo className="h-3.5 w-3.5" /> Checklist
-                {state.taskList && <Check className="ml-auto h-3.5 w-3.5 text-brand" />}
+                {state.taskList && <Check className="ml-auto h-3.5 w-3.5 text-text-brand" />}
               </DropdownMenuItem>
             )}
             {!visible.has("code") && (
               <DropdownMenuItem onSelect={() => editor.chain().focus().toggleCode().run()}>
                 <Code className="h-3.5 w-3.5" /> Código inline
-                {state.code && <Check className="ml-auto h-3.5 w-3.5 text-brand" />}
+                {state.code && <Check className="ml-auto h-3.5 w-3.5 text-text-brand" />}
               </DropdownMenuItem>
             )}
             {!(
@@ -472,7 +472,7 @@ export function EditorToolbar({
 
             <DropdownMenuItem onSelect={() => editor.chain().focus().toggleHighlight().run()}>
               <Highlighter className="h-3.5 w-3.5" /> Destacar
-              {state.highlight && <Check className="ml-auto h-3.5 w-3.5 text-brand" />}
+              {state.highlight && <Check className="ml-auto h-3.5 w-3.5 text-text-brand" />}
             </DropdownMenuItem>
             <div className="flex items-center gap-1 px-2 py-1.5">
               <Palette className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -493,11 +493,11 @@ export function EditorToolbar({
             </div>
             <DropdownMenuItem onSelect={() => editor.chain().focus().toggleBlockquote().run()}>
               <Quote className="h-3.5 w-3.5" /> Citação
-              {state.blockquote && <Check className="ml-auto h-3.5 w-3.5 text-brand" />}
+              {state.blockquote && <Check className="ml-auto h-3.5 w-3.5 text-text-brand" />}
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => editor.chain().focus().toggleCodeBlock().run()}>
               <Code2 className="h-3.5 w-3.5" /> Bloco de código
-              {state.codeBlock && <Check className="ml-auto h-3.5 w-3.5 text-brand" />}
+              {state.codeBlock && <Check className="ml-auto h-3.5 w-3.5 text-text-brand" />}
             </DropdownMenuItem>
             <div className="flex items-center gap-0.5 px-2 py-1">
               {(
@@ -516,7 +516,7 @@ export function EditorToolbar({
                   className={cn(
                     "flex h-7 w-7 cursor-pointer items-center justify-center rounded",
                     state.align === align
-                      ? "bg-brand-subtle text-brand"
+                      ? "bg-brand-subtle text-text-brand"
                       : "text-foreground/80 hover:bg-muted",
                   )}
                 >

@@ -78,7 +78,7 @@ export function RequerAtencaoList({
   const hiddenCount = items.length - visibleItems.length;
 
   return (
-    <div className={`rounded-[24px] ${SECONDARY_SURFACE} p-5`}>
+    <div className={`rounded-2xl ${SECONDARY_SURFACE} p-5`}>
       <p className="text-[15px] font-semibold text-foreground">Requer atenção</p>
       <div className="-mx-2 mt-2 divide-y divide-border">
         {visibleItems.map((item) => {
@@ -106,7 +106,7 @@ export function RequerAtencaoList({
         <button
           type="button"
           onClick={() => setExpanded(true)}
-          className="mt-1 flex w-full cursor-pointer items-center gap-1 px-2 py-1.5 text-xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+          className="mt-1 flex w-full cursor-pointer items-center gap-1 px-2 py-1.5 text-xs font-medium text-text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
         >
           <ChevronDown className="h-3.5 w-3.5" />+{hiddenCount} outro{hiddenCount > 1 ? "s" : ""}
         </button>

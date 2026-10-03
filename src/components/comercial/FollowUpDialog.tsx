@@ -16,6 +16,7 @@ import {
   type InteractionType,
   type InteractionOutcome,
 } from "@/lib/commercial-interactions.functions";
+import { NativeSelect } from "@/components/ui/native-select";
 
 const INTERACTION_TYPES = Object.keys(INTERACTION_TYPE_LABEL) as InteractionType[];
 const OUTCOMES = Object.keys(INTERACTION_OUTCOME_LABEL) as InteractionOutcome[];
@@ -125,7 +126,7 @@ export function FollowUpDialog({
         <div className="space-y-3 py-1">
           <label className={labelCls}>
             <span>Tipo de contato *</span>
-            <select
+            <NativeSelect
               value={interactionType}
               onChange={(e) => setInteractionType(e.target.value as InteractionType)}
               className={inputCls}
@@ -138,7 +139,7 @@ export function FollowUpDialog({
                   {INTERACTION_TYPE_LABEL[t]}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </label>
 
           <label className={labelCls}>
@@ -164,7 +165,7 @@ export function FollowUpDialog({
 
           <label className={labelCls}>
             <span>Resultado do contato</span>
-            <select
+            <NativeSelect
               value={outcome}
               onChange={(e) => setOutcome(e.target.value as InteractionOutcome)}
               className={inputCls}
@@ -175,7 +176,7 @@ export function FollowUpDialog({
                   {INTERACTION_OUTCOME_LABEL[o]}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </label>
 
           <div className="space-y-2 rounded-lg border border-border p-3">

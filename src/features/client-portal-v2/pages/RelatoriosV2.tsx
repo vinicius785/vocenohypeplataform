@@ -17,6 +17,7 @@ import { PortalListPanel, PortalListRow } from "../components/shared/PortalListP
 import { portalFieldBase } from "../components/shared/portal-field-styles";
 import { ClientFileViewer } from "../components/files/ClientFileViewer";
 import type { ClientFile } from "../types/files";
+import { NativeSelect } from "@/components/ui/native-select";
 
 type ReportRow = {
   id: string;
@@ -131,7 +132,7 @@ export function RelatoriosV2({ openFileId }: { openFileId?: string }) {
 
       {reports.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          <select
+          <NativeSelect
             value={campaignFilter}
             onChange={(e) => setCampaignFilter(e.target.value)}
             className={portalFieldBase}
@@ -142,8 +143,8 @@ export function RelatoriosV2({ openFileId }: { openFileId?: string }) {
                 {c.nome}
               </option>
             ))}
-          </select>
-          <select
+          </NativeSelect>
+          <NativeSelect
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
             className={portalFieldBase}
@@ -151,7 +152,7 @@ export function RelatoriosV2({ openFileId }: { openFileId?: string }) {
             <option value="recentes">Mais recentes</option>
             <option value="antigos">Mais antigos</option>
             <option value="campanha">Campanha A–Z</option>
-          </select>
+          </NativeSelect>
         </div>
       )}
 
@@ -184,7 +185,7 @@ export function RelatoriosV2({ openFileId }: { openFileId?: string }) {
                       <span className="flex items-center gap-1.5">
                         {r.nome}
                         {r.id === mostRecentId && (
-                          <span className="shrink-0 rounded-full bg-brand-subtle px-1.5 py-0.5 text-[10px] font-semibold text-brand">
+                          <span className="shrink-0 rounded-full bg-brand-subtle px-1.5 py-0.5 text-[11px] font-semibold text-text-brand">
                             Mais recente
                           </span>
                         )}

@@ -3,6 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Check, ImageIcon, Sparkles, X } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Badge } from "@/components/ui/badge";
 import { DateField } from "@/components/ui/date-field";
 import {
@@ -69,10 +70,10 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-text-secondary">
+      <span className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-foreground">
         {label}
         {fromCrm && (
-          <Badge variant="brand" className="gap-1 text-[9px] normal-case">
+          <Badge variant="brand" size="sm" className="gap-1 normal-case">
             <Sparkles className="h-2.5 w-2.5" /> Do CRM
           </Badge>
         )}
@@ -458,7 +459,7 @@ export function ClienteFormSheet({
                         aria-pressed={origin === opt.value}
                         className={`rounded-lg border p-4 text-left text-sm font-medium transition-colors ${
                           origin === opt.value
-                            ? "border-brand bg-brand-subtle text-brand"
+                            ? "border-brand bg-brand-subtle text-text-brand"
                             : "border-border bg-card text-foreground hover:bg-muted"
                         }`}
                       >
@@ -474,7 +475,7 @@ export function ClienteFormSheet({
                           <span className="text-sm font-semibold text-foreground">
                             {crmLead.company || crmLead.name}
                           </span>
-                          <Badge variant="secondary" className="text-[10px]">
+                          <Badge variant="secondary" size="sm">
                             {OPPORTUNITY_STAGE_LABEL[legacyStage(crmLead.stage)]}
                           </Badge>
                         </div>
@@ -556,7 +557,7 @@ export function ClienteFormSheet({
                                       <span className="truncate text-sm font-medium text-foreground">
                                         {lead.company || lead.name}
                                       </span>
-                                      <Badge variant="secondary" className="shrink-0 text-[10px]">
+                                      <Badge variant="secondary" size="sm" className="shrink-0">
                                         {OPPORTUNITY_STAGE_LABEL[stage]}
                                       </Badge>
                                     </div>
@@ -729,10 +730,9 @@ export function ClienteFormSheet({
                       Gestão interna
                     </h3>
                     <Field label="Responsável interno">
-                      <select
+                      <NativeSelect
                         value={form.responsavelInterno}
                         onChange={(e) => update("responsavelInterno", e.target.value)}
-                        className={inputCls}
                       >
                         <option value="">Selecione um membro</option>
                         {members.map((m) => (
@@ -740,7 +740,7 @@ export function ClienteFormSheet({
                             {m.name}
                           </option>
                         ))}
-                      </select>
+                      </NativeSelect>
                     </Field>
                     <Field label="Cliente desde">
                       <DateField
@@ -798,7 +798,7 @@ export function ClienteFormSheet({
                       aria-pressed={createCampaignChoice === "yes"}
                       className={`rounded-lg border p-4 text-left text-sm font-medium transition-colors ${
                         createCampaignChoice === "yes"
-                          ? "border-brand bg-brand-subtle text-brand"
+                          ? "border-brand bg-brand-subtle text-text-brand"
                           : "border-border bg-card text-foreground hover:bg-muted"
                       }`}
                     >
@@ -813,7 +813,7 @@ export function ClienteFormSheet({
                       aria-pressed={createCampaignChoice === "no"}
                       className={`rounded-lg border p-4 text-left text-sm font-medium transition-colors ${
                         createCampaignChoice === "no"
-                          ? "border-brand bg-brand-subtle text-brand"
+                          ? "border-brand bg-brand-subtle text-text-brand"
                           : "border-border bg-card text-foreground hover:bg-muted"
                       }`}
                     >

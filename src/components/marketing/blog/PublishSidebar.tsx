@@ -9,6 +9,7 @@ import { useClientes } from "@/lib/clientes-store";
 import { CoverUploadField } from "../ImageUploadField";
 import { initialsOf, colorFor } from "@/lib/blog-engagement";
 import { buildChecklist } from "./types";
+import { NativeSelect } from "@/components/ui/native-select";
 
 const inputCls =
   "h-8 w-full rounded-md border border-border bg-background px-2.5 text-xs outline-none focus:ring-2 focus:ring-ring";
@@ -121,7 +122,7 @@ export function PublishSidebar({
                 {initialsOf(post.authorName || "") || "?"}
               </span>
             )}
-            <select
+            <NativeSelect
               value={post.authorId ?? ""}
               onChange={(e) => {
                 const id = e.target.value;
@@ -137,10 +138,10 @@ export function PublishSidebar({
                   {m.role ? ` · ${m.role}` : ""}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
           {team.length === 0 && (
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
               Cadastre membros na aba Time para vincular autores.
             </p>
           )}
@@ -171,7 +172,7 @@ export function PublishSidebar({
           <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             Destinos
           </span>
-          <p className="text-[10px] text-muted-foreground">Onde este conteúdo será publicado?</p>
+          <p className="text-[11px] text-muted-foreground">Onde este conteúdo será publicado?</p>
           <div className="space-y-1.5">
             {DESTINOS.map(({ key, icon: Icon, label, desc }) => {
               const checked = post.audience?.includes(key) ?? false;
@@ -192,7 +193,7 @@ export function PublishSidebar({
                   <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <span className="min-w-0 flex-1">
                     <span className="block text-xs font-medium leading-none">{label}</span>
-                    <span className="mt-1 block text-[10px] text-muted-foreground">{desc}</span>
+                    <span className="mt-1 block text-[11px] text-muted-foreground">{desc}</span>
                   </span>
                   {checked && <Check className="h-3.5 w-3.5 shrink-0 text-foreground" />}
                 </button>
@@ -215,7 +216,7 @@ export function PublishSidebar({
               <Users2 className="h-4 w-4 shrink-0 text-muted-foreground" />
               <span className="min-w-0 flex-1">
                 <span className="block text-xs font-medium leading-none">Portal do cliente</span>
-                <span className="mt-1 block text-[10px] text-muted-foreground">
+                <span className="mt-1 block text-[11px] text-muted-foreground">
                   Conteúdo para clientes
                 </span>
               </span>
@@ -296,7 +297,7 @@ export function PublishSidebar({
             </li>
           ))}
         </ul>
-        <p className="mt-1.5 text-[10px] text-muted-foreground">
+        <p className="mt-1.5 text-[11px] text-muted-foreground">
           {doneCount} de {checklist.length} completos
         </p>
       </div>
@@ -365,7 +366,7 @@ function ClienteChips({
         </Popover>
       )}
       {clientes.length === 0 && (
-        <p className="text-[10px] text-muted-foreground">
+        <p className="text-[11px] text-muted-foreground">
           Cadastre clientes na aba Clientes pra poder selecionar.
         </p>
       )}

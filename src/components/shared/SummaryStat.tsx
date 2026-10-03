@@ -37,13 +37,13 @@ export function SummaryStat({
   return (
     <div className="min-w-[104px] flex-1 border-b border-r border-border/60 px-4 py-3 last:border-r-0 sm:border-b-0">
       <div className="flex items-center gap-1.5">
-        <p className="text-[10px] font-medium uppercase tracking-wide text-text-secondary">
+        <p className="text-[11px] font-medium uppercase tracking-wide text-text-secondary">
           {label}
         </p>
         {labelExtra}
       </div>
       <p
-        className={`mt-1 truncate text-base font-bold tabular-nums ${
+        className={`mt-1 truncate text-base font-semibold tabular-nums ${
           tone ? SUMMARY_TONE_CLASS[tone] : "text-foreground"
         }`}
       >

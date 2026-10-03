@@ -179,6 +179,7 @@ import {
   TASK_CHIP,
 } from "@/components/tasks/task-ui";
 import type { TaskBlockedState, TaskBlockCategory } from "@/lib/projetos";
+import { NativeSelect } from "@/components/ui/native-select";
 export type { TaskBlockedState, TaskBlockCategory };
 
 /** Dados coletados pelo questionário de bloqueio (`BlockedPendingForm`,
@@ -268,7 +269,7 @@ const TASK_SORT_CATEGORY_LABEL: Record<TaskSortCategory, string> = {
 };
 
 /** Estrutura do menu "Ordenar" — cada grupo vira uma seção com cabeçalho,
- * cada opção um item de menu (nunca um `<select>`). */
+ * cada opção um item de menu (nunca um `<NativeSelect>`). */
 export const TASK_SORT_MENU_GROUPS: {
   category: TaskSortCategory;
   label: string;
@@ -945,7 +946,7 @@ export function formatWhen(iso: string) {
 }
 
 export function Avatar({ member, size = 20 }: { member: Member; size?: number }) {
-  const cls = `flex shrink-0 items-center justify-center overflow-hidden rounded-full text-[9px] font-semibold ${member.photo ? "bg-muted" : member.color}`;
+  const cls = `flex shrink-0 items-center justify-center overflow-hidden rounded-full text-[11px] font-semibold ${member.photo ? "bg-muted" : member.color}`;
   return (
     <span className={cls} style={{ width: size, height: size }} title={member.name}>
       {member.photo ? (
@@ -1069,7 +1070,7 @@ function AssigneeStack({ names, members }: { names: string[]; members: Member[] 
             />
           ))}
           {overflow.length > 0 && (
-            <span className="z-10 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-muted text-[9px] font-medium text-muted-foreground ring-2 ring-card">
+            <span className="z-10 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-muted-foreground ring-2 ring-card">
               +{overflow.length}
             </span>
           )}
@@ -1115,7 +1116,7 @@ function CardTags({ tags, taskTags }: { tags: string[]; taskTags: TaskTag[] }) {
         <span
           key={tag}
           title={tag}
-          className={`max-w-[110px] truncate rounded-full px-1.5 py-0.5 text-[10px] font-medium ${softColor(colorForTag(tag, taskTags))}`}
+          className={`max-w-[110px] truncate rounded-full px-1.5 py-0.5 text-[11px] font-medium ${softColor(colorForTag(tag, taskTags))}`}
         >
           {tag}
         </span>
@@ -1123,7 +1124,7 @@ function CardTags({ tags, taskTags }: { tags: string[]; taskTags: TaskTag[] }) {
       {overflow.length > 0 && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+            <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
               +{overflow.length}
             </span>
           </TooltipTrigger>
@@ -1599,7 +1600,7 @@ export function TaskBoard({
                     </>
                   )}
                   {sortSecondary !== "none" && (
-                    <span className="rounded-full bg-foreground px-1.5 text-[10px] text-background">
+                    <span className="rounded-full bg-foreground px-1.5 text-[11px] text-background">
                       2
                     </span>
                   )}
@@ -1626,7 +1627,7 @@ export function TaskBoard({
                 </button>
                 {TASK_SORT_MENU_GROUPS.map((group) => (
                   <div key={group.category} className="pt-1.5">
-                    <p className="px-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+                    <p className="px-2 text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
                       {group.label}
                     </p>
                     {group.options.map((opt) => (
@@ -1670,7 +1671,7 @@ export function TaskBoard({
                       (g) => g.category !== sortKeyCategory(sortPrimary),
                     ).map((group) => (
                       <div key={group.category} className="pt-1.5">
-                        <p className="px-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+                        <p className="px-2 text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
                           {group.label}
                         </p>
                         {group.options.map((opt) => (
@@ -1707,7 +1708,7 @@ export function TaskBoard({
                   <Filter className="h-3.5 w-3.5" />
                   Filtrar
                   {activeFilterCount > 0 && (
-                    <span className="rounded-full bg-foreground px-1.5 text-[10px] text-background">
+                    <span className="rounded-full bg-foreground px-1.5 text-[11px] text-background">
                       {activeFilterCount}
                     </span>
                   )}
@@ -1942,12 +1943,12 @@ export function TaskBoard({
         )}
 
         {viewToggle && tasks.length === 0 ? (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-card px-4 py-3">
+          <div className="surface-card flex flex-wrap items-center justify-between gap-3 px-4 py-3">
             <p className="text-sm text-muted-foreground">Nenhuma tarefa aberta nesta campanha.</p>
             <button
               type="button"
               onClick={() => setTaskDialog({ mode: "new" })}
-              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-brand hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-text-brand hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
             >
               <Plus className="h-3.5 w-3.5" /> Nova tarefa
             </button>
@@ -1959,7 +1960,7 @@ export function TaskBoard({
             const closedRows = filtered.filter((t) => isClosedStatus(t.status));
             const rows = showClosedInList ? [...openRows, ...closedRows] : openRows;
             return (
-              <div className="overflow-hidden rounded-2xl bg-card">
+              <div className="surface-card overflow-hidden">
                 {rows.length === 0 ? (
                   <p className="px-4 py-3 text-sm text-muted-foreground">
                     {filtered.length === 0 && tasks.length > 0 && activeFilterCount > 0
@@ -2150,7 +2151,7 @@ export function TaskBoard({
                         setDragId(null);
                         setDragOverCol(null);
                       }}
-                      className={`flex ${isMobile ? "w-full" : "w-[320px] shrink-0"} flex-col rounded-[20px] bg-muted/40 transition-colors dark:bg-white/[0.03] ${dragOverCol === col.key ? "ring-2 ring-brand" : ""}`}
+                      className={`flex ${isMobile ? "w-full" : "w-[320px] shrink-0"} flex-col rounded-2xl bg-muted/40 transition-colors dark:bg-white/[0.03] ${dragOverCol === col.key ? "ring-2 ring-brand" : ""}`}
                     >
                       <div className="rounded-t-[20px] bg-muted/40 px-4 py-3 dark:bg-white/[0.03]">
                         <div className="flex items-center justify-between gap-2">
@@ -2160,7 +2161,7 @@ export function TaskBoard({
                               role="heading"
                               aria-level={3}
                               title={col.label}
-                              className="truncate text-[13px] font-semibold text-foreground"
+                              className="truncate text-sm font-semibold text-foreground"
                             >
                               {col.label}
                             </p>
@@ -2176,14 +2177,14 @@ export function TaskBoard({
                           onClick={() =>
                             setTaskDialog({ mode: "new", defaultStatus: col.key as TaskStatus })
                           }
-                          className="flex h-8 w-full items-center justify-center gap-1.5 rounded-md text-[12px] font-medium text-muted-foreground transition-colors hover:bg-brand-subtle hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                          className="flex h-8 w-full items-center justify-center gap-1.5 rounded-md text-[12px] font-medium text-muted-foreground transition-colors hover:bg-brand-subtle hover:text-text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                         >
                           <Plus className="h-3.5 w-3.5" /> Adicionar tarefa
                         </button>
                       </div>
                       <div className="flex-1 space-y-2.5 p-3 pt-2">
                         {allItems.length === 0 && (
-                          <div className="rounded-[16px] bg-card/40 py-5 text-center text-xs text-text-secondary">
+                          <div className="rounded-2xl bg-card/40 py-5 text-center text-xs text-text-secondary">
                             Nenhuma tarefa
                           </div>
                         )}
@@ -2200,7 +2201,7 @@ export function TaskBoard({
                                 openSubtaskId: t.__parentTask ? t.id : undefined,
                               })
                             }
-                            className={`group relative cursor-pointer rounded-[18px] bg-card p-3.5 text-sm transition-all hover:bg-card/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand dark:shadow-none ${dragId === t.id ? "scale-[0.98] opacity-50 shadow-lg" : ""}`}
+                            className={`group relative cursor-pointer rounded-2xl bg-card p-3.5 text-sm transition-all hover:bg-card/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand dark:shadow-none ${dragId === t.id ? "scale-[0.98] opacity-50 shadow-lg" : ""}`}
                           >
                             {/* Nível 1 — título (maior peso visual do card, no
                         máximo 2 linhas — nada compete com ele aqui). */}
@@ -2208,7 +2209,7 @@ export function TaskBoard({
                               {t.__parentTask && (
                                 <span
                                   title={`Subtarefa de "${t.__parentTask.title}"`}
-                                  className="mt-0.5 inline-flex shrink-0 items-center rounded border border-border bg-muted/60 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-wide text-muted-foreground"
+                                  className="mt-0.5 inline-flex shrink-0 items-center rounded border border-border bg-muted/60 px-1 py-0.5 text-[11px] font-semibold uppercase leading-none tracking-wide text-muted-foreground"
                                 >
                                   Sub
                                 </span>
@@ -3545,7 +3546,7 @@ export function TaskDialog({
     if (closeAfter) onOpenChange(false);
   };
 
-  const attemptSave = (closeAfter: boolean) => {
+  const attemptSave = async (closeAfter: boolean) => {
     // Questionário de bloqueio/resolução aberto com dados digitados —
     // avisa antes de fechar (exigência explícita do pedido de bloqueio,
     // diferente do formulário de replanejamento que descarta em
@@ -3554,9 +3555,10 @@ export function TaskDialog({
     if (
       pendingBlockAction &&
       blockComposerHasData.current &&
-      !window.confirm(
+      !(await confirmDelete(
         "Você tem um questionário de bloqueio não confirmado. Fechar mesmo assim vai descartá-lo.",
-      )
+        { title: "Descartar questionário?", confirmLabel: "Descartar", destructive: true },
+      ))
     ) {
       return;
     }
@@ -4055,7 +4057,7 @@ export function TaskDialog({
                     }}
                     aria-label="Nome da tarefa"
                     placeholder="Nome da tarefa"
-                    className="-mx-1 w-[calc(100%+0.5rem)] resize-none overflow-hidden rounded-md border-0 bg-transparent px-1 text-2xl font-semibold leading-tight tracking-tight outline-none transition-colors [field-sizing:content] placeholder:text-muted-foreground/50 hover:bg-muted/40 focus:bg-transparent sm:text-[28px]"
+                    className="-mx-1 w-[calc(100%+0.5rem)] resize-none overflow-hidden rounded-md border-0 bg-transparent px-1 text-2xl font-semibold leading-tight tracking-tight outline-none transition-colors [field-sizing:content] placeholder:text-text-secondary hover:bg-muted/40 focus:bg-transparent sm:text-[28px]"
                   />
 
                   {/* Propriedades — controles inline (cada chip abre o seu
@@ -4101,7 +4103,7 @@ export function TaskDialog({
                                   />
                                   <span className="min-w-0 truncate">{primaryName}</span>
                                   {othersCount > 0 && (
-                                    <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                    <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
                                       +{othersCount}
                                     </span>
                                   )}
@@ -4118,7 +4120,7 @@ export function TaskDialog({
                           </div>
                         ) : (
                           <>
-                            <p className="px-2 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            <p className="px-2 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                               Responsável e colaboradores
                             </p>
                             {members.map((m) => {
@@ -4154,7 +4156,7 @@ export function TaskDialog({
                                       className={`shrink-0 rounded p-1 hover:bg-background ${
                                         isPrimary
                                           ? "text-amber-500"
-                                          : "text-muted-foreground/50 hover:text-amber-500"
+                                          : "text-text-secondary hover:text-amber-500"
                                       }`}
                                     >
                                       <Star
@@ -4327,7 +4329,7 @@ export function TaskDialog({
                             {visibleSubtasks.length > 0 && (
                               <div
                                 aria-hidden
-                                className="hidden grid-cols-[24px_minmax(0,1fr)_88px_96px_112px_20px] gap-x-2 border-b border-border/60 px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:grid"
+                                className="hidden grid-cols-[24px_minmax(0,1fr)_88px_96px_112px_20px] gap-x-2 border-b border-border/60 px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:grid"
                               >
                                 <span />
                                 <span>Nome</span>
@@ -4688,7 +4690,7 @@ export function TaskDialog({
                                     }
                                   }}
                                   placeholder="Nome da subtarefa"
-                                  className="mb-2 w-full border-0 bg-transparent p-0 text-sm outline-none placeholder:text-muted-foreground/70"
+                                  className="mb-2 w-full border-0 bg-transparent p-0 text-sm outline-none placeholder:text-text-secondary"
                                 />
                                 <div className="flex flex-wrap items-center gap-2">
                                   <DateField
@@ -4824,7 +4826,7 @@ export function TaskDialog({
                             <div className="space-y-2 pl-5">
                               {dependsOn.length > 0 && (
                                 <div className="space-y-1">
-                                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                                     Depende de
                                   </p>
                                   {dependsOn.map((id) => {
@@ -4875,7 +4877,7 @@ export function TaskDialog({
 
                               {blocks.length > 0 && (
                                 <div className="space-y-1">
-                                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                                     Esta tarefa bloqueia
                                   </p>
                                   {blocks.map((id) => {
@@ -5360,7 +5362,7 @@ function DeadlineHealthBadge({ task }: { task: Task }) {
         </div>
         {hasHistory && (
           <div className="mt-2.5 space-y-2 border-t border-border pt-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               Replanejamentos
             </p>
             {[...history].reverse().map((h) => {
@@ -5383,7 +5385,7 @@ function DeadlineHealthBadge({ task }: { task: Task }) {
             })}
           </div>
         )}
-        <p className="mt-2.5 border-t border-border pt-2 text-[10px] text-muted-foreground">
+        <p className="mt-2.5 border-t border-border pt-2 text-[11px] text-muted-foreground">
           Prazos encerram às {performanceSettings.deadlineCutoffHour}h.
         </p>
       </PopoverContent>

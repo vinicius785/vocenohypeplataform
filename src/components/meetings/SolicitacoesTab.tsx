@@ -51,7 +51,7 @@ export function SolicitacoesTab({
 
   if (pend.length === 0) {
     return (
-      <div className="mx-auto max-w-[440px] rounded-2xl bg-card px-6 py-8 text-center dark:shadow-none">
+      <div className="surface-card mx-auto max-w-[440px] px-6 py-8 text-center">
         <Users className="mx-auto h-6 w-6 text-text-secondary/50" />
         <p className="mt-2.5 text-sm font-medium text-foreground">Nenhuma solicitação pendente</p>
         <p className="mt-1 text-xs text-text-secondary">
@@ -73,7 +73,7 @@ export function SolicitacoesTab({
         {pend.map((m) => {
           const criador = criadorOf(m);
           return (
-            <li key={m.id} className="rounded-2xl bg-card p-4 dark:shadow-none">
+            <li key={m.id} className="surface-card p-4">
               <div className="flex items-start gap-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-xs font-semibold text-text-secondary">
                   {criador?.photo ? (

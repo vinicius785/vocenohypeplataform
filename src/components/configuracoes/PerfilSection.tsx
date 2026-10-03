@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { saveMe } from "@/lib/chat-store";
 import { SettingsCard, SettingsSectionHeader, SettingsSaveBar } from "./settings-shared";
+import { NativeSelect } from "@/components/ui/native-select";
 
 export type Perfil = {
   nome: string;
@@ -325,14 +326,18 @@ function AVCard() {
   }) => (
     <label className="space-y-1">
       <span className="text-xs font-medium">{label}</span>
-      <select value={value ?? ""} onChange={(e) => onChange(e.target.value)} className={inputCls}>
+      <NativeSelect
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value)}
+        className={inputCls}
+      >
         <option value="">Padrão do sistema</option>
         {options.map((d, i) => (
           <option key={d.deviceId || i} value={d.deviceId}>
             {d.label || `${fallback} ${i + 1}`}
           </option>
         ))}
-      </select>
+      </NativeSelect>
     </label>
   );
 

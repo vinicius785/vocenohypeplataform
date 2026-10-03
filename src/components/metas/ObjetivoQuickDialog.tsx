@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { DateField } from "@/components/ui/date-field";
 import { META_AREAS, type Objetivo, type MetaArea } from "@/lib/metas-store";
+import { NativeSelect } from "@/components/ui/native-select";
 
 type Member = { name: string; photo?: string };
 
@@ -108,7 +109,7 @@ export function ObjetivoQuickDialog({
               <Label htmlFor="objetivo-area" className={LABEL_CLS}>
                 Área
               </Label>
-              <select
+              <NativeSelect
                 id="objetivo-area"
                 value={area}
                 onChange={(e) => setArea(e.target.value as MetaArea)}
@@ -119,13 +120,13 @@ export function ObjetivoQuickDialog({
                     {a}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
             <div>
               <Label htmlFor="objetivo-dono" className={LABEL_CLS}>
                 Responsável
               </Label>
-              <select
+              <NativeSelect
                 id="objetivo-dono"
                 value={dono}
                 onChange={(e) => setDono(e.target.value)}
@@ -137,7 +138,7 @@ export function ObjetivoQuickDialog({
                     {m.name}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
           </div>
           <div>
@@ -196,7 +197,7 @@ export function ObjetivoQuickDialog({
                           onClick={() => toggleColaborador(m.name)}
                           className={`rounded-full px-2.5 py-1 text-[11px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
                             active
-                              ? "bg-brand-subtle text-brand"
+                              ? "bg-brand-subtle text-text-brand"
                               : "bg-muted text-text-secondary hover:text-foreground"
                           }`}
                         >

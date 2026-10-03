@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import type { EditorialPost, EditorialStatus, Project, Task } from "@/lib/projetos";
 import { formatIsoDate } from "@/lib/utils";
+import { NativeSelect } from "@/components/ui/native-select";
 
 const STATUS: { key: EditorialStatus; label: string; cls: string }[] = [
   { key: "ideia", label: "Ideia", cls: "bg-muted text-foreground" },
@@ -159,7 +160,7 @@ export function EditorialPanel({
 
       {view === "calendar" ? (
         <div className="rounded-lg border border-border bg-background">
-          <div className="grid grid-cols-7 border-b border-border text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+          <div className="grid grid-cols-7 border-b border-border text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
             {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((d) => (
               <div key={d} className="px-2 py-1.5 text-center">
                 {d}
@@ -203,7 +204,7 @@ export function EditorialPanel({
                         <button
                           key={p.id}
                           onClick={() => setEditing(p)}
-                          className={`block w-full truncate rounded px-1.5 py-0.5 text-left text-[10px] ${s.cls}`}
+                          className={`block w-full truncate rounded px-1.5 py-0.5 text-left text-[11px] ${s.cls}`}
                           title={`${p.title} · ${p.channel}`}
                         >
                           {p.title}
@@ -233,7 +234,7 @@ export function EditorialPanel({
                       {formatIsoDate(p.date)} · {p.channel}
                     </p>
                   </button>
-                  <span className={`rounded px-1.5 py-0.5 text-[10px] ${s.cls}`}>{s.label}</span>
+                  <span className={`rounded px-1.5 py-0.5 text-[11px] ${s.cls}`}>{s.label}</span>
                   <button
                     onClick={() => createTaskFromPost(p)}
                     aria-label="Criar tarefa"
@@ -327,7 +328,7 @@ function PostModal({
             </label>
             <label className="block space-y-1">
               <span className="text-xs font-medium">Canal</span>
-              <select
+              <NativeSelect
                 value={p.channel}
                 onChange={(e) => setP({ ...p, channel: e.target.value })}
                 className={inputCls}
@@ -337,12 +338,12 @@ function PostModal({
                     {c}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </label>
           </div>
           <label className="block space-y-1">
             <span className="text-xs font-medium">Status</span>
-            <select
+            <NativeSelect
               value={p.status}
               onChange={(e) => setP({ ...p, status: e.target.value as EditorialStatus })}
               className={inputCls}
@@ -352,7 +353,7 @@ function PostModal({
                   {s.label}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </label>
           <label className="block space-y-1">
             <span className="text-xs font-medium">Notas</span>

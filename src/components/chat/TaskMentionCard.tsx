@@ -51,7 +51,7 @@ export function TaskMentionCard({
           {isTaskStatus(status) ? (
             <TaskStatusBadge status={status} size="xs" />
           ) : (
-            <span className="shrink-0 text-[10px] text-muted-foreground">{status}</span>
+            <span className="shrink-0 text-[11px] text-muted-foreground">{status}</span>
           )}
         </div>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
@@ -73,7 +73,7 @@ export function TaskMentionCard({
             <div className="h-1 flex-1 rounded-full bg-muted">
               <div className="h-1 rounded-full bg-brand" style={{ width: `${subtaskPct}%` }} />
             </div>
-            <span className="shrink-0 text-[10px] text-muted-foreground">
+            <span className="shrink-0 text-[11px] text-muted-foreground">
               {task.subtasksDone}/{task.subtasksTotal} subtarefas
             </span>
           </div>

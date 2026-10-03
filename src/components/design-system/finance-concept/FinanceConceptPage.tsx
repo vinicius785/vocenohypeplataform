@@ -221,7 +221,7 @@ export function FinanceConceptPage() {
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
             {/* HERO — bloco protagonista */}
             <div className="lg:col-span-7">
-              <div className="relative h-full overflow-hidden rounded-[28px] bg-card p-7 dark:shadow-none md:p-9">
+              <div className="relative h-full overflow-hidden rounded-2xl bg-card p-7 dark:shadow-none md:p-9">
                 <div className="flex items-center justify-between">
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-subtle px-3 py-1 text-xs font-semibold uppercase tracking-wide text-brand">
                     <Wallet className="h-3.5 w-3.5" /> Saldo atual
@@ -283,7 +283,7 @@ export function FinanceConceptPage() {
 
             {/* Coluna direita: Requer atenção + Entradas/Saídas */}
             <div className="flex flex-col gap-5 lg:col-span-5">
-              <div className="rounded-[24px] bg-card p-5 dark:shadow-none">
+              <div className="rounded-2xl bg-card p-5 dark:shadow-none">
                 <p className="text-[15px] font-semibold text-foreground">Requer atenção</p>
                 <div className="mt-3 space-y-2">
                   {RESUMO_FIXTURE.requerAtencao.map((item) => (
@@ -321,7 +321,7 @@ export function FinanceConceptPage() {
               </div>
 
               <div className="grid grid-cols-2 gap-5">
-                <div className="rounded-[24px] bg-card p-5 dark:shadow-none">
+                <div className="rounded-2xl bg-card p-5 dark:shadow-none">
                   <span className="flex h-8 w-8 items-center justify-center rounded-full bg-success-soft text-success">
                     <ArrowUpRight className="h-4 w-4" />
                   </span>
@@ -335,7 +335,7 @@ export function FinanceConceptPage() {
                     <DeltaTag pct={RESUMO_FIXTURE.entradasDeltaPct} />
                   </div>
                 </div>
-                <div className="rounded-[24px] bg-card p-5 dark:shadow-none">
+                <div className="rounded-2xl bg-card p-5 dark:shadow-none">
                   <span className="flex h-8 w-8 items-center justify-center rounded-full bg-danger-soft text-danger">
                     <ArrowDownRight className="h-4 w-4" />
                   </span>
@@ -356,7 +356,7 @@ export function FinanceConceptPage() {
           {/* ============ BENTO — linha 2: fluxo de caixa + receber/pagar ============ */}
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
             <div className="lg:col-span-8">
-              <div className="rounded-[28px] bg-card p-6 dark:shadow-none md:p-7">
+              <div className="rounded-2xl bg-card p-6 dark:shadow-none md:p-7">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-[20px] font-semibold text-foreground md:text-[22px]">
@@ -474,7 +474,7 @@ function ReceivableCard({
   onVerTodos: () => void;
 }) {
   return (
-    <div className="rounded-[22px] bg-card p-5 dark:shadow-none">
+    <div className="rounded-2xl bg-card p-5 dark:shadow-none">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">{label}</p>
         <span

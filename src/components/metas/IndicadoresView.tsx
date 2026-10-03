@@ -14,11 +14,12 @@ import {
   type StatusAtualizacao,
 } from "@/lib/metas-engine";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { FilterSearch } from "@/components/shared/FilterToolbar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CADENCE_LABEL, CADENCE_OPTIONS } from "./metas-ui-utils";
 import { IndicadorGlobalRow } from "./IndicadorGlobalRow";
 import { IndicadorQuickUpdate, type IndicadorQuickPatch } from "./IndicadorQuickUpdate";
+import { NativeSelect } from "@/components/ui/native-select";
 
 type SortKey = "prioridade" | "nome" | "atualizacao" | "impacto";
 type QuickChip = "" | "precisa_atualizar" | "em_risco";
@@ -170,15 +171,7 @@ export function IndicadoresView({
     <div className="space-y-6">
       {/* Toolbar única — busca + filtros + ordenação, sincronizados. */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative w-full max-w-xs sm:flex-1">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-secondary" />
-          <Input
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            placeholder="Buscar indicador..."
-            className="h-9 pl-8 text-sm"
-          />
-        </div>
+        <FilterSearch value={busca} onChange={setBusca} placeholder="Buscar indicador..." />
         <Popover>
           <PopoverTrigger asChild>
             <button
@@ -192,7 +185,7 @@ export function IndicadoresView({
             </button>
           </PopoverTrigger>
           <PopoverContent align="end" className="w-72 space-y-2 p-3">
-            <select
+            <NativeSelect
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
               className="h-9 w-full rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
@@ -203,8 +196,8 @@ export function IndicadoresView({
                   {STATUS_ATUALIZACAO_LABEL[s]}
                 </option>
               ))}
-            </select>
-            <select
+            </NativeSelect>
+            <NativeSelect
               value={cadenciaFilter}
               onChange={(e) => setCadenciaFilter(e.target.value as typeof cadenciaFilter)}
               className="h-9 w-full rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
@@ -215,8 +208,8 @@ export function IndicadoresView({
                   {CADENCE_LABEL[f]}
                 </option>
               ))}
-            </select>
-            <select
+            </NativeSelect>
+            <NativeSelect
               value={areaFilter}
               onChange={(e) => setAreaFilter(e.target.value as typeof areaFilter)}
               className="h-9 w-full rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
@@ -227,9 +220,9 @@ export function IndicadoresView({
                   {a}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
             {objetivos.length > 0 && (
-              <select
+              <NativeSelect
                 value={objetivoFilter}
                 onChange={(e) => setObjetivoFilter(e.target.value)}
                 className="h-9 w-full rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
@@ -240,11 +233,11 @@ export function IndicadoresView({
                     {o.titulo}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             )}
           </PopoverContent>
         </Popover>
-        <select
+        <NativeSelect
           value={sortKey}
           onChange={(e) => setSortKey(e.target.value as SortKey)}
           aria-label="Ordenar por"
@@ -255,7 +248,7 @@ export function IndicadoresView({
               Ordenar: {SORT_LABEL[k]}
             </option>
           ))}
-        </select>
+        </NativeSelect>
         {hasFilters && (
           <button
             type="button"
@@ -291,7 +284,7 @@ export function IndicadoresView({
       </div>
 
       {indicadores.length === 0 ? (
-        <div className="rounded-[24px] bg-card p-10 text-center dark:shadow-none">
+        <div className="surface-card p-10 text-center">
           <Gauge className="mx-auto h-8 w-8 text-text-secondary/50" />
           <p className="mt-3 text-sm font-medium text-foreground">Nenhum indicador cadastrado</p>
           <p className="mt-1 text-sm text-text-secondary">
@@ -302,7 +295,7 @@ export function IndicadoresView({
           </Button>
         </div>
       ) : ordenados.length === 0 ? (
-        <div className="rounded-[24px] bg-card p-10 text-center dark:shadow-none">
+        <div className="surface-card p-10 text-center">
           <Search className="mx-auto h-8 w-8 text-text-secondary/50" />
           <p className="mt-3 text-sm font-medium text-foreground">Nenhum indicador encontrado</p>
           <p className="mt-1 text-sm text-text-secondary">
@@ -310,7 +303,7 @@ export function IndicadoresView({
           </p>
         </div>
       ) : (
-        <div className="rounded-[24px] bg-card p-5 dark:shadow-none">
+        <div className="surface-card p-5">
           <div className="hidden grid-cols-[1fr_5.5rem_6rem_6rem_9rem_2rem] gap-3 px-1 pb-2 text-[11px] font-semibold uppercase tracking-wide text-text-secondary sm:grid">
             <span>Indicador</span>
             <span className="text-right">Valor atual</span>

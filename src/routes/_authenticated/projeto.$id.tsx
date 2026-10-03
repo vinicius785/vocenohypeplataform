@@ -94,6 +94,7 @@ import {
   saveProjetoTarefas,
 } from "@/lib/projeto-scoped-store";
 import { formatIsoDate } from "@/lib/utils";
+import { NativeSelect } from "@/components/ui/native-select";
 
 export const Route = createFileRoute("/_authenticated/projeto/$id")({
   component: ProjetoPage,
@@ -353,7 +354,7 @@ function ProjetoPage() {
           <button
             type="button"
             onClick={() => void navigate({ to: "/time", search: { section: "projetos" } })}
-            className="text-sm font-medium text-brand hover:underline"
+            className="text-sm font-medium text-text-brand hover:underline"
           >
             Voltar para Projetos
           </button>
@@ -433,7 +434,7 @@ function ProjetoPage() {
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="truncate text-2xl font-bold tracking-tight text-foreground md:text-3xl">
+                  <h1 className="truncate text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
                     {project.name}
                   </h1>
                   <Badge variant={PROJECT_STATUS_BADGE_VARIANT[projectStatus]} className="shrink-0">
@@ -508,7 +509,7 @@ function ProjetoPage() {
 
           {/* Resumo operacional — uma faixa só, SummaryStat compartilhado
            * (mesmo componente do resumo de Campanha). */}
-          <div className="flex flex-wrap rounded-2xl bg-card dark:shadow-none">
+          <div className="surface-card flex flex-wrap">
             <SummaryStat
               label="Progresso"
               value={metrics.total === 0 ? "Sem tarefas" : `${metrics.progressPct}%`}
@@ -530,7 +531,7 @@ function ProjetoPage() {
                 metrics.health !== "saudavel" && (
                   <Badge
                     variant={PROJECT_HEALTH_BADGE_VARIANT[metrics.health]}
-                    className="px-1.5 py-0 text-[9px]"
+                    className="px-1.5 py-0 text-[11px]"
                   >
                     {PROJECT_HEALTH_LABEL[metrics.health]}
                   </Badge>
@@ -751,7 +752,7 @@ function DocLinkForm({
       </label>
       <label className="block space-y-1">
         <span className="text-[11px] font-medium text-muted-foreground">Categoria</span>
-        <select
+        <NativeSelect
           value={category}
           onChange={(e) => setCategory(e.target.value as DocCategory)}
           className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
@@ -761,7 +762,7 @@ function DocLinkForm({
               {DOC_CATEGORY_LABEL[c]}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </label>
       <div className="flex justify-end gap-2 pt-1">
         <button
@@ -974,7 +975,7 @@ function DocsPanel({
               className="h-8 w-36 rounded-md border border-border bg-background pl-8 pr-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-brand sm:w-44"
             />
           </div>
-          <select
+          <NativeSelect
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value as DocCategory | "todas")}
             aria-label="Filtrar por categoria"
@@ -986,7 +987,7 @@ function DocsPanel({
                 {DOC_CATEGORY_LABEL[c]}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           <Popover
             open={addOpen}
             onOpenChange={(o) => {
@@ -1049,7 +1050,7 @@ function DocsPanel({
           <button
             type="button"
             onClick={() => setAddOpen(true)}
-            className="mt-2 text-xs font-medium text-brand hover:underline"
+            className="mt-2 text-xs font-medium text-text-brand hover:underline"
           >
             Adicionar primeiro material
           </button>

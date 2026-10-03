@@ -11,7 +11,9 @@ const badgeVariants = cva(
       // passa essa prop, então continua `text-xs` (12px) em todo lugar.
       size: {
         default: "",
-        lg: "px-3 py-1 text-[13px]",
+        /** 11px — o menor tamanho permitido (substitui `text-[11px]`/`[9px]` soltos). */
+        sm: "px-2 py-0.5 text-[11px]",
+        lg: "px-3 py-1 text-sm",
       },
       variant: {
         default: "border-transparent bg-foreground text-background shadow hover:bg-foreground/80",
@@ -25,7 +27,7 @@ const badgeVariants = cva(
         // com o botão/ação principal da tela. `brand` nunca deve
         // substituir `default`/`primary` em botão/link/foco — é só pra
         // indicar destaque de marca num badge/chip.
-        brand: "border-transparent bg-brand-subtle text-brand",
+        brand: "border-transparent bg-brand-subtle text-text-brand",
         success: "border-transparent bg-success-soft text-success-soft-foreground",
         warning: "border-transparent bg-warning-soft text-warning-soft-foreground",
         danger: "border-transparent bg-danger-soft text-danger-soft-foreground",

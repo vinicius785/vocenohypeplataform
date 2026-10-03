@@ -13,7 +13,7 @@ export function Avatar({
   photo?: string;
   size?: "sm" | "md";
 }) {
-  const dim = size === "md" ? "h-9 w-9 text-[11px]" : "h-6 w-6 text-[9px]";
+  const dim = size === "md" ? "h-9 w-9 text-[11px]" : "h-6 w-6 text-[11px]";
   return (
     <span
       className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted font-semibold text-foreground ring-1 ring-border ${dim}`}

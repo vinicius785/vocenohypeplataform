@@ -55,6 +55,7 @@ const FORM_TEXTAREA =
 const FORM_PICKER =
   "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-2.5 text-left text-xs outline-none hover:bg-muted/40 focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring";
 import type { TaskDirectoryEntry } from "@/lib/task-directory";
+import { NativeSelect } from "@/components/ui/native-select";
 
 /** Janela de agrupamento pra eventos secundários consecutivos do mesmo
  * autor (item 12 do pedido) — puramente de apresentação, nada é
@@ -347,7 +348,7 @@ export function TaskActivityPanel({
       <div className="border-b border-border px-5 py-3">
         <div className="mb-2.5 flex items-center justify-between">
           <p className="text-sm font-semibold">Atividade</p>
-          <span className="text-[10px] text-muted-foreground">
+          <span className="text-[11px] text-muted-foreground">
             {activity.length + comments.length}
           </span>
         </div>
@@ -380,13 +381,13 @@ export function TaskActivityPanel({
                   <div className="min-w-0 flex-1">
                     <div className="mb-1 flex items-baseline gap-1.5">
                       <span className="text-xs font-semibold text-foreground">{f.item.author}</span>
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-[11px] text-muted-foreground">
                         {formatWhen(f.item.createdAt)}
                       </span>
                       <button
                         type="button"
                         onClick={() => replyTo(f.item.author)}
-                        className="ml-auto rounded px-1.5 text-[10px] font-medium text-muted-foreground transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/comment:opacity-100 sm:opacity-0"
+                        className="ml-auto rounded px-1.5 text-[11px] font-medium text-muted-foreground transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/comment:opacity-100 sm:opacity-0"
                       >
                         Responder
                       </button>
@@ -485,7 +486,7 @@ export function TaskActivityPanel({
                           )}
                       </div>
                     )}
-                    <div className="mt-0.5 text-[10px] text-muted-foreground/70">
+                    <div className="mt-0.5 text-[11px] text-text-secondary">
                       {f.item.author} · {formatWhen(f.item.createdAt)}
                     </div>
                   </div>
@@ -500,7 +501,7 @@ export function TaskActivityPanel({
                   <div className="min-w-0 flex-1 break-words text-xs leading-relaxed [overflow-wrap:anywhere]">
                     <span className="font-medium text-foreground">{f.item.author}</span>{" "}
                     <span className="text-muted-foreground">{f.item.action}</span>
-                    <div className="text-[10px] text-muted-foreground/70">
+                    <div className="text-[11px] text-text-secondary">
                       {formatWhen(f.item.createdAt)}
                     </div>
                   </div>
@@ -574,7 +575,7 @@ export function TaskActivityPanel({
             rows={2}
             aria-label="Escrever comentário"
             placeholder="Escreva um comentário… @ para mencionar · Ctrl/⌘+Enter envia"
-            className="w-full resize-none rounded-md border border-border bg-background py-2 pl-2.5 pr-16 text-xs outline-none placeholder:text-muted-foreground/70 focus:border-ring focus:ring-1 focus:ring-ring"
+            className="w-full resize-none rounded-md border border-border bg-background py-2 pl-2.5 pr-16 text-xs outline-none placeholder:text-text-secondary focus:border-ring focus:ring-1 focus:ring-ring"
           />
           {onAttachFiles && (
             <>
@@ -639,7 +640,7 @@ function MinorGroupRow({ group, members }: { group: Activity[]; members: Member[
             <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
           )}
         </button>
-        <div className="text-[10px] text-muted-foreground/70">
+        <div className="text-[11px] text-text-secondary">
           {formatWhen(last.createdAt)} · {group.length} alteraç{group.length === 1 ? "ão" : "ões"}
         </div>
         {open && (
@@ -698,7 +699,7 @@ function DeadlinePendingForm({
       </div>
       <label className="block space-y-1">
         <span className={FORM_LABEL}>Motivo</span>
-        <select
+        <NativeSelect
           ref={selectRef}
           value={motivo}
           onChange={(e) => setMotivo(e.target.value as DeadlineChangeMotivo)}
@@ -709,7 +710,7 @@ function DeadlinePendingForm({
               {DEADLINE_CHANGE_MOTIVO_LABEL[m]}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </label>
       <label className="block space-y-1">
         <span className={FORM_LABEL}>Contexto{precisaObservacao ? "" : " (opcional)"}</span>
@@ -746,7 +747,7 @@ function DeadlinePendingForm({
  * Questionário de bloqueio — mesmo padrão estrutural/comportamental de
  * `DeadlinePendingForm` (card inline na Activity, cabeçalho, campos,
  * rodapé Cancelar/Confirmar, loading), clonado em vez de duplicado
- * livremente: mesma classe de card, mesmo `<select>`/`<textarea>`, mesmo
+ * livremente: mesma classe de card, mesmo `<NativeSelect>`/`<textarea>`, mesmo
  * layout de rodapé. A decisão de pausar o prazo NUNCA é escolhida aqui —
  * o "Resumo do impacto" abaixo é só uma prévia (`decidesPausesDeadlineByCategory`,
  * mesma regra usada no backend); quem decide de verdade é `blockTask`
@@ -988,7 +989,7 @@ function BlockedPendingForm({
         </label>
 
         <div className="rounded-md border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300">
             Impacto
           </p>
           <ul className="mt-1 space-y-0.5 text-[11px] text-foreground">

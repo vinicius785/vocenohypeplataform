@@ -91,7 +91,7 @@ export const TASK_STATUS_ICON_TONE: Record<TaskStatus, string> = {
   Bloqueada: "text-amber-700 dark:text-amber-300",
   Aprovado: "text-emerald-600 dark:text-emerald-400",
   Concluído: "text-emerald-600 dark:text-emerald-400",
-  Arquivado: "text-muted-foreground/70",
+  Arquivado: "text-text-secondary",
 };
 
 export function isTaskStatus(v: unknown): v is TaskStatus {
@@ -118,7 +118,7 @@ export function TaskStatusBadge({
     <span
       className={cx(
         "inline-flex max-w-full shrink-0 items-center gap-1 rounded-md font-medium",
-        size === "xs" ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-0.5 text-[11px]",
+        size === "xs" ? "px-1.5 py-0.5 text-[11px]" : "px-2 py-0.5 text-[11px]",
         TASK_STATUS_TONE[status],
         className,
       )}
@@ -215,10 +215,13 @@ export function TaskOptionPicker<T extends string>({
                     {o.icon}
                     <span className="min-w-0 flex-1 truncate">{o.label}</span>
                     {o.hint && (
-                      <span className="shrink-0 text-[10px] text-muted-foreground">{o.hint}</span>
+                      <span className="shrink-0 text-[11px] text-muted-foreground">{o.hint}</span>
                     )}
                     {o.value === value && (
-                      <Check aria-label="Selecionado" className="h-3.5 w-3.5 shrink-0 text-brand" />
+                      <Check
+                        aria-label="Selecionado"
+                        className="h-3.5 w-3.5 shrink-0 text-text-brand"
+                      />
                     )}
                   </CommandItem>
                 ))}
@@ -547,7 +550,7 @@ export function TaskBlockIndicator({
     <span
       className={cx(
         "inline-flex min-w-0 max-w-full items-center gap-1 rounded-md border border-amber-500/40 px-1.5 py-0.5 font-medium text-amber-800 dark:text-amber-300",
-        size === "xs" ? "text-[10px]" : "text-[11px]",
+        size === "xs" ? "text-[11px]" : "text-[11px]",
         className,
       )}
     >
@@ -685,7 +688,7 @@ export function TaskSectionHeader({
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="flex min-w-0 items-center gap-1.5 rounded-md py-1 pr-1 text-xs font-semibold text-foreground outline-none hover:text-brand focus-visible:ring-2 focus-visible:ring-brand"
+        className="flex min-w-0 items-center gap-1.5 rounded-md py-1 pr-1 text-xs font-semibold text-foreground outline-none hover:text-text-brand focus-visible:ring-2 focus-visible:ring-brand"
       >
         <ChevronRight
           aria-hidden

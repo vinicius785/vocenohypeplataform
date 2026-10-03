@@ -47,7 +47,7 @@ export function ChartCard({
     // ancestral já tem altura definida (grid `items-stretch`, o padrão);
     // nos outros consumidores (Relatórios/Campanhas, dentro de `space-y-6`
     // sem stretch) o ancestral é `auto`, então isso não muda nada lá.
-    <div className="flex h-full flex-col rounded-[24px] bg-card p-5 dark:shadow-none md:p-6">
+    <div className="surface-card flex h-full flex-col p-5 md:p-6">
       <div className="mb-3 flex shrink-0 flex-wrap items-start justify-between gap-2">
         <div>
           <p

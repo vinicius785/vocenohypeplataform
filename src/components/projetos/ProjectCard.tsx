@@ -31,7 +31,7 @@ import {
 /**
  * Card de projeto — mesma estrutura, tamanho e linguagem visual do
  * `CampanhaCard.tsx` (a referência oficial da rodada): container
- * `rounded-[20px]`/`p-4`, "stretched button" pro card inteiro abrir o
+ * `rounded-2xl`/`p-4`, "stretched button" pro card inteiro abrir o
  * projeto sem HTML de interativo-aninhado inválido, miniatura quadrada
  * (nunca uma capa grande), no máximo 2 badges, divisor discreto e rodapé
  * textual compacto em duas linhas — nada de barra de progresso grande,
@@ -81,14 +81,14 @@ export function ProjectCard({
 
   return (
     <div
-      className={`group relative cursor-pointer rounded-[20px] border border-transparent p-4 text-left transition-colors duration-150 hover:border-border hover:bg-accent/40 dark:shadow-none ${
+      className={`group relative cursor-pointer rounded-2xl border border-transparent p-4 text-left transition-colors duration-150 hover:border-border hover:bg-accent/40 dark:shadow-none ${
         neutral ? "bg-muted/40" : "bg-card"
       }`}
     >
       <button
         type="button"
         onClick={onOpen}
-        className="absolute inset-0 cursor-pointer rounded-[20px] transition-transform duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand active:scale-[0.99]"
+        className="absolute inset-0 cursor-pointer rounded-2xl transition-transform duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand active:scale-[0.99]"
         aria-label={`Abrir projeto ${project.name} — ${PROJECT_STATUS_LABEL[status]}${
           metrics.principal ? `, responsável ${metrics.principal.name}` : ""
         }`}
@@ -100,7 +100,7 @@ export function ProjectCard({
             {project.cover ? (
               <img src={project.cover} alt="" className="h-full w-full object-cover" />
             ) : initials ? (
-              <span className="text-sm font-semibold text-muted-foreground/70">{initials}</span>
+              <span className="text-sm font-semibold text-text-secondary">{initials}</span>
             ) : (
               <FolderKanban className="h-5 w-5 text-muted-foreground" strokeWidth={1.5} />
             )}
@@ -126,7 +126,7 @@ export function ProjectCard({
                   {extraCount > 0 && (
                     <span
                       title={metrics.participantes.map((p) => p.name).join(", ")}
-                      className="shrink-0 text-[10px] font-medium text-muted-foreground"
+                      className="shrink-0 text-[11px] font-medium text-muted-foreground"
                     >
                       +{extraCount}
                     </span>

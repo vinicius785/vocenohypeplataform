@@ -409,7 +409,7 @@ export function PortalAccessSection({
           <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">
             Acesso antigo ainda ativo
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 text-xs text-text-secondary">
             Este cliente ainda pode acessar o portal pelo link compartilhado. Migre os usuários para
             login e senha antes de desativá-lo.
             {members && members.some((m) => m.status === "active") && (

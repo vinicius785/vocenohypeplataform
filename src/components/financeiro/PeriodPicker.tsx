@@ -1,5 +1,6 @@
 import { DateField } from "@/components/ui/date-field";
 import { PERIOD_OPTIONS, type useFinanceiroFilteredEntries } from "./useFinanceiroFilteredEntries";
+import { NativeSelect } from "@/components/ui/native-select";
 
 type Filtered = ReturnType<typeof useFinanceiroFilteredEntries>;
 
@@ -20,7 +21,7 @@ export function PeriodPicker({ filtered }: { filtered: Filtered }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       <span className="text-sm text-text-secondary">Período</span>
-      <select
+      <NativeSelect
         value={periodMode}
         onChange={(e) => setPeriodMode(e.target.value as typeof periodMode)}
         className="h-9 cursor-pointer rounded-md border border-input bg-background px-2 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-brand"
@@ -30,7 +31,7 @@ export function PeriodPicker({ filtered }: { filtered: Filtered }) {
             {o.label}
           </option>
         ))}
-      </select>
+      </NativeSelect>
       {(periodMode === "este_mes" || periodMode === "mes_passado") && (
         <div className="inline-flex items-center gap-1">
           <button

@@ -132,7 +132,7 @@ export function ChatV2Search({
                   <span className="truncate text-xs font-semibold text-foreground">
                     {r.author_name}
                   </span>
-                  <span className="shrink-0 text-[10px] text-muted-foreground">
+                  <span className="shrink-0 text-[11px] text-muted-foreground">
                     {formatResultDate(r.created_at)}
                   </span>
                 </span>

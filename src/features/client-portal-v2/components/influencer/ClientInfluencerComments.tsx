@@ -48,11 +48,9 @@ export function ClientInfluencerComments({
       description={comments.length > 0 ? `${comments.length}` : undefined}
     >
       {comments.length === 0 ? (
-        <p className="rounded-2xl bg-card p-4 text-xs text-text-secondary dark:shadow-none">
-          Nenhum comentário ainda.
-        </p>
+        <p className="surface-card p-4 text-xs text-text-secondary">Nenhum comentário ainda.</p>
       ) : (
-        <div className="space-y-2 rounded-2xl bg-card p-3 dark:shadow-none">
+        <div className="surface-card space-y-2 p-3">
           {comments.map((c) => (
             <div key={c.id} className="flex items-start gap-2.5">
               <span

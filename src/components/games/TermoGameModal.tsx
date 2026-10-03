@@ -209,7 +209,7 @@ export function TermoGameModal({
                     return (
                       <div
                         key={ci}
-                        className={`flex h-12 w-12 items-center justify-center rounded-md border-2 text-xl font-bold uppercase sm:h-14 sm:w-14 ${
+                        className={`flex h-12 w-12 items-center justify-center rounded-md border-2 text-xl font-semibold uppercase sm:h-14 sm:w-14 ${
                           state
                             ? STATE_CLASS[state]
                             : letter

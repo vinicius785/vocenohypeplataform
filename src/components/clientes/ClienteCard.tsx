@@ -7,8 +7,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 import type { Cliente } from "@/lib/clientes-store";
 import { clienteStatus, CLIENTE_STATUS_LABEL, lastClienteActivityAt } from "./cliente-ui";
+import { ClienteLogo } from "./ClienteLogo";
 
 function fmtDate(iso: string): string {
   const d = new Date(iso.length === 10 ? `${iso}T12:00:00` : iso);
@@ -16,8 +18,6 @@ function fmtDate(iso: string): string {
     ? iso
     : d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
 }
-import { ClienteLogo } from "./ClienteLogo";
-
 /** Variante de badge por status de cliente (Fase 2 da reconstrução do
  * modelo de status) — âmbar pra negociando (nunca vermelho, é um estado
  * normal do funil, não um alerta), verde pra ativo, cinza pros dois
@@ -73,11 +73,11 @@ export function ClienteCard({
   const lastActivity = lastClienteActivityAt(cliente);
 
   return (
-    <div className="group relative cursor-pointer rounded-[20px] bg-card p-4 text-left transition-colors hover:bg-accent/40 dark:shadow-none">
+    <Card variant="interactive" className="group relative p-4 text-left">
       <button
         type="button"
         onClick={onOpen}
-        className="absolute inset-0 cursor-pointer rounded-[20px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+        className="absolute inset-0 cursor-pointer rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
         aria-label={`Ver detalhes de ${cliente.empresa} — ${
           cliente.responsavel || "contato não informado"
         }, ${cliente.responsavelInterno || "sem responsável interno"}, ${campanhasLabel}`}
@@ -91,7 +91,7 @@ export function ClienteCard({
               <p className="truncate text-[15px] font-semibold text-foreground">
                 {cliente.empresa}
               </p>
-              <Badge variant={STATUS_BADGE_VARIANT[status]} className="shrink-0 text-[10px]">
+              <Badge variant={STATUS_BADGE_VARIANT[status]} size="sm" className="shrink-0">
                 {CLIENTE_STATUS_LABEL[status]}
               </Badge>
             </div>
@@ -107,7 +107,7 @@ export function ClienteCard({
               type="button"
               onClick={(e) => e.stopPropagation()}
               aria-label={`Mais ações para ${cliente.empresa}`}
-              className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-secondary opacity-60 pointer-events-auto transition-opacity hover:bg-muted hover:text-foreground hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand group-hover:opacity-100"
+              className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-secondary pointer-events-auto transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
             >
               <MoreVertical className="h-4 w-4" />
             </button>
@@ -148,7 +148,7 @@ export function ClienteCard({
       {showProximaAcao && (
         <div className="relative mt-2 flex items-start gap-1.5 text-xs text-foreground pointer-events-none">
           <ArrowRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
-          <span className="min-w-0 truncate">
+          <span className="line-clamp-2 min-w-0">
             <span className="text-text-secondary">Próxima ação: </span>
             {proximoPasso || "—"}
             {previsao && (
@@ -157,6 +157,6 @@ export function ClienteCard({
           </span>
         </div>
       )}
-    </div>
+    </Card>
   );
 }

@@ -7,6 +7,7 @@ import { formatSeguidores } from "@/lib/format";
 import { NICHOS, type Rede } from "@/components/influenciadores/InfluencerBoard";
 import { TIERS, suggestTier } from "@/lib/pricing";
 import { type BankInflu, type Endereco } from "@/lib/banco-influs-store";
+import { NativeSelect } from "@/components/ui/native-select";
 
 const REDES_OPTS = ["Instagram", "TikTok", "YouTube", "X", "LinkedIn", "Facebook"];
 
@@ -240,7 +241,7 @@ export function BankInfluWizard({
                     disabled={idx > maxVisited}
                     aria-current={step === s.key ? "step" : undefined}
                     className={`flex items-center gap-2 text-xs font-medium transition-colors ${
-                      idx > maxVisited ? "cursor-not-allowed text-muted-foreground/50" : ""
+                      idx > maxVisited ? "cursor-not-allowed text-text-secondary" : ""
                     } ${step === s.key ? "text-foreground" : "text-muted-foreground"}`}
                   >
                     <span
@@ -302,7 +303,7 @@ export function BankInfluWizard({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-muted-foreground">Nicho</label>
-                    <select
+                    <NativeSelect
                       value={nicho}
                       onChange={(e) => setNicho(e.target.value)}
                       className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
@@ -313,7 +314,7 @@ export function BankInfluWizard({
                           {n}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </div>
                   <div>
                     <div className="flex items-center justify-between">
@@ -324,13 +325,13 @@ export function BankInfluWizard({
                         <button
                           type="button"
                           onClick={() => setTier(suggestTier(maiorSeguidores))}
-                          className="text-[11px] text-brand hover:underline"
+                          className="text-[11px] text-text-brand hover:underline"
                         >
                           Sugerir
                         </button>
                       )}
                     </div>
-                    <select
+                    <NativeSelect
                       value={tier}
                       onChange={(e) => setTier(e.target.value)}
                       className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
@@ -341,7 +342,7 @@ export function BankInfluWizard({
                           {t.label}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </div>
                 </div>
 
@@ -388,7 +389,7 @@ export function BankInfluWizard({
                         { id: crypto.randomUUID(), plataforma: "Instagram", handle: "" },
                       ])
                     }
-                    className="inline-flex items-center gap-1 text-xs text-brand hover:underline"
+                    className="inline-flex items-center gap-1 text-xs text-text-brand hover:underline"
                   >
                     <Plus className="h-3 w-3" /> adicionar rede
                   </button>
@@ -397,7 +398,7 @@ export function BankInfluWizard({
                   {redes.map((r) => (
                     <div key={r.id} className="rounded-lg border border-border p-2.5">
                       <div className="flex items-center gap-2">
-                        <select
+                        <NativeSelect
                           value={r.plataforma}
                           onChange={(e) =>
                             setRedes((list) =>
@@ -413,7 +414,7 @@ export function BankInfluWizard({
                               {opt}
                             </option>
                           ))}
-                        </select>
+                        </NativeSelect>
                         <input
                           type="text"
                           value={r.handle}
@@ -458,7 +459,7 @@ export function BankInfluWizard({
                         onClick={() => setRedePrincipalId(r.id)}
                         className={`mt-2 inline-flex items-center gap-1 text-[11px] font-medium ${
                           redePrincipalId === r.id
-                            ? "text-brand"
+                            ? "text-text-brand"
                             : "text-muted-foreground hover:text-foreground"
                         }`}
                       >

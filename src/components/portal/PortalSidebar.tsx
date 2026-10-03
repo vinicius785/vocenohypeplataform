@@ -36,7 +36,7 @@ function NavItem({
       title={collapsed ? label : undefined}
       className={`relative flex min-h-10 items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
         active
-          ? "bg-brand-subtle font-medium text-brand"
+          ? "bg-brand-subtle font-medium text-text-brand"
           : "text-muted-foreground hover:bg-muted/60"
       }`}
     >
@@ -123,7 +123,7 @@ export function PortalSidebar({
           {ws.logo ? (
             <img src={ws.logo} alt="" className="h-full w-full object-cover" />
           ) : (
-            <span className="text-xs font-bold">{ws.nome.charAt(0).toUpperCase()}</span>
+            <span className="text-xs font-semibold">{ws.nome.charAt(0).toUpperCase()}</span>
           )}
         </div>
         {!collapsed && (
@@ -141,7 +141,7 @@ export function PortalSidebar({
       >
         <Avatar className="h-7 w-7 shrink-0">
           {clienteFoto && <AvatarImage src={clienteFoto} alt={clienteNome} />}
-          <AvatarFallback className="text-[10px] font-semibold">
+          <AvatarFallback className="text-[11px] font-semibold">
             {clienteNome.charAt(0).toUpperCase()}
           </AvatarFallback>
         </Avatar>
@@ -185,7 +185,7 @@ export function PortalSidebar({
             to="/portal/$token/campanhas"
             params={{ token }}
             onClick={onNavigate}
-            className="block px-2.5 py-1.5 text-xs font-medium text-brand hover:underline"
+            className="block px-2.5 py-1.5 text-xs font-medium text-text-brand hover:underline"
           >
             Ver todas
           </Link>

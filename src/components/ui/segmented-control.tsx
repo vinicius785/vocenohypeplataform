@@ -46,7 +46,7 @@ export function SegmentedControl<T extends string>({
               size === "sm" ? "px-2.5 py-1 text-[11px]" : "px-3.5 py-1.5 text-xs",
               active
                 ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
+                : "text-text-secondary hover:text-foreground",
             )}
           >
             {opt.icon}

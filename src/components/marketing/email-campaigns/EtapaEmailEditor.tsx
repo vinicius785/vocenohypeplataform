@@ -17,6 +17,7 @@ import {
   type SendMode,
 } from "@/lib/email-campaigns-constants";
 import { isoToLocalInput, localInputToIso } from "./email-ui-utils";
+import { NativeSelect } from "@/components/ui/native-select";
 
 type Template = Awaited<ReturnType<typeof listEmailTemplates>>[number];
 type Step = {
@@ -134,7 +135,7 @@ export function EtapaEmailEditor({
           {templates.length > 0 && (
             <label className="block space-y-1">
               <span className="text-xs font-medium text-foreground">Conteúdo</span>
-              <select
+              <NativeSelect
                 value={templateId}
                 onChange={(e) => applyTemplate(e.target.value)}
                 className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
@@ -145,7 +146,7 @@ export function EtapaEmailEditor({
                     Usar template: {t.name}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </label>
           )}
 
@@ -169,7 +170,7 @@ export function EtapaEmailEditor({
                     type="button"
                     onClick={() => setBodyHtml((v) => `${v}{{${t.token}}}`)}
                     title={t.label}
-                    className="rounded-full border border-dashed border-border px-2 py-0.5 text-[10px] font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+                    className="rounded-full border border-dashed border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground"
                   >
                     {`{{${t.token}}}`}
                   </button>
@@ -207,7 +208,7 @@ export function EtapaEmailEditor({
 
           <label className="block space-y-1">
             <span className="text-xs font-medium text-foreground">Destinatários</span>
-            <select
+            <NativeSelect
               value={recipientRule}
               onChange={(e) => setRecipientRule(e.target.value as RecipientRule)}
               className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
@@ -217,12 +218,12 @@ export function EtapaEmailEditor({
                   {RECIPIENT_RULE_LABEL[r]}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </label>
 
           <label className="block space-y-1">
             <span className="text-xs font-medium text-foreground">Quando enviar</span>
-            <select
+            <NativeSelect
               value={sendMode}
               onChange={(e) => setSendMode(e.target.value as SendMode)}
               className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
@@ -232,7 +233,7 @@ export function EtapaEmailEditor({
                   {SEND_MODE_LABEL[m]}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </label>
           {sendMode === "agendado" && (
             <label className="block space-y-1">

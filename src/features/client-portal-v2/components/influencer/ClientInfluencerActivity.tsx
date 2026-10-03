@@ -34,7 +34,7 @@ export function ClientInfluencerActivity({ influencer }: { influencer: PublicInf
 
   return (
     <InfluencerDrawerSection icon={<Sparkles className="h-4 w-4" />} title="Atividade">
-      <div className="space-y-1.5 rounded-2xl bg-card p-2 dark:shadow-none">
+      <div className="surface-card space-y-1.5 p-2">
         {events.map((event) => (
           <div key={event.id} className="flex items-start gap-2.5 rounded-xl px-3 py-2">
             <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">

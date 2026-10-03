@@ -13,7 +13,7 @@ export function ClientInfluencerFiles({ influencer }: { influencer: PublicInflue
 
   return (
     <InfluencerDrawerSection icon={<Paperclip className="h-4 w-4" />} title="Arquivos">
-      <div className="space-y-1.5 rounded-2xl bg-card p-2 dark:shadow-none">
+      <div className="surface-card space-y-1.5 p-2">
         <div className="flex items-center gap-3 rounded-xl px-3 py-2">
           <Paperclip className="h-4 w-4 shrink-0 text-muted-foreground" />
           <div className="min-w-0 flex-1">

@@ -12,6 +12,7 @@ import {
 } from "@/lib/aeo-store";
 import { proximoPromptNaoPreenchido } from "@/lib/aeo-engine";
 import { TagChipInput } from "../shared/TagChipInput";
+import { useConfirm } from "@/hooks/use-confirm";
 import { PosicaoButtonGroup } from "../shared/PosicaoButtonGroup";
 import { NarrativaButtonGroup } from "../shared/NarrativaButtonGroup";
 import { EvidenciaField } from "../shared/EvidenciaField";
@@ -143,9 +144,15 @@ function RespostaDrawerBody({
   const anterior = idx > 0 ? ordenados[idx - 1] : idx === 0 ? ordenados.at(-1) : undefined;
   const proximo = idx >= 0 && idx < ordenados.length - 1 ? ordenados[idx + 1] : ordenados[0];
 
-  const confirmNavigateAway = () => {
+  const { confirm, confirmDialog } = useConfirm();
+
+  const confirmNavigateAway = async () => {
     if (!dirty) return true;
-    return window.confirm("Há alterações não salvas nesta resposta. Descartar e continuar?");
+    return confirm("Há alterações não salvas nesta resposta. Descartar e continuar?", {
+      title: "Descartar alterações?",
+      confirmLabel: "Descartar",
+      destructive: true,
+    });
   };
 
   const save = (): AeoResposta => {
@@ -177,11 +184,12 @@ function RespostaDrawerBody({
 
   return (
     <div className="flex h-full flex-col">
+      {confirmDialog}
       <div className="flex items-center justify-between border-b border-border px-5 py-3">
         <button
           type="button"
-          onClick={() => {
-            if (anterior && confirmNavigateAway()) onNavigatePrompt(anterior);
+          onClick={async () => {
+            if (anterior && (await confirmNavigateAway())) onNavigatePrompt(anterior);
           }}
           disabled={!anterior}
           className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-30"
@@ -190,8 +198,8 @@ function RespostaDrawerBody({
         </button>
         <button
           type="button"
-          onClick={() => {
-            if (proximo && confirmNavigateAway()) onNavigatePrompt(proximo);
+          onClick={async () => {
+            if (proximo && (await confirmNavigateAway())) onNavigatePrompt(proximo);
           }}
           disabled={!proximo}
           className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-30"

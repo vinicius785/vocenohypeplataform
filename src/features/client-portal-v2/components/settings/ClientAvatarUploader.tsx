@@ -10,6 +10,7 @@ import {
   validateAvatarFile,
 } from "../../lib/avatar-upload";
 import { initialsFromName, useClientProfile } from "../../lib/client-profile";
+import { useConfirm } from "@/hooks/use-confirm";
 import { ClientAvatarCropDialog } from "./ClientAvatarCropDialog";
 
 const SIGNED_URL_TTL = 60 * 60 * 24 * 365; // 1 ano — mesmo padrão já usado pelo time (PerfilSection.tsx)
@@ -30,6 +31,7 @@ export function ClientAvatarUploader({ name, roleLabel }: { name: string; roleLa
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [cropOpen, setCropOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const { confirm, confirmDialog } = useConfirm();
 
   const initials = initialsFromName(name);
 
@@ -80,7 +82,12 @@ export function ClientAvatarUploader({ name, roleLabel }: { name: string; roleLa
 
   const handleRemove = async () => {
     if (busy || !profile?.photoUrl) return;
-    if (!window.confirm("Remover sua foto de perfil?")) return;
+    const ok = await confirm("Sua foto de perfil será removida.", {
+      title: "Remover foto?",
+      confirmLabel: "Remover foto",
+      destructive: true,
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       const {
@@ -109,6 +116,7 @@ export function ClientAvatarUploader({ name, roleLabel }: { name: string; roleLa
 
   return (
     <div className="flex items-center gap-4">
+      {confirmDialog}
       <div className="h-16 w-16 shrink-0 overflow-hidden rounded-full border border-border bg-muted">
         {profile?.photoUrl ? (
           <img

@@ -37,7 +37,7 @@ import {
   type ProjectFiltersState,
 } from "./projetos/projeto-ui";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { PageCanvas, PageContainer } from "@/components/shared/PageContainer";
+import { PageContainer } from "@/components/shared/PageContainer";
 import { PageHeader } from "@/components/shared/PageHeader";
 import {
   PageSummaryPanel,
@@ -48,6 +48,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { useConfirm } from "@/hooks/use-confirm";
+import { NativeSelect } from "@/components/ui/native-select";
 
 export function ProjetosSection() {
   const navigate = useNavigate();
@@ -210,7 +211,7 @@ export function ProjetosSection() {
     // Canvas fix — mesma correção já usada em Campanhas/Clientes/Financeiro
     // (--background e --card são idênticos no tema claro, então sem isso
     // os cards não se distinguiam do fundo).
-    <PageCanvas>
+    <>
       <PageContainer className="space-y-6">
         <PageHeader
           title="Projetos"
@@ -263,10 +264,7 @@ export function ProjetosSection() {
         {!loaded ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div
-                key={i}
-                className="h-[124px] animate-pulse rounded-[20px] border border-transparent bg-card"
-              />
+              <div key={i} className="surface-card h-[124px] animate-pulse border-transparent" />
             ))}
           </div>
         ) : !hasAnyProject ? (
@@ -314,7 +312,7 @@ export function ProjetosSection() {
             <button
               type="button"
               onClick={() => setShowEncerrados((v) => !v)}
-              className="flex w-full items-center justify-center gap-1.5 rounded-full py-2.5 text-sm font-medium text-brand hover:underline"
+              className="flex w-full items-center justify-center gap-1.5 rounded-full py-2.5 text-sm font-medium text-text-brand hover:underline"
             >
               {showEncerrados
                 ? "Ocultar projetos encerrados"
@@ -353,7 +351,7 @@ export function ProjetosSection() {
         )}
         {confirmDialog}
       </PageContainer>
-    </PageCanvas>
+    </>
   );
 }
 
@@ -541,7 +539,7 @@ export function ProjectWizard({
   };
 
   const inputCls =
-    "w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none placeholder:text-muted-foreground/60 focus-visible:ring-2 focus-visible:ring-brand";
+    "w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none placeholder:text-text-secondary focus-visible:ring-2 focus-visible:ring-brand";
 
   return (
     <>
@@ -649,7 +647,7 @@ export function ProjectWizard({
                   {initial && (
                     <label className="block space-y-1.5">
                       <span className="text-sm font-medium text-foreground">Status</span>
-                      <select
+                      <NativeSelect
                         value={status}
                         onChange={(e) => setStatus(e.target.value as ProjectStatus)}
                         className={inputCls}
@@ -659,7 +657,7 @@ export function ProjectWizard({
                             {PROJECT_STATUS_LABEL[s]}
                           </option>
                         ))}
-                      </select>
+                      </NativeSelect>
                     </label>
                   )}
                 </div>

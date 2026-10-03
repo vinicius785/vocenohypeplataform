@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { Plus, Target, TrendingUp } from "lucide-react";
-import { PageCanvas, PageContainer } from "@/components/shared/PageContainer";
+import { PageContainer } from "@/components/shared/PageContainer";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import {
@@ -328,7 +328,7 @@ export function MetasSection() {
   }
 
   return (
-    <PageCanvas>
+    <>
       <PageContainer className="space-y-6">
         {/* Objetivos/Indicadores: navegação contextual do módulo (a sidebar
          * global só leva a Metas); `metasView` continua na URL. */}
@@ -425,6 +425,6 @@ export function MetasSection() {
         />
         {confirmDialog}
       </PageContainer>
-    </PageCanvas>
+    </>
   );
 }
