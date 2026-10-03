@@ -5,8 +5,10 @@ import {
   ChevronUp,
   CircleDashed,
   CornerUpRight,
+  Loader2,
   Lock,
   LockOpen,
+  Paperclip,
   Send,
   Undo2,
   User as UserIcon,
@@ -172,6 +174,7 @@ export function TaskActivityPanel({
   commentText,
   onCommentTextChange,
   onPostComment,
+  onAttachFiles,
   pendingDeadlineChange,
   onConfirmDeadlineChange,
   onCancelDeadlineChange,
@@ -197,6 +200,8 @@ export function TaskActivityPanel({
   commentText: string;
   onCommentTextChange: (v: string) => void;
   onPostComment: () => void;
+  /** Envia arquivos pelo composer; devolve os nomes anexados. */
+  onAttachFiles?: (files: FileList) => Promise<string[]>;
   /** Mudança de prazo crítica aguardando confirmação (vence hoje/está
    * atrasada, sendo adiada) — enquanto presente, mostra o formulário
    * inline abaixo do feed (nunca modal/popup/drawer). */
@@ -255,6 +260,32 @@ export function TaskActivityPanel({
       el?.setSelectionRange(before.length, before.length);
     }, 0);
   };
+  // "Responder": cita a pessoa (@menção, que já notifica) e foca o campo.
+  const replyTo = (author: string) => {
+    const prefix = `@${author} `;
+    onCommentTextChange(commentText.startsWith(prefix) ? commentText : prefix + commentText);
+    setTimeout(() => {
+      const el = commentRef.current;
+      el?.focus();
+      el?.setSelectionRange(el.value.length, el.value.length);
+    }, 0);
+  };
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const attach = async (files: FileList | null) => {
+    if (!files?.length || !onAttachFiles) return;
+    setUploading(true);
+    try {
+      const names = await onAttachFiles(files);
+      if (names.length) {
+        const line = names.map((n) => `📎 ${n}`).join("\n");
+        onCommentTextChange(commentText ? `${commentText}\n${line}` : line);
+      }
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const mentionMatches =
     mentionQuery !== null
       ? members.filter((m) => m.name.toLowerCase().includes(mentionQuery.toLowerCase())).slice(0, 5)
@@ -344,17 +375,26 @@ export function TaskActivityPanel({
             if (f.type === "comment") {
               const member = memberFor(f.item.author, f.item, members);
               return (
-                <div key={f.item.id} className="flex min-w-0 items-start gap-2">
+                <div key={f.item.id} className="group/comment flex min-w-0 items-start gap-2.5">
                   <Avatar member={member} size={28} />
-                  <div className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-2">
-                    <div className="mb-0.5 flex items-baseline gap-1.5">
-                      <span className="text-xs font-semibold">{f.item.author}</span>
-                      <span className="text-[10px] text-muted-foreground/70">
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1 flex items-baseline gap-1.5">
+                      <span className="text-xs font-semibold text-foreground">{f.item.author}</span>
+                      <span className="text-[10px] text-muted-foreground">
                         {formatWhen(f.item.createdAt)}
                       </span>
+                      <button
+                        type="button"
+                        onClick={() => replyTo(f.item.author)}
+                        className="ml-auto rounded px-1.5 text-[10px] font-medium text-muted-foreground transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/comment:opacity-100 sm:opacity-0"
+                      >
+                        Responder
+                      </button>
                     </div>
-                    <div className="whitespace-pre-wrap break-words text-xs leading-relaxed text-foreground [overflow-wrap:anywhere]">
-                      {renderMentions(f.item.text, members)}
+                    <div className="rounded-lg rounded-tl-sm bg-muted/60 px-3 py-2 text-xs leading-relaxed text-foreground [overflow-wrap:anywhere]">
+                      <div className="whitespace-pre-wrap break-words">
+                        {renderMentions(f.item.text, members)}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -532,9 +572,36 @@ export function TaskActivityPanel({
               }
             }}
             rows={2}
-            placeholder="Escreva um comentário… use @ para mencionar"
-            className="w-full resize-none rounded-md border border-border bg-background py-1.5 pl-2 pr-9 text-xs outline-none placeholder:text-muted-foreground/70 focus:border-primary"
+            aria-label="Escrever comentário"
+            placeholder="Escreva um comentário… @ para mencionar · Ctrl/⌘+Enter envia"
+            className="w-full resize-none rounded-md border border-border bg-background py-2 pl-2.5 pr-16 text-xs outline-none placeholder:text-muted-foreground/70 focus:border-ring focus:ring-1 focus:ring-ring"
           />
+          {onAttachFiles && (
+            <>
+              <input
+                ref={fileRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  void attach(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+              <IconButton
+                label={uploading ? "Enviando arquivo…" : "Anexar arquivo"}
+                onClick={() => fileRef.current?.click()}
+                disabled={uploading}
+                className="absolute bottom-1.5 right-9 h-6 w-6"
+              >
+                {uploading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Paperclip className="h-3.5 w-3.5" />
+                )}
+              </IconButton>
+            </>
+          )}
           <IconButton
             label="Comentar"
             tone="brand"

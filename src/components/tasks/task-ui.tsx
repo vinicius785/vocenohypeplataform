@@ -297,15 +297,25 @@ export function TaskStatusSelect({
           <button
             type="button"
             onClick={(e) => e.stopPropagation()}
-            className="inline-flex max-w-full items-center rounded-md outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            className="inline-flex max-w-full items-center rounded-md outline-none transition-opacity hover:opacity-85 focus-visible:ring-2 focus-visible:ring-brand"
           >
-            <TaskStatusBadge status={value} />
+            <TaskStatusBadge status={value} className="h-8 px-2.5 text-xs" />
           </button>
         ))
       }
     />
   );
 }
+
+/* ================================================================== */
+/* CHIP DE PROPRIEDADE (barra de propriedades do detalhe)              */
+/* ================================================================== */
+
+/** Moldura única dos controles inline da barra de propriedades — status,
+ * responsável, prazo, prioridade, fase e tempo têm a mesma altura, borda
+ * e hover; cada um abre o seu próprio seletor. */
+export const TASK_CHIP =
+  "inline-flex h-8 max-w-[240px] shrink-0 items-center gap-1.5 rounded-md border border-border/70 bg-background px-2 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand data-[state=open]:bg-muted";
 
 /* ================================================================== */
 /* PRIORIDADE                                                           */
@@ -339,10 +349,13 @@ export function TaskPrioritySelect({
   value,
   onChange,
   size = "sm",
+  chip,
 }: {
   value: TaskPriority;
   onChange: (next: TaskPriority) => void;
   size?: "xs" | "sm";
+  /** Renderiza como chip da barra de propriedades. */
+  chip?: boolean;
 }) {
   return (
     <TaskOptionPicker
@@ -359,7 +372,11 @@ export function TaskPrioritySelect({
         <button
           type="button"
           onClick={(e) => e.stopPropagation()}
-          className="inline-flex h-6 items-center rounded-md px-1 outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-brand"
+          className={
+            chip
+              ? TASK_CHIP
+              : "inline-flex h-6 items-center rounded-md px-1 outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-brand"
+          }
         >
           <TaskPriorityFlag priority={value} size={size} />
         </button>

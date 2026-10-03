@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Calendar,
+  CalendarClock,
+  SlidersHorizontal,
+  Timer,
   ChevronRight,
   ChevronDown,
-  Clock,
   FileText,
   Flag,
   Tag,
@@ -21,12 +23,14 @@ import {
   ArrowUpDown,
   Filter,
   MessageSquare,
+  Undo2,
   MoreHorizontal,
   Search,
   Link2,
   Milestone as MilestoneIcon,
   Copy,
   Archive,
+  AlertTriangle,
   History,
   FolderInput,
   Lock,
@@ -77,7 +81,7 @@ import { DateField } from "@/components/ui/date-field";
 import { TimeTrackingPanel } from "@/components/tasks/TimeTrackingPanel";
 import { stopIfRunningOnTask } from "@/lib/time-entries";
 import { linkifyText } from "@/lib/linkify";
-import { loadTeamMembers, ACTIVITY_STATUS_COMPLETED_ACTION } from "@/lib/projetos";
+import { loadTeamMembers, loadProjetos, ACTIVITY_STATUS_COMPLETED_ACTION } from "@/lib/projetos";
 import { getMe } from "@/lib/chat-store";
 import { supabase } from "@/integrations/supabase/client";
 import { TaskActivityPanel } from "@/components/tasks/TaskActivityPanel";
@@ -176,6 +180,7 @@ import {
   TaskStatusSelect,
   deadlineViewFromTask,
   isTaskStatus,
+  TASK_CHIP,
 } from "@/components/tasks/task-ui";
 import type { TaskBlockedState, TaskBlockCategory } from "@/lib/projetos";
 export type { TaskBlockedState, TaskBlockCategory };
@@ -2981,6 +2986,7 @@ export function TaskDialog({
   const [subtasksOpen, setSubtasksOpen] = useState(false);
   const [showArchivedSubtasks, setShowArchivedSubtasks] = useState(false);
   const [attachmentsOpen, setAttachmentsOpen] = useState(false);
+  const [fieldsOpen, setFieldsOpen] = useState(false);
   // `dependsOn`/`blocks` só resolvem depois que `allDeps` (store realtime)
   // carrega — abrir a faixa de Dependências sozinha na primeira vez que
   // isso acontecer (por tarefa) evita nascer sempre fechada mesmo quando
@@ -3076,10 +3082,17 @@ export function TaskDialog({
     setPendingBlockAction(null);
     setBlockActionBusy(false);
     lastAtomicStatusRef.current = null;
-    setActivityOpen(false);
+    // Desktop largo: Atividade fica aberta ao lado (painel fixo); tablet e
+    // celular: começa fechada e abre pelo botão do cabeçalho.
+    setActivityOpen(
+      !!initial &&
+        typeof window !== "undefined" &&
+        window.matchMedia("(min-width: 1024px)").matches,
+    );
     setSubtasksOpen(!!initial?.subtasks?.length);
     setDepsOpen(false); // reaberto pelo `useEffect` de `dependsOn`/`blocks`, quando resolverem
     setAttachmentsOpen(!!initial?.attachments?.length);
+    setFieldsOpen(false);
     setEstimate(initial?.estimate ?? "");
     setRecurrence(initial?.recurrence);
     setRoadmapPhaseId(initial?.roadmapPhaseId ?? defaultRoadmapPhaseId);
@@ -3870,8 +3883,8 @@ export function TaskDialog({
     return { id: crypto.randomUUID(), name: file.name, url: signed.signedUrl, path };
   }
 
-  const addFiles = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
+  const addFiles = async (files: FileList | null): Promise<Attachment[]> => {
+    if (!files || files.length === 0) return [];
     const items: Attachment[] = await Promise.all(
       Array.from(files).map(
         async (f) =>
@@ -3884,6 +3897,7 @@ export function TaskDialog({
     );
     setAttachments((a) => [...a, ...items]);
     setActivity((a) => pushActivity(a, `anexou ${items.length} arquivo(s)`));
+    return items;
   };
   const removeAttachment = (id: string) => {
     const removed = attachments.find((a) => a.id === id);
@@ -3925,6 +3939,69 @@ export function TaskDialog({
   const promoteToPrimary = (name: string) => {
     setPrimaryAssignee((prev) => (prev === name ? undefined : name));
   };
+  // Nome do projeto no breadcrumb (só leitura do store local, sem I/O).
+  const scopeName = useMemo(
+    () =>
+      scope?.kind === "projeto" ? loadProjetos().find((p) => p.id === scope.id)?.name : undefined,
+    [scope],
+  );
+
+  // "Alterações pendentes": compara o estado editável com a tarefa como
+  // abriu. Só indicador — salvar continua sendo `attemptSave` (botão,
+  // Ctrl/⌘+Enter ou fechar). Descrição fica fora: ela tem autosave próprio.
+  const isDirty = useMemo(() => {
+    if (!initial) return false;
+    const now = [
+      title.trim(),
+      status,
+      priority,
+      dueDate || "",
+      startDate || "",
+      assignees,
+      primaryAssignee ?? null,
+      tags,
+      attachments.map((a) => a.id),
+      subtasks,
+      roadmapPhaseId ?? null,
+      estimate || "",
+      recurrence ?? null,
+      comments.length,
+    ];
+    const was = [
+      initial.title,
+      initial.status,
+      initial.priority ?? "Normal",
+      initial.dueDate ?? "",
+      initial.startDate ?? "",
+      getTaskAssignees(initial),
+      initial.primaryAssignee ?? null,
+      initial.tags ?? [],
+      (initial.attachments ?? []).map((a) => a.id),
+      initial.subtasks ?? [],
+      initial.roadmapPhaseId ?? null,
+      initial.estimate ?? "",
+      initial.recurrence ?? null,
+      (initial.comments ?? []).length,
+    ];
+    return JSON.stringify(now) !== JSON.stringify(was);
+  }, [
+    initial,
+    title,
+    status,
+    priority,
+    dueDate,
+    startDate,
+    assignees,
+    primaryAssignee,
+    tags,
+    attachments,
+    subtasks,
+    roadmapPhaseId,
+    estimate,
+    recurrence,
+    comments.length,
+  ]);
+
   const rootLabel =
     breadcrumb ??
     (scope?.kind === "projeto"
@@ -3951,52 +4028,96 @@ export function TaskDialog({
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent
           mobileFullScreen
-          className={`gap-0 overflow-hidden p-0 ${
-            activityOpen
+          className={`flex flex-col gap-0 overflow-hidden p-0 md:h-[min(90vh,920px)] ${
+            activityOpen && initial
               ? "w-[min(1280px,calc(100vw-48px))] max-w-[1280px]"
-              : "w-[min(960px,calc(100vw-48px))] max-w-[960px]"
+              : "w-[min(900px,calc(100vw-48px))] max-w-[900px]"
           }`}
         >
           <DialogTitle className="sr-only">{initial ? "Editar tarefa" : "Nova tarefa"}</DialogTitle>
           <DialogDescription className="sr-only">
-            Formulário de tarefa no estilo ClickUp
+            Detalhe da tarefa: propriedades, descrição, subtarefas, dependências, anexos e atividade
           </DialogDescription>
 
-          <div className="flex items-center gap-2 border-b border-border bg-muted/30 py-2.5 pl-4 pr-12 text-[11px] text-muted-foreground">
-            <span>{rootLabel}</span>
-            <ChevronRight className="h-3 w-3 opacity-60" />
-            <span>Tarefas</span>
-            {parentTitle && (
-              <>
-                <ChevronRight className="h-3 w-3 opacity-60" />
-                <span className="max-w-[240px] truncate" title={parentTitle}>
-                  {parentTitle}
-                </span>
-              </>
-            )}
-            <ChevronRight className="h-3 w-3 opacity-60" />
-            <span className="text-foreground">
-              {initial ? "Editar" : parentTitle ? "Nova subtarefa" : "Nova tarefa"}
-            </span>
+          <div className="flex min-h-12 items-center gap-2 border-b border-border py-2 pl-4 pr-12 text-xs text-muted-foreground sm:pl-6">
+            <nav
+              aria-label="Localização da tarefa"
+              className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden"
+            >
+              <span className="shrink-0">{rootLabel}</span>
+              {scopeName && (
+                <>
+                  <span aria-hidden className="opacity-50">
+                    /
+                  </span>
+                  <span className="min-w-0 truncate" title={scopeName}>
+                    {scopeName}
+                  </span>
+                </>
+              )}
+              <span aria-hidden className="opacity-50">
+                /
+              </span>
+              <span className="shrink-0">Tarefas</span>
+              {parentTitle && (
+                <>
+                  <span aria-hidden className="opacity-50">
+                    /
+                  </span>
+                  <span className="min-w-0 truncate" title={parentTitle}>
+                    {parentTitle}
+                  </span>
+                </>
+              )}
+              {!initial && (
+                <>
+                  <span aria-hidden className="opacity-50">
+                    /
+                  </span>
+                  <span className="shrink-0 text-foreground">
+                    {parentTitle ? "Nova subtarefa" : "Nova tarefa"}
+                  </span>
+                </>
+              )}
+            </nav>
             {/* Menu de ações — só faz sentido editando uma tarefa raiz já
                 existente (não numa subtarefa nem em "Nova tarefa"). Mover/
                 Duplicar dependem de saber o scope atual (`scope`), então
                 ficam fora se ele não vier informado (chamador não sabe onde
                 a tarefa vive). */}
             {initial && (
-              <div className="ml-auto flex items-center gap-1">
+              <div className="ml-auto flex shrink-0 items-center gap-1">
+                {isDirty ? (
+                  <button
+                    type="button"
+                    onClick={() => attemptSave(true)}
+                    title="As alterações também são salvas ao fechar a tarefa (Ctrl/⌘ + Enter)"
+                    className="hidden items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:bg-muted sm:inline-flex"
+                  >
+                    <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                    Alterações pendentes · Salvar
+                  </button>
+                ) : (
+                  <span className="hidden items-center gap-1 px-2 text-[11px] text-muted-foreground sm:inline-flex">
+                    <Check aria-hidden className="h-3 w-3" /> Salvo
+                  </span>
+                )}
                 <button
                   type="button"
                   onClick={() => setActivityOpen((v) => !v)}
+                  aria-pressed={activityOpen}
+                  aria-label={`Atividade (${activity.length + comments.length})`}
                   className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
                     activityOpen
-                      ? "bg-brand-subtle text-brand"
+                      ? "bg-muted text-foreground"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   }`}
                 >
-                  Atividade · {activity.length + comments.length}
+                  <MessageSquare aria-hidden className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Atividade</span>
+                  <span className="tabular-nums">{activity.length + comments.length}</span>
                 </button>
-                {!parentTitle && (
+                {
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <button
@@ -4008,12 +4129,12 @@ export function TaskDialog({
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      {scope && (
+                      {!parentTitle && scope && (
                         <DropdownMenuItem onClick={() => setMoveDialogOpen(true)}>
                           <FolderInput className="h-3.5 w-3.5" /> Mover para...
                         </DropdownMenuItem>
                       )}
-                      {scope && (
+                      {!parentTitle && scope && (
                         <DropdownMenuItem
                           onClick={() => {
                             duplicateTask(initial, scope);
@@ -4033,17 +4154,10 @@ export function TaskDialog({
                       >
                         <Link2 className="h-3.5 w-3.5" /> Relacionamentos
                       </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() =>
-                          historicoSectionRef.current?.scrollIntoView({
-                            behavior: "smooth",
-                            block: "center",
-                          })
-                        }
-                      >
+                      <DropdownMenuItem onClick={() => setActivityOpen(true)}>
                         <History className="h-3.5 w-3.5" /> Histórico
                       </DropdownMenuItem>
-                      {status === "Bloqueada" ? (
+                      {parentTitle ? null : status === "Bloqueada" ? (
                         <DropdownMenuItem onClick={openResolveComposer}>
                           <Lock className="h-3.5 w-3.5" /> Resolver bloqueio
                         </DropdownMenuItem>
@@ -4055,11 +4169,15 @@ export function TaskDialog({
                           </DropdownMenuItem>
                         )
                       )}
-                      {status !== "Arquivado" && (
+                      {!parentTitle && status !== "Arquivado" && (
                         <DropdownMenuItem onClick={() => setStatus("Arquivado")}>
                           <Archive className="h-3.5 w-3.5" /> Arquivar
                         </DropdownMenuItem>
                       )}
+                      {/* Antigo botão "Cancelar" do rodapé: fecha SEM salvar. */}
+                      <DropdownMenuItem onClick={() => onOpenChange(false)}>
+                        <Undo2 className="h-3.5 w-3.5" /> Descartar alterações e fechar
+                      </DropdownMenuItem>
                       {onDelete && (
                         <DropdownMenuItem
                           onClick={onDelete}
@@ -4070,7 +4188,7 @@ export function TaskDialog({
                       )}
                     </DropdownMenuContent>
                   </DropdownMenu>
-                )}
+                }
               </div>
             )}
           </div>
@@ -4089,98 +4207,73 @@ export function TaskDialog({
           )}
 
           <div
-            className={`grid max-h-[80vh] grid-cols-1 overflow-hidden ${
-              activityOpen ? "md:grid-cols-[minmax(0,1fr)_360px]" : ""
+            className={`grid min-h-0 flex-1 grid-cols-1 overflow-hidden ${
+              activityOpen && initial
+                ? "md:grid-cols-[minmax(0,1fr)_340px] lg:grid-cols-[minmax(0,1fr)_380px]"
+                : ""
             }`}
           >
             <div
-              className={`min-h-0 overflow-y-auto ${
+              className={`min-h-0 overflow-y-auto [overscroll-behavior:contain] ${
                 isMobileDialog && activityOpen && initial ? "hidden md:block" : ""
               }`}
             >
-              <div className="px-5 pb-2 pt-5 sm:px-8 sm:pt-6">
-                {parentTitle && (
-                  <p className="mb-1 flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
-                    <CornerDownRight aria-hidden className="h-3 w-3 shrink-0" />
-                    Subtarefa de
-                    <span className="truncate font-medium text-foreground" title={parentTitle}>
-                      {parentTitle}
-                    </span>
+              {/* Documento — largura confortável de leitura, centralizado. */}
+              <div className="mx-auto w-full max-w-[820px] pb-10">
+                <div className="px-5 pb-2 pt-5 sm:px-10 sm:pt-7">
+                  {/* Tipo → título → propriedades: o "cabeçalho do documento". */}
+                  <p className="mb-1.5 flex min-w-0 items-center gap-1 text-[11px] font-medium text-muted-foreground">
+                    {parentTitle ? (
+                      <>
+                        <CornerDownRight aria-hidden className="h-3 w-3 shrink-0" />
+                        Subtarefa de
+                        <span className="truncate text-foreground" title={parentTitle}>
+                          {parentTitle}
+                        </span>
+                      </>
+                    ) : (
+                      "Tarefa"
+                    )}
                   </p>
-                )}
 
-                {/* Título quebra linha (nunca corta em telas estreitas), mas
+                  {/* Título quebra linha (nunca corta em telas estreitas), mas
                     continua sendo uma linha lógica: Enter não insere quebra;
                     Ctrl/⌘+Enter salva, como antes. */}
-                <textarea
-                  autoFocus
-                  rows={1}
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value.replace(/\n/g, " "))}
-                  onKeyDown={(e) => {
-                    if (e.key !== "Enter") return;
-                    e.preventDefault();
-                    if (e.metaKey || e.ctrlKey) save();
-                  }}
-                  aria-label="Nome da tarefa"
-                  placeholder="Nome da tarefa"
-                  className="w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-xl font-semibold leading-tight tracking-tight outline-none [field-sizing:content] placeholder:text-muted-foreground/50 sm:text-2xl"
-                />
-
-                {/* Estado atual — status (selo clicável), dependências
-                    pendentes e prazo, logo abaixo do título. */}
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <TaskStatusSelect
-                    value={status}
-                    onChange={handleStatusPick}
-                    onSelectBlocked={openBlockComposer}
-                  />
-                  <TaskDependencyIndicator
-                    pendingTitles={dependsOnPending.map(
-                      (id) => directoryByRawId.get(id)?.label ?? "tarefa",
-                    )}
-                    onClick={() => {
-                      setDepsOpen(true);
-                      depsSectionRef.current?.scrollIntoView({
-                        behavior: "smooth",
-                        block: "center",
-                      });
+                  <textarea
+                    autoFocus={!initial}
+                    rows={1}
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value.replace(/\n/g, " "))}
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter") return;
+                      e.preventDefault();
+                      if (e.metaKey || e.ctrlKey) attemptSave(true);
                     }}
+                    aria-label="Nome da tarefa"
+                    placeholder="Nome da tarefa"
+                    className="-mx-1 w-[calc(100%+0.5rem)] resize-none overflow-hidden rounded-md border-0 bg-transparent px-1 text-2xl font-semibold leading-tight tracking-tight outline-none transition-colors [field-sizing:content] placeholder:text-muted-foreground/50 hover:bg-muted/40 focus:bg-transparent sm:text-[28px]"
                   />
-                  {initial && (dueDate || initial.performanceDueDate) && (
-                    <DeadlineHealthBadge task={initial} />
-                  )}
-                </div>
-              </div>
 
-              {status === "Bloqueada" && blockedState && (
-                <div className="px-5 pb-1 pt-2 sm:px-8">
-                  <TaskBlockPanel
-                    blocked={blockedState}
-                    onResolve={openResolveComposer}
-                    onViewHistory={() =>
-                      historicoSectionRef.current?.scrollIntoView({
-                        behavior: "smooth",
-                        block: "center",
-                      })
-                    }
-                  />
-                </div>
-              )}
-
-              <div className="px-3 py-2 sm:px-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-                  <Field label="Responsável" icon={<User className="h-3.5 w-3.5" />}>
+                  {/* Propriedades — controles inline (cada chip abre o seu
+                    seletor). No celular viram uma linha rolável. */}
+                  <div
+                    role="group"
+                    aria-label="Propriedades da tarefa"
+                    className="-mx-5 mt-4 flex items-center gap-1.5 overflow-x-auto px-5 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden"
+                  >
+                    <TaskStatusSelect
+                      value={status}
+                      onChange={handleStatusPick}
+                      onSelectBlocked={openBlockComposer}
+                    />
                     <Popover open={assigneePickerOpen} onOpenChange={setAssigneePickerOpen}>
                       <PopoverTrigger asChild>
-                        <button
-                          type="button"
-                          className="flex min-h-7 w-full items-center gap-2 rounded-md px-1 py-0.5 text-left text-sm outline-none data-[state=open]:ring-1 data-[state=open]:ring-ring"
-                        >
+                        <button type="button" aria-label="Responsável" className={TASK_CHIP}>
                           {assignees.length === 0 ? (
-                            <span className="text-muted-foreground">
-                              — Selecionar responsável —
-                            </span>
+                            <>
+                              <User aria-hidden className="h-3.5 w-3.5 text-muted-foreground" />
+                              <span className="text-muted-foreground">Sem responsável</span>
+                            </>
                           ) : (
                             (() => {
                               // Sem `primaryAssignee` explícito, o primeiro
@@ -4200,9 +4293,9 @@ export function TaskDialog({
                                         color: colorFor(primaryName),
                                       }
                                     }
-                                    size={20}
+                                    size={18}
                                   />
-                                  <span className="min-w-0 flex-1 truncate">{primaryName}</span>
+                                  <span className="min-w-0 truncate">{primaryName}</span>
                                   {othersCount > 0 && (
                                     <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                                       +{othersCount}
@@ -4272,21 +4365,11 @@ export function TaskDialog({
                         )}
                       </PopoverContent>
                     </Popover>
-                  </Field>
-
-                  <Field label="Prazo" icon={<Calendar className="h-3.5 w-3.5" />}>
-                    <div className="flex w-full flex-wrap items-center gap-2">
-                      <DateField
-                        variant="inline"
-                        value={startDate || undefined}
-                        onChange={(v) => setStartDate(v ?? "")}
-                        max={dueDate || undefined}
-                        rangeStart={startDate || undefined}
-                        rangeEnd={dueDate || undefined}
-                        ariaLabel="Início"
-                        placeholder="Início"
+                    <div className={TASK_CHIP} title="Prazo">
+                      <Calendar
+                        aria-hidden
+                        className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
                       />
-                      <span className="text-xs text-muted-foreground">→</span>
                       <DateField
                         variant="inline"
                         value={dueDate || undefined}
@@ -4300,14 +4383,11 @@ export function TaskDialog({
                         onRecurrenceChange={setRecurrence}
                       />
                     </div>
-                  </Field>
-
-                  <Field label="Prioridade" icon={<Flag className="h-3.5 w-3.5" />}>
-                    <TaskPrioritySelect value={priority} onChange={setPriority} />
-                  </Field>
-
-                  {fases && (
-                    <Field label="Fase" icon={<MilestoneIcon className="h-3.5 w-3.5" />}>
+                    {initial && (dueDate || initial.performanceDueDate) && (
+                      <DeadlineHealthBadge task={initial} />
+                    )}
+                    <TaskPrioritySelect value={priority} onChange={setPriority} chip />
+                    {fases && (
                       <TaskOptionPicker
                         value={roadmapPhaseId ?? ""}
                         ariaLabel="Fase da tarefa"
@@ -4324,10 +4404,11 @@ export function TaskDialog({
                         ]}
                         onSelect={(v) => setRoadmapPhaseId(v || undefined)}
                         trigger={
-                          <button
-                            type="button"
-                            className="flex min-h-7 w-full min-w-0 items-center rounded-md px-1 text-left text-sm font-medium text-foreground outline-none focus-visible:ring-2 focus-visible:ring-brand"
-                          >
+                          <button type="button" aria-label="Fase" className={TASK_CHIP}>
+                            <MilestoneIcon
+                              aria-hidden
+                              className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                            />
                             <span className="truncate">
                               {fases.find((f) => f.id === roadmapPhaseId)?.nome ?? (
                                 <span className="text-muted-foreground">Sem fase</span>
@@ -4336,750 +4417,868 @@ export function TaskDialog({
                           </button>
                         }
                       />
-                    </Field>
-                  )}
-
-                  <Field label="Tempo" icon={<Clock className="h-3.5 w-3.5" />}>
-                    {initial && timeTrackingOrigin ? (
-                      <TimeTrackingPanel
-                        taskId={timeTrackingTaskId!}
-                        taskOrigin={timeTrackingOrigin}
-                        members={members}
-                      />
-                    ) : (
-                      <span className="text-sm text-muted-foreground">
-                        {initial ? "—" : "Disponível após criar a tarefa"}
+                    )}
+                    {initial && timeTrackingOrigin && (
+                      <span className="inline-flex h-8 shrink-0 items-center rounded-md border border-border/70 [&>button]:h-full [&>button]:text-xs">
+                        <TimeTrackingPanel
+                          taskId={timeTrackingTaskId!}
+                          taskOrigin={timeTrackingOrigin}
+                          members={members}
+                        />
                       </span>
                     )}
-                  </Field>
-
-                  <Field
-                    label="Etiquetas"
-                    icon={<Tag className="h-3.5 w-3.5" />}
-                    className="sm:col-span-2 lg:col-span-3"
-                  >
-                    <TaskTagsPopover value={tags} onChange={setTags} taskTags={taskTags} />
-                  </Field>
+                    <TaskDependencyIndicator
+                      pendingTitles={dependsOnPending.map(
+                        (id) => directoryByRawId.get(id)?.label ?? "tarefa",
+                      )}
+                      onClick={() => {
+                        setDepsOpen(true);
+                        depsSectionRef.current?.scrollIntoView({
+                          behavior: "smooth",
+                          block: "center",
+                        });
+                      }}
+                    />
+                  </div>
                 </div>
-              </div>
 
-              <div className="px-5 pb-4 pt-4 sm:px-8">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Descrição
-                  </p>
-                  {initial && autosaveStatus !== "idle" && (
-                    <span className="text-[11px] text-muted-foreground">
-                      {autosaveStatus === "saving" ? "Salvando…" : "Salvo"}
-                    </span>
+                {status === "Bloqueada" && blockedState && (
+                  <div className="px-5 pb-1 pt-3 sm:px-10">
+                    <TaskBlockPanel
+                      blocked={blockedState}
+                      onResolve={openResolveComposer}
+                      onViewHistory={() => {
+                        setActivityOpen(true);
+                        setTimeout(
+                          () =>
+                            historicoSectionRef.current?.scrollIntoView({
+                              behavior: "smooth",
+                              block: "center",
+                            }),
+                          0,
+                        );
+                      }}
+                    />
+                  </div>
+                )}
+
+                <div className="px-5 pb-3 pt-3 sm:px-10">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Descrição
+                    </p>
+                    {initial && autosaveStatus !== "idle" && (
+                      <span className="text-[11px] text-muted-foreground">
+                        {autosaveStatus === "saving" ? "Salvando…" : "Salvo"}
+                      </span>
+                    )}
+                  </div>
+                  <div className="-mx-3 w-[calc(100%+1.5rem)]">
+                    <RichTaskEditor
+                      variant="document"
+                      placeholder="Adicione uma descrição… (digite / para comandos)"
+                      taskKey={initial?.id ?? "new"}
+                      content={description}
+                      onChange={(doc, text) => {
+                        setDescription(doc);
+                        setDescriptionText(text);
+                        scheduleDescriptionAutosave(doc, text);
+                      }}
+                      onBlurFlush={() => flushDescriptionSave(description, descriptionText)}
+                      onSaveShortcut={() => attemptSave(false)}
+                      onOpenTaskMention={(rawId) => pushTaskModal(rawId)}
+                      getMentionOptions={getMentionOptions}
+                    />
+                  </div>
+                </div>
+
+                {/* Campos — propriedades secundárias, recolhidas por padrão. */}
+                <div className="border-t border-border/60 px-5 py-3 sm:px-10">
+                  <TaskSectionHeader
+                    icon={<SlidersHorizontal className="h-3.5 w-3.5" />}
+                    label="Campos"
+                    count={
+                      [tags.length > 0, !!startDate, !!estimate].filter(Boolean).length || undefined
+                    }
+                    open={fieldsOpen}
+                    onToggle={() => setFieldsOpen((v) => !v)}
+                  />
+                  {fieldsOpen && (
+                    <dl className="mt-1 grid grid-cols-[minmax(0,120px)_minmax(0,1fr)] items-center gap-x-3 gap-y-1 pl-5 text-xs">
+                      <dt className="flex items-center gap-1.5 text-muted-foreground">
+                        <Tag aria-hidden className="h-3.5 w-3.5 shrink-0" /> Etiquetas
+                      </dt>
+                      <dd className="min-w-0 py-1">
+                        <TaskTagsPopover value={tags} onChange={setTags} taskTags={taskTags} />
+                      </dd>
+                      <dt className="flex items-center gap-1.5 text-muted-foreground">
+                        <CalendarClock aria-hidden className="h-3.5 w-3.5 shrink-0" /> Início
+                      </dt>
+                      <dd className="min-w-0 py-1">
+                        <DateField
+                          variant="inline"
+                          value={startDate || undefined}
+                          onChange={(v) => setStartDate(v ?? "")}
+                          max={dueDate || undefined}
+                          rangeStart={startDate || undefined}
+                          rangeEnd={dueDate || undefined}
+                          ariaLabel="Início"
+                          placeholder="Início"
+                        />
+                      </dd>
+                      <dt className="flex items-center gap-1.5 text-muted-foreground">
+                        <Timer aria-hidden className="h-3.5 w-3.5 shrink-0" /> Estimativa
+                      </dt>
+                      <dd className="min-w-0 py-1">
+                        <input
+                          value={estimate}
+                          onChange={(e) => setEstimate(e.target.value)}
+                          placeholder="Ex.: 3h"
+                          aria-label="Estimativa"
+                          className="h-7 w-32 rounded-md border border-transparent bg-transparent px-1.5 text-xs outline-none hover:border-border focus:border-ring"
+                        />
+                      </dd>
+                    </dl>
                   )}
                 </div>
-                <div className="min-h-[120px] w-full">
-                  <RichTaskEditor
-                    taskKey={initial?.id ?? "new"}
-                    content={description}
-                    onChange={(doc, text) => {
-                      setDescription(doc);
-                      setDescriptionText(text);
-                      scheduleDescriptionAutosave(doc, text);
-                    }}
-                    onBlurFlush={() => flushDescriptionSave(description, descriptionText)}
-                    onSaveShortcut={() => attemptSave(false)}
-                    onOpenTaskMention={(rawId) => pushTaskModal(rawId)}
-                    getMentionOptions={getMentionOptions}
-                  />
-                </div>
-              </div>
 
-              {initial &&
-                (() => {
-                  const activeSubtasks = subtasks.filter(
-                    (s) => TASK_STATUS_CATEGORY[s.status] !== "archived",
-                  );
-                  const doneSubtasks = activeSubtasks.filter(
-                    (s) => TASK_STATUS_CATEGORY[s.status] === "done",
-                  );
-                  const archivedCount = subtasks.length - activeSubtasks.length;
-                  const progressPct =
-                    activeSubtasks.length > 0
-                      ? Math.round((doneSubtasks.length / activeSubtasks.length) * 100)
-                      : 0;
-                  const visibleSubtasks = sortedSubtasks.filter(
-                    (s) => showArchivedSubtasks || TASK_STATUS_CATEGORY[s.status] !== "archived",
-                  );
-                  return (
-                    <div className="space-y-1 border-t border-border/60 px-5 py-3 sm:px-8">
-                      <TaskSectionHeader
-                        icon={<CornerDownRight className="h-3.5 w-3.5" />}
-                        label="Subtarefas"
-                        count={`${doneSubtasks.length}/${activeSubtasks.length}`}
-                        open={subtasksOpen}
-                        onToggle={() => setSubtasksOpen((v) => !v)}
-                        onAdd={() => {
-                          setSubtasksOpen(true);
-                          setShowSubtaskInput(true);
-                        }}
-                      >
-                        {activeSubtasks.length > 0 && (
-                          <div
-                            role="progressbar"
-                            aria-label="Progresso das subtarefas"
-                            aria-valuenow={progressPct}
-                            aria-valuemin={0}
-                            aria-valuemax={100}
-                            className="h-1 w-16 shrink-0 overflow-hidden rounded-full bg-muted"
-                          >
+                {initial &&
+                  (() => {
+                    const activeSubtasks = subtasks.filter(
+                      (s) => TASK_STATUS_CATEGORY[s.status] !== "archived",
+                    );
+                    const doneSubtasks = activeSubtasks.filter(
+                      (s) => TASK_STATUS_CATEGORY[s.status] === "done",
+                    );
+                    const archivedCount = subtasks.length - activeSubtasks.length;
+                    const progressPct =
+                      activeSubtasks.length > 0
+                        ? Math.round((doneSubtasks.length / activeSubtasks.length) * 100)
+                        : 0;
+                    const visibleSubtasks = sortedSubtasks.filter(
+                      (s) => showArchivedSubtasks || TASK_STATUS_CATEGORY[s.status] !== "archived",
+                    );
+                    return (
+                      <div className="space-y-1 border-t border-border/60 px-5 py-3 sm:px-10">
+                        <TaskSectionHeader
+                          icon={<CornerDownRight className="h-3.5 w-3.5" />}
+                          label="Subtarefas"
+                          count={
+                            activeSubtasks.length > 0
+                              ? `${doneSubtasks.length}/${activeSubtasks.length} concluídas`
+                              : undefined
+                          }
+                          open={subtasksOpen}
+                          onToggle={() => setSubtasksOpen((v) => !v)}
+                          onAdd={() => {
+                            setSubtasksOpen(true);
+                            setShowSubtaskInput(true);
+                          }}
+                        >
+                          {activeSubtasks.length > 0 && (
                             <div
-                              className="h-full rounded-full bg-brand transition-all"
-                              style={{ width: `${progressPct}%` }}
-                            />
-                          </div>
-                        )}
-                        {archivedCount > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => setShowArchivedSubtasks((v) => !v)}
-                            className="text-[11px] text-muted-foreground hover:text-foreground"
-                          >
-                            {showArchivedSubtasks
-                              ? "Ocultar arquivadas"
-                              : `Ver ${archivedCount} arquivada${archivedCount === 1 ? "" : "s"}`}
-                          </button>
-                        )}
-                      </TaskSectionHeader>
-
-                      {subtasksOpen && !showSubtaskInput && visibleSubtasks.length === 0 && (
-                        <TaskEmptyLine>Nenhuma subtarefa.</TaskEmptyLine>
-                      )}
-
-                      {subtasksOpen && (showSubtaskInput || visibleSubtasks.length > 0) && (
-                        <div className="space-y-0.5 pl-4">
-                          {visibleSubtasks.map((s) => {
-                            const done = s.status === "Concluído";
-                            const archived = TASK_STATUS_CATEGORY[s.status] === "archived";
-                            const subtaskAssignees = getTaskAssignees(s);
-                            const applyStatusChange = (next: TaskStatus) => {
-                              // `withStatusChange` já para o timer da subtarefa se
-                              // ele estava rodando (e inicia se o novo status for
-                              // "Em andamento") — sem passar por ela aqui, um
-                              // timer preso rodando nunca parava só porque o
-                              // status mudou.
-                              const updated = withStatusChange(s, next);
-                              setSubtasks((prev) =>
-                                prev.map((st) => (st.id === s.id ? updated : st)),
-                              );
-                              setActivity((a) =>
-                                pushActivity(a, `mudou status de "${s.title}" para ${next}`),
-                              );
-                              if (next === "Concluído" && timeTrackingOrigin) {
-                                void stopIfRunningOnTask(
-                                  s.id.replace(/^mkt:/, ""),
-                                  timeTrackingOrigin,
-                                );
-                              }
-                              // Sem isso, concluir/reabrir uma subtarefa por aqui
-                              // (o caminho mais usado, direto na linha) nunca
-                              // gerava o evento de XP/"concluídas hoje" — só
-                              // concluir a tarefa-mãe ou abrir a subtarefa em seu
-                              // próprio diálogo passavam por
-                              // `recordTaskLedgerEventsOnStatusChange`. Isso fazia
-                              // o Score subcontar completions de verdade.
-                              if (updated !== s) {
-                                recordTaskLedgerEventsOnStatusChange(s, updated, {
-                                  scope,
-                                  members,
-                                  performanceSettings,
-                                });
-                              }
-                            };
-                            return (
+                              role="progressbar"
+                              aria-label="Progresso das subtarefas"
+                              aria-valuenow={progressPct}
+                              aria-valuemin={0}
+                              aria-valuemax={100}
+                              className="hidden h-1 w-16 shrink-0 overflow-hidden rounded-full bg-muted sm:block"
+                            >
                               <div
-                                key={s.id}
-                                className={`group grid min-h-10 grid-cols-[24px_minmax(0,1fr)_20px] items-center gap-x-2 gap-y-0.5 rounded-md px-2 py-1 hover:bg-muted/60 sm:grid-cols-[24px_minmax(0,1fr)_auto_auto_auto_20px] ${
-                                  archived ? "opacity-60" : ""
-                                }`}
-                              >
-                                <TaskStatusSelect
-                                  variant="icon"
-                                  value={s.status}
-                                  onChange={applyStatusChange}
-                                  onSelectBlocked={() => openSubtaskBlockComposer(s.id)}
-                                />
-
-                                <button
-                                  type="button"
-                                  onClick={() => setEditSubtask(s)}
-                                  className="flex min-w-0 items-center gap-2 text-left"
-                                >
-                                  <span
-                                    className={`truncate text-sm ${done ? "text-muted-foreground" : "text-foreground"}`}
-                                  >
-                                    {s.title}
-                                  </span>
-                                  {!isDescriptionEmpty(s.description) && (
-                                    <span
-                                      title="Tem descrição"
-                                      className="shrink-0 text-muted-foreground"
-                                    >
-                                      <FileText className="h-3 w-3" />
-                                    </span>
-                                  )}
-                                </button>
-
-                                {/* Metadados: 2ª linha no celular (sob o título),
-                                    colunas próprias a partir de `sm`. */}
-                                <div className="col-start-2 row-start-2 flex min-w-0 flex-wrap items-center gap-2 sm:contents">
-                                  <SubtaskAssigneePopover
-                                    selected={subtaskAssignees}
-                                    members={members}
-                                    onToggle={(name) => {
-                                      const prevAssignees = getTaskAssignees(s);
-                                      const nextAssignees = prevAssignees.includes(name)
-                                        ? prevAssignees.filter((a) => a !== name)
-                                        : [...prevAssignees, name];
-                                      setSubtasks((prev) =>
-                                        prev.map((st) =>
-                                          st.id === s.id
-                                            ? {
-                                                ...st,
-                                                assignees: nextAssignees,
-                                                assignee: undefined,
-                                              }
-                                            : st,
-                                        ),
-                                      );
-                                      setActivity((a) =>
-                                        pushActivity(
-                                          a,
-                                          `alterou responsável de "${s.title}" para ${nextAssignees.join(", ") || "ninguém"}`,
-                                        ),
-                                      );
-                                    }}
-                                  />
-
-                                  <TaskPrioritySelect
-                                    size="xs"
-                                    value={s.priority}
-                                    onChange={(next) => {
-                                      setSubtasks((prev) =>
-                                        prev.map((st) =>
-                                          st.id === s.id ? { ...st, priority: next } : st,
-                                        ),
-                                      );
-                                      setActivity((a) =>
-                                        pushActivity(
-                                          a,
-                                          `alterou prioridade de "${s.title}" para ${next}`,
-                                        ),
-                                      );
-                                    }}
-                                  />
-
-                                  <div className="flex min-w-0 shrink-0 items-center justify-end">
-                                    {s.status === "Bloqueada" && s.blockedState ? (
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <button
-                                            type="button"
-                                            onClick={() => openSubtaskResolveComposer(s.id)}
-                                            aria-label={`Subtarefa bloqueada: ${s.blockedState.reason}. Resolver bloqueio`}
-                                            className="max-w-[160px] rounded-md outline-none hover:opacity-80 focus-visible:ring-2 focus-visible:ring-brand"
-                                          >
-                                            <TaskBlockIndicator
-                                              blocked={s.blockedState}
-                                              size="xs"
-                                            />
-                                          </button>
-                                        </TooltipTrigger>
-                                        <TooltipContent className="max-w-64">
-                                          <p>{s.blockedState.reason}</p>
-                                          {s.blockedState.responsibleForUnblockingName && (
-                                            <p className="text-muted-foreground">
-                                              Aguardando:{" "}
-                                              {s.blockedState.responsibleForUnblockingName}
-                                            </p>
-                                          )}
-                                          <p className="text-muted-foreground">
-                                            Bloqueada em{" "}
-                                            {fmtDateCompact(s.blockedState.blockedAt.slice(0, 10))}
-                                            {" · "}
-                                            {s.blockedState.pausesDeadline
-                                              ? "prazo pausado"
-                                              : "prazo continua correndo"}
-                                          </p>
-                                        </TooltipContent>
-                                      </Tooltip>
-                                    ) : (
-                                      (s.dueDate || s.performanceDueDate) && (
-                                        <Popover>
-                                          <PopoverTrigger asChild>
-                                            <button
-                                              type="button"
-                                              onClick={(e) => e.stopPropagation()}
-                                              className="rounded px-1 py-0.5 hover:bg-muted/60"
-                                            >
-                                              <CardDeadlineBadge task={s} />
-                                            </button>
-                                          </PopoverTrigger>
-                                          <PopoverContent
-                                            align="start"
-                                            collisionPadding={12}
-                                            className="w-auto p-0"
-                                            onClick={(e) => e.stopPropagation()}
-                                          >
-                                            <CalendarPicker
-                                              mode="single"
-                                              selected={
-                                                s.dueDate ? parseIsoDateLocal(s.dueDate) : undefined
-                                              }
-                                              onSelect={(d) => {
-                                                setSubtasks((prev) =>
-                                                  prev.map((st) =>
-                                                    st.id === s.id
-                                                      ? {
-                                                          ...st,
-                                                          dueDate: d
-                                                            ? formatDateToIso(d)
-                                                            : undefined,
-                                                        }
-                                                      : st,
-                                                  ),
-                                                );
-                                                setActivity((a) =>
-                                                  pushActivity(
-                                                    a,
-                                                    `alterou o prazo de "${s.title}"`,
-                                                  ),
-                                                );
-                                              }}
-                                            />
-                                          </PopoverContent>
-                                        </Popover>
-                                      )
-                                    )}
-                                    {!s.status.startsWith("Bloqueada") &&
-                                      !s.dueDate &&
-                                      !s.performanceDueDate && (
-                                        <Popover>
-                                          <PopoverTrigger asChild>
-                                            <button
-                                              type="button"
-                                              onClick={(e) => e.stopPropagation()}
-                                              className="rounded px-1 py-0.5 text-[11px] text-muted-foreground hover:bg-muted/60 focus-visible:opacity-100 group-hover:opacity-100 sm:opacity-0"
-                                            >
-                                              + Prazo
-                                            </button>
-                                          </PopoverTrigger>
-                                          <PopoverContent
-                                            align="start"
-                                            collisionPadding={12}
-                                            className="w-auto p-0"
-                                            onClick={(e) => e.stopPropagation()}
-                                          >
-                                            <CalendarPicker
-                                              mode="single"
-                                              selected={undefined}
-                                              onSelect={(d) => {
-                                                setSubtasks((prev) =>
-                                                  prev.map((st) =>
-                                                    st.id === s.id
-                                                      ? {
-                                                          ...st,
-                                                          dueDate: d
-                                                            ? formatDateToIso(d)
-                                                            : undefined,
-                                                        }
-                                                      : st,
-                                                  ),
-                                                );
-                                                setActivity((a) =>
-                                                  pushActivity(a, `definiu prazo de "${s.title}"`),
-                                                );
-                                              }}
-                                            />
-                                          </PopoverContent>
-                                        </Popover>
-                                      )}
-                                  </div>
-                                </div>
-
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => e.stopPropagation()}
-                                      aria-label="Mais ações da subtarefa"
-                                      className="col-start-3 row-start-1 shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100 sm:col-auto sm:row-auto sm:opacity-0"
-                                    >
-                                      <MoreHorizontal className="h-3.5 w-3.5" />
-                                    </button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onClick={() => setEditSubtask(s)}>
-                                      <ExternalLink className="h-3.5 w-3.5" /> Abrir detalhes
-                                    </DropdownMenuItem>
-                                    {!archived && (
-                                      <DropdownMenuItem
-                                        onClick={() => {
-                                          setSubtasks((prev) =>
-                                            prev.map((st) =>
-                                              st.id === s.id ? { ...st, status: "Arquivado" } : st,
-                                            ),
-                                          );
-                                          setActivity((a) =>
-                                            pushActivity(a, `arquivou a subtarefa "${s.title}"`),
-                                          );
-                                        }}
-                                      >
-                                        <Archive className="h-3.5 w-3.5" /> Arquivar
-                                      </DropdownMenuItem>
-                                    )}
-                                    <DropdownMenuItem
-                                      onClick={() => removeSubtask(s.id)}
-                                      className="text-destructive focus:text-destructive"
-                                    >
-                                      <Trash2 className="h-3.5 w-3.5" /> Excluir
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </div>
-                            );
-                          })}
-                          {showSubtaskInput && (
-                            <div className="rounded-md border border-border bg-background p-2">
-                              <input
-                                ref={newSubtaskTitleRef}
-                                autoFocus
-                                value={newSubtaskTitle}
-                                onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") {
-                                    e.preventDefault();
-                                    addSubtask();
-                                  }
-                                  if (e.key === "Escape") {
-                                    e.preventDefault();
-                                    setShowSubtaskInput(false);
-                                    setNewSubtaskTitle("");
-                                    setNewSubtaskDate("");
-                                    setNewSubtaskAssignees([]);
-                                  }
-                                }}
-                                placeholder="Nome da subtarefa"
-                                className="mb-2 w-full border-0 bg-transparent p-0 text-sm outline-none placeholder:text-muted-foreground/70"
+                                className="h-full rounded-full bg-brand transition-all"
+                                style={{ width: `${progressPct}%` }}
                               />
-                              <div className="flex flex-wrap items-center gap-2">
-                                <DateField
-                                  variant="input"
-                                  value={newSubtaskDate || undefined}
-                                  onChange={(v) => setNewSubtaskDate(v ?? "")}
-                                  placeholder="Data"
-                                  ariaLabel="Data da subtarefa"
-                                  className="h-auto w-auto rounded border px-2 py-1 text-xs shadow-none"
-                                />
-                                <SubtaskAssigneePopover
-                                  selected={newSubtaskAssignees}
-                                  members={members}
-                                  onToggle={toggleNewSubtaskAssignee}
-                                />
-                                <TaskPrioritySelect
-                                  size="xs"
-                                  value={newSubtaskPriority}
-                                  onChange={setNewSubtaskPriority}
-                                />
-                                <div className="ml-auto flex items-center gap-1">
+                            </div>
+                          )}
+                          {archivedCount > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setShowArchivedSubtasks((v) => !v)}
+                              className="text-[11px] text-muted-foreground hover:text-foreground"
+                            >
+                              {showArchivedSubtasks
+                                ? "Ocultar arquivadas"
+                                : `Ver ${archivedCount} arquivada${archivedCount === 1 ? "" : "s"}`}
+                            </button>
+                          )}
+                        </TaskSectionHeader>
+
+                        {subtasksOpen && !showSubtaskInput && visibleSubtasks.length === 0 && (
+                          <TaskEmptyLine>Nenhuma subtarefa.</TaskEmptyLine>
+                        )}
+
+                        {subtasksOpen && (showSubtaskInput || visibleSubtasks.length > 0) && (
+                          <div className="space-y-0.5">
+                            {visibleSubtasks.length > 0 && (
+                              <div
+                                aria-hidden
+                                className="hidden grid-cols-[24px_minmax(0,1fr)_88px_96px_112px_20px] gap-x-2 border-b border-border/60 px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:grid"
+                              >
+                                <span />
+                                <span>Nome</span>
+                                <span>Responsável</span>
+                                <span>Prioridade</span>
+                                <span>Prazo</span>
+                                <span />
+                              </div>
+                            )}
+                            {visibleSubtasks.map((s) => {
+                              const done = s.status === "Concluído";
+                              const archived = TASK_STATUS_CATEGORY[s.status] === "archived";
+                              const subtaskAssignees = getTaskAssignees(s);
+                              const applyStatusChange = (next: TaskStatus) => {
+                                // `withStatusChange` já para o timer da subtarefa se
+                                // ele estava rodando (e inicia se o novo status for
+                                // "Em andamento") — sem passar por ela aqui, um
+                                // timer preso rodando nunca parava só porque o
+                                // status mudou.
+                                const updated = withStatusChange(s, next);
+                                setSubtasks((prev) =>
+                                  prev.map((st) => (st.id === s.id ? updated : st)),
+                                );
+                                setActivity((a) =>
+                                  pushActivity(a, `mudou status de "${s.title}" para ${next}`),
+                                );
+                                if (next === "Concluído" && timeTrackingOrigin) {
+                                  void stopIfRunningOnTask(
+                                    s.id.replace(/^mkt:/, ""),
+                                    timeTrackingOrigin,
+                                  );
+                                }
+                                // Sem isso, concluir/reabrir uma subtarefa por aqui
+                                // (o caminho mais usado, direto na linha) nunca
+                                // gerava o evento de XP/"concluídas hoje" — só
+                                // concluir a tarefa-mãe ou abrir a subtarefa em seu
+                                // próprio diálogo passavam por
+                                // `recordTaskLedgerEventsOnStatusChange`. Isso fazia
+                                // o Score subcontar completions de verdade.
+                                if (updated !== s) {
+                                  recordTaskLedgerEventsOnStatusChange(s, updated, {
+                                    scope,
+                                    members,
+                                    performanceSettings,
+                                  });
+                                }
+                              };
+                              return (
+                                <div
+                                  key={s.id}
+                                  className={`group grid min-h-10 grid-cols-[24px_minmax(0,1fr)_20px] items-center gap-x-2 gap-y-0.5 rounded-md px-2 py-1 hover:bg-muted/60 sm:grid-cols-[24px_minmax(0,1fr)_88px_96px_112px_20px] ${
+                                    archived ? "opacity-60" : ""
+                                  }`}
+                                >
+                                  <TaskStatusSelect
+                                    variant="icon"
+                                    value={s.status}
+                                    onChange={applyStatusChange}
+                                    onSelectBlocked={() => openSubtaskBlockComposer(s.id)}
+                                  />
+
                                   <button
                                     type="button"
-                                    onClick={() => {
+                                    onClick={() => setEditSubtask(s)}
+                                    className="flex min-w-0 items-center gap-2 text-left"
+                                  >
+                                    <span
+                                      className={`truncate text-sm ${done ? "text-muted-foreground" : "text-foreground"}`}
+                                    >
+                                      {s.title}
+                                    </span>
+                                    {!isDescriptionEmpty(s.description) && (
+                                      <span
+                                        title="Tem descrição"
+                                        className="shrink-0 text-muted-foreground"
+                                      >
+                                        <FileText className="h-3 w-3" />
+                                      </span>
+                                    )}
+                                  </button>
+
+                                  {/* Metadados: 2ª linha no celular (sob o título),
+                                    colunas próprias a partir de `sm`. */}
+                                  <div className="col-start-2 row-start-2 flex min-w-0 flex-wrap items-center gap-2 sm:contents">
+                                    <SubtaskAssigneePopover
+                                      showName
+                                      selected={subtaskAssignees}
+                                      members={members}
+                                      onToggle={(name) => {
+                                        const prevAssignees = getTaskAssignees(s);
+                                        const nextAssignees = prevAssignees.includes(name)
+                                          ? prevAssignees.filter((a) => a !== name)
+                                          : [...prevAssignees, name];
+                                        setSubtasks((prev) =>
+                                          prev.map((st) =>
+                                            st.id === s.id
+                                              ? {
+                                                  ...st,
+                                                  assignees: nextAssignees,
+                                                  assignee: undefined,
+                                                }
+                                              : st,
+                                          ),
+                                        );
+                                        setActivity((a) =>
+                                          pushActivity(
+                                            a,
+                                            `alterou responsável de "${s.title}" para ${nextAssignees.join(", ") || "ninguém"}`,
+                                          ),
+                                        );
+                                      }}
+                                    />
+
+                                    <TaskPrioritySelect
+                                      size="xs"
+                                      value={s.priority}
+                                      onChange={(next) => {
+                                        setSubtasks((prev) =>
+                                          prev.map((st) =>
+                                            st.id === s.id ? { ...st, priority: next } : st,
+                                          ),
+                                        );
+                                        setActivity((a) =>
+                                          pushActivity(
+                                            a,
+                                            `alterou prioridade de "${s.title}" para ${next}`,
+                                          ),
+                                        );
+                                      }}
+                                    />
+
+                                    <div className="flex min-w-0 shrink-0 items-center justify-start">
+                                      {s.status === "Bloqueada" && s.blockedState ? (
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <button
+                                              type="button"
+                                              onClick={() => openSubtaskResolveComposer(s.id)}
+                                              aria-label={`Subtarefa bloqueada: ${s.blockedState.reason}. Resolver bloqueio`}
+                                              className="max-w-[160px] rounded-md outline-none hover:opacity-80 focus-visible:ring-2 focus-visible:ring-brand"
+                                            >
+                                              <TaskBlockIndicator
+                                                blocked={s.blockedState}
+                                                size="xs"
+                                              />
+                                            </button>
+                                          </TooltipTrigger>
+                                          <TooltipContent className="max-w-64">
+                                            <p>{s.blockedState.reason}</p>
+                                            {s.blockedState.responsibleForUnblockingName && (
+                                              <p className="text-muted-foreground">
+                                                Aguardando:{" "}
+                                                {s.blockedState.responsibleForUnblockingName}
+                                              </p>
+                                            )}
+                                            <p className="text-muted-foreground">
+                                              Bloqueada em{" "}
+                                              {fmtDateCompact(
+                                                s.blockedState.blockedAt.slice(0, 10),
+                                              )}
+                                              {" · "}
+                                              {s.blockedState.pausesDeadline
+                                                ? "prazo pausado"
+                                                : "prazo continua correndo"}
+                                            </p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      ) : (
+                                        (s.dueDate || s.performanceDueDate) && (
+                                          <Popover>
+                                            <PopoverTrigger asChild>
+                                              <button
+                                                type="button"
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="rounded px-1 py-0.5 hover:bg-muted/60"
+                                              >
+                                                <CardDeadlineBadge task={s} />
+                                              </button>
+                                            </PopoverTrigger>
+                                            <PopoverContent
+                                              align="start"
+                                              collisionPadding={12}
+                                              className="w-auto p-0"
+                                              onClick={(e) => e.stopPropagation()}
+                                            >
+                                              <CalendarPicker
+                                                mode="single"
+                                                selected={
+                                                  s.dueDate
+                                                    ? parseIsoDateLocal(s.dueDate)
+                                                    : undefined
+                                                }
+                                                onSelect={(d) => {
+                                                  setSubtasks((prev) =>
+                                                    prev.map((st) =>
+                                                      st.id === s.id
+                                                        ? {
+                                                            ...st,
+                                                            dueDate: d
+                                                              ? formatDateToIso(d)
+                                                              : undefined,
+                                                          }
+                                                        : st,
+                                                    ),
+                                                  );
+                                                  setActivity((a) =>
+                                                    pushActivity(
+                                                      a,
+                                                      `alterou o prazo de "${s.title}"`,
+                                                    ),
+                                                  );
+                                                }}
+                                              />
+                                            </PopoverContent>
+                                          </Popover>
+                                        )
+                                      )}
+                                      {!s.status.startsWith("Bloqueada") &&
+                                        !s.dueDate &&
+                                        !s.performanceDueDate && (
+                                          <Popover>
+                                            <PopoverTrigger asChild>
+                                              <button
+                                                type="button"
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="rounded px-1 py-0.5 text-[11px] text-muted-foreground hover:bg-muted/60 focus-visible:opacity-100 group-hover:opacity-100 sm:opacity-0"
+                                              >
+                                                + Prazo
+                                              </button>
+                                            </PopoverTrigger>
+                                            <PopoverContent
+                                              align="start"
+                                              collisionPadding={12}
+                                              className="w-auto p-0"
+                                              onClick={(e) => e.stopPropagation()}
+                                            >
+                                              <CalendarPicker
+                                                mode="single"
+                                                selected={undefined}
+                                                onSelect={(d) => {
+                                                  setSubtasks((prev) =>
+                                                    prev.map((st) =>
+                                                      st.id === s.id
+                                                        ? {
+                                                            ...st,
+                                                            dueDate: d
+                                                              ? formatDateToIso(d)
+                                                              : undefined,
+                                                          }
+                                                        : st,
+                                                    ),
+                                                  );
+                                                  setActivity((a) =>
+                                                    pushActivity(
+                                                      a,
+                                                      `definiu prazo de "${s.title}"`,
+                                                    ),
+                                                  );
+                                                }}
+                                              />
+                                            </PopoverContent>
+                                          </Popover>
+                                        )}
+                                    </div>
+                                  </div>
+
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => e.stopPropagation()}
+                                        aria-label="Mais ações da subtarefa"
+                                        className="col-start-3 row-start-1 shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100 sm:col-auto sm:row-auto sm:opacity-0"
+                                      >
+                                        <MoreHorizontal className="h-3.5 w-3.5" />
+                                      </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                      <DropdownMenuItem onClick={() => setEditSubtask(s)}>
+                                        <ExternalLink className="h-3.5 w-3.5" /> Abrir detalhes
+                                      </DropdownMenuItem>
+                                      {!archived && (
+                                        <DropdownMenuItem
+                                          onClick={() => {
+                                            setSubtasks((prev) =>
+                                              prev.map((st) =>
+                                                st.id === s.id
+                                                  ? { ...st, status: "Arquivado" }
+                                                  : st,
+                                              ),
+                                            );
+                                            setActivity((a) =>
+                                              pushActivity(a, `arquivou a subtarefa "${s.title}"`),
+                                            );
+                                          }}
+                                        >
+                                          <Archive className="h-3.5 w-3.5" /> Arquivar
+                                        </DropdownMenuItem>
+                                      )}
+                                      <DropdownMenuItem
+                                        onClick={() => removeSubtask(s.id)}
+                                        className="text-destructive focus:text-destructive"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" /> Excluir
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
+                              );
+                            })}
+                            {!showSubtaskInput && (
+                              <button
+                                type="button"
+                                onClick={() => setShowSubtaskInput(true)}
+                                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                              >
+                                <Plus aria-hidden className="h-3.5 w-3.5" /> Adicionar subtarefa
+                              </button>
+                            )}
+                            {showSubtaskInput && (
+                              <div className="rounded-md border border-border bg-background p-2">
+                                <input
+                                  ref={newSubtaskTitleRef}
+                                  autoFocus
+                                  value={newSubtaskTitle}
+                                  onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      addSubtask();
+                                    }
+                                    if (e.key === "Escape") {
+                                      e.preventDefault();
                                       setShowSubtaskInput(false);
                                       setNewSubtaskTitle("");
                                       setNewSubtaskDate("");
                                       setNewSubtaskAssignees([]);
-                                    }}
-                                    className="rounded px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted"
-                                  >
-                                    Cancelar
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={addSubtask}
-                                    disabled={!newSubtaskTitle.trim()}
-                                    className="rounded bg-brand px-2 py-1 text-[11px] font-medium text-brand-foreground hover:bg-brand-hover disabled:opacity-50"
-                                  >
-                                    Adicionar
-                                  </button>
+                                    }
+                                  }}
+                                  placeholder="Nome da subtarefa"
+                                  className="mb-2 w-full border-0 bg-transparent p-0 text-sm outline-none placeholder:text-muted-foreground/70"
+                                />
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <DateField
+                                    variant="input"
+                                    value={newSubtaskDate || undefined}
+                                    onChange={(v) => setNewSubtaskDate(v ?? "")}
+                                    placeholder="Data"
+                                    ariaLabel="Data da subtarefa"
+                                    className="h-auto w-auto rounded border px-2 py-1 text-xs shadow-none"
+                                  />
+                                  <SubtaskAssigneePopover
+                                    selected={newSubtaskAssignees}
+                                    members={members}
+                                    onToggle={toggleNewSubtaskAssignee}
+                                  />
+                                  <TaskPrioritySelect
+                                    size="xs"
+                                    value={newSubtaskPriority}
+                                    onChange={setNewSubtaskPriority}
+                                  />
+                                  <div className="ml-auto flex items-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setShowSubtaskInput(false);
+                                        setNewSubtaskTitle("");
+                                        setNewSubtaskDate("");
+                                        setNewSubtaskAssignees([]);
+                                      }}
+                                      className="rounded px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted"
+                                    >
+                                      Cancelar
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={addSubtask}
+                                      disabled={!newSubtaskTitle.trim()}
+                                      className="rounded bg-brand px-2 py-1 text-[11px] font-medium text-brand-foreground hover:bg-brand-hover disabled:opacity-50"
+                                    >
+                                      Adicionar
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                {initial && (
+                  <div className="space-y-1 border-t border-border/60 px-5 py-3 sm:px-10">
+                    <div ref={depsSectionRef} className="space-y-1">
+                      <div className="flex items-center gap-1.5">
+                        <TaskSectionHeader
+                          icon={<Link2 className="h-3.5 w-3.5" />}
+                          label="Dependências"
+                          count={dependsOn.length + blocks.length}
+                          open={depsOpen}
+                          onToggle={() => setDepsOpen((v) => !v)}
+                        >
+                          {dependsOnPending.length > 0 && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 dark:text-amber-400">
+                              <AlertTriangle aria-hidden className="h-3 w-3" /> Aguardando
+                              dependência
+                            </span>
                           )}
+                        </TaskSectionHeader>
+                        <Popover
+                          open={depPopover !== null}
+                          onOpenChange={(o) => !o && setDepPopover(null)}
+                        >
+                          <PopoverTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDepsOpen(true);
+                                setDepPopover("menu");
+                              }}
+                              className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                              Adicionar
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent
+                            side="bottom"
+                            align="end"
+                            sideOffset={6}
+                            collisionPadding={16}
+                            className={
+                              depPopover === "menu" ? "w-56 p-1" : "w-[380px] max-w-[90vw] p-0"
+                            }
+                          >
+                            {depPopover === "menu" && (
+                              <div className="space-y-0.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setDepPopover("depends")}
+                                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted"
+                                >
+                                  ← Esta tarefa depende de...
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setDepPopover("blocks")}
+                                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted"
+                                >
+                                  → Esta tarefa bloqueia...
+                                </button>
+                              </div>
+                            )}
+                            {(depPopover === "depends" || depPopover === "blocks") && (
+                              <TaskPicker
+                                excludeTaskId={depTaskId ?? ""}
+                                currentProjectId={scope?.kind === "projeto" ? scope.id : undefined}
+                                currentCampanhaId={
+                                  scope?.kind === "campanha" ? scope.id : undefined
+                                }
+                                onSelect={(picked) => void handlePickDependency(depPopover, picked)}
+                              />
+                            )}
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+
+                      {depsOpen &&
+                        (dependsOn.length === 0 && blocks.length === 0 ? (
+                          <TaskEmptyLine>Nenhuma dependência.</TaskEmptyLine>
+                        ) : (
+                          dependsOn.length + blocks.length > 0 && (
+                            <div className="space-y-2 pl-5">
+                              {dependsOn.length > 0 && (
+                                <div className="space-y-1">
+                                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                    Depende de
+                                  </p>
+                                  {dependsOn.map((id) => {
+                                    const dep = allDeps.find(
+                                      (d) =>
+                                        d.blockedTaskId === depTaskId && d.blockingTaskId === id,
+                                    );
+                                    const entry = directoryByRawId.get(id);
+                                    if (!dep) return null;
+                                    return (
+                                      <ListRow
+                                        key={dep.id}
+                                        icon={
+                                          <TaskStatusIcon
+                                            status={
+                                              isTaskStatus(entry?.status) ? entry.status : "Aberto"
+                                            }
+                                            className="h-3.5 w-3.5"
+                                          />
+                                        }
+                                        title={entry?.label ?? id}
+                                        description={entry?.assignees.join(", ") || undefined}
+                                        meta={
+                                          entry?.dueDate ? formatIsoDate(entry.dueDate) : undefined
+                                        }
+                                        status={
+                                          entry
+                                            ? {
+                                                label: entry.status,
+                                                tone: toneForTaskStatus(entry.status),
+                                              }
+                                            : undefined
+                                        }
+                                        onClick={() => pushTaskModal(id)}
+                                        menuItems={[
+                                          {
+                                            label: "Remover dependência",
+                                            onClick: () =>
+                                              void handleRemoveDependency(dep, entry?.label ?? id),
+                                            destructive: true,
+                                          },
+                                        ]}
+                                      />
+                                    );
+                                  })}
+                                </div>
+                              )}
+
+                              {blocks.length > 0 && (
+                                <div className="space-y-1">
+                                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                    Esta tarefa bloqueia
+                                  </p>
+                                  {blocks.map((id) => {
+                                    const dep = allDeps.find(
+                                      (d) =>
+                                        d.blockingTaskId === depTaskId && d.blockedTaskId === id,
+                                    );
+                                    const entry = directoryByRawId.get(id);
+                                    if (!dep) return null;
+                                    return (
+                                      <ListRow
+                                        key={dep.id}
+                                        icon={
+                                          <TaskStatusIcon
+                                            status={
+                                              isTaskStatus(entry?.status) ? entry.status : "Aberto"
+                                            }
+                                            className="h-3.5 w-3.5"
+                                          />
+                                        }
+                                        title={entry?.label ?? id}
+                                        description={entry?.assignees.join(", ") || undefined}
+                                        meta={
+                                          entry?.dueDate ? formatIsoDate(entry.dueDate) : undefined
+                                        }
+                                        status={
+                                          entry
+                                            ? {
+                                                label: entry.status,
+                                                tone: toneForTaskStatus(entry.status),
+                                              }
+                                            : undefined
+                                        }
+                                        onClick={() => pushTaskModal(id)}
+                                        menuItems={[
+                                          {
+                                            label: "Remover dependência",
+                                            onClick: () =>
+                                              void handleRemoveDependency(dep, entry?.label ?? id),
+                                            destructive: true,
+                                          },
+                                        ]}
+                                      />
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-1 border-t border-border/60 px-5 py-3 sm:px-10">
+                  <TaskSectionHeader
+                    icon={<Paperclip className="h-3.5 w-3.5" />}
+                    label="Anexos"
+                    count={attachments.length}
+                    open={attachmentsOpen}
+                    onToggle={() => setAttachmentsOpen((v) => !v)}
+                    onAdd={() => {
+                      setAttachmentsOpen(true);
+                      fileRef.current?.click();
+                    }}
+                  />
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      void addFiles(e.target.files);
+                      e.target.value = "";
+                    }}
+                  />
+
+                  {attachmentsOpen && (
+                    <>
+                      {attachments.length > 0 && (
+                        <div className="space-y-1">
+                          {attachments.map((a) => (
+                            <div
+                              key={a.id}
+                              className="group flex items-center gap-2 rounded border border-border bg-background px-2 py-1 text-xs"
+                            >
+                              <button
+                                type="button"
+                                onClick={() => setPreviewAttachment(a)}
+                                className="flex min-w-0 flex-1 items-center gap-2 text-left hover:underline"
+                              >
+                                <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                <span className="flex-1 truncate">{a.name}</span>
+                              </button>
+                              {a.url && (
+                                <a
+                                  href={a.url}
+                                  download={a.name}
+                                  onClick={(e) => e.stopPropagation()}
+                                  aria-label={`Baixar ${a.name}`}
+                                  className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                                >
+                                  <Download className="h-3.5 w-3.5" />
+                                </a>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => removeAttachment(a.id)}
+                                aria-label={`Remover ${a.name}`}
+                                className="shrink-0 opacity-0 transition focus-visible:opacity-100 group-hover:opacity-100"
+                              >
+                                <X className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+                              </button>
+                            </div>
+                          ))}
                         </div>
                       )}
-                    </div>
-                  );
-                })()}
 
-              {initial && (
-                <div className="space-y-1 border-t border-border/60 px-5 py-3 sm:px-8">
-                  <div ref={depsSectionRef} className="space-y-1">
-                    <div className="flex items-center gap-1.5">
-                      <TaskSectionHeader
-                        icon={<Link2 className="h-3.5 w-3.5" />}
-                        label="Dependências"
-                        count={dependsOn.length + blocks.length}
-                        open={depsOpen}
-                        onToggle={() => setDepsOpen((v) => !v)}
-                      />
-                      <Popover
-                        open={depPopover !== null}
-                        onOpenChange={(o) => !o && setDepPopover(null)}
+                      <div
+                        className="flex items-center justify-center rounded-md border border-dashed border-border px-3 py-2 text-center text-[11px] text-muted-foreground"
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          void addFiles(e.dataTransfer.files);
+                        }}
                       >
-                        <PopoverTrigger asChild>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setDepsOpen(true);
-                              setDepPopover("menu");
-                            }}
-                            className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                          >
-                            <Plus className="h-3.5 w-3.5" />
-                            Adicionar
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent
-                          side="bottom"
-                          align="end"
-                          sideOffset={6}
-                          collisionPadding={16}
-                          className={
-                            depPopover === "menu" ? "w-56 p-1" : "w-[380px] max-w-[90vw] p-0"
-                          }
+                        Arraste arquivos ou{" "}
+                        <button
+                          type="button"
+                          onClick={() => fileRef.current?.click()}
+                          className="ml-1 text-primary hover:underline"
                         >
-                          {depPopover === "menu" && (
-                            <div className="space-y-0.5">
-                              <button
-                                type="button"
-                                onClick={() => setDepPopover("depends")}
-                                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted"
-                              >
-                                ← Esta tarefa depende de...
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setDepPopover("blocks")}
-                                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted"
-                              >
-                                → Esta tarefa bloqueia...
-                              </button>
-                            </div>
-                          )}
-                          {(depPopover === "depends" || depPopover === "blocks") && (
-                            <TaskPicker
-                              excludeTaskId={depTaskId ?? ""}
-                              currentProjectId={scope?.kind === "projeto" ? scope.id : undefined}
-                              currentCampanhaId={scope?.kind === "campanha" ? scope.id : undefined}
-                              onSelect={(picked) => void handlePickDependency(depPopover, picked)}
-                            />
-                          )}
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-
-                    {depsOpen &&
-                      (dependsOn.length === 0 && blocks.length === 0 ? (
-                        <TaskEmptyLine>Nenhuma dependência.</TaskEmptyLine>
-                      ) : (
-                        dependsOn.length + blocks.length > 0 && (
-                          <div className="space-y-2 pl-5">
-                            {dependsOn.length > 0 && (
-                              <div className="space-y-1">
-                                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                  Depende de
-                                </p>
-                                {dependsOn.map((id) => {
-                                  const dep = allDeps.find(
-                                    (d) => d.blockedTaskId === depTaskId && d.blockingTaskId === id,
-                                  );
-                                  const entry = directoryByRawId.get(id);
-                                  if (!dep) return null;
-                                  return (
-                                    <ListRow
-                                      key={dep.id}
-                                      icon={
-                                        <TaskStatusIcon
-                                          status={
-                                            isTaskStatus(entry?.status) ? entry.status : "Aberto"
-                                          }
-                                          className="h-3.5 w-3.5"
-                                        />
-                                      }
-                                      title={entry?.label ?? id}
-                                      description={entry?.assignees.join(", ") || undefined}
-                                      meta={
-                                        entry?.dueDate ? formatIsoDate(entry.dueDate) : undefined
-                                      }
-                                      status={
-                                        entry
-                                          ? {
-                                              label: entry.status,
-                                              tone: toneForTaskStatus(entry.status),
-                                            }
-                                          : undefined
-                                      }
-                                      onClick={() => pushTaskModal(id)}
-                                      menuItems={[
-                                        {
-                                          label: "Remover dependência",
-                                          onClick: () =>
-                                            void handleRemoveDependency(dep, entry?.label ?? id),
-                                          destructive: true,
-                                        },
-                                      ]}
-                                    />
-                                  );
-                                })}
-                              </div>
-                            )}
-
-                            {blocks.length > 0 && (
-                              <div className="space-y-1">
-                                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                  Esta tarefa bloqueia
-                                </p>
-                                {blocks.map((id) => {
-                                  const dep = allDeps.find(
-                                    (d) => d.blockingTaskId === depTaskId && d.blockedTaskId === id,
-                                  );
-                                  const entry = directoryByRawId.get(id);
-                                  if (!dep) return null;
-                                  return (
-                                    <ListRow
-                                      key={dep.id}
-                                      icon={
-                                        <TaskStatusIcon
-                                          status={
-                                            isTaskStatus(entry?.status) ? entry.status : "Aberto"
-                                          }
-                                          className="h-3.5 w-3.5"
-                                        />
-                                      }
-                                      title={entry?.label ?? id}
-                                      description={entry?.assignees.join(", ") || undefined}
-                                      meta={
-                                        entry?.dueDate ? formatIsoDate(entry.dueDate) : undefined
-                                      }
-                                      status={
-                                        entry
-                                          ? {
-                                              label: entry.status,
-                                              tone: toneForTaskStatus(entry.status),
-                                            }
-                                          : undefined
-                                      }
-                                      onClick={() => pushTaskModal(id)}
-                                      menuItems={[
-                                        {
-                                          label: "Remover dependência",
-                                          onClick: () =>
-                                            void handleRemoveDependency(dep, entry?.label ?? id),
-                                          destructive: true,
-                                        },
-                                      ]}
-                                    />
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        )
-                      ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-1 border-t border-border/60 px-5 py-3 sm:px-8">
-                <TaskSectionHeader
-                  icon={<Paperclip className="h-3.5 w-3.5" />}
-                  label="Anexos"
-                  count={attachments.length}
-                  open={attachmentsOpen}
-                  onToggle={() => setAttachmentsOpen((v) => !v)}
-                  onAdd={() => {
-                    setAttachmentsOpen(true);
-                    fileRef.current?.click();
-                  }}
-                />
-                <input
-                  ref={fileRef}
-                  type="file"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => {
-                    void addFiles(e.target.files);
-                    e.target.value = "";
-                  }}
-                />
-
-                {attachmentsOpen && (
-                  <>
-                    {attachments.length > 0 && (
-                      <div className="space-y-1 pl-4">
-                        {attachments.map((a) => (
-                          <div
-                            key={a.id}
-                            className="group flex items-center gap-2 rounded border border-border bg-background px-2 py-1 text-xs"
-                          >
-                            <button
-                              type="button"
-                              onClick={() => setPreviewAttachment(a)}
-                              className="flex min-w-0 flex-1 items-center gap-2 text-left hover:underline"
-                            >
-                              <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                              <span className="flex-1 truncate">{a.name}</span>
-                            </button>
-                            {a.url && (
-                              <a
-                                href={a.url}
-                                download={a.name}
-                                onClick={(e) => e.stopPropagation()}
-                                aria-label={`Baixar ${a.name}`}
-                                className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
-                              >
-                                <Download className="h-3.5 w-3.5" />
-                              </a>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => removeAttachment(a.id)}
-                              aria-label={`Remover ${a.name}`}
-                              className="shrink-0 opacity-0 transition focus-visible:opacity-100 group-hover:opacity-100"
-                            >
-                              <X className="h-3 w-3 text-muted-foreground hover:text-destructive" />
-                            </button>
-                          </div>
-                        ))}
+                          procure no computador
+                        </button>
                       </div>
-                    )}
-
-                    <div
-                      className="ml-4 flex min-h-[72px] items-center justify-center rounded-md border border-dashed border-border px-4 py-3 text-center text-xs text-muted-foreground"
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        void addFiles(e.dataTransfer.files);
-                      }}
-                    >
-                      Arraste arquivos ou{" "}
-                      <button
-                        type="button"
-                        onClick={() => fileRef.current?.click()}
-                        className="ml-1 text-primary hover:underline"
-                      >
-                        procure no computador
-                      </button>
-                    </div>
-                  </>
-                )}
+                    </>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -5114,6 +5313,13 @@ export function TaskDialog({
                   commentText={commentText}
                   onCommentTextChange={setCommentText}
                   onPostComment={postComment}
+                  onAttachFiles={async (files) => {
+                    // Anexo do comentário entra nos anexos da TAREFA (mesmo upload) e é
+                    // citado no texto do comentário — comentário não tem campo de anexo.
+                    const items = await addFiles(files);
+                    if (items.length) setAttachmentsOpen(true);
+                    return items.map((a) => a.name);
+                  }}
                   pendingDeadlineChange={pendingDeadlineChange}
                   onConfirmDeadlineChange={(motivo, observacao) => {
                     if (!pendingDeadlineChange) return;
@@ -5151,36 +5357,40 @@ export function TaskDialog({
             )}
           </div>
 
-          <div className="flex items-center justify-between border-t border-border bg-muted/30 px-4 py-3">
-            <div>
-              {onDelete && (
+          {/* Tarefa existente salva ao fechar (ou "Salvar" no cabeçalho);
+              rodapé só existe pra CRIAR uma tarefa nova. */}
+          {!initial && (
+            <div className="flex items-center justify-between border-t border-border bg-muted/30 px-4 py-3">
+              <div>
+                {onDelete && (
+                  <button
+                    type="button"
+                    onClick={onDelete}
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> Excluir
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={onDelete}
-                  className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-destructive"
+                  onClick={() => onOpenChange(false)}
+                  className="rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
                 >
-                  <Trash2 className="h-3.5 w-3.5" /> Excluir
+                  Cancelar
                 </button>
-              )}
+                <button
+                  type="button"
+                  onClick={() => attemptSave(false)}
+                  disabled={!canSave}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-brand-foreground hover:bg-brand-hover disabled:opacity-50"
+                >
+                  {initial ? "Salvar" : "Criar tarefa"}
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => onOpenChange(false)}
-                className="rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={() => attemptSave(false)}
-                disabled={!canSave}
-                className="inline-flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-brand-foreground hover:bg-brand-hover disabled:opacity-50"
-              >
-                {initial ? "Salvar" : "Criar tarefa"}
-              </button>
-            </div>
-          </div>
+          )}
         </DialogContent>
         {editSubtask && (
           <TaskDialog
@@ -5443,39 +5653,5 @@ function DeadlineHealthBadge({ task }: { task: Task }) {
         </p>
       </PopoverContent>
     </Popover>
-  );
-}
-
-/**
- * Uma propriedade dentro do bloco "Detalhes" — label pequeno em cima,
- * valor embaixo (nunca lado a lado numa grade fixa de colunas, que é o
- * que dava a leitura de "planilha"). Sem borda em repouso — só
- * `hover:bg-brand-subtle`, a mesma superfície usada em toda a
- * plataforma pra indicar "isto é clicável", nunca uma borda permanente
- * imitando um campo de formulário sempre em edição.
- */
-function Field({
-  label,
-  icon,
-  children,
-  className,
-}: {
-  label: string;
-  icon?: React.ReactNode;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div
-      className={`group flex min-h-11 flex-col justify-center gap-1 rounded-lg px-2.5 py-1.5 transition-colors hover:bg-brand-subtle ${className ?? ""}`}
-    >
-      <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-        <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">{icon}</span>
-        <span className="truncate">{label}</span>
-      </div>
-      <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-sm text-foreground">
-        {children}
-      </div>
-    </div>
   );
 }

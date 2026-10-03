@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import TaskList from "@tiptap/extension-task-list";
@@ -25,6 +25,8 @@ export function RichTaskEditor({
   onOpenTaskMention,
   getMentionOptions,
   onSaveShortcut,
+  variant = "boxed",
+  placeholder = "Escreva uma descrição ou digite / para comandos…",
 }: {
   /** Identifica a "sessão" de edição (id da tarefa, ou "new") — o editor só
    * reseta seu conteúdo quando essa chave muda, nunca a cada render do pai
@@ -38,6 +40,11 @@ export function RichTaskEditor({
   onOpenTaskMention: (rawId: string) => void;
   getMentionOptions: () => MentionOption[];
   onSaveShortcut?: () => void;
+  /** `document` = sem moldura de campo: o conteúdo aparece direto, como
+   * texto do documento; a barra de formatação só aparece enquanto se edita
+   * (clique/foco). `boxed` = comportamento original (moldura + barra fixa). */
+  variant?: "boxed" | "document";
+  placeholder?: string;
 }) {
   const forcePlainPaste = useRef(false);
   const mentionExtension = useRef(createMentionExtension(getMentionOptions)).current;
@@ -75,7 +82,7 @@ export function RichTaskEditor({
         TextStyle,
         Color,
         Highlight,
-        Placeholder.configure({ placeholder: "Escreva uma descrição ou digite / para comandos…" }),
+        Placeholder.configure({ placeholder }),
         DashDivider,
         SlashCommand,
         mentionExtension,
@@ -148,6 +155,47 @@ export function RichTaskEditor({
     lastKey.current = taskKey;
     editor.commands.setContent(content);
   }, [taskKey, content, editor]);
+
+  // Modo documento: "editando" liga no foco/clique e só desliga num clique
+  // FORA do editor que também não seja num popover da própria barra
+  // (cor, link, títulos vivem em portais do Radix).
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    if (variant !== "document" || !editing) return;
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Element | null;
+      if (!t || wrapperRef.current?.contains(t)) return;
+      if (t.closest("[data-radix-popper-content-wrapper]")) return;
+      setEditing(false);
+    };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [variant, editing]);
+
+  if (variant === "document") {
+    return (
+      <div
+        ref={wrapperRef}
+        onFocusCapture={() => setEditing(true)}
+        onClick={() => {
+          if (!editing) editor?.commands.focus();
+        }}
+        className={`flex flex-col rounded-lg border transition-colors ${
+          editing ? "border-border bg-card" : "cursor-text border-transparent hover:bg-muted/40"
+        }`}
+      >
+        {editor && editing && (
+          <div className="sticky top-0 z-10 rounded-t-lg bg-card">
+            <EditorToolbar editor={editor} />
+          </div>
+        )}
+        <div className={`min-h-[44px] px-3 ${editing ? "py-2" : "py-1.5"}`}>
+          <EditorContent editor={editor} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex max-h-[420px] min-h-[160px] flex-col overflow-y-auto rounded-lg border border-border bg-card">

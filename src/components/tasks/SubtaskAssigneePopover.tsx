@@ -16,10 +16,14 @@ export function SubtaskAssigneePopover({
   selected,
   members,
   onToggle,
+  showName,
 }: {
   selected: string[];
   members: Member[];
   onToggle: (name: string) => void;
+  /** Mostra o primeiro nome ao lado do avatar quando há 1 responsável
+   * (coluna "Responsável" da lista de subtarefas). */
+  showName?: boolean;
 }) {
   const MAX_VISIBLE = 2;
   const visible = selected.slice(0, MAX_VISIBLE);
@@ -31,7 +35,8 @@ export function SubtaskAssigneePopover({
         <button
           type="button"
           onClick={(e) => e.stopPropagation()}
-          className="flex h-6 items-center gap-1 rounded px-1 outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-brand"
+          aria-label={selected.length ? `Responsáveis: ${selected.join(", ")}` : "Sem responsável"}
+          className="flex h-6 min-w-0 max-w-full items-center gap-1 rounded px-1 outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-brand"
         >
           {selected.length === 0 ? (
             <Tooltip>
@@ -60,6 +65,11 @@ export function SubtaskAssigneePopover({
                   {overflow.length > 0 && (
                     <span className="z-10 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-muted text-[9px] font-medium text-muted-foreground ring-2 ring-card">
                       +{overflow.length}
+                    </span>
+                  )}
+                  {showName && selected.length === 1 && (
+                    <span className="ml-2.5 max-w-[56px] truncate text-xs text-foreground">
+                      {selected[0].split(" ")[0]}
                     </span>
                   )}
                 </span>
