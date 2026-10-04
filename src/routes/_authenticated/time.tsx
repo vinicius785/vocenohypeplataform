@@ -67,7 +67,7 @@ function parseComercialSearch(s: Record<string, unknown>): {
 
 // Cada seção vira o próprio chunk JS, baixado só quando o usuário navega até
 // ela — antes todas as 12 seções (algumas com milhares de linhas, ex.
-// ConfiguracoesSection/ChatSection) eram importadas estaticamente aqui e
+// ConfiguracoesSection) eram importadas estaticamente aqui e
 // entravam no bundle inicial mesmo que só "Início" fosse aberto.
 const ProblemasSection = lazy(() =>
   import("@/components/problemas/ProblemasSection").then((m) => ({
@@ -108,9 +108,6 @@ const ConfiguracoesSection = lazy(() =>
 );
 const FinanceiroSection = lazy(() =>
   import("@/components/FinanceiroSection").then((m) => ({ default: m.FinanceiroSection })),
-);
-const ChatSection = lazy(() =>
-  import("@/components/ChatSection").then((m) => ({ default: m.ChatSection })),
 );
 
 function SectionFallback() {
@@ -218,10 +215,8 @@ function TimePage() {
   const active = search.section ?? "inicio";
   // O Chat V2 (`/chat-v2`) virou o Chat oficial da plataforma — qualquer
   // caminho que antes levava a `?section=chat` (clique na sidebar, busca
-  // global, sino de notificações, link antigo salvo) agora sai desta
-  // rota em vez de renderizar a V1. `ChatSection.tsx` continua intacto no
-  // repositório como referência/rollback rápido, só não tem mais rota
-  // apontando pra ele.
+  // global, sino de notificações, link antigo salvo) sai desta rota para o
+  // Chat V2. O Chat V1 foi removido em 2026-10.
   const setActive = (key: SectionKey) => {
     if (key === "chat") {
       void navigate({ to: "/chat-v2" });
@@ -283,7 +278,7 @@ function TimePage() {
           ) : active === "financeiro" ? (
             <FinanceiroSection />
           ) : active === "chat" ? (
-            <ChatSection />
+            <SectionFallback />
           ) : (
             <>
               <h1 className="text-3xl font-semibold tracking-tight">{section.title}</h1>

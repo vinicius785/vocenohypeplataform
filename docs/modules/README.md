@@ -68,7 +68,7 @@ Todos vivem sob `/time?section=<chave>` (exceto detalhes de cliente e projeto e 
 `metas/*`: **Objetivos** com **Indicadores** (peso, histórico, evolução, linha esperada), hoje atualizados **manualmente** (`dataSource: "auto"` está reservado para o futuro). Saúde: saudável, atenção, em risco, atrasado, concluído, não iniciado, cancelado — calculada só por `metas-engine`.
 
 ## Chat
-V1 (`ChatSection`, `chat-store`) e V2 (`chat-v2/*`, rotas `/chat-v2`). Canais públicos/privados, DMs, **@menções** de pessoa, tarefa, projeto, campanha e cliente (`mention-kinds`), anexos, mensagens de voz, reações, fixadas/salvas, busca, threads, links com preview, **chamadas** (`call-controller`, WebRTC) e push.
+`chat-v2/*` (rotas `/chat-v2`) sobre o `chat-store`; o Chat V1 foi removido em 2026-10 e `?section=chat` redireciona para o V2. Canais públicos/privados, DMs, **@menções** de pessoa, tarefa, projeto, campanha e cliente (`mention-kinds`), anexos, mensagens de voz, reações, fixadas/salvas, busca, threads, links com preview, **chamadas** (`call-controller`, WebRTC) e push.
 
 ## Configurações
 Seções: Geral/Workspace, Perfil, Preferências, Disponibilidade, Áudio e Vídeo, Segurança (MFA, cofre), **Time e permissões**, **Integrações** (webhook de leads, webhooks de saída, Google), Precificação, Score operacional, Dados e backup, **Auditoria**.

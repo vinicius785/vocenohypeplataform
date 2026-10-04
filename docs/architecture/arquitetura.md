@@ -44,7 +44,7 @@ scripts/release.ts    release local (não há CI)
 | `/selecionar-ambiente`, `/acesso-pendente`, `/acesso-bloqueado` | auth | Escolha de organização, convite pendente, organização suspensa |
 | `/portal-v2/*` | cliente | Portal com login (ver 05) |
 | `/portal/$token/*` | cliente | Portal por link (ver 05) |
-| `/portal-app/*` | legado | Redirects para `/portal-v2` |
+| `/portal-app/*` | legado | Um único redirect (`portal-app.$.tsx`) para o equivalente em `/portal-v2` |
 | `/inscricao/$token`, `/nps-influenciador/$token`, `/bugs/$token`, `/calculadora-proposta/$token`, `/email/descadastro/$token` | pública | Páginas por token (ver 05) |
 | `/api/public/leads`, `/api/webhooks/resend`, `/api/google/oauth-callback`, `/api/cron/email-flows`, `/api/cron/google-calendar-sync` | máquina | Endpoints (ver 05) |
 | `/foco`, `/time-v2`, `/banco-influenciadores-v2` | redirect | Compatibilidade (cutover concluído) |

@@ -5,7 +5,7 @@
 |---|---|---|
 | `/portal-v2/*` | **Atual**, destino de todo login de cliente | Sessão Supabase + organização `client` ativa |
 | `/portal/$token/*` | **Em uso**, por link | Token público fixo do cliente, sem login |
-| `/portal-app/*` | **Legado**: só redirects para `/portal-v2` | — |
+| `/portal-app/*` | **Legado**: um único redirect para `/portal-v2` (links e e-mails antigos); a guarda e as telas do V1 foram removidas em 2026-10 | — |
 
 ### Portal V2 (`features/client-portal-v2`, rotas `portal-v2/*`)
 Layout `PortalV2Shell`. Guard (`portal-v2/route.tsx`): exige sessão, MFA resolvido, troca de senha se pendente, aceita convites pendentes, resolve o ambiente; e aplica o **gate de NPS** — se há NPS do mês pendente, bloqueia a navegação até responder (`nps-guard`).

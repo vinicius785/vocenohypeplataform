@@ -42,7 +42,7 @@ Alias `@/*` → `src/*`; Prettier 100 colunas, aspas duplas, vírgulas finais; `
 
 ## Regras de camada (desde 2026-10)
 1. `src/lib/**` **não importa valores de `src/components/**`**. Tipos e regras de domínio vivem em `lib/` (ex.: `lib/influencer-model.ts`); componentes só os consomem. Ainda há 19 imports `lib → components` (14 `import type`) (dívida: ver `architecture/auditoria-2026-10.md`).
-2. Cada arquivo de componente grande (> 1.500 linhas) deve perder responsabilidades, não ganhar: `InfluencerBoard` (~6.000), `TaskBoard` (~5.400), `ChatSection`, `AppShell`.
+2. Cada arquivo de componente grande (> 1.500 linhas) deve perder responsabilidades, não ganhar: `InfluencerBoard` (~6.000), `TaskBoard` (~5.400), `AppShell`.
 3. Server functions: autenticadas por padrão (`requireSupabaseAuth`); sem sessão **só** com token validado + zod + (para escrita) rate limit. Nunca devolver `error.message` do banco ao cliente em endpoint público/portal: usar `throwSafeDbError`.
 4. Toda migration nova que toque RLS: conferir o comportamento para **contas de cliente** (mesmo Supabase Auth, mesma chave anon) — ver `security/README.md`.
 5. Testes que dependem de "hoje" usam o fuso de Brasília (`lib/timezone`), nunca `toISOString()`.

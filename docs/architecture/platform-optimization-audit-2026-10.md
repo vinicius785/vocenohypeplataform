@@ -4,6 +4,8 @@
 
 Pergunta que guiou o trabalho: *o que está tornando esta plataforma mais complexa, lenta, inconsistente ou difícil de manter do que deveria?* O baseline de segurança ([`../security/relatorio-consolidado.md`](../security/relatorio-consolidado.md)) foi tratado como dado de entrada, não refeito. A etapa 1 ([`auditoria-2026-10.md`](./auditoria-2026-10.md)) já tratou bundle, camada `lib → components` e limpeza; aqui estão as **causas**.
 
+**Executado depois do diagnóstico (2026-10-04, por decisão do produto):** Chat V1 removido (`ChatSection`, `CreateChannelModal`, `chat-sidebar-prefs`; ≈3.100 linhas) e o portal V1 de sessão (`portal-app/*`) reduzido a **um** redirect. O portal por token foi mantido. Itens TD-04 e a linha do Chat V1 em §5.3 passam a "feito"; o restante do diagnóstico segue válido.
+
 **Como foi medido.** Grafo de imports e blocos de código por varredura (scripts, não amostragem); migrations em ordem + esquema vivo (`types.ts`); matriz de adoção por módulo; leitura dirigida do código nos pontos críticos. **Limites:** nada foi executado contra o banco vivo nem profilado em runtime. Onde o ganho depende de volume real ou de profiling, está escrito *(medir antes)*.
 
 ---
@@ -338,7 +340,7 @@ Prioridades: **P0** crítico · **P1** alto · **P2** médio · **P3** baixo. Es
 | DS-02 | Design System | ≈410 usos de paleta direta nos módulos | Mapeamento status → token não executado | Inconsistência de cor | Baixo | A | P2 | Executar C3 por módulo |
 | DS-03 | Design System | 20 modais à mão nos módulos | Overlay local | Foco/Esc/aria ausentes | Médio | M | P2 | Trocar por `Dialog`/`Sheet` |
 | UX-01 | UX | Camadas de controle empilhadas (Metas, Time, Reuniões, Tarefas) | `SegmentedControl` com 3 papéis; sem esqueleto | Carga cognitiva | Baixo | M | P2 | Aplicar taxonomia; avaliar `PageScaffold` fino |
-| TD-04 | Débito | Legado (Chat V1 2.833 linhas, `portal-app`, vitrine, `SectionHeader`) | "Rollback" nunca encerrado | ≈5.500 linhas sem uso | Baixo | B–M | P2 | Remover Chat V1 após validar V2 logado; `portal-app` após janela de links |
+| TD-04 | Débito | Legado (Chat V1 2.833 linhas, `portal-app`, vitrine, `SectionHeader`) | "Rollback" nunca encerrado | ≈5.500 linhas sem uso | Baixo | B–M | P2 | **Feito (Chat V1 e `portal-app`)**; restam vitrine `/design-system`, `SectionHeader` e `ui/accordion` |
 | DOC-01 | Documentação | DS marca P1–P4 como abertos; AUDIT-FINDINGS/technical obsoletos; 3 listas de pendências | Documentos de momento viraram permanentes | Contradição | Nulo | B | P2 | Atualizar contrato; arquivar; `BACKLOG.md` único |
 | CQ-05 | Código | 218 casts + 66 supressões de `exhaustive-deps` | Atalhos em JSONB e effects | Bugs invisíveis | Médio | A | P3 | Tipar JSONB (zod) e revisar effects por módulo |
 | CQ-06 | Código | Duplicações idênticas (~20 funções/blocos) | Cópia | Correções replicadas | Baixo | M | P3 | Consolidar caso a caso |
