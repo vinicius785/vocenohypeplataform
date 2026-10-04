@@ -55,6 +55,7 @@ import type { TeamMemberLite } from "@/lib/projetos";
 import { useConfirm } from "@/hooks/use-confirm";
 import { valueImpactMessage } from "@/lib/comercial-proposal-form";
 import { convertLeadToClienteEProjeto } from "./convertLead";
+import { LeadDemoSection } from "./lead/LeadDemoSection";
 import { LeadHistoryPanel } from "./lead/LeadTimeline";
 import { LeadOverview, type LeadFieldApi } from "./lead/LeadOverview";
 import { LeadProposal, APPLY_CANCELLED, type ApplyResult } from "./lead/LeadProposal";
@@ -702,6 +703,14 @@ export function LeadDrawer({
                 onOpenHistory={() => setTab("historico")}
                 onRegisterFollowUp={onRegisterFollowUp}
               />
+              {liveLead && (
+                <div className="mt-6">
+                  <LeadDemoSection
+                    leadId={liveLead.id}
+                    leadLabel={liveLead.company || liveLead.name}
+                  />
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent
