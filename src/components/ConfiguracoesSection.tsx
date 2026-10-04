@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import {
   User,
@@ -188,10 +190,13 @@ function StatusPopover({
   status,
   onClose,
   onSave,
+  anchor,
 }: {
   status: UserStatus;
   onClose: () => void;
   onSave: (s: UserStatus) => void;
+  /** Sidebar recolhida: o painel é posicionado em coordenadas da tela (fora do `overflow-hidden` da sidebar). */
+  anchor?: { left: number; bottom: number };
 }) {
   const [sel, setSel] = useState<StatusKey>(status.status);
   const [ate, setAte] = useState(status.ausenteAte ?? "");
@@ -215,7 +220,8 @@ function StatusPopover({
       <div className="fixed inset-0 z-40" onClick={onClose} />
       <form
         onSubmit={submit}
-        className={`absolute right-0 bottom-full z-50 mb-1 rounded-lg border border-border bg-background p-1 shadow-lg ${
+        style={anchor ? { left: anchor.left, bottom: anchor.bottom } : undefined}
+        className={`${anchor ? "fixed" : "absolute right-0 bottom-full mb-1"} z-50 rounded-lg border border-border bg-background p-1 shadow-lg ${
           sel === "ausente" ? "w-60 space-y-2 p-2" : "w-40"
         }`}
       >
@@ -282,7 +288,8 @@ function StatusPopover({
   );
 }
 
-export function SidebarProfile() {
+export function SidebarProfile({ compact = false }: { compact?: boolean } = {}) {
+  const avatarRef = useRef<HTMLButtonElement>(null);
   const [perfil, setPerfil] = useState<Perfil>(() => loadPerfil());
   const [status, setStatus] = useState<UserStatus>(() => loadStatus());
   const [open, setOpen] = useState(false);
@@ -356,6 +363,59 @@ export function SidebarProfile() {
     await supabase.auth.signOut();
     window.location.href = "/";
   };
+
+  if (compact) {
+    const rect = open ? avatarRef.current?.getBoundingClientRect() : undefined;
+    const label = `${perfil.nome || "Sem nome"} · ${meta.label}${ausenteInfo ? ` ${ausenteInfo}` : ""}`;
+    return (
+      <div className="px-3 pt-3">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              ref={avatarRef}
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              aria-label={`${label}. Alterar status`}
+              aria-expanded={open}
+              className="nav-item mx-auto flex h-11 w-11 items-center justify-center rounded-lg transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+            >
+              <span className="relative block h-8 w-8">
+                <span className="block h-full w-full overflow-hidden rounded-full border border-border bg-muted">
+                  {perfil.foto ? (
+                    <img src={perfil.foto} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center text-[11px] font-semibold text-muted-foreground">
+                      {initials}
+                    </span>
+                  )}
+                </span>
+                <span
+                  className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background ${meta.dot}`}
+                />
+              </span>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right" sideOffset={10} collisionPadding={8}>
+            {label}
+          </TooltipContent>
+        </Tooltip>
+        {open &&
+          rect &&
+          createPortal(
+            <StatusPopover
+              status={status}
+              anchor={{ left: rect.right + 10, bottom: window.innerHeight - rect.bottom }}
+              onClose={() => setOpen(false)}
+              onSave={(st) => {
+                updateStatus(st);
+                setOpen(false);
+              }}
+            />,
+            document.body,
+          )}
+      </div>
+    );
+  }
 
   return (
     <div className="relative border-t border-border p-3">

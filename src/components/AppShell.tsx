@@ -19,6 +19,7 @@ import {
   Moon,
   Sun,
   PanelLeft,
+  PanelLeftClose,
   Menu,
   Lock,
   X,
@@ -38,6 +39,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getTheme, setTheme } from "@/lib/theme";
 import { setFaviconBadge } from "@/lib/favicon-badge";
 import { SidebarProfile } from "./ConfiguracoesSection";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Drawer,
@@ -363,164 +365,178 @@ export function AppShell({
           aria-hidden="true"
         />
       )}
-      <aside
-        className={`fixed inset-y-0 left-0 z-50 flex h-screen w-64 shrink-0 flex-col overflow-hidden border-r border-border bg-background transition-transform duration-200 md:sticky md:top-0 md:z-auto md:translate-x-0 md:transition-[width] md:duration-150 ${
-          mobileOpen ? "translate-x-0" : "-translate-x-full"
-        } ${collapsed ? "md:w-[68px]" : "md:w-64"}`}
-      >
-        <div className="flex items-center gap-3 px-5 py-5">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-foreground text-background">
-            {ws.logo ? (
-              <img src={ws.logo} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                <path d="M2 17l10 5 10-5" />
-                <path d="M2 12l10 5 10-5" />
-              </svg>
-            )}
-          </div>
-          {showFull && (
-            <div className="min-w-0">
-              <div className="truncate text-sm font-semibold">{ws.nome || "Workspace"}</div>
-              <div className="truncate text-xs text-muted-foreground">workspace</div>
-            </div>
-          )}
-        </div>
-
-        <nav ref={mobileNavRef} className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
-          {groups.map((group) => (
-            <div
-              key={group.title}
-              className={showFull ? "mb-3" : "mb-2 border-b border-border/50 pb-2 last:border-0"}
-            >
-              {showFull && (
-                <div className="px-2.5 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wider text-text-secondary">
-                  {group.title}
-                </div>
+      <TooltipProvider delayDuration={150} skipDelayDuration={300}>
+        <aside
+          className={`fixed inset-y-0 left-0 z-50 flex h-screen w-64 shrink-0 flex-col overflow-hidden border-r border-border bg-background transition-transform duration-200 md:sticky md:top-0 md:z-auto md:translate-x-0 md:transition-[width] md:duration-200 md:ease-out ${
+            mobileOpen ? "translate-x-0" : "-translate-x-full"
+          } ${collapsed ? "md:w-[72px]" : "md:w-64"}`}
+        >
+          <div
+            className={`flex shrink-0 ${
+              showFull
+                ? "items-center gap-3 px-5 py-5"
+                : "flex-col items-center gap-2 px-3 pb-2 pt-4"
+            }`}
+          >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-foreground text-background">
+              {ws.logo ? (
+                <img src={ws.logo} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                  <path d="M2 17l10 5 10-5" />
+                  <path d="M2 12l10 5 10-5" />
+                </svg>
               )}
-              <ul className="space-y-0.5">
-                {group.items.map((item) => {
-                  const isActive = active === item.key;
-                  const Icon = item.icon;
-                  const allowed = hasPermission(access, SECTION_PERMISSION[item.key]);
-                  const showDot =
-                    allowed &&
-                    ((item.key === "comercial" && unseenLeads > 0) ||
-                      (item.key === "reunioes" && hasPendingMeetings));
-                  const chatUnread = allowed && item.key === "chat" ? unreadChatCount : 0;
-                  const showOverdueWarning =
-                    allowed && item.key === "financeiro" && hasOverdueDespesas;
-                  return (
-                    <li key={item.key}>
-                      <NavButton
-                        label={item.label}
-                        icon={<Icon className="h-4 w-4" aria-hidden="true" />}
-                        active={isActive}
-                        disabled={!allowed}
-                        collapsed={!showFull}
-                        title={
-                          !allowed
-                            ? "Sem permissão para acessar esta seção"
-                            : showOverdueWarning
-                              ? "Há despesas vencidas"
-                              : undefined
-                        }
-                        badge={
-                          <>
-                            {chatUnread > 0 && (
-                              <span
-                                aria-label={`${chatUnread} mensagens não lidas`}
-                                className={
-                                  showFull
-                                    ? "flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-brand px-1 text-[11px] font-semibold leading-none text-brand-foreground"
-                                    : "absolute right-0.5 top-0.5 flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-brand px-1 text-[11px] font-semibold leading-none text-brand-foreground"
-                                }
-                              >
-                                {chatUnread > 99 ? "99+" : chatUnread}
-                              </span>
-                            )}
-                            {showDot && (
-                              <span
-                                aria-label="Novidades"
-                                className={
-                                  showFull
-                                    ? "h-1.5 w-1.5 shrink-0 rounded-full bg-destructive"
-                                    : "absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-destructive"
-                                }
-                              />
-                            )}
-                            {showOverdueWarning && (
-                              <AlertTriangle
-                                aria-label="Despesas vencidas"
-                                className={
-                                  showFull
-                                    ? "h-3.5 w-3.5 shrink-0 fill-amber-500 text-background"
-                                    : "absolute right-0.5 top-0.5 h-3 w-3 fill-amber-500 text-background"
-                                }
-                              />
-                            )}
-                            {!allowed && (
-                              <Lock
-                                aria-hidden
-                                className={
-                                  showFull
-                                    ? "h-3 w-3 shrink-0 text-text-secondary"
-                                    : "absolute right-1 top-1 h-2.5 w-2.5 text-text-secondary"
-                                }
-                              />
-                            )}
-                          </>
-                        }
-                        onClick={() => {
-                          if (!allowed) return;
-                          onSelect(item.key);
-                          if (item.key === "comercial") void markLeadsSeen();
-                        }}
-                      />
-                    </li>
-                  );
-                })}
-              </ul>
             </div>
-          ))}
-        </nav>
+            {showFull && (
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold">{ws.nome || "Workspace"}</div>
+                <div className="truncate text-xs text-muted-foreground">workspace</div>
+              </div>
+            )}
+            <SidebarToggle
+              collapsed={collapsed}
+              onToggle={() => setCollapsed((c) => !c)}
+              className={showFull ? "ml-auto" : ""}
+            />
+          </div>
 
-        <div className="shrink-0 border-t border-border bg-background">
-          {showFull && <SidebarProfile />}
+          <nav ref={mobileNavRef} className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
+            {groups.map((group, gi) => (
+              <div key={group.title} className={showFull ? "mb-3" : "mb-1"}>
+                {/* Recolhido: o título do grupo some, fica só um traço curto e discreto. */}
+                {!showFull && gi > 0 && (
+                  <div aria-hidden="true" className="mx-auto mb-2 mt-1 h-px w-5 bg-border" />
+                )}
+                {showFull && (
+                  <div className="px-2.5 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wider text-text-secondary">
+                    {group.title}
+                  </div>
+                )}
+                <ul className={showFull ? "space-y-0.5" : "space-y-1"}>
+                  {group.items.map((item) => {
+                    const isActive = active === item.key;
+                    const Icon = item.icon;
+                    const allowed = hasPermission(access, SECTION_PERMISSION[item.key]);
+                    const showDot =
+                      allowed &&
+                      ((item.key === "comercial" && unseenLeads > 0) ||
+                        (item.key === "reunioes" && hasPendingMeetings));
+                    const chatUnread = allowed && item.key === "chat" ? unreadChatCount : 0;
+                    const showOverdueWarning =
+                      allowed && item.key === "financeiro" && hasOverdueDespesas;
+                    return (
+                      <li key={item.key}>
+                        <NavButton
+                          label={item.label}
+                          icon={<Icon className="h-4 w-4" aria-hidden="true" />}
+                          active={isActive}
+                          disabled={!allowed}
+                          collapsed={!showFull}
+                          title={
+                            !allowed
+                              ? "Sem permissão para acessar esta seção"
+                              : showOverdueWarning
+                                ? "Há despesas vencidas"
+                                : undefined
+                          }
+                          badge={
+                            <>
+                              {chatUnread > 0 && (
+                                <span
+                                  aria-label={`${chatUnread} mensagens não lidas`}
+                                  className={
+                                    showFull
+                                      ? "flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-brand px-1 text-[11px] font-semibold leading-none text-brand-foreground"
+                                      : "absolute right-0.5 top-0.5 flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-brand px-1 text-[11px] font-semibold leading-none text-brand-foreground"
+                                  }
+                                >
+                                  {chatUnread > 99 ? "99+" : chatUnread}
+                                </span>
+                              )}
+                              {showDot && (
+                                <span
+                                  aria-label="Novidades"
+                                  className={
+                                    showFull
+                                      ? "h-1.5 w-1.5 shrink-0 rounded-full bg-destructive"
+                                      : "absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-destructive"
+                                  }
+                                />
+                              )}
+                              {showOverdueWarning && (
+                                <AlertTriangle
+                                  aria-label="Despesas vencidas"
+                                  className={
+                                    showFull
+                                      ? "h-3.5 w-3.5 shrink-0 fill-amber-500 text-background"
+                                      : "absolute right-0.5 top-0.5 h-3 w-3 fill-amber-500 text-background"
+                                  }
+                                />
+                              )}
+                              {!allowed && (
+                                <Lock
+                                  aria-hidden
+                                  className={
+                                    showFull
+                                      ? "h-3 w-3 shrink-0 text-text-secondary"
+                                      : "absolute right-1 top-1 h-2.5 w-2.5 text-text-secondary"
+                                  }
+                                />
+                              )}
+                            </>
+                          }
+                          onClick={() => {
+                            if (!allowed) return;
+                            onSelect(item.key);
+                            if (item.key === "comercial") void markLeadsSeen();
+                          }}
+                        />
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </nav>
 
-          <ul className="space-y-0.5 border-t border-border p-3">
-            <li>
-              <NavButton
-                label="Configurações"
-                icon={<Settings className="h-4 w-4" aria-hidden="true" />}
-                active={active === "configuracoes"}
-                collapsed={!showFull}
-                onClick={() => onSelect("configuracoes")}
-              />
-            </li>
-            <li>
-              <NavButton
-                label="Problemas"
-                icon={<LifeBuoy className="h-4 w-4" aria-hidden="true" />}
-                active={active === "problemas"}
-                collapsed={!showFull}
-                onClick={() => onSelect("problemas")}
-              />
-            </li>
-          </ul>
-        </div>
-      </aside>
+          <div className="shrink-0 border-t border-border bg-background">
+            <SidebarProfile compact={!showFull} />
+
+            <ul className={`border-t border-border p-3 ${showFull ? "space-y-0.5" : "space-y-1"}`}>
+              <li>
+                <NavButton
+                  label="Configurações"
+                  icon={<Settings className="h-4 w-4" aria-hidden="true" />}
+                  active={active === "configuracoes"}
+                  collapsed={!showFull}
+                  onClick={() => onSelect("configuracoes")}
+                />
+              </li>
+              <li>
+                <NavButton
+                  label="Problemas"
+                  icon={<LifeBuoy className="h-4 w-4" aria-hidden="true" />}
+                  active={active === "problemas"}
+                  collapsed={!showFull}
+                  onClick={() => onSelect("problemas")}
+                />
+              </li>
+            </ul>
+          </div>
+        </aside>
+      </TooltipProvider>
 
       <div
         className="flex h-screen min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
@@ -536,14 +552,6 @@ export function AppShell({
             aria-expanded={mobileOpen}
           >
             <Menu className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setCollapsed((c) => !c)}
-            className="hidden rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground md:inline-flex"
-            aria-label="Alternar menu lateral"
-          >
-            <PanelLeft className="h-4 w-4" />
           </button>
           <GlobalSearch onSelect={onSelect} />
           <div className="ml-auto flex items-center gap-1">
@@ -568,8 +576,9 @@ export function AppShell({
 }
 
 /** Item da sidebar — um só componente para módulos e rodapé. Ativo:
- * fundo neutro + marca lateral discreta (sem excesso de azul); recolhido:
- * só o ícone, com o nome no `title`/`aria-label`. */
+ * fundo neutro + marca lateral discreta (sem excesso de azul). Recolhido:
+ * alvo de clique de 44×44, ícone de 20px e o nome num tooltip (também no foco
+ * do teclado); o `aria-label` garante o nome para leitores de tela. */
 function NavButton({
   label,
   icon,
@@ -589,34 +598,88 @@ function NavButton({
   badge?: ReactNode;
   onClick: () => void;
 }) {
-  return (
+  const button = (
     <button
       type="button"
       disabled={disabled}
       onClick={onClick}
-      title={title ?? (collapsed ? label : undefined)}
-      aria-label={collapsed ? label : undefined}
+      title={collapsed ? undefined : title}
+      aria-label={collapsed ? (title ? `${label}. ${title}` : label) : undefined}
       aria-current={active ? "page" : undefined}
-      className={`nav-item relative flex h-9 w-full items-center gap-3 rounded-md px-2.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
-        collapsed ? "justify-center" : ""
+      className={`nav-item relative flex w-full items-center text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
+        collapsed ? "mx-auto h-11 w-11 justify-center rounded-lg" : "h-9 gap-3 rounded-md px-2.5"
       } ${
         disabled
           ? "cursor-not-allowed text-text-secondary"
           : active
-            ? "bg-muted font-medium text-foreground"
+            ? `bg-muted text-foreground ${collapsed ? "" : "font-medium"}`
             : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
       }`}
     >
       {active && (
         <span
           aria-hidden="true"
-          className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-brand"
+          className={`absolute w-0.5 rounded-full bg-brand ${
+            collapsed ? "inset-y-3 -left-[14px] w-[3px] rounded-l-none" : "inset-y-2 left-0"
+          }`}
         />
       )}
-      <span className="nav-icon relative flex shrink-0 items-center">{icon}</span>
+      <span
+        className={`nav-icon relative flex shrink-0 items-center ${
+          collapsed ? "[&>svg]:h-5 [&>svg]:w-5" : ""
+        }`}
+      >
+        {icon}
+      </span>
       {!collapsed && <span className="min-w-0 flex-1 truncate">{label}</span>}
       {badge}
     </button>
+  );
+  if (!collapsed) return button;
+  return (
+    <Tooltip>
+      {/* `span` como gatilho: um botão `disabled` não dispara eventos de ponteiro. */}
+      <TooltipTrigger asChild>
+        <span className="block">{button}</span>
+      </TooltipTrigger>
+      <TooltipContent side="right" sideOffset={10} collisionPadding={8}>
+        {label}
+        {title && <span className="block text-[11px] opacity-70">{title}</span>}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/** Expandir/recolher o menu lateral (só desktop). Vive dentro da sidebar, ao
+ * lado do logo; o tooltip diz a ação que o clique executa. */
+function SidebarToggle({
+  collapsed,
+  onToggle,
+  className = "",
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+  className?: string;
+}) {
+  const label = collapsed ? "Expandir menu" : "Recolher menu";
+  const Icon = collapsed ? PanelLeft : PanelLeftClose;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label={label}
+          aria-expanded={!collapsed}
+          className={`hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand md:inline-flex ${className}`}
+        >
+          <Icon className="h-[18px] w-[18px]" aria-hidden="true" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="right" sideOffset={10} collisionPadding={8}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
