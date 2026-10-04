@@ -1,23 +1,35 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
-import { Check, Loader2, Paperclip, Plus, X } from "lucide-react";
-import { DateField } from "@/components/ui/date-field";
+import { useMemo, useRef, useState } from "react";
+import { Check, Loader2 } from "lucide-react";
 import {
   getInscricaoCampanhaData,
   submitInscricaoCampanha,
 } from "@/lib/inscricao-campanha.functions";
 import { NICHOS } from "@/lib/influencer-model";
-import {
-  PLATAFORMAS,
-  platformDef,
-  normalizeSocialInput,
-  isDuplicateProfile,
-  groupByPlatform,
-} from "@/lib/social-profiles";
+import { normalizeSocialInput, isDuplicateProfile } from "@/lib/social-profiles";
 import { fetchWorkspace } from "@/lib/workspace-store";
-import type { CustomQuestion } from "@/lib/inscricao-page";
+import {
+  inscricaoSteps,
+  validateAnexoFile,
+  validateInscricao,
+  type InscricaoRules,
+} from "@/lib/inscricao-validation";
 import { NativeSelect } from "@/components/ui/native-select";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { PublicFooter, PublicHeader } from "@/components/inscricao/PublicChrome";
+import {
+  CustomQuestionField,
+  Field,
+  FormStep,
+  SocialPicker,
+  UploadField,
+  type RedeForm,
+  type RespostaValue,
+} from "@/components/inscricao/InscricaoParts";
+import { inputClass } from "@/components/inscricao/input-class";
 
 type InscricaoData = Awaited<ReturnType<typeof getInscricaoCampanhaData>>;
 
@@ -34,32 +46,37 @@ export const Route = createFileRoute("/inscricao/$token")({
     meta: [
       { title: `Inscrição · ${loaderData?.data?.page.publicTitle || "Campanha"}` },
       { name: "robots", content: "noindex, nofollow" },
+      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
     ],
   }),
 });
 
-type RedeForm = {
-  id: string;
-  plataforma: string;
-  handle: string;
-  profileUrl?: string;
-  seguidores: string;
-  isPrimary?: boolean;
-};
-type RespostaValue = string | string[];
-
-function Header({ logo, nome }: { logo?: string; nome: string }) {
+function Fact({ label, value }: { label: string; value?: string }) {
+  if (!value) return null;
   return (
-    <header className="flex h-14 shrink-0 items-center gap-2.5 border-b border-border bg-background px-5">
-      <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-md bg-foreground text-background">
-        {logo ? (
-          <img src={logo} alt="" className="h-full w-full object-cover" />
-        ) : (
-          <span className="text-[11px] font-semibold">{nome.charAt(0).toUpperCase()}</span>
-        )}
-      </div>
-      <span className="text-sm font-semibold text-foreground">{nome}</span>
-    </header>
+    <div className="min-w-0">
+      <dt className="text-xs font-medium uppercase tracking-wide text-text-secondary">{label}</dt>
+      <dd className="mt-0.5 text-sm font-medium text-foreground">{value}</dd>
+    </div>
+  );
+}
+
+function BriefRow({ label, value }: { label: string; value?: string }) {
+  if (!value) return null;
+  return (
+    <div>
+      <dt className="text-xs font-medium uppercase tracking-wide text-text-secondary">{label}</dt>
+      <dd className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-foreground">{value}</dd>
+    </div>
+  );
+}
+
+function ReviewBlock({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="border-t border-border/60 pt-5 first:border-t-0 first:pt-0">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">{title}</h3>
+      <div className="mt-2 space-y-1 text-sm text-foreground">{children}</div>
+    </div>
   );
 }
 
@@ -67,12 +84,9 @@ function InscricaoPage() {
   const { token } = Route.useParams();
   const { data, ws } = Route.useLoaderData();
   const submitFn = useServerFn(submitInscricaoCampanha);
-  // Gerada uma vez por carregamento do formulário — enviada em toda
-  // tentativa de submit (inclusive um retry de rede pro MESMO clique), pra
-  // que o servidor detecte resubmissão exata via a constraint única de
-  // `inscricao_campanha_idempotency` (mitigação de escopo reduzido pro
-  // Fix #2, ver `submitInscricaoCampanha`). Não regenerar a cada
-  // tentativa — regenerar destruiria justamente a proteção que ela dá.
+  // Gerada uma vez por carregamento do formulário — enviada em toda tentativa de submit (inclusive
+  // um retry de rede pro MESMO clique), pra o servidor detectar resubmissão exata via a constraint
+  // única de `inscricao_campanha_idempotency`. Não regenerar a cada tentativa.
   const [idempotencyKey] = useState(() => crypto.randomUUID());
 
   const [nome, setNome] = useState("");
@@ -89,10 +103,38 @@ function InscricaoPage() {
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [attempted, setAttempted] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
+  const topRef = useRef<HTMLDivElement>(null);
 
-  // Cria o grupo da plataforma (1º perfil) ou adiciona outro dentro do
-  // mesmo grupo já existente — NUNCA substitui um perfil já preenchido,
-  // ao contrário do antigo toggle "liga/desliga uma entrada única".
+  const rules: InscricaoRules | null = data
+    ? {
+        fields: data.page.fields,
+        customQuestions: data.page.customQuestions,
+      }
+    : null;
+  const values = {
+    nome,
+    telefone,
+    email,
+    nicho,
+    redesComHandle: redes.filter((r) => r.handle.trim()).length,
+    mensagem,
+    temAnexo: !!anexo,
+    respostas,
+  };
+  const errors = useMemo(
+    () => (rules ? validateInscricao(values, rules) : {}),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [nome, telefone, email, nicho, redes, mensagem, anexo, respostas, data],
+  );
+  const steps = rules ? inscricaoSteps(values, rules) : [];
+  const stepOf = (id: string) => steps.findIndex((s) => s.id === id) + 1;
+  const doneOf = (id: string) => steps.find((s) => s.id === id)?.done ?? false;
+  const shown = (key: string) => (attempted || touched[key] ? errors[key] : undefined);
+  const touch = (key: string) => setTouched((t) => ({ ...t, [key]: true }));
+
   const addRede = (plataforma: string) =>
     setRedes((prev) => [
       ...prev,
@@ -116,20 +158,11 @@ function InscricaoPage() {
       prev.map((r) => (r.plataforma === plataforma ? { ...r, isPrimary: r.id === id } : r)),
     );
 
-  // O servidor rejeita o data-URL acima de 8.000.000 caracteres em base64
-  // (`SubmitInscricaoInput.anexo`, `inscricao-campanha.functions.ts`) —
-  // base64 é ~4/3 do tamanho original, então checar aqui ANTES de ler o
-  // arquivo evita mandar um upload que o servidor com certeza vai
-  // recusar (o que antes aparecia só como "Não foi possível enviar sua
-  // inscrição", sem dizer que o motivo era o tamanho do arquivo).
-  const MAX_ANEXO_BYTES = 5.5 * 1024 * 1024;
-
   const uploadAnexo = async (file: File) => {
     setAnexoError(null);
-    if (file.size > MAX_ANEXO_BYTES) {
-      setAnexoError(
-        `Este arquivo tem ${(file.size / (1024 * 1024)).toFixed(1)}MB — o limite é 5MB. Envie uma versão menor do mídia kit.`,
-      );
+    const problem = validateAnexoFile(file);
+    if (problem) {
+      setAnexoError(problem);
       return;
     }
     setUploading(true);
@@ -148,27 +181,49 @@ function InscricaoPage() {
     }
   };
 
-  if (!data) {
+  if (!data || !rules) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-2 bg-background px-6 text-center">
-        <p className="text-sm font-medium text-foreground">Link não encontrado.</p>
-        <p className="text-xs text-muted-foreground">
-          Verifique se o link de inscrição está correto ou peça um novo link pra campanha.
-        </p>
+      <div className="flex min-h-screen flex-col bg-background">
+        <PublicHeader logo={ws.logo} nome={ws.nome} />
+        <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-2 px-6 py-24 text-center">
+          <h1 className="text-lg font-semibold text-foreground">Link não encontrado.</h1>
+          <p className="text-sm text-text-secondary">
+            Verifique se o link de inscrição está correto ou peça um novo link para a campanha.
+          </p>
+        </main>
+        <PublicFooter logo={ws.logo} nome={ws.nome} />
       </div>
     );
   }
 
   const { clienteNome, page } = data;
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!nome.trim() || !telefone.trim() || !email.trim()) return;
-    const validRedes = redes.filter((r) => r.handle.trim());
-    if (page.fields.redes.visible && page.fields.redes.required && validRedes.length === 0) return;
-    for (const q of page.customQuestions) {
-      if (q.required && !respostas[q.id]) return;
+  const goFirstError = () => {
+    const first = Object.keys(errors)[0];
+    if (!first) return;
+    const el = document.getElementById(`field-${first}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    window.setTimeout(() => (el as HTMLElement | null)?.focus({ preventScroll: true }), 250);
+  };
+
+  const review = () => {
+    setAttempted(true);
+    if (Object.keys(errors).length > 0) {
+      goFirstError();
+      return;
     }
+    setReviewing(true);
+    topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const submit = async () => {
+    setAttempted(true);
+    if (Object.keys(errors).length > 0) {
+      setReviewing(false);
+      goFirstError();
+      return;
+    }
+    const validRedes = redes.filter((r) => r.handle.trim());
     setSubmitting(true);
     setError(null);
     try {
@@ -200,18 +255,13 @@ function InscricaoPage() {
         },
       });
       setDone(true);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
       const message = err instanceof Error ? err.message : "";
-      // O servidor recusa o anexo acima de ~6MB em base64 (ver
-      // `MAX_ANEXO_BYTES` acima) — o pré-check no cliente já evita a
-      // maioria dos casos, mas se ainda assim for esse o motivo (ex.:
-      // outro limite de tamanho de requisição na infraestrutura), diz
-      // isso exatamente em vez do genérico "tente novamente", que não
-      // ajuda em nada quando o problema é o tamanho do arquivo.
       const isSizeError = /too large|exceeds|maximum|payload|8000000|8_000_000/i.test(message);
       setError(
         isSizeError
-          ? "Não foi possível enviar sua inscrição: o mídia kit é maior do que o permitido (5MB). Anexe um arquivo menor."
+          ? "Não foi possível enviar sua inscrição: o mídia kit é maior do que o permitido (5 MB). Anexe um arquivo menor."
           : "Não foi possível enviar sua inscrição. Tente novamente em instantes.",
       );
     } finally {
@@ -221,142 +271,159 @@ function InscricaoPage() {
 
   if (page.status === "RASCUNHO") {
     return (
-      <div className="min-h-screen bg-background">
-        <Header logo={ws.logo} nome={ws.nome} />
-        <div className="mx-auto flex max-w-2xl flex-col items-center gap-2 px-5 py-24 text-center">
-          <p
-            role="heading"
-            aria-level={1}
-            className="text-xl font-semibold tracking-tight text-foreground"
-          >
+      <div className="flex min-h-screen flex-col bg-background">
+        <PublicHeader logo={ws.logo} nome={ws.nome} />
+        <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col items-center gap-2 px-5 py-24 text-center">
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">
             Esta página ainda não está disponível.
+          </h1>
+          <p className="text-sm text-text-secondary">
+            A inscrição para <strong>{page.publicTitle}</strong> ainda não foi publicada.
           </p>
-          <p className="text-sm text-muted-foreground">
-            A inscrição pra <strong>{page.publicTitle}</strong> ainda não foi publicada.
-          </p>
-        </div>
+        </main>
+        <PublicFooter logo={ws.logo} nome={ws.nome} />
       </div>
     );
   }
 
   const encerrada = page.status === "ENCERRADA";
+  const showBar = !done && !encerrada;
+  const missing = steps.filter((s) => !s.done);
+  const pct = steps.length ? Math.round(((steps.length - missing.length) / steps.length) * 100) : 0;
+  const sobre = page.sobre;
+  const hasBrief =
+    sobre.objetivo || sobre.requisitos || sobre.publicoDesejado || sobre.infoImportante;
+  const hasFacts = sobre.periodo || sobre.regioes || sobre.tipoConteudo;
+  const hasDos = page.showDos && page.dos.length > 0;
+  const hasDonts = page.showDonts && page.donts.length > 0;
+  const validRedes = redes.filter((r) => r.handle.trim());
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header logo={ws.logo} nome={ws.nome} />
+    <div className="flex min-h-screen flex-col bg-background">
+      <PublicHeader logo={ws.logo} nome={ws.nome} contexto={page.publicTitle} />
 
-      <div className="mx-auto w-full max-w-3xl px-5 py-10">
+      <main
+        className={`mx-auto w-full max-w-4xl flex-1 px-5 py-8 sm:py-12 ${showBar ? "pb-32" : ""}`}
+      >
         {done ? (
-          <div className="surface-card flex flex-col items-center gap-3 py-16 text-center">
+          <section
+            role="status"
+            className="surface-card mx-auto flex max-w-xl flex-col items-center gap-3 px-6 py-14 text-center"
+          >
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background">
-              <Check className="h-6 w-6" />
+              <Check className="h-6 w-6" aria-hidden="true" />
             </div>
-            <p
-              role="heading"
-              aria-level={1}
-              className="text-xl font-semibold tracking-tight text-foreground"
-            >
-              Inscrição enviada!
+            <h1 className="text-xl font-semibold tracking-tight text-foreground">
+              Inscrição enviada
+            </h1>
+            <p className="text-sm text-text-secondary">
+              Recebemos sua inscrição para{" "}
+              <strong className="text-foreground">{page.publicTitle}</strong>.
             </p>
-            <p className="max-w-sm text-sm text-muted-foreground whitespace-pre-wrap">
-              {page.thankYouMessage}
-            </p>
-          </div>
-        ) : (
-          <>
-            {page.bannerUrl && (
-              <div className="mb-6 w-full overflow-hidden rounded-2xl border border-border">
-                <img src={page.bannerUrl} alt="" className="aspect-video w-full object-cover" />
-              </div>
-            )}
-
-            {page.showClientName && (
-              <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-                {clienteNome}
+            {page.thankYouMessage && (
+              <p className="max-w-sm whitespace-pre-wrap text-sm text-text-secondary">
+                {page.thankYouMessage}
               </p>
             )}
-            <p
-              role="heading"
-              aria-level={1}
-              className="mt-1 text-3xl font-semibold tracking-tight text-foreground"
-            >
-              {page.publicTitle}
-            </p>
-            {page.publicSubtitle && (
-              <p className="mt-2 text-base text-muted-foreground">{page.publicSubtitle}</p>
-            )}
+            <p className="text-xs text-text-secondary">Você já pode fechar esta página.</p>
+          </section>
+        ) : (
+          <>
+            {/* HERO */}
+            <section aria-labelledby="titulo-campanha">
+              {page.bannerUrl && (
+                <div className="mb-6 overflow-hidden rounded-2xl border border-border">
+                  <img
+                    src={page.bannerUrl}
+                    alt=""
+                    className="aspect-[21/9] w-full object-cover"
+                    fetchPriority="high"
+                  />
+                </div>
+              )}
+              {page.showClientName && (
+                <p className="text-xs font-medium uppercase tracking-widest text-text-secondary">
+                  {clienteNome}
+                </p>
+              )}
+              <h1
+                id="titulo-campanha"
+                className="mt-1 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl"
+              >
+                {page.publicTitle}
+              </h1>
+              {page.publicSubtitle && (
+                <p className="mt-2 max-w-2xl text-base text-text-secondary">
+                  {page.publicSubtitle}
+                </p>
+              )}
+              {hasFacts && (
+                <dl className="mt-5 grid grid-cols-1 gap-4 border-y border-border/60 py-4 sm:grid-cols-3">
+                  <Fact label="Período" value={sobre.periodo} />
+                  <Fact label="Regiões" value={sobre.regioes} />
+                  <Fact label="Formato" value={sobre.tipoConteudo} />
+                </dl>
+              )}
+              {page.description && (
+                <p className="mt-5 max-w-2xl whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                  {page.description}
+                </p>
+              )}
+            </section>
 
-            {page.description && (
-              <section className="surface-card mt-6 p-5">
-                <p className="whitespace-pre-wrap text-sm text-foreground">{page.description}</p>
-              </section>
-            )}
-
-            {(page.sobre.objetivo ||
-              page.sobre.regioes ||
-              page.sobre.periodo ||
-              page.sobre.tipoConteudo ||
-              page.sobre.requisitos ||
-              page.sobre.publicoDesejado ||
-              page.sobre.infoImportante) && (
-              <section className="surface-card mt-6 space-y-3 p-5">
-                <p
-                  role="heading"
-                  aria-level={2}
-                  className="text-xs font-semibold uppercase tracking-widest text-muted-foreground"
+            {/* BRIEFING */}
+            {hasBrief && (
+              <section aria-labelledby="sobre" className="mt-10">
+                <h2
+                  id="sobre"
+                  className="text-xs font-semibold uppercase tracking-widest text-text-secondary"
                 >
                   Sobre a campanha
-                </p>
-                <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-                  <SobreRow label="Objetivo" value={page.sobre.objetivo} />
-                  <SobreRow label="Regiões" value={page.sobre.regioes} />
-                  <SobreRow label="Período" value={page.sobre.periodo} />
-                  <SobreRow label="Formato" value={page.sobre.tipoConteudo} />
-                  <SobreRow label="Requisitos" value={page.sobre.requisitos} />
-                  <SobreRow label="Público desejado" value={page.sobre.publicoDesejado} />
+                </h2>
+                <dl className="mt-4 grid grid-cols-1 gap-x-10 gap-y-5 sm:grid-cols-2">
+                  <BriefRow label="Objetivo" value={sobre.objetivo} />
+                  <BriefRow label="Público desejado" value={sobre.publicoDesejado} />
+                  <BriefRow label="Requisitos" value={sobre.requisitos} />
                 </dl>
-                {page.sobre.infoImportante && (
-                  <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-                    {page.sobre.infoImportante}
+                {sobre.infoImportante && (
+                  <p className="mt-5 whitespace-pre-wrap border-l-2 border-border pl-4 text-sm text-text-secondary">
+                    {sobre.infoImportante}
                   </p>
                 )}
               </section>
             )}
 
-            {(page.showDos && page.dos.length > 0) || (page.showDonts && page.donts.length > 0) ? (
-              <section className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {page.showDos && page.dos.length > 0 && (
-                  <div className="surface-card p-5">
-                    <p
-                      role="heading"
-                      aria-level={2}
-                      className="text-xs font-semibold uppercase tracking-widest text-muted-foreground"
-                    >
+            {(hasDos || hasDonts) && (
+              <section className="mt-10 grid grid-cols-1 gap-8 sm:grid-cols-2">
+                {hasDos && (
+                  <div>
+                    <h2 className="text-xs font-semibold uppercase tracking-widest text-text-secondary">
                       O que fazer
-                    </p>
+                    </h2>
                     <ul className="mt-3 space-y-2">
                       {page.dos.map((d, i) => (
                         <li key={i} className="flex items-start gap-2 text-sm text-foreground">
-                          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-foreground" />
+                          <Check className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                           {d}
                         </li>
                       ))}
                     </ul>
                   </div>
                 )}
-                {page.showDonts && page.donts.length > 0 && (
-                  <div className="surface-card p-5">
-                    <p
-                      role="heading"
-                      aria-level={2}
-                      className="text-xs font-semibold uppercase tracking-widest text-muted-foreground"
-                    >
+                {hasDonts && (
+                  <div>
+                    <h2 className="text-xs font-semibold uppercase tracking-widest text-text-secondary">
                       O que evitar
-                    </p>
+                    </h2>
                     <ul className="mt-3 space-y-2">
                       {page.donts.map((d, i) => (
                         <li key={i} className="flex items-start gap-2 text-sm text-foreground">
-                          <X className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <span
+                            aria-hidden="true"
+                            className="w-4 shrink-0 text-center text-text-secondary"
+                          >
+                            ×
+                          </span>
                           {d}
                         </li>
                       ))}
@@ -364,440 +431,344 @@ function InscricaoPage() {
                   </div>
                 )}
               </section>
-            ) : null}
+            )}
 
-            {encerrada ? (
-              <section className="surface-card mt-6 p-8 text-center">
-                <p className="text-sm font-medium text-foreground">
+            {/* SUA INSCRIÇÃO */}
+            <div ref={topRef} className="scroll-mt-6" />
+            <section id="inscricao" aria-labelledby="sua-inscricao" className="mt-12">
+              <h2
+                id="sua-inscricao"
+                className="text-xs font-semibold uppercase tracking-widest text-text-secondary"
+              >
+                Sua inscrição
+              </h2>
+
+              {encerrada ? (
+                <p className="surface-card mt-4 p-8 text-center text-sm font-medium text-foreground">
                   As inscrições para esta campanha estão encerradas.
                 </p>
-              </section>
-            ) : (
-              <form onSubmit={submit} className="surface-card mt-6 space-y-6 p-5 sm:p-6">
-                <FormSection title="Seus dados">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground">Nome *</label>
-                      <input
-                        value={nome}
-                        onChange={(e) => setNome(e.target.value)}
-                        required
-                        className="mt-1 h-9 w-full rounded-md border border-border bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground">
-                        Telefone *
-                      </label>
-                      <input
-                        value={telefone}
-                        onChange={(e) => setTelefone(e.target.value)}
-                        required
-                        className="mt-1 h-9 w-full rounded-md border border-border bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground">E-mail *</label>
-                      <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        required
-                        className="mt-1 h-9 w-full rounded-md border border-border bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
-                      />
-                    </div>
-                    {page.fields.nicho.visible && (
-                      <div>
-                        <label className="text-xs font-medium text-muted-foreground">
-                          Nicho{page.fields.nicho.required ? " *" : ""}
-                        </label>
-                        <NativeSelect
-                          value={nicho}
-                          onChange={(e) => setNicho(e.target.value)}
-                          required={page.fields.nicho.required}
-                          className="mt-1 w-full"
-                        >
-                          <option value="">Selecione</option>
-                          {NICHOS.map((n) => (
-                            <option key={n} value={n}>
-                              {n}
-                            </option>
-                          ))}
-                        </NativeSelect>
-                      </div>
-                    )}
+              ) : reviewing ? (
+                <div className="surface-card mt-4 space-y-5 p-5 sm:p-6">
+                  <div>
+                    <h3 className="text-lg font-semibold text-foreground">Revise sua inscrição</h3>
+                    <p className="mt-0.5 text-sm text-text-secondary">
+                      Confira os dados abaixo. Depois do envio, não será possível editar.
+                    </p>
                   </div>
-                </FormSection>
-
-                {page.fields.redes.visible && (
-                  <FormSection
-                    title={`Redes sociais${page.fields.redes.required ? " *" : ""}`}
-                    description="Adicione as redes sociais que você utiliza."
-                  >
-                    <div className="flex flex-wrap gap-1.5">
-                      {PLATAFORMAS.map((p) => (
-                        <button
-                          key={p.key}
-                          type="button"
-                          onClick={() => addRede(p.key)}
-                          className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
-                        >
-                          <Plus className="h-3 w-3" />
-                          {p.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    {redes.length > 0 && (
-                      <div className="mt-3 space-y-4">
-                        {groupByPlatform(redes).map(([plataforma, items]) => {
-                          const def = platformDef(plataforma);
-                          return (
-                            <div key={plataforma} className="space-y-1.5">
-                              <p className="text-xs font-semibold text-foreground">{plataforma}</p>
-                              <div className="space-y-1.5">
-                                {items.map((r) => (
-                                  <div key={r.id} className="space-y-1">
-                                    <div className="flex items-center gap-2">
-                                      {def?.usesHandle && (
-                                        <span className="text-sm text-muted-foreground">@</span>
-                                      )}
-                                      <input
-                                        placeholder={def?.placeholder ?? "usuario"}
-                                        value={r.handle}
-                                        onChange={(e) =>
-                                          updateRede(r.id, { handle: e.target.value })
-                                        }
-                                        onBlur={() => commitRede(r)}
-                                        className="h-9 flex-1 rounded-md border border-border bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
-                                      />
-                                      <input
-                                        placeholder="Seguidores"
-                                        value={r.seguidores}
-                                        onChange={(e) =>
-                                          updateRede(r.id, { seguidores: e.target.value })
-                                        }
-                                        className="h-9 w-20 shrink-0 rounded-md border border-border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring sm:w-28 sm:px-2.5"
-                                      />
-                                      <button
-                                        type="button"
-                                        onClick={() => removeRede(r.id)}
-                                        aria-label={`Remover ${plataforma}`}
-                                        className="shrink-0 rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-destructive"
-                                      >
-                                        <X className="h-3.5 w-3.5" />
-                                      </button>
-                                    </div>
-                                    {items.length > 1 && (
-                                      <button
-                                        type="button"
-                                        onClick={() => setPrimaryRede(plataforma, r.id)}
-                                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                                          r.isPrimary
-                                            ? "bg-foreground text-background"
-                                            : "text-muted-foreground hover:text-foreground"
-                                        }`}
-                                      >
-                                        {r.isPrimary ? "Principal" : "Tornar principal"}
-                                      </button>
-                                    )}
-                                    {redesDupError === r.id && (
-                                      <p className="text-[11px] text-destructive">
-                                        Você já adicionou um perfil igual nesta rede.
-                                      </p>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => addRede(plataforma)}
-                                className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
-                              >
-                                <Plus className="h-3 w-3" />
-                                Adicionar outro {plataforma}
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </FormSection>
-                )}
-
-                {(page.customQuestions.length > 0 || page.fields.mensagem.visible) && (
-                  <FormSection title="Proposta">
-                    {page.customQuestions.map((q) => (
-                      <CustomQuestionField
-                        key={q.id}
-                        question={q}
-                        value={respostas[q.id]}
-                        onChange={(v) => setRespostas((prev) => ({ ...prev, [q.id]: v }))}
-                      />
-                    ))}
-
-                    {page.fields.mensagem.visible && (
-                      <div>
-                        <label className="text-xs font-medium text-muted-foreground">
-                          Mensagem{page.fields.mensagem.required ? " *" : " (opcional)"}
-                        </label>
-                        <textarea
-                          value={mensagem}
-                          onChange={(e) => setMensagem(e.target.value)}
-                          required={page.fields.mensagem.required}
-                          rows={3}
-                          placeholder="Conte um pouco sobre você, disponibilidade, proposta de valor..."
-                          className="mt-1 w-full resize-none rounded-md border border-border bg-background px-2.5 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                        />
-                      </div>
-                    )}
-                  </FormSection>
-                )}
-
-                {page.fields.midiaKit.visible && (
-                  <FormSection title="Materiais">
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground">
-                        Mídia kit{page.fields.midiaKit.required ? " *" : " (opcional)"}
-                      </label>
-                      <div className="mt-1.5">
-                        {anexo ? (
-                          <div className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground">
-                            <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
-                            {anexo.nome}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setAnexo(null);
-                                setAnexoError(null);
-                              }}
-                              aria-label="Remover anexo"
-                              className="rounded p-0.5 hover:bg-muted"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </div>
-                        ) : (
-                          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-dashed border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:border-foreground hover:text-foreground">
-                            {uploading ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Paperclip className="h-3.5 w-3.5" />
-                            )}
-                            {uploading ? "Enviando..." : "Anexar arquivo"}
-                            <input
-                              type="file"
-                              className="hidden"
-                              required={page.fields.midiaKit.required}
-                              disabled={uploading}
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) void uploadAnexo(file);
-                                e.target.value = "";
-                              }}
-                            />
-                          </label>
-                        )}
-                      </div>
-                      {anexoError && (
-                        <p className="mt-1.5 text-xs text-destructive">{anexoError}</p>
+                  <ReviewBlock title="Seus dados">
+                    <p className="font-medium">{nome}</p>
+                    <p>{telefone}</p>
+                    <p>{email}</p>
+                    {nicho && <p className="text-text-secondary">Nicho: {nicho}</p>}
+                  </ReviewBlock>
+                  {page.fields.redes.visible && (
+                    <ReviewBlock title="Redes sociais">
+                      {validRedes.length === 0 ? (
+                        <p className="text-text-secondary">Nenhuma rede informada.</p>
+                      ) : (
+                        validRedes.map((r) => (
+                          <p key={r.id}>
+                            <span className="font-medium">{r.plataforma}</span> · {r.handle}
+                            {r.seguidores ? ` · ${r.seguidores} seguidores` : ""}
+                          </p>
+                        ))
                       )}
-                      <p className="mt-1.5 text-[11px] text-muted-foreground">
-                        Tamanho máximo: 5MB.
+                    </ReviewBlock>
+                  )}
+                  {(page.customQuestions.length > 0 || page.fields.mensagem.visible) && (
+                    <ReviewBlock title="Proposta">
+                      {page.customQuestions.map((q) => {
+                        const v = respostas[q.id];
+                        const text = Array.isArray(v) ? v.join(", ") : v;
+                        return text ? (
+                          <p key={q.id}>
+                            <span className="text-text-secondary">{q.label}:</span> {text}
+                          </p>
+                        ) : null;
+                      })}
+                      {mensagem ? (
+                        <p className="whitespace-pre-wrap">{mensagem}</p>
+                      ) : (
+                        !page.customQuestions.length && (
+                          <p className="text-text-secondary">Sem mensagem.</p>
+                        )
+                      )}
+                    </ReviewBlock>
+                  )}
+                  {page.fields.midiaKit.visible && (
+                    <ReviewBlock title="Materiais">
+                      <p>
+                        {anexo ? (
+                          anexo.nome
+                        ) : (
+                          <span className="text-text-secondary">Sem mídia kit.</span>
+                        )}
                       </p>
+                    </ReviewBlock>
+                  )}
+                  {error && (
+                    <p role="alert" className="text-sm text-destructive">
+                      {error}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <form
+                  noValidate
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    review();
+                  }}
+                  className="mt-4 space-y-8"
+                  aria-label="Formulário de inscrição"
+                >
+                  <FormStep
+                    n={stepOf("dados")}
+                    title="Seus dados"
+                    description="Como a equipe pode falar com você."
+                    done={doneOf("dados")}
+                  >
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field id="field-nome" label="Nome completo" required error={shown("nome")}>
+                        {(a) => (
+                          <Input
+                            {...a}
+                            value={nome}
+                            onChange={(e) => setNome(e.target.value)}
+                            onBlur={() => touch("nome")}
+                            autoComplete="name"
+                            placeholder="Como você se chama"
+                            className={inputClass(!!shown("nome"))}
+                          />
+                        )}
+                      </Field>
+                      <Field
+                        id="field-telefone"
+                        label="Telefone / WhatsApp"
+                        required
+                        error={shown("telefone")}
+                      >
+                        {(a) => (
+                          <Input
+                            {...a}
+                            type="tel"
+                            inputMode="tel"
+                            value={telefone}
+                            onChange={(e) => setTelefone(e.target.value)}
+                            onBlur={() => touch("telefone")}
+                            autoComplete="tel"
+                            placeholder="(21) 99999-9999"
+                            className={inputClass(!!shown("telefone"))}
+                          />
+                        )}
+                      </Field>
+                      <Field id="field-email" label="E-mail" required error={shown("email")}>
+                        {(a) => (
+                          <Input
+                            {...a}
+                            type="email"
+                            inputMode="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            onBlur={() => touch("email")}
+                            autoComplete="email"
+                            placeholder="voce@email.com"
+                            className={inputClass(!!shown("email"))}
+                          />
+                        )}
+                      </Field>
+                      {page.fields.nicho.visible && (
+                        <Field
+                          id="field-nicho"
+                          label="Nicho"
+                          required={page.fields.nicho.required}
+                          optional={!page.fields.nicho.required}
+                          error={shown("nicho")}
+                        >
+                          {(a) => (
+                            <NativeSelect
+                              {...a}
+                              value={nicho}
+                              onChange={(e) => setNicho(e.target.value)}
+                              onBlur={() => touch("nicho")}
+                              selectClassName={inputClass(!!shown("nicho"))}
+                            >
+                              <option value="">Selecione</option>
+                              {NICHOS.map((n) => (
+                                <option key={n} value={n}>
+                                  {n}
+                                </option>
+                              ))}
+                            </NativeSelect>
+                          )}
+                        </Field>
+                      )}
                     </div>
-                  </FormSection>
-                )}
+                  </FormStep>
 
-                {error && <p className="text-xs text-destructive">{error}</p>}
+                  {page.fields.redes.visible && (
+                    <FormStep
+                      n={stepOf("redes")}
+                      title={`Redes sociais${page.fields.redes.required ? "" : " (opcional)"}`}
+                      description="Escolha onde você publica e informe seu usuário ou link."
+                      done={doneOf("redes") && validRedes.length > 0}
+                    >
+                      <SocialPicker
+                        redes={redes}
+                        error={shown("redes")}
+                        dupError={redesDupError}
+                        onAdd={addRede}
+                        onUpdate={updateRede}
+                        onCommit={commitRede}
+                        onRemove={removeRede}
+                        onPrimary={setPrimaryRede}
+                      />
+                    </FormStep>
+                  )}
 
-                <button
-                  type="submit"
+                  {(page.customQuestions.length > 0 || page.fields.mensagem.visible) && (
+                    <FormStep
+                      n={stepOf("proposta")}
+                      title="Sua proposta"
+                      description="Conte à equipe por que você é a pessoa certa para esta campanha."
+                      done={doneOf("proposta")}
+                    >
+                      {page.customQuestions.map((q) => (
+                        <CustomQuestionField
+                          key={q.id}
+                          question={q}
+                          value={respostas[q.id]}
+                          error={shown(`q:${q.id}`)}
+                          onChange={(v) => setRespostas((prev) => ({ ...prev, [q.id]: v }))}
+                        />
+                      ))}
+                      {page.fields.mensagem.visible && (
+                        <Field
+                          id="field-mensagem"
+                          label="Mensagem para a equipe"
+                          required={page.fields.mensagem.required}
+                          optional={!page.fields.mensagem.required}
+                          hint="Fale sobre você, sua disponibilidade e o que pode entregar."
+                          error={shown("mensagem")}
+                        >
+                          {(a) => (
+                            <Textarea
+                              {...a}
+                              rows={4}
+                              value={mensagem}
+                              onChange={(e) => setMensagem(e.target.value)}
+                              onBlur={() => touch("mensagem")}
+                              className={inputClass(!!shown("mensagem"))}
+                            />
+                          )}
+                        </Field>
+                      )}
+                    </FormStep>
+                  )}
+
+                  {page.fields.midiaKit.visible && (
+                    <FormStep
+                      n={stepOf("materiais")}
+                      title="Materiais"
+                      description="Seu mídia kit ajuda a equipe a conhecer melhor o seu trabalho."
+                      done={doneOf("materiais") && !!anexo}
+                    >
+                      <UploadField
+                        anexo={anexo}
+                        uploading={uploading}
+                        required={page.fields.midiaKit.required}
+                        error={anexoError ?? shown("anexo")}
+                        onFile={(f) => void uploadAnexo(f)}
+                        onRemove={() => {
+                          setAnexo(null);
+                          setAnexoError(null);
+                        }}
+                      />
+                    </FormStep>
+                  )}
+                  <button type="submit" className="sr-only">
+                    Revisar inscrição
+                  </button>
+                </form>
+              )}
+            </section>
+          </>
+        )}
+      </main>
+
+      {showBar && (
+        <div
+          role="region"
+          aria-label="Andamento da inscrição"
+          className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85"
+          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+        >
+          <div className="mx-auto flex w-full max-w-4xl items-center gap-4 px-5 py-3">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-foreground">
+                {reviewing
+                  ? "Revise e envie"
+                  : missing.length === 0
+                    ? "Tudo pronto para revisar"
+                    : `${steps.length - missing.length} de ${steps.length} etapas`}
+              </p>
+              <p className="truncate text-xs text-text-secondary">
+                {reviewing
+                  ? "Depois do envio não é possível editar."
+                  : missing.length === 0
+                    ? "Confira e envie sua inscrição."
+                    : `Falta: ${missing.map((s) => s.label).join(", ")}`}
+              </p>
+              <div
+                role="progressbar"
+                aria-label="Progresso da inscrição"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={reviewing ? 100 : pct}
+                className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-muted"
+              >
+                <div
+                  className="h-full rounded-full bg-foreground transition-[width] duration-300"
+                  style={{ width: `${reviewing ? 100 : pct}%` }}
+                />
+              </div>
+            </div>
+            {reviewing ? (
+              <div className="flex shrink-0 items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="comfortable"
+                  onClick={() => setReviewing(false)}
+                  disabled={submitting}
+                >
+                  Editar
+                </Button>
+                <Button
+                  variant="primary"
+                  size="comfortable"
+                  onClick={() => void submit()}
                   disabled={submitting || uploading}
-                  className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-full bg-foreground text-sm font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
                   {submitting ? "Enviando..." : "Enviar inscrição"}
-                </button>
-              </form>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/** Separa visualmente os blocos do formulário público (Seus dados /
- * Redes sociais / Proposta / Materiais) — puramente apresentacional,
- * sem lógica própria. */
-function FormSection({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-3 border-t border-border/60 pt-6 first:border-t-0 first:pt-0">
-      <div>
-        <p role="heading" aria-level={3} className="text-sm font-semibold text-foreground">
-          {title}
-        </p>
-        {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function SobreRow({ label, value }: { label: string; value?: string }) {
-  if (!value) return null;
-  return (
-    <div>
-      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
-      <dd className="text-foreground">{value}</dd>
-    </div>
-  );
-}
-
-function CustomQuestionField({
-  question,
-  value,
-  onChange,
-}: {
-  question: CustomQuestion;
-  value: RespostaValue | undefined;
-  onChange: (v: RespostaValue) => void;
-}) {
-  const inputCls =
-    "mt-1 h-9 w-full rounded-md border border-border bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring";
-  const label = `${question.label}${question.required ? " *" : ""}`;
-
-  if (question.type === "texto_longo") {
-    return (
-      <div>
-        <label className="text-xs font-medium text-muted-foreground">{label}</label>
-        <textarea
-          value={(value as string) ?? ""}
-          onChange={(e) => onChange(e.target.value)}
-          required={question.required}
-          rows={3}
-          className={`${inputCls} h-auto resize-none py-2`}
-        />
-      </div>
-    );
-  }
-  if (question.type === "numero") {
-    return (
-      <div>
-        <label className="text-xs font-medium text-muted-foreground">{label}</label>
-        <input
-          type="number"
-          value={(value as string) ?? ""}
-          onChange={(e) => onChange(e.target.value)}
-          required={question.required}
-          className={inputCls}
-        />
-      </div>
-    );
-  }
-  if (question.type === "data") {
-    return (
-      <div>
-        <label className="text-xs font-medium text-muted-foreground">{label}</label>
-        <DateField
-          value={(value as string) || undefined}
-          onChange={(v) => onChange(v ?? "")}
-          className={inputCls}
-        />
-      </div>
-    );
-  }
-  if (question.type === "sim_nao") {
-    return (
-      <div>
-        <label className="text-xs font-medium text-muted-foreground">{label}</label>
-        <div className="mt-1.5 flex gap-2">
-          {["Sim", "Não"].map((opt) => (
-            <button
-              key={opt}
-              type="button"
-              onClick={() => onChange(opt)}
-              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                value === opt
-                  ? "border-foreground bg-foreground text-background"
-                  : "border-border text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {opt}
-            </button>
-          ))}
-        </div>
-      </div>
-    );
-  }
-  if (question.type === "selecao_unica") {
-    return (
-      <div>
-        <label className="text-xs font-medium text-muted-foreground">{label}</label>
-        <NativeSelect
-          value={(value as string) ?? ""}
-          onChange={(e) => onChange(e.target.value)}
-          required={question.required}
-          className={inputCls}
-        >
-          <option value="">Selecione</option>
-          {(question.options ?? []).map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
-            </option>
-          ))}
-        </NativeSelect>
-      </div>
-    );
-  }
-  if (question.type === "selecao_multipla") {
-    const selected = Array.isArray(value) ? value : [];
-    return (
-      <div>
-        <label className="text-xs font-medium text-muted-foreground">{label}</label>
-        <div className="mt-1.5 flex flex-wrap gap-1.5">
-          {(question.options ?? []).map((opt) => {
-            const active = selected.includes(opt);
-            return (
-              <button
-                key={opt}
-                type="button"
-                onClick={() =>
-                  onChange(active ? selected.filter((o) => o !== opt) : [...selected, opt])
-                }
-                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
-                  active
-                    ? "border-foreground bg-foreground text-background"
-                    : "border-border text-muted-foreground hover:text-foreground"
-                }`}
+                </Button>
+              </div>
+            ) : (
+              <Button
+                variant="primary"
+                size="comfortable"
+                className="shrink-0"
+                onClick={review}
+                disabled={uploading}
               >
-                {active ? <Check className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
-                {opt}
-              </button>
-            );
-          })}
+                Revisar inscrição
+              </Button>
+            )}
+          </div>
         </div>
-      </div>
-    );
-  }
-  return (
-    <div>
-      <label className="text-xs font-medium text-muted-foreground">{label}</label>
-      <input
-        value={(value as string) ?? ""}
-        onChange={(e) => onChange(e.target.value)}
-        required={question.required}
-        className={inputCls}
-      />
+      )}
+
+      <PublicFooter logo={ws.logo} nome={ws.nome} className={showBar ? "pb-20" : ""} />
     </div>
   );
 }
