@@ -32,7 +32,7 @@ export function DemoPortalRuntime({ token, children }: { token: string; children
       paths: makePortalPaths(`/demo/${token}`),
       api,
       capabilities: { accountMenu: false, environmentSwitch: false },
-      identity: { name: "Cliente (demonstração)", secondary: "Demonstração", email: "" },
+      identity: { name: "Cliente", secondary: "Demonstração", email: "" },
       banner: <DemoChip />,
     };
   }, [token, respondInflu, respondEntrega, addComentario, freshRelatorioUrl]);

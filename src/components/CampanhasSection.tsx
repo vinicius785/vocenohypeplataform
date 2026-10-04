@@ -38,7 +38,7 @@ import { KpiCell, KpiStrip } from "@/components/shared/Kpi";
 import { ClienteLogo } from "@/components/clientes/ClienteLogo";
 import { useClientes, useClientesComDemo, clientesStore } from "@/lib/clientes-store";
 import { isDemoCliente } from "@/lib/demo/demo-visibility";
-import { DemoChip } from "@/components/demo/DemoChip";
+import { CampaignDemoControl } from "@/components/demo/CampaignDemoControl";
 import {
   VincularCampanhaDialog,
   type Campaign,
@@ -1003,7 +1003,7 @@ function CampanhaDetail({
                       </DropdownMenuContent>
                     )}
                   </DropdownMenu>
-                  {cliente.demo && <DemoChip />}
+                  {cliente.demo && <CampaignDemoControl campanhaId={c.id} influs={influs} />}
                   <span className="inline-flex items-center gap-1 text-xs font-medium text-text-secondary">
                     <Calendar className="h-3.5 w-3.5" />
                     {isRecorrente

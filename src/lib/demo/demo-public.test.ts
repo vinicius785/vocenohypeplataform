@@ -152,6 +152,7 @@ describe("getPortalData", () => {
     const data = await svc.getPortalData(TOKEN);
     expect(data.clienteNome).toBe("Praia Bonita Resorts");
     expect(data.role).toBe("client_standard");
+    expect(data.realtimeKey).toBe("k");
   });
 });
 

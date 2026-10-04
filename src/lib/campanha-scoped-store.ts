@@ -3,6 +3,8 @@ import type { Task } from "@/components/tasks/TaskBoard";
 import { createScopedArrayStore } from "./scoped-table-store";
 import { clientesStore, getDemoCampanhaIds } from "./clientes-store";
 import { demoIdsKey, demoTaskIdsOf, withoutDemoCampanhas } from "./demo/demo-visibility";
+import { createDemoSignalSender, DEMO_SIGNAL_EVENT } from "./demo/demo-signal";
+import { supabase } from "@/integrations/supabase/client";
 
 export type CampaignDoc = {
   id: string;
@@ -103,8 +105,40 @@ function subscribeWithDemoIds(
 export function loadCampanhaInflus(campanhaId: string): Influ[] {
   return influsStore.get(campanhaId);
 }
+/**
+ * Time → cliente da DEMO: depois de gravar na campanha de uma demonstração, avisa o portal por
+ * Broadcast (sem dado) para ele recarregar. Campanha comum: não faz nada.
+ */
+const notifyDemoChanged = createDemoSignalSender({
+  isDemoCampanha: (id) => getDemoCampanhaIds().has(id),
+  loadKeys: async () => {
+    // Colunas explícitas: `token` não é legível por esta conta (e nem é necessário).
+    const { data } = await supabase
+      .from("demo_sessions" as never)
+      .select("campanha_id, realtime_key")
+      .eq("status", "active");
+    const rows = (data ?? []) as unknown as { campanha_id: string; realtime_key: string }[];
+    return new Map(rows.map((r) => [r.campanha_id, r.realtime_key]));
+  },
+  broadcast: async (topic) => {
+    const channel = supabase.channel(topic);
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error("timeout")), 5_000);
+      channel.subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          clearTimeout(timeout);
+          resolve();
+        }
+      });
+    });
+    await channel.send({ type: "broadcast", event: DEMO_SIGNAL_EVENT, payload: {} });
+    await supabase.removeChannel(channel);
+  },
+});
+
 export function saveCampanhaInflus(campanhaId: string, list: Influ[]) {
   influsStore.set(campanhaId, () => list);
+  notifyDemoChanged(campanhaId);
 }
 export function onCampanhaInflusChange(cb: () => void): () => void {
   return subscribeWithDemoIds(influsStore.subscribe, cb);
@@ -154,6 +188,7 @@ export function loadCampanhaCronograma(campanhaId: string): CronogramaItem[] {
 }
 export function saveCampanhaCronograma(campanhaId: string, list: CronogramaItem[]) {
   cronogramaStore.set(campanhaId, () => list);
+  notifyDemoChanged(campanhaId);
 }
 export function onCampanhaCronogramaChange(cb: () => void): () => void {
   return cronogramaStore.subscribe(cb);

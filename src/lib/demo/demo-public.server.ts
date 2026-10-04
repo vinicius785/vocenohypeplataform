@@ -10,6 +10,7 @@ import {
   type DemoAccessKind,
   type DemoPublicPort,
 } from "./demo-public";
+import { sendDemoSignalHttp } from "./demo-signal";
 import { createDemoService } from "./demo-service";
 import { createSupabaseDemoPort, type DemoAdminClient } from "./demo-service.server";
 import type { DemoSessionRow } from "./demo-types";
@@ -101,6 +102,13 @@ export async function getServerDemoPublicService() {
       buildClienteLinkData: buildClienteLinkData as DemoPublicDeps["buildClienteLinkData"],
       loadInfluRow,
       saveInfluRow,
+      // Avisa outras abas do cliente (o time já recebe por `postgres_changes`).
+      afterWrite: async (session) => {
+        const url = process.env.SUPABASE_URL;
+        const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        if (!url || !serviceKey) return;
+        await sendDemoSignalHttp({ url, serviceKey, realtimeKey: session.realtime_key });
+      },
     }),
   );
 }

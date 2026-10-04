@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { subscribeDemoSignal, type DemoSignalClient } from "@/lib/demo/demo-signal";
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { DemoLinkInvalid } from "@/components/demo/DemoLinkInvalid";
 import { PortalSessionDataProvider } from "@/components/portal/portal-session-context";
@@ -39,6 +41,10 @@ function DemoLayout() {
   const source = useMemo(
     () => ({
       load: () => getDemoPortalData({ data: { token } }),
+      // Time → cliente: o time avisa por Broadcast (o cliente anônimo não recebe
+      // `postgres_changes`); o polling de 20 s do provider cobre a falta do sinal.
+      subscribe: (onSignal: () => void) =>
+        subscribeDemoSignal(supabase as unknown as DemoSignalClient, data.realtimeKey, onSignal),
       // O link foi revogado/expirou/encerrado durante a sessão: mostra a tela de link inválido
       // em vez de deixar dados velhos parados na tela.
       onError: (error: unknown) => {
@@ -47,7 +53,7 @@ function DemoLayout() {
         }
       },
     }),
-    [token],
+    [token, data.realtimeKey],
   );
 
   if (revoked) return <DemoLinkInvalid />;

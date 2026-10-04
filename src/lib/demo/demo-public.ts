@@ -116,7 +116,8 @@ export type AddComentarioInputT = z.infer<typeof AddComentarioInput>;
 export type ReportUrlInputT = z.infer<typeof ReportUrlInput>;
 
 export const DEMO_CLIENT_ROLE = "client_standard";
-export type DemoPortalData = ClienteLinkData & { role: string };
+/** `realtimeKey`: tópico do sinal de mudança (não é segredo: só dispara um recarregamento). */
+export type DemoPortalData = ClienteLinkData & { role: string; realtimeKey: string };
 
 function initialsOf(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -166,7 +167,7 @@ export function createDemoPublicService(port: DemoPublicPort) {
     async getPortalData(token: unknown): Promise<DemoPortalData> {
       const session = await authorize(token, "read");
       const base = await port.loadPortalData(session);
-      return { ...base, role: DEMO_CLIENT_ROLE };
+      return { ...base, role: DEMO_CLIENT_ROLE, realtimeKey: session.realtime_key };
     },
 
     async respondInflu(token: unknown, raw: unknown): Promise<{ ok: true }> {
