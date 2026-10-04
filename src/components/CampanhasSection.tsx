@@ -19,6 +19,9 @@ import {
   UserPlus,
   Wallet,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  History,
   Archive,
   ArchiveRestore,
 } from "lucide-react";
@@ -469,10 +472,12 @@ function CampanhaDetail({
   const now = new Date();
   const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const [monthFilter, setMonthFilter] = useState<string>(defaultMonth);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const monthOptions = useMemo(
     () => buildMesReferenciaOptions(c.pagClienteRecorrenteInicio),
     [c.pagClienteRecorrenteInicio],
   );
+  const monthIndex = monthOptions.findIndex((m) => m.value === monthFilter);
   const totalInflus = c.linhas.reduce((s, l) => s + (l.quantidade || 0), 0);
   const totalEnviar = c.linhas.reduce((s, l) => s + (l.enviar || 0), 0);
 
@@ -928,101 +933,124 @@ function CampanhaDetail({
           onConfirm={confirmActivation}
         />
 
-        {/* CABEÇALHO DA CAMPANHA — breadcrumb + identidade/ações agrupados
-         * num único bloco visual (gap interno pequeno, "content gap");
-         * sem hero colorido, azul só nos elementos interativos (botão
-         * primário, badges de status/foco). Nome da campanha é o
-         * elemento principal (maior peso tipográfico). */}
-        <div className="space-y-3">
-          <nav aria-label="Navegação" className="flex items-center gap-1.5 text-xs">
+        {/* CABEÇALHO DA CAMPANHA — EXATAMENTE 2 linhas.
+         * Linha 1: ← Campanhas · logo · nome (principal) + cliente · status/ritmo · ações.
+         * Linha 2: contexto do período (stepper compacto de mês, ou o prazo). Sem hero colorido;
+         * azul só nos elementos interativos. No mobile a linha 1 compacta (Editar vira ícone,
+         * status desce para dentro do bloco de identidade) — nunca uma terceira camada. */}
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={onBack}
-              className="inline-flex items-center gap-1 text-text-secondary hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              aria-label="Voltar para Campanhas"
+              className="inline-flex shrink-0 items-center gap-1 rounded-md py-1 text-xs text-text-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
             >
-              <ArrowLeft className="h-3.5 w-3.5" /> Campanhas
+              <ArrowLeft className="h-3.5 w-3.5" />{" "}
+              <span className="hidden sm:inline">Campanhas</span>
             </button>
-          </nav>
-
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="flex min-w-0 items-start gap-4 md:gap-5">
-              <ClienteLogo photo={cliente.photo} empresa={cliente.empresa} size="lg" />
-              <div className="min-w-0">
-                <p
+            <ClienteLogo photo={cliente.photo} empresa={cliente.empresa} size="sm" />
+            <div className="min-w-0 flex-1 md:flex-none">
+              <p className="truncate">
+                <span
                   role="heading"
                   aria-level={1}
-                  className="truncate text-2xl font-semibold tracking-tight text-foreground md:text-3xl"
+                  className="text-lg font-semibold tracking-tight text-foreground md:text-xl"
                 >
                   {c.nome}
-                </p>
-                <p className="mt-0.5 truncate text-sm text-text-secondary">
-                  Cliente: <span className="font-medium text-foreground">{cliente.empresa}</span>
-                </p>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        type="button"
-                        disabled={!canChangeStatus}
-                        className="disabled:cursor-default"
-                      >
-                        <Badge
-                          variant={
-                            status === "active"
-                              ? "success"
-                              : status === "completed"
-                                ? "secondary"
-                                : "outline"
-                          }
-                          className={canChangeStatus ? "cursor-pointer hover:opacity-80" : ""}
-                        >
-                          {CAMPANHA_STATUS_LABEL[status]}
-                        </Badge>
-                      </button>
-                    </DropdownMenuTrigger>
-                    {canChangeStatus && (
-                      <DropdownMenuContent align="start">
-                        {CAMPANHA_STATUS_TRANSITIONS[status].map((t) => (
-                          <DropdownMenuItem
-                            key={t.to}
-                            onSelect={() =>
-                              void changeStatus(t.to, t.needsConfirm ? t.confirmMessage : undefined)
-                            }
-                          >
-                            {t.actionLabel}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    )}
-                  </DropdownMenu>
-                  {cliente.demo && <CampaignDemoControl campanhaId={c.id} influs={influs} />}
-                  <span className="inline-flex items-center gap-1 text-xs font-medium text-text-secondary">
-                    <Calendar className="h-3.5 w-3.5" />
-                    {isRecorrente
-                      ? `Mensal · dia ${c.pagClienteRecorrenteDia ?? "—"}`
-                      : `Prazo ${fmtDate(c.prazo)}`}
-                  </span>
-                  {isRecorrente && (
-                    <NativeSelect
-                      value={monthFilter}
-                      onChange={(e) => setMonthFilter(e.target.value)}
-                      aria-label="Mês de referência"
+                </span>
+                <span className="text-sm text-text-secondary"> · {cliente.empresa}</span>
+              </p>
+              <div className="mt-0.5 flex items-center gap-2 md:hidden">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      disabled={!canChangeStatus}
+                      className="disabled:cursor-default"
                     >
-                      {monthOptions.map((m) => (
-                        <option key={m.value} value={m.value} className="capitalize">
-                          {m.label}
-                        </option>
+                      <Badge
+                        variant={
+                          status === "active"
+                            ? "success"
+                            : status === "completed"
+                              ? "secondary"
+                              : "outline"
+                        }
+                        className={canChangeStatus ? "cursor-pointer hover:opacity-80" : ""}
+                      >
+                        {CAMPANHA_STATUS_LABEL[status]}
+                      </Badge>
+                    </button>
+                  </DropdownMenuTrigger>
+                  {canChangeStatus && (
+                    <DropdownMenuContent align="start">
+                      {CAMPANHA_STATUS_TRANSITIONS[status].map((t) => (
+                        <DropdownMenuItem
+                          key={t.to}
+                          onSelect={() =>
+                            void changeStatus(t.to, t.needsConfirm ? t.confirmMessage : undefined)
+                          }
+                        >
+                          {t.actionLabel}
+                        </DropdownMenuItem>
                       ))}
-                    </NativeSelect>
+                    </DropdownMenuContent>
                   )}
-                </div>
+                </DropdownMenu>
+                {cliente.demo && <CampaignDemoControl campanhaId={c.id} influs={influs} />}
+                {isRecorrente && (
+                  <span className="truncate text-xs text-text-secondary">
+                    Mensal · dia {c.pagClienteRecorrenteDia ?? "—"}
+                  </span>
+                )}
               </div>
             </div>
+            <div className="hidden min-w-0 flex-1 items-center gap-2 md:flex">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    disabled={!canChangeStatus}
+                    className="disabled:cursor-default"
+                  >
+                    <Badge
+                      variant={
+                        status === "active"
+                          ? "success"
+                          : status === "completed"
+                            ? "secondary"
+                            : "outline"
+                      }
+                      className={canChangeStatus ? "cursor-pointer hover:opacity-80" : ""}
+                    >
+                      {CAMPANHA_STATUS_LABEL[status]}
+                    </Badge>
+                  </button>
+                </DropdownMenuTrigger>
+                {canChangeStatus && (
+                  <DropdownMenuContent align="start">
+                    {CAMPANHA_STATUS_TRANSITIONS[status].map((t) => (
+                      <DropdownMenuItem
+                        key={t.to}
+                        onSelect={() =>
+                          void changeStatus(t.to, t.needsConfirm ? t.confirmMessage : undefined)
+                        }
+                      >
+                        {t.actionLabel}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                )}
+              </DropdownMenu>
+              {cliente.demo && <CampaignDemoControl campanhaId={c.id} influs={influs} />}
+              {isRecorrente && (
+                <span className="truncate text-xs font-medium text-text-secondary">
+                  Mensal · dia {c.pagClienteRecorrenteDia ?? "—"}
+                </span>
+              )}
+            </div>
 
-            {/* Ações — três níveis, cada coisa num único lugar: "Recursos"
-             * (tudo o que se abre/compartilha), "Editar" (a ação direta da
-             * página) e "⋮" (administrativo: arquivar/restaurar e, separado,
-             * excluir). Peso visual decrescente: Editar > Recursos > ⋮. */}
             <div className="flex shrink-0 items-center gap-1.5">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -1070,8 +1098,13 @@ function CampanhaDetail({
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-                <Pencil className="h-3.5 w-3.5" /> Editar
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setEditOpen(true)}
+                aria-label="Editar campanha"
+              >
+                <Pencil className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Editar</span>
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -1084,6 +1117,15 @@ function CampanhaDetail({
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  {(c.activity?.length ?? 0) > 0 && (
+                    <>
+                      <DropdownMenuItem onSelect={() => setHistoryOpen(true)}>
+                        <History className="h-3.5 w-3.5 text-text-secondary" />
+                        Histórico de status ({c.activity!.length})
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
                   {canArchiveOrRestore && status !== "archived" && (
                     <DropdownMenuItem onSelect={archiveCampaign} disabled={cliente.demo}>
                       <Archive className="h-3.5 w-3.5 text-text-secondary" />
@@ -1111,31 +1153,68 @@ function CampanhaDetail({
             </div>
           </div>
 
-          {(c.activity?.length ?? 0) > 0 && (
-            <details className="group text-xs text-text-secondary">
-              <summary className="cursor-pointer select-none font-medium hover:text-foreground">
-                Histórico de status ({c.activity!.length})
-              </summary>
-              <ul className="mt-2 space-y-1.5 border-l border-border/60 pl-3">
-                {[...c.activity!]
-                  .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-                  .map((entry) => (
-                    <li key={entry.id}>
-                      <span className="font-medium text-foreground">{entry.author}</span>{" "}
-                      {entry.action}
-                      <span className="ml-1.5 text-text-secondary/70">
-                        ·{" "}
-                        {new Date(entry.createdAt).toLocaleString("pt-BR", {
-                          dateStyle: "short",
-                          timeStyle: "short",
-                        })}
-                      </span>
-                    </li>
-                  ))}
-              </ul>
-            </details>
-          )}
+          {/* Linha 2 — contexto do período. */}
+          <div className="flex items-center gap-1 pl-0.5 text-sm text-text-secondary">
+            {isRecorrente ? (
+              <>
+                <button
+                  type="button"
+                  aria-label="Mês anterior"
+                  disabled={monthIndex <= 0}
+                  onClick={() => setMonthFilter(monthOptions[monthIndex - 1].value)}
+                  className="flex h-7 w-7 items-center justify-center rounded-md hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-40 disabled:hover:bg-transparent"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <span
+                  aria-live="polite"
+                  className="min-w-[8.5rem] text-center font-medium text-foreground"
+                >
+                  {monthOptions[monthIndex]?.label ?? "—"}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Próximo mês"
+                  disabled={monthIndex < 0 || monthIndex >= monthOptions.length - 1}
+                  onClick={() => setMonthFilter(monthOptions[monthIndex + 1].value)}
+                  className="flex h-7 w-7 items-center justify-center rounded-md hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-40 disabled:hover:bg-transparent"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium">
+                <Calendar className="h-3.5 w-3.5" /> Prazo {fmtDate(c.prazo)}
+              </span>
+            )}
+          </div>
         </div>
+
+        <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+          <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-md">
+            <DialogTitle>Histórico de status</DialogTitle>
+            <DialogDescription className="sr-only">
+              Mudanças de status da campanha.
+            </DialogDescription>
+            <ul className="space-y-1.5 border-l border-border/60 pl-3 text-xs text-text-secondary">
+              {[...(c.activity ?? [])]
+                .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+                .map((entry) => (
+                  <li key={entry.id}>
+                    <span className="font-medium text-foreground">{entry.author}</span>{" "}
+                    {entry.action}
+                    <span className="ml-1.5 text-text-secondary/70">
+                      ·{" "}
+                      {new Date(entry.createdAt).toLocaleString("pt-BR", {
+                        dateStyle: "short",
+                        timeStyle: "short",
+                      })}
+                    </span>
+                  </li>
+                ))}
+            </ul>
+          </DialogContent>
+        </Dialog>
 
         <InscricaoPageDialog
           open={inscricaoOpen}
