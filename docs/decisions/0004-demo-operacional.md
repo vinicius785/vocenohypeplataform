@@ -378,3 +378,30 @@ A Demo passa a ficar **fora de tudo que o time lê em conjunto** e continua abri
 - Notificações e agregados dependem de o cliente de demo já estar no cache; uma ação do cliente que chegue antes dessa linha seria o único caso de borda (a Demo nasce no servidor, bem antes do primeiro acesso do cliente).
 - Não há botão de "Encerrar/Reiniciar" na tela ainda (Etapa 5); por ora só pelas funções de servidor.
 - Rodar a UI contra o banco vivo continua impossível: as migrations `20261004`/`20261005` não estão aplicadas, então nenhuma Demo pode ser criada.
+
+---
+
+## 7. Etapas 3 a 7 — resultado final
+
+| Etapa                     | Entrega                                                                                                                                                                                                                                                                                                                                                               | Verificação                                                                              |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| **3 · CRM**               | Seção **Demonstração** na ficha do lead (criar, estado, abrir campanha, menu •••); diálogo de criação                                                                                                                                                                                                                                                                 | testes + página temporária (estados e diálogo)                                           |
+| **4 · Cliente**           | `PortalRuntime` (caminhos, ações, identidade) torna o Portal V2 reutilizável **sem duplicá-lo** — o portal real continua idêntico (`rebase` é a identidade); rotas `/demo/$token`; funções públicas por token (limite de uso, mesmo erro para qualquer falha de acesso, campanha derivada da sessão, ator fixo, sem efeito externo); Copiar link / Abrir como cliente | testes + **banco real**: criar, abrir como cliente, aprovar, revogar, renovar, reiniciar |
+| **5 · Sinal e narrativa** | Time → cliente por Broadcast (payload vazio) + polling de 20 s; narrativa como modelo de leitura; selo da campanha vira controle (estado, link, atividade, ações)                                                                                                                                                                                                     | testes + **banco real**: portal foi de 6 para 7 pendências em ~3,5 s após o sinal        |
+| **6 · Fluxos completos**  | Relatório calculado das mesmas métricas do cenário; teste de **fluxos completos** com time e cliente no mesmo estado (influenciador com substituição, roteiro e conteúdo com ajuste e reenvio, publicação e métricas, relatório, comentários, narrativa, reiniciar, revogar, renovar, encerrar, isolamento)                                                           | 21 testes + portal real (métricas, relatório PDF abrindo por URL assinada)               |
+| **7 · Endurecimento**     | Runbook e roteiro de demonstração; regras no `CLAUDE.md`; documentação de segurança atualizada; limpeza do que foi criado para teste                                                                                                                                                                                                                                  | [`demo-runbook.md`](../development/demo-runbook.md)                                      |
+
+### Achados ao testar contra o banco real (e corrigidos)
+
+1. **`uuid = text` em `demo_apply_scenario`**: `campanha_nps.campanha_id` é `uuid` no banco vivo (a migration original o declarava `text`). Corrigido em `20261005120000_demo_apply_scenario_fix.sql`; o teste estático da migration agora cobre a correção. Os testes em memória não poderiam ter achado isso.
+2. **Relatório mensal com total digitado à mão** que não batia com as métricas do cenário: agora é calculado delas (e testado).
+
+### Decisões tomadas pelo caminho (revisáveis)
+
+- Identidade exibida ao cliente da demo: "Cliente" (o ator gravado no histórico continua "Cliente (demonstração)").
+- O sinal do time para o cliente cobre influenciadores e cronograma; mudanças na ficha da campanha chegam pelo polling.
+- A exigência da `20261004` em `demo_prerequisites()` foi **mantida** (e a migration foi aplicada).
+
+### Estado final
+
+Etapas 0–7 entregues e no `main`. Pendências fora do escopo da Demo: teste funcional da `20261004` (equipe e portal) e a migration `20261003100000` (central de problemas), ainda não aplicada.

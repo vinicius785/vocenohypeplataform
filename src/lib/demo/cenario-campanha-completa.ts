@@ -846,6 +846,22 @@ export function buildDemoScenario(input: BuildDemoScenarioInput): DemoScenario {
 
   // --- Relatório mensal e documentos -----------------------------------------------
   const relatorioMes = c.previousMonth();
+  // O relatório é calculado das MESMAS métricas das entregas publicadas (nunca digitado à mão):
+  // o PDF e a tela de Resultados do portal sempre contam a mesma história.
+  const totais = { reach: 0, views: 0, interacoes: 0 };
+  for (const { data } of influenciadores) {
+    for (const e of data.entregas) {
+      if (!e.metrics) continue;
+      totais.reach += e.metrics.reach ?? 0;
+      totais.views += e.metrics.views ?? 0;
+      totais.interacoes +=
+        (e.metrics.likes ?? 0) +
+        (e.metrics.comments ?? 0) +
+        (e.metrics.shares ?? 0) +
+        (e.metrics.saves ?? 0);
+    }
+  }
+  const fmt = (n: number) => n.toLocaleString("pt-BR");
   const relatorio = registerAsset(
     "relatorio-mensal",
     "pdf",
@@ -856,9 +872,9 @@ export function buildDemoScenario(input: BuildDemoScenarioInput): DemoScenario {
       `Referência: ${relatorioMes}`,
       "",
       "Documento de EXEMPLO da demonstração — números fictícios.",
-      "Alcance total: 106.650",
-      "Visualizações: 139.500",
-      "Interações: 11.973",
+      `Alcance total: ${fmt(totais.reach)}`,
+      `Visualizações: ${fmt(totais.views)}`,
+      `Interações (curtidas, comentários, compartilhamentos e salvamentos): ${fmt(totais.interacoes)}`,
     ],
   );
   const briefing = registerAsset(

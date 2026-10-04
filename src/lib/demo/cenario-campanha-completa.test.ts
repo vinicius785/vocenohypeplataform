@@ -379,6 +379,24 @@ describe("arquivos de exemplo (assets)", () => {
   });
 });
 
+describe("relatório mensal coerente com as métricas", () => {
+  it("os totais do PDF são a soma das métricas das entregas publicadas", () => {
+    const s = build();
+    const m = entregasDe(s).flatMap((e) => (e.metrics ? [e.metrics] : []));
+    const soma = (k: "reach" | "views") => m.reduce((n, x) => n + (x[k] ?? 0), 0);
+    const inter = m.reduce(
+      (n, x) => n + (x.likes ?? 0) + (x.comments ?? 0) + (x.shares ?? 0) + (x.saves ?? 0),
+      0,
+    );
+    const rel = s.assetSpecs.find((a) => a.key === "relatorio-mensal")!;
+    expect(rel.lines).toContain(`Alcance total: ${soma("reach").toLocaleString("pt-BR")}`);
+    expect(rel.lines).toContain(`Visualizações: ${soma("views").toLocaleString("pt-BR")}`);
+    expect(rel.lines.some((l) => l.endsWith(`: ${inter.toLocaleString("pt-BR")}`))).toBe(true);
+    expect(soma("reach")).toBe(106650);
+    expect(soma("views")).toBe(139500);
+  });
+});
+
 describe("datas relativas (Brasília)", () => {
   it("hoje = 2026-10-05; mês anterior = 2026-09; viradas de ano", () => {
     const s = build();
