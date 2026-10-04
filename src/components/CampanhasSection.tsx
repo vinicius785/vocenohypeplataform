@@ -120,7 +120,6 @@ import {
   deleteCampanhaScopedData,
   type CronogramaItem,
 } from "@/lib/campanha-scoped-store";
-import { NativeSelect } from "@/components/ui/native-select";
 
 export { BankFields, type BankInfo };
 
