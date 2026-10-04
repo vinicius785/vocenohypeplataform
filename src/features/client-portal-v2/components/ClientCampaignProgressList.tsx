@@ -1,6 +1,6 @@
 import { Megaphone } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
-import { Card, CardHeader } from "@/components/InicioDashboard";
+import { Card, CardHeader } from "@/components/shared/SectionCard";
 import { EmptyState } from "@/components/shared/EmptyState";
 import type { CampaignSummary } from "../types/attention";
 import { CLIENT_CAMPAIGN_STATUS_LABEL } from "../lib/client-status";

@@ -21,9 +21,10 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import type { Cliente } from "@/lib/clientes-store";
-import type { Influ } from "@/components/influenciadores/InfluencerBoard";
+import type { Influ } from "@/lib/influencer-model";
 import { ensurePrimary } from "@/lib/social-profiles";
 import { InfluNpsAnswerSchema, InfluNpsTokenSchema } from "@/lib/campanha-nps-influenciador";
+import { throwSafeDbError } from "@/lib/portal-db-error";
 
 type NpsInfluRow = {
   id: string;
@@ -40,7 +41,7 @@ async function findNpsInfluByToken(token: string): Promise<NpsInfluRow | null> {
     .select("id, campanha_id, influenciador_id, score, answered_at")
     .eq("token", token)
     .maybeSingle();
-  if (error) throw new Error(error.message);
+  if (error) throwSafeDbError(error);
   return data;
 }
 
@@ -53,7 +54,7 @@ async function findCampanhaNomeEPeriodo(
 ): Promise<{ nome: string; dataInicio?: string } | null> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: rows, error } = await supabaseAdmin.from("clientes").select("data");
-  if (error) throw new Error(error.message);
+  if (error) throwSafeDbError(error);
   for (const row of (rows ?? []) as { data: Cliente }[]) {
     const campanha = row.data.campanhas?.find((c) => c.id === campanhaId);
     if (campanha) return { nome: campanha.nome, dataInicio: campanha.dataInicio };
@@ -130,5 +131,5 @@ export const submitInfluNps = createServerFn({ method: "POST" })
       })
       .eq("id", row.id)
       .is("answered_at", null); // defesa extra contra corrida entre 2 submits simultâneos do mesmo token
-    if (error) throw new Error(error.message);
+    if (error) throwSafeDbError(error);
   });

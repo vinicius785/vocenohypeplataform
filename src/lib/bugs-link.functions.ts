@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { Project } from "@/lib/projetos";
 import type { BugReportKind, BugReportScope } from "@/lib/bug-reports";
+import { throwSafeDbError } from "@/lib/portal-db-error";
 
 /**
  * Link público/externo de Bugs & Sugestões do HypeApp (`/bugs/$token`) —
@@ -17,7 +18,7 @@ async function findProjetoByToken(
 ): Promise<{ projetoId: string; projeto: Project } | null> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: rows, error } = await supabaseAdmin.from("projetos").select("id, data");
-  if (error) throw new Error(error.message);
+  if (error) throwSafeDbError(error);
   for (const row of (rows ?? []) as { id: string; data: Project }[]) {
     if (row.data.bugsPublicToken === token) return { projetoId: row.id, projeto: row.data };
   }
@@ -54,7 +55,7 @@ export const getPublicBugReports = createServerFn({ method: "GET" })
       )
       .eq("source", "hypeapp")
       .order("created_at", { ascending: false });
-    if (error) throw new Error(error.message);
+    if (error) throwSafeDbError(error);
     return (rows ?? []).map((r) => ({
       id: r.id,
       reporterName: r.reporter_name ?? "",
@@ -109,7 +110,7 @@ export const submitPublicBugReport = createServerFn({ method: "POST" })
         const { error: uploadError } = await supabaseAdmin.storage
           .from("bug-reports")
           .upload(path, buffer, { contentType });
-        if (uploadError) throw new Error(uploadError.message);
+        if (uploadError) throwSafeDbError(uploadError);
         screenshotPath = path;
       }
     }
@@ -124,7 +125,7 @@ export const submitPublicBugReport = createServerFn({ method: "POST" })
       scope: data.scope as BugReportScope | null,
       source: "hypeapp",
     });
-    if (error) throw new Error(error.message);
+    if (error) throwSafeDbError(error);
     return { ok: true };
   });
 
@@ -150,6 +151,6 @@ export const setPublicBugResolved = createServerFn({ method: "POST" })
       })
       .eq("id", data.id)
       .eq("source", "hypeapp");
-    if (error) throw new Error(error.message);
+    if (error) throwSafeDbError(error);
     return { ok: true };
   });

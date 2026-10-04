@@ -7,7 +7,7 @@ import {
   getInscricaoCampanhaData,
   submitInscricaoCampanha,
 } from "@/lib/inscricao-campanha.functions";
-import { NICHOS } from "@/components/influenciadores/InfluencerBoard";
+import { NICHOS } from "@/lib/influencer-model";
 import {
   PLATAFORMAS,
   platformDef,

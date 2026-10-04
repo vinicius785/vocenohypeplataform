@@ -1,4 +1,4 @@
-import type { Influ } from "@/components/influenciadores/InfluencerBoard";
+import type { Influ } from "@/lib/influencer-model";
 import type { Task } from "@/components/tasks/TaskBoard";
 import { createScopedArrayStore } from "./scoped-table-store";
 

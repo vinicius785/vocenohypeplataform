@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { ClienteLogo } from "@/components/clientes/ClienteLogo";
-import { fmtDate } from "@/components/influenciadores/InfluencerBoard";
+import { fmtDate } from "@/lib/influencer-model";
 import { campanhaStatus, CAMPANHA_STATUS_LABEL, type CampanhaRow } from "./campanha-ui";
 
 const STATUS_BADGE_VARIANT = {

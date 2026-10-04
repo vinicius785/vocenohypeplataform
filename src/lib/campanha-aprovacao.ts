@@ -1,9 +1,4 @@
-import type {
-  Influ,
-  Entrega,
-  ClienteVeredito,
-  InfluActivityEvent,
-} from "@/components/influenciadores/InfluencerBoard";
+import type { Influ, Entrega, ClienteVeredito, InfluActivityEvent } from "@/lib/influencer-model";
 import { canReopenInfluApproval } from "@/lib/campanha-status";
 
 /**

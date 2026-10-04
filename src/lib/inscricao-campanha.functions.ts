@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { Cliente } from "@/lib/clientes-store";
 import type { Campaign } from "@/components/VincularCampanhaDialog";
-import type { Influ, InfluAttachment } from "@/components/influenciadores/InfluencerBoard";
+import type { Influ, InfluAttachment } from "@/lib/influencer-model";
 import { getEffectiveInscricaoPage } from "@/lib/inscricao-page";
 import {
   normalizeSocialInput,
@@ -14,6 +14,7 @@ import {
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
+import { throwSafeDbError } from "@/lib/portal-db-error";
 
 /**
  * Link público de INSCRIÇÃO de influenciadores numa campanha
@@ -28,7 +29,7 @@ async function findCampanhaBySignupToken(
 ): Promise<{ clienteId: string; cliente: Cliente; campanha: Campaign } | null> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: rows, error } = await supabaseAdmin.from("clientes").select("id, data");
-  if (error) throw new Error(error.message);
+  if (error) throwSafeDbError(error);
   for (const row of (rows ?? []) as { id: string; data: Cliente }[]) {
     const campanha = row.data.campanhas?.find((c) => c.signupToken === token);
     if (campanha) return { clienteId: row.id, cliente: row.data, campanha };
@@ -234,7 +235,7 @@ export const submitInscricaoCampanha = createServerFn({ method: "POST" })
       const { error: uploadError } = await supabaseAdmin.storage
         .from("entrega-anexos")
         .upload(path, buffer, { contentType });
-      if (uploadError) throw new Error(uploadError.message);
+      if (uploadError) throwSafeDbError(uploadError);
       // Guarda a CHAVE permanente, nunca uma URL assinada — a URL de
       // visualização/download é sempre gerada sob demanda
       // (`getInfluAttachmentUrl`), então nunca expira "de vez" sem chance
@@ -294,7 +295,7 @@ export const submitInscricaoCampanha = createServerFn({ method: "POST" })
       .from("campanha_influenciadores")
       .select("id, data")
       .eq("campanha_id", found.campanha.id);
-    if (fetchError) throw new Error(fetchError.message);
+    if (fetchError) throwSafeDbError(fetchError);
 
     type ExistingRow = { id: string; data: Influ };
     let matched: ExistingRow | null = null;
@@ -353,7 +354,7 @@ export const submitInscricaoCampanha = createServerFn({ method: "POST" })
         .from("campanha_influenciadores")
         .update({ data: updated as unknown as never })
         .eq("id", matched.id);
-      if (error) throw new Error(error.message);
+      if (error) throwSafeDbError(error);
       const result = { ok: true as const, merged: true };
       if (idempotencyRowId) {
         await supabaseAdmin
@@ -402,7 +403,7 @@ export const submitInscricaoCampanha = createServerFn({ method: "POST" })
       campanha_id: found.campanha.id,
       data: influ as unknown as never,
     });
-    if (error) throw new Error(error.message);
+    if (error) throwSafeDbError(error);
     const result = { ok: true as const, merged: false };
     if (idempotencyRowId) {
       await supabaseAdmin
@@ -431,12 +432,12 @@ async function assertCanManage(userId: string, supabase: SupabaseClient<Database
       _user_id: userId,
       _permission: p,
     });
-    if (error) throw new Error(error.message);
+    if (error) throwSafeDbError(error);
     return v === true;
   };
   const admin = async () => {
     const { data: v, error } = await supabase.rpc("is_admin", { _user_id: userId });
-    if (error) throw new Error(error.message);
+    if (error) throwSafeDbError(error);
     return v === true;
   };
   const [isAdmin, hasPerm] = await Promise.all([admin(), perm("influenciadores")]);

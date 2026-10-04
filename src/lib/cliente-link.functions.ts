@@ -3,12 +3,8 @@ import { z } from "zod";
 import { throwSafeDbError } from "@/lib/portal-db-error";
 import type { Cliente } from "@/lib/clientes-store";
 import type { Campaign } from "@/components/VincularCampanhaDialog";
-import type {
-  Influ,
-  Entrega,
-  InfluActivityEventKind,
-} from "@/components/influenciadores/InfluencerBoard";
-import { legacyAnexoCategoria } from "@/components/influenciadores/InfluencerBoard";
+import type { Influ, Entrega, InfluActivityEventKind } from "@/lib/influencer-model";
+import { legacyAnexoCategoria } from "@/lib/influencer-model";
 import {
   applyInfluApproval,
   applyEntregaApproval,

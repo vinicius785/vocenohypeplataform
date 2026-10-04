@@ -42,29 +42,37 @@ export const Route = createFileRoute("/_authenticated")({
       throw redirect({ to: "/" });
     }
 
-    // Additive check (2026-09-18, Fase 3 parte 2 — ver CLAUDE.md): sem isto,
-    // um usuário com MFA cadastrado poderia contornar o desafio de
-    // segundo fator do login simplesmente navegando direto pra uma URL
-    // autenticada logo após a senha (a sessão já existe em aal1 nesse
-    // ponto). `/` (index.tsx) já sabe mostrar a etapa de verificação quando
-    // detecta essa mesma condição — redirecionar pra lá em vez de deixar
-    // passar. Não afeta ninguém sem fator MFA cadastrado nem sessões que já
-    // alcançaram aal2 (`shouldRequireMfaChallenge` só é `true` no caso
-    // estreito "tem fator verificado E esta sessão ainda não o satisfez").
-    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    // Três leituras independentes (nível de MFA, perfil, ambiente) disparadas JUNTAS:
+    // antes eram 3 idas ao servidor em fila, antes de qualquer tela aparecer. As
+    // DECISÕES continuam na mesma ordem de antes (MFA → troca de senha → ambiente).
+    const userId = sessionData.session.user.id;
+    const isFirstAccess = location.pathname === "/primeiro-acesso";
+    const [{ data: aal }, { data: profile }, env] = await Promise.all([
+      supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
+      supabase.from("profiles").select("must_change_password").eq("id", userId).maybeSingle(),
+      // Pulado na tela de primeiro acesso: ainda não teve chance de ter uma
+      // membership de verdade resolvida.
+      // Um erro aqui só deve aparecer se chegarmos ao ponto de usar o ambiente (como
+      // antes, quando esta consulta vinha depois dos redirects de MFA/senha).
+      isFirstAccess
+        ? Promise.resolve(null)
+        : resolveUserEnvironment(supabase, userId).then(
+            (value) => ({ value }),
+            (error: unknown) => ({ error }),
+          ),
+    ]);
+
+    // Check (2026-09-18, Fase 3 parte 2): sem isto, um usuário com MFA cadastrado
+    // poderia contornar o desafio de segundo fator navegando direto para uma URL
+    // autenticada logo após a senha (a sessão já existe em aal1 nesse ponto).
+    // `/` já sabe mostrar a etapa de verificação. Só é `true` no caso estreito
+    // "tem fator verificado E esta sessão ainda não o satisfez".
     if (shouldRequireMfaChallenge(aal?.currentLevel ?? null, aal?.nextLevel ?? null)) {
       throw redirect({ to: "/" });
     }
 
     markTabSessionActive();
-    const userId = sessionData.session.user.id;
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("must_change_password")
-      .eq("id", userId)
-      .maybeSingle();
 
-    const isFirstAccess = location.pathname === "/primeiro-acesso";
     if (profile?.must_change_password && !isFirstAccess) {
       throw redirect({ to: "/primeiro-acesso" });
     }
@@ -72,19 +80,13 @@ export const Route = createFileRoute("/_authenticated")({
       throw redirect({ to: "/time" });
     }
 
-    // Additive check (2026-09, Fase 1 da reformulação de auth): um usuário
-    // autenticado sem NENHUM ambiente interno ativo (ex.: um cliente que
-    // logou pela mesma tela, ou um convite ainda não aceito) não deve ver o
-    // shell interno silenciosamente. `/selecionar-ambiente` e
-    // `/acesso-pendente` são rotas de nível raiz (fora de `_authenticated`),
-    // então não recaem neste mesmo guard — sem risco de loop de redirect.
-    // Pulado na tela de primeiro acesso pelo mesmo motivo do check acima
-    // (ainda não teve chance de ter uma membership de verdade resolvida).
-    if (!isFirstAccess) {
-      const env = await resolveUserEnvironment(supabase, userId);
-      if (env.type !== "internal") {
-        throw redirect({ to: env.redirectTo });
-      }
+    // Um usuário autenticado sem NENHUM ambiente interno ativo (ex.: um cliente que
+    // logou pela mesma tela, ou um convite ainda não aceito) não deve ver o shell
+    // interno. `/selecionar-ambiente` e `/acesso-pendente` são rotas de nível raiz
+    // (fora de `_authenticated`), então não recaem neste guard — sem loop.
+    if (env && "error" in env) throw env.error;
+    if (env && env.value.type !== "internal") {
+      throw redirect({ to: env.value.redirectTo });
     }
     // A tela de primeiro acesso não usa nenhum desses dados — sincronizá-los
     // aqui só atrasava (às vezes bastante, com o Realtime ainda reconectando

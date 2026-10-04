@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { IconButton } from "@/components/ui/icon-button";
 import { DateField } from "@/components/ui/date-field";
-import { fmtDate, type Influ } from "@/components/influenciadores/InfluencerBoard";
+import { fmtDate, type Influ } from "@/lib/influencer-model";
 import type { Campaign } from "@/components/VincularCampanhaDialog";
 import type { CronogramaItem } from "@/lib/campanha-scoped-store";
 import { CampaignToolShell, ToolEmpty, ToolSectionTitle } from "./CampaignToolShell";

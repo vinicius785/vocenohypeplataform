@@ -4,7 +4,7 @@ import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/hooks/use-confirm";
 import { formatSeguidores } from "@/lib/format";
-import { NICHOS, type Rede } from "@/components/influenciadores/InfluencerBoard";
+import { NICHOS, type Rede } from "@/lib/influencer-model";
 import { TIERS, suggestTier } from "@/lib/pricing";
 import { type BankInflu, type Endereco } from "@/lib/banco-influs-store";
 import { NativeSelect } from "@/components/ui/native-select";

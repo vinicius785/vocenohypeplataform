@@ -1,5 +1,5 @@
 import { Bell, Plus } from "lucide-react";
-import { Card, CardHeader } from "@/components/InicioDashboard";
+import { Card, CardHeader } from "@/components/shared/SectionCard";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { IconButton } from "@/components/ui/icon-button";
 import { BRASILIA_TZ } from "@/lib/timezone";

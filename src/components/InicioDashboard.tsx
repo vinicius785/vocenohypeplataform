@@ -9,9 +9,6 @@ import {
   Flag,
   MessageSquare,
   Newspaper,
-  Plus,
-  Star,
-  Trash2,
   X,
   Sun,
   Moon,
@@ -39,7 +36,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Badge } from "@/components/ui/badge";
 import { IconButton } from "@/components/ui/icon-button";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { Card as UiCard, CardHeader } from "@/components/ui/card";
+import { Card, CardHeader } from "@/components/shared/SectionCard";
 import { AvatarStack } from "@/components/meetings/AvatarStack";
 import { useConfirm } from "@/hooks/use-confirm";
 import {
@@ -64,7 +61,8 @@ import {
   declineMeetingFor,
   type Meeting,
 } from "@/lib/reunioes-store";
-import { PRIORITY_TONE, useTeamMembers } from "@/components/tasks/TaskBoard";
+import { PRIORITY_TONE } from "@/lib/task-status";
+import { useTeamMembers } from "@/components/tasks/task-people";
 import {
   TaskDeadlineBadge,
   TaskStatusBadge,
@@ -1369,27 +1367,6 @@ export function InicioDashboard() {
     </PageContainer>
   );
 }
-
-/** Card e cabeçalho de card da Home — são os componentes CANÔNICOS de
- * `ui/card` (`rounded-2xl` + `SURFACE.raised`, sem sombra); a Home só
- * acrescenta `overflow-hidden` para cortar listas nos cantos. Mantidos aqui
- * como re-export porque outros módulos (portal, lembretes) já importam
- * daqui. */
-export const Card = ({
-  children,
-  className = "",
-  ref,
-}: {
-  children: ReactNode;
-  className?: string;
-  ref?: React.Ref<HTMLDivElement>;
-}) => (
-  <UiCard ref={ref} className={`overflow-hidden ${className}`}>
-    {children}
-  </UiCard>
-);
-
-export { CardHeader };
 
 /** Grupo de tabs em pill — usado só em "Meu trabalho". Ativo com fundo
  * de marca bem sutil (`bg-brand-subtle`, mesmo tom que badges/chips de

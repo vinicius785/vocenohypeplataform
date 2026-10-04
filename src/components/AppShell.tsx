@@ -30,7 +30,7 @@ import {
   LifeBuoy,
 } from "lucide-react";
 import { loadProjetos, onProjetosChange, loadTeamMembers, getTaskAssignees } from "@/lib/projetos";
-import { metricasPendentes, type Influ } from "@/components/influenciadores/InfluencerBoard";
+import { metricasPendentes, type Influ } from "@/lib/influencer-model";
 import { getAllCampanhaTarefas, onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
 import { loadStandalone, onStandaloneChange } from "@/lib/marketing-tasks";
 import type { Task } from "@/components/tasks/TaskBoard";
@@ -1071,11 +1071,14 @@ function ActiveTimerIndicator({ onSelect }: { onSelect: (key: SectionKey) => voi
   useEffect(() => onProjetosChange(() => forceData((n) => n + 1)), []);
   useEffect(() => onCampanhaTarefasChange(() => forceData((n) => n + 1)), []);
   useEffect(() => onStandaloneChange(() => forceData((n) => n + 1)), []);
+  // O relógio (mm:ss) só precisa girar enquanto há um cronômetro em andamento.
   const [, forceNow] = useState(0);
+  const hasRunningTimer = !!running.entry;
   useEffect(() => {
+    if (!hasRunningTimer) return;
     const iv = setInterval(() => forceNow((n) => n + 1), 1000);
     return () => clearInterval(iv);
-  }, []);
+  }, [hasRunningTimer]);
 
   const active = useMemo(() => {
     const entry = running.entry;

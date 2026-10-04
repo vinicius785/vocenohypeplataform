@@ -11,7 +11,7 @@ import {
   normalizeInflus,
   type Entrega,
   type PagamentoEntrega,
-} from "@/components/influenciadores/InfluencerBoard";
+} from "@/lib/influencer-model";
 
 export type Kind = "receita" | "despesa";
 export type Source = "manual" | "influenciador" | "salario" | "campanha";

@@ -11,10 +11,10 @@
 import type { Cliente } from "@/lib/clientes-store";
 import type { CampanhaStatus } from "@/components/VincularCampanhaDialog";
 import type { BankInflu } from "@/lib/banco-influs-store";
-import type { Influ } from "@/components/influenciadores/InfluencerBoard";
+import type { Influ } from "@/lib/influencer-model";
 import { getAllCampanhaInflus } from "@/lib/campanha-scoped-store";
 import { campanhaStatus } from "@/components/campanhas/campanha-ui";
-import { producaoResumo } from "@/components/influenciadores/InfluencerBoard";
+import { producaoResumo } from "@/lib/influencer-model";
 
 export type ParticipacaoCampanha = {
   clienteId: string;

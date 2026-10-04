@@ -14,6 +14,7 @@ import {
   type CustoTierFormato,
 } from "@/lib/pricing";
 import type { PropostaSnapshot } from "@/lib/comercial";
+import { throwSafeDbError } from "@/lib/portal-db-error";
 
 /**
  * Calculadora de proposta EXTERNA (`/calculadora-proposta/$token`) — link à
@@ -56,7 +57,7 @@ async function findLeadByPropostaToken(token: string): Promise<LeadPropostaPubli
   const { data: rows, error } = await supabaseAdmin
     .from("leads")
     .select("id, name, company, extra");
-  if (error) throw new Error(error.message);
+  if (error) throwSafeDbError(error);
   for (const row of (rows ?? []) as {
     id: string;
     name: string;
@@ -98,7 +99,7 @@ async function resolvePricing(): Promise<{
     .select("imposto_pct, comissao_pct, bonificacao_pct, margem_pct, custos_tier")
     .eq("id", true)
     .maybeSingle();
-  if (error) throw new Error(error.message);
+  if (error) throwSafeDbError(error);
   if (!row) return { percentuais: DEFAULT_PERCENTUAIS, custos: EMPTY_CUSTOS };
   return {
     percentuais: {
@@ -204,6 +205,6 @@ export const savePropostaPublica = createServerFn({ method: "POST" })
       .from("leads")
       .update({ extra: { ...extra, proposta: snapshot }, value: precoFinal } as never)
       .eq("id", found.leadId);
-    if (error) throw new Error(error.message);
+    if (error) throwSafeDbError(error);
     return { ok: true, precoFinal };
   });

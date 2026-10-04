@@ -101,6 +101,12 @@ export const logLoginFailure = createServerFn({ method: "POST" })
     // matches a real account (service-role lookup, never exposed to the
     // caller either way — the response is always {ok:true}).
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // Endpoint sem sessão: sem um teto, qualquer pessoa poderia encher o log de
+    // auditoria de um e-mail alheio. Passou do limite: responde ok e não grava.
+    const { checkRateLimit, emailBucket } = await import("@/lib/rate-limit.server");
+    if (!(await checkRateLimit(emailBucket("login-failure-log", data.email), 20, 60 * 60))) {
+      return { ok: true };
+    }
     let actorUserId: string | null = null;
     try {
       const { data: profile } = await supabaseAdmin

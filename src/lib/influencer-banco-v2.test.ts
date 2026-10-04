@@ -12,7 +12,7 @@ import {
 import { mediaAvaliacao, mediaGeralAvaliacoes } from "./campanha-influenciador-avaliacao";
 import type { Cliente } from "@/lib/clientes-store";
 import type { Campaign } from "@/components/VincularCampanhaDialog";
-import type { Influ } from "@/components/influenciadores/InfluencerBoard";
+import type { Influ } from "@/lib/influencer-model";
 import type { BankInflu } from "@/lib/banco-influs-store";
 
 function cliente(overrides: Partial<Cliente> = {}): Cliente {

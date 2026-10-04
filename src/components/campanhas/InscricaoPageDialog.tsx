@@ -30,7 +30,7 @@ import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/
 import { useConfirm } from "@/hooks/use-confirm";
 import { supabase } from "@/integrations/supabase/client";
 import type { Campaign } from "@/components/VincularCampanhaDialog";
-import type { Influ } from "@/components/influenciadores/InfluencerBoard";
+import type { Influ } from "@/lib/influencer-model";
 import {
   type InscricaoPageStatus,
   type InscricaoPageConfig,

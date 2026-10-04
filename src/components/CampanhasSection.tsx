@@ -77,8 +77,6 @@ import { OPEN_CAMPANHA_TASK_KEY, OPEN_CAMPANHA_TASK_EVENT } from "./AppShell";
 import { TaskBoard, matchesDeadlinePeriod, type Task } from "./tasks/TaskBoard";
 import { usePerformanceSettings } from "@/lib/performance-events-store";
 import {
-  InfluencerBoard,
-  BankFields,
   parseMoney,
   fmtBRL,
   fmtDate,
@@ -88,7 +86,8 @@ import {
   type Influ,
   type BankInfo,
   type Entrega,
-} from "@/components/influenciadores/InfluencerBoard";
+} from "@/lib/influencer-model";
+import { InfluencerBoard, BankFields } from "@/components/influenciadores/InfluencerBoard";
 import {
   ENTREGA_STAGE_LABEL,
   ENTREGA_STAGE_TONE,

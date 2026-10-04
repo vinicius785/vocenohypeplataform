@@ -1,7 +1,7 @@
 import { Check, User } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Avatar, initialsOf, colorFor, type Member } from "@/components/tasks/TaskBoard";
+import { Avatar, initialsOf, colorFor, type Member } from "@/components/tasks/task-people";
 
 /**
  * Responsável da subtarefa — `Popover` com Portal (substitui o antigo

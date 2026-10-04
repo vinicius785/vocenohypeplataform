@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/hooks/use-confirm";
 import { formatSeguidores } from "@/lib/format";
 import { type BankInflu } from "@/lib/banco-influs-store";
-import { producaoResumo } from "@/components/influenciadores/InfluencerBoard";
+import { producaoResumo } from "@/lib/influencer-model";
 import { CAMPANHA_STATUS_LABEL } from "@/components/campanhas/campanha-ui";
 import {
   totalSeguidores,

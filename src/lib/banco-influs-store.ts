@@ -1,4 +1,4 @@
-import type { Rede } from "@/components/influenciadores/InfluencerBoard";
+import type { Rede } from "@/lib/influencer-model";
 import { createTableArrayStore } from "./table-array-store";
 import type { TierId } from "./pricing";
 

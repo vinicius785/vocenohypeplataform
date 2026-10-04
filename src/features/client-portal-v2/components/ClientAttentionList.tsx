@@ -1,6 +1,6 @@
 import { AlertCircle, ArrowRight, CheckCircle2 } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
-import { Card, CardHeader } from "@/components/InicioDashboard";
+import { Card, CardHeader } from "@/components/shared/SectionCard";
 import { EmptyState } from "@/components/shared/EmptyState";
 import type { AttentionItem } from "../types/attention";
 

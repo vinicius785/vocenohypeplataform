@@ -82,11 +82,8 @@ import { TrafegoPagoPanel } from "@/components/marketing/TrafegoPagoPanel";
 import { BlogPanel } from "@/components/marketing/BlogPanel";
 import { AeoMonitorPanel } from "@/components/marketing/AeoMonitorPanel";
 import { FluxosEmailPanel } from "@/components/marketing/FluxosEmailPanel";
-import {
-  InfluencerBoard,
-  normalizeInflus,
-  type Influ,
-} from "@/components/influenciadores/InfluencerBoard";
+import { normalizeInflus, type Influ } from "@/lib/influencer-model";
+import { InfluencerBoard } from "@/components/influenciadores/InfluencerBoard";
 import {
   loadProjetoInflus,
   saveProjetoInflus,

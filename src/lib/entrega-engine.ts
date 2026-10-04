@@ -1,4 +1,4 @@
-import type { Entrega, EntregaAnexoCategoria } from "@/components/influenciadores/InfluencerBoard";
+import type { Entrega, EntregaAnexoCategoria } from "@/lib/influencer-model";
 import {
   nextActionForEntrega,
   ENTREGA_STAGE_LABEL,

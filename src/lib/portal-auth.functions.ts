@@ -47,7 +47,7 @@ import {
   reopenInfluApprovalByCliente,
 } from "@/lib/campanha-aprovacao";
 import { PERFIL_REJEICAO_MOTIVOS } from "@/lib/campanha-status";
-import type { Influ } from "@/components/influenciadores/InfluencerBoard";
+import type { Influ } from "@/lib/influencer-model";
 import type { Cliente } from "@/lib/clientes-store";
 import type { Task } from "@/components/tasks/TaskBoard";
 import {

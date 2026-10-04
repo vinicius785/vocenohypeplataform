@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Heart, MessageCircle, Send, Trash2 } from "lucide-react";
 import type { BlogComment } from "@/lib/blog-engagement";
 import { initialsOf, colorFor } from "@/lib/blog-engagement";
-import { renderMentions, type Member } from "@/components/tasks/TaskBoard";
+import { renderMentions, type Member } from "@/components/tasks/task-people";
 import { useConfirm } from "@/hooks/use-confirm";
 import { MARKDOWN_LITE_CLASSES } from "./markdown";
 

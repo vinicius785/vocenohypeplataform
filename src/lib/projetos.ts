@@ -1,4 +1,4 @@
-import type { InfluencerFieldKey } from "@/components/influenciadores/InfluencerBoard";
+import type { InfluencerFieldKey } from "@/lib/influencer-model";
 import { createTableArrayStore } from "./table-array-store";
 import { loadProjetoTarefas, onProjetoTarefasChange } from "./projeto-scoped-store";
 import type { TaskRecurrence } from "@/lib/task-recurrence";
@@ -79,12 +79,9 @@ export const FEATURES: {
 export const DEFAULT_FEATURES: FeatureKey[] = ["kanban", "influenciadores", "documentos"];
 
 /** Which influencer fields a project's "Influenciadores" feature collects —
- * see @/components/influenciadores/InfluencerBoard, the same board Campanhas uses. */
-export type { InfluencerFieldKey } from "@/components/influenciadores/InfluencerBoard";
-export {
-  INFLUENCER_FIELDS,
-  DEFAULT_INFLUENCER_FIELDS,
-} from "@/components/influenciadores/InfluencerBoard";
+ * see @/lib/influencer-model, the same board Campanhas uses. */
+export type { InfluencerFieldKey } from "@/lib/influencer-model";
+export { INFLUENCER_FIELDS, DEFAULT_INFLUENCER_FIELDS } from "@/lib/influencer-model";
 
 export type KanbanStatus =
   | "Aberto"

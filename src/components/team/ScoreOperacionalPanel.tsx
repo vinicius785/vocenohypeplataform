@@ -16,7 +16,7 @@ import type { Meeting } from "@/lib/reunioes-store";
 import {
   DEADLINE_CHANGE_MOTIVO_LABEL,
   type DeadlineChangeMotivo,
-} from "@/components/tasks/TaskBoard";
+} from "@/components/tasks/task-people";
 import { MiniStat } from "./member-ui";
 
 export type ProfileCompletion = {

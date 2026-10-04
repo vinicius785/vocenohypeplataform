@@ -8,7 +8,7 @@ import {
 } from "@/components/shared/FilterToolbar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { NICHOS } from "@/components/influenciadores/InfluencerBoard";
+import { NICHOS } from "@/lib/influencer-model";
 import { type BankInflu } from "@/lib/banco-influs-store";
 import {
   type InfluencerBancoFiltersState,

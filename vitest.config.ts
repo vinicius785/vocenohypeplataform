@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 import path from "node:path";
 
 // Standalone config for unit tests (pure logic only) — intentionally does not
@@ -12,5 +12,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // `.claude/worktrees/*` são cópias do repositório criadas por ferramentas de
+    // agente; sem excluí-las o `vitest run` roda (e falha) em código antigo.
+    exclude: [...configDefaults.exclude, ".claude/**"],
   },
 });

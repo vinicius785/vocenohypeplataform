@@ -1,3 +1,4 @@
+import { addDaysIso, todayIsoInBrasilia } from "@/lib/timezone";
 import { describe, expect, it } from "vitest";
 import type { Project, Task } from "@/lib/projetos";
 import {
@@ -35,10 +36,10 @@ function project(overrides: Partial<Project> = {}): Project {
   };
 }
 
+// "Hoje" no fuso de Brasília — o mesmo do app. `toISOString()` (UTC) fazia estes
+// testes falharem entre 21h e 00h (BRT), quando o dia UTC já virou.
 function daysFromToday(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return addDaysIso(todayIsoInBrasilia(), days);
 }
 
 describe("computeProjectMetrics — progresso", () => {

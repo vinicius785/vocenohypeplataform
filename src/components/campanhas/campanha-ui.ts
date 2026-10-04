@@ -15,7 +15,7 @@ import type {
   CampanhaActivityEntry,
 } from "@/components/VincularCampanhaDialog";
 import type { Cliente } from "@/lib/clientes-store";
-import type { Influ, Entrega } from "@/components/influenciadores/InfluencerBoard";
+import type { Influ, Entrega } from "@/lib/influencer-model";
 import { isInfluencerEligibleForDeliveries } from "@/lib/campanha-status";
 
 export type { CampanhaStatus, CampanhaActivityEntry };

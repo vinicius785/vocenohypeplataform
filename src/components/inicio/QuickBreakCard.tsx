@@ -1,13 +1,19 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Coffee, Grid3x3, Type } from "lucide-react";
-import { Card, CardHeader } from "@/components/InicioDashboard";
+import { Card, CardHeader } from "@/components/shared/SectionCard";
 import { Button } from "@/components/ui/button";
 import { getZipSession } from "@/lib/games/zip.functions";
 import { getTermoSession } from "@/lib/games/termo.functions";
-import { ZipGameModal } from "@/components/games/ZipGameModal";
-import { TermoGameModal } from "@/components/games/TermoGameModal";
+// Os jogos só carregam quando abertos: o dicionário do Termo (~128 KB) não precisa
+// viajar com a Início de quem nunca joga.
+const ZipGameModal = lazy(() =>
+  import("@/components/games/ZipGameModal").then((m) => ({ default: m.ZipGameModal })),
+);
+const TermoGameModal = lazy(() =>
+  import("@/components/games/TermoGameModal").then((m) => ({ default: m.TermoGameModal })),
+);
 
 function zipLabel(status: "not_started" | "in_progress" | "won" | undefined): {
   text: string;
@@ -108,10 +114,12 @@ export function QuickBreakCard() {
         </div>
       </Card>
 
-      {openGame === "zip" && <ZipGameModal open onOpenChange={(v) => !v && setOpenGame(null)} />}
-      {openGame === "termo" && (
-        <TermoGameModal open onOpenChange={(v) => !v && setOpenGame(null)} />
-      )}
+      <Suspense fallback={null}>
+        {openGame === "zip" && <ZipGameModal open onOpenChange={(v) => !v && setOpenGame(null)} />}
+        {openGame === "termo" && (
+          <TermoGameModal open onOpenChange={(v) => !v && setOpenGame(null)} />
+        )}
+      </Suspense>
     </>
   );
 }
