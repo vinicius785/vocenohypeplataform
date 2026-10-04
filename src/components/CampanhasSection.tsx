@@ -932,122 +932,120 @@ function CampanhaDetail({
           onConfirm={confirmActivation}
         />
 
-        {/* CABEÇALHO DA CAMPANHA — EXATAMENTE 2 linhas.
-         * Linha 1: ← Campanhas · logo · nome (principal) + cliente · status/ritmo · ações.
-         * Linha 2: contexto do período (stepper compacto de mês, ou o prazo). Sem hero colorido;
-         * azul só nos elementos interativos. No mobile a linha 1 compacta (Editar vira ícone,
-         * status desce para dentro do bloco de identidade) — nunca uma terceira camada. */}
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={onBack}
-              aria-label="Voltar para Campanhas"
-              className="inline-flex shrink-0 items-center gap-1 rounded-md py-1 text-xs text-text-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />{" "}
-              <span className="hidden sm:inline">Campanhas</span>
-            </button>
-            <ClienteLogo photo={cliente.photo} empresa={cliente.empresa} size="sm" />
-            <div className="min-w-0 flex-1 md:flex-none">
-              <p className="truncate">
-                <span
-                  role="heading"
-                  aria-level={1}
-                  className="text-lg font-semibold tracking-tight text-foreground md:text-xl"
-                >
-                  {c.nome}
-                </span>
-                <span className="text-sm text-text-secondary"> · {cliente.empresa}</span>
-              </p>
-              <div className="mt-0.5 flex items-center gap-2 md:hidden">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      disabled={!canChangeStatus}
-                      className="disabled:cursor-default"
-                    >
-                      <Badge
-                        variant={
-                          status === "active"
-                            ? "success"
-                            : status === "completed"
-                              ? "secondary"
-                              : "outline"
-                        }
-                        className={canChangeStatus ? "cursor-pointer hover:opacity-80" : ""}
-                      >
-                        {CAMPANHA_STATUS_LABEL[status]}
-                      </Badge>
-                    </button>
-                  </DropdownMenuTrigger>
-                  {canChangeStatus && (
-                    <DropdownMenuContent align="start">
-                      {CAMPANHA_STATUS_TRANSITIONS[status].map((t) => (
-                        <DropdownMenuItem
-                          key={t.to}
-                          onSelect={() =>
-                            void changeStatus(t.to, t.needsConfirm ? t.confirmMessage : undefined)
-                          }
-                        >
-                          {t.actionLabel}
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  )}
-                </DropdownMenu>
-                {cliente.demo && <CampaignDemoControl campanhaId={c.id} influs={influs} />}
-                {isRecorrente && (
-                  <span className="truncate text-xs text-text-secondary">
-                    Mensal · dia {c.pagClienteRecorrenteDia ?? "—"}
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="hidden min-w-0 flex-1 items-center gap-2 md:flex">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    disabled={!canChangeStatus}
-                    className="disabled:cursor-default"
+        {/* CABEÇALHO DA CAMPANHA — bloco de identidade: logo + nome (protagonista), cliente e
+         * período à esquerda; Recursos · Editar · ••• à direita. O breadcrumb fica acima, pequeno.
+         * Status = um selo discreto junto ao nome; o ritmo (Mensal · dia X) vai na linha do cliente.
+         * No mobile as ações descem para uma linha própria, sem competir com a identidade. */}
+        <div className="space-y-3">
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Voltar para Campanhas"
+            className="inline-flex items-center gap-1 rounded-md text-xs text-text-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Campanhas
+          </button>
+
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+            <div className="flex min-w-0 items-center gap-4 sm:gap-5">
+              <ClienteLogo
+                photo={cliente.photo}
+                empresa={cliente.empresa}
+                size="lg"
+                className="h-14 w-14 sm:h-[72px] sm:w-[72px]"
+              />
+              <div className="min-w-0">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <span
+                    role="heading"
+                    aria-level={1}
+                    className="truncate text-2xl font-semibold leading-tight tracking-tight text-foreground sm:text-3xl"
                   >
-                    <Badge
-                      variant={
-                        status === "active"
-                          ? "success"
-                          : status === "completed"
-                            ? "secondary"
-                            : "outline"
-                      }
-                      className={canChangeStatus ? "cursor-pointer hover:opacity-80" : ""}
-                    >
-                      {CAMPANHA_STATUS_LABEL[status]}
-                    </Badge>
-                  </button>
-                </DropdownMenuTrigger>
-                {canChangeStatus && (
-                  <DropdownMenuContent align="start">
-                    {CAMPANHA_STATUS_TRANSITIONS[status].map((t) => (
-                      <DropdownMenuItem
-                        key={t.to}
-                        onSelect={() =>
-                          void changeStatus(t.to, t.needsConfirm ? t.confirmMessage : undefined)
-                        }
+                    {c.nome}
+                  </span>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          disabled={!canChangeStatus}
+                          className="disabled:cursor-default"
+                        >
+                          <Badge
+                            variant={
+                              status === "active"
+                                ? "success"
+                                : status === "completed"
+                                  ? "secondary"
+                                  : "outline"
+                            }
+                            className={canChangeStatus ? "cursor-pointer hover:opacity-80" : ""}
+                          >
+                            {CAMPANHA_STATUS_LABEL[status]}
+                          </Badge>
+                        </button>
+                      </DropdownMenuTrigger>
+                      {canChangeStatus && (
+                        <DropdownMenuContent align="start">
+                          {CAMPANHA_STATUS_TRANSITIONS[status].map((t) => (
+                            <DropdownMenuItem
+                              key={t.to}
+                              onSelect={() =>
+                                void changeStatus(
+                                  t.to,
+                                  t.needsConfirm ? t.confirmMessage : undefined,
+                                )
+                              }
+                            >
+                              {t.actionLabel}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      )}
+                    </DropdownMenu>
+                    {cliente.demo && <CampaignDemoControl campanhaId={c.id} influs={influs} />}
+                  </div>
+                </div>
+                <p className="mt-1 truncate text-sm text-text-secondary">
+                  {cliente.empresa}
+                  {isRecorrente && ` · Mensal · dia ${c.pagClienteRecorrenteDia ?? "—"}`}
+                </p>
+                {/* Período, integrado à identidade: ‹ Outubro de 2026 › (mensal) ou o prazo. */}
+                <div className="mt-1.5 flex items-center text-xs text-text-secondary">
+                  {isRecorrente ? (
+                    <div className="-ml-1.5 flex items-center">
+                      <button
+                        type="button"
+                        aria-label="Mês anterior"
+                        disabled={monthIndex <= 0}
+                        onClick={() => setMonthFilter(monthOptions[monthIndex - 1].value)}
+                        className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-40 disabled:hover:bg-transparent"
                       >
-                        {t.actionLabel}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                )}
-              </DropdownMenu>
-              {cliente.demo && <CampaignDemoControl campanhaId={c.id} influs={influs} />}
-              {isRecorrente && (
-                <span className="truncate text-xs font-medium text-text-secondary">
-                  Mensal · dia {c.pagClienteRecorrenteDia ?? "—"}
-                </span>
-              )}
+                        <ChevronLeft className="h-3.5 w-3.5" />
+                      </button>
+                      <span
+                        aria-live="polite"
+                        className="min-w-[7.5rem] text-center text-sm font-medium text-foreground"
+                      >
+                        {monthOptions[monthIndex]?.label ?? "—"}
+                      </span>
+                      <button
+                        type="button"
+                        aria-label="Próximo mês"
+                        disabled={monthIndex < 0 || monthIndex >= monthOptions.length - 1}
+                        onClick={() => setMonthFilter(monthOptions[monthIndex + 1].value)}
+                        className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-40 disabled:hover:bg-transparent"
+                      >
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 font-medium">
+                      <Calendar className="h-3.5 w-3.5" /> Prazo {fmtDate(c.prazo)}
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className="flex shrink-0 items-center gap-1.5">
@@ -1103,7 +1101,7 @@ function CampanhaDetail({
                 onClick={() => setEditOpen(true)}
                 aria-label="Editar campanha"
               >
-                <Pencil className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Editar</span>
+                <Pencil className="h-3.5 w-3.5" /> Editar
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -1150,42 +1148,6 @@ function CampanhaDetail({
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-          </div>
-
-          {/* Linha 2 — contexto do período. */}
-          <div className="flex items-center gap-1 pl-0.5 text-sm text-text-secondary">
-            {isRecorrente ? (
-              <>
-                <button
-                  type="button"
-                  aria-label="Mês anterior"
-                  disabled={monthIndex <= 0}
-                  onClick={() => setMonthFilter(monthOptions[monthIndex - 1].value)}
-                  className="flex h-7 w-7 items-center justify-center rounded-md hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-40 disabled:hover:bg-transparent"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-                <span
-                  aria-live="polite"
-                  className="min-w-[8.5rem] text-center font-medium text-foreground"
-                >
-                  {monthOptions[monthIndex]?.label ?? "—"}
-                </span>
-                <button
-                  type="button"
-                  aria-label="Próximo mês"
-                  disabled={monthIndex < 0 || monthIndex >= monthOptions.length - 1}
-                  onClick={() => setMonthFilter(monthOptions[monthIndex + 1].value)}
-                  className="flex h-7 w-7 items-center justify-center rounded-md hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-40 disabled:hover:bg-transparent"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 text-xs font-medium">
-                <Calendar className="h-3.5 w-3.5" /> Prazo {fmtDate(c.prazo)}
-              </span>
-            )}
           </div>
         </div>
 
