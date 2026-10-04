@@ -368,7 +368,7 @@ export function SidebarProfile({ compact = false }: { compact?: boolean } = {}) 
     const rect = open ? avatarRef.current?.getBoundingClientRect() : undefined;
     const label = `${perfil.nome || "Sem nome"} · ${meta.label}${ausenteInfo ? ` ${ausenteInfo}` : ""}`;
     return (
-      <div className="flex justify-center px-3 pt-3">
+      <div className="flex justify-center px-3 py-3">
         <Tooltip>
           <TooltipTrigger asChild>
             <button
