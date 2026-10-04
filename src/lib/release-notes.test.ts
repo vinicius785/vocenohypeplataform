@@ -6,6 +6,7 @@ import {
   fetchVersionInfo,
   getSeenVersion,
   isNewerVersion,
+  isUpdateAvailable,
   markVersionSeen,
   releaseHighlights,
   type Release,
@@ -119,5 +120,26 @@ describe("consistência do versionamento", () => {
     ) as { version: string; releases: Release[] };
     expect(file.version).toBe(APP_VERSION);
     expect(file.releases[0]?.version).toBe(APP_VERSION);
+  });
+});
+
+describe("isUpdateAvailable (deploy novo sem bump de versão)", () => {
+  const cur = { version: "1.0.0", build: "aaaaaaa" };
+  it("mesmo build e mesma versão: sem aviso", () => {
+    expect(isUpdateAvailable({ version: "1.0.0", build: "aaaaaaa" }, cur)).toBe(false);
+  });
+  it("build diferente com a mesma versão: avisa", () => {
+    expect(isUpdateAvailable({ version: "1.0.0", build: "bbbbbbb" }, cur)).toBe(true);
+  });
+  it("versão maior avisa; versão menor (rollback) não avisa nem com build diferente", () => {
+    expect(isUpdateAvailable({ version: "1.0.1" }, cur)).toBe(true);
+    expect(isUpdateAvailable({ version: "0.9.0", build: "bbbbbbb" }, cur)).toBe(false);
+  });
+  it("sem build em um dos lados (dev/local) ou sem resposta: não avisa por build", () => {
+    expect(isUpdateAvailable({ version: "1.0.0", build: "bbbbbbb" }, { ...cur, build: "" })).toBe(
+      false,
+    );
+    expect(isUpdateAvailable({ version: "1.0.0" }, cur)).toBe(false);
+    expect(isUpdateAvailable(null, cur)).toBe(false);
   });
 });

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { APP_VERSION } from "@/lib/app-version";
+import { APP_VERSION, BUILD_ID } from "@/lib/app-version";
 import {
   fetchVersionInfo,
   getSeenVersion,
-  isNewerVersion,
+  isUpdateAvailable,
   markVersionSeen,
   releaseHighlights,
   type Release,
@@ -72,17 +72,18 @@ export function VersionWatcher({ scope = "vi" }: { scope?: "vi" | "vc" }) {
     };
   }, []);
 
-  const outdated = isNewerVersion(info?.version, APP_VERSION);
+  const outdated = isUpdateAvailable(info, { version: APP_VERSION, build: BUILD_ID });
   const releases = scope === "vc" ? info?.releasesVC : info?.releases;
   const release: Release | null = releases?.[0] ?? null;
+  const seenToken = `${info?.version ?? ""}+${info?.build ?? ""}`;
   const alreadySeen = useMemo(
-    () => !!info?.version && getSeenVersion(scope) === info.version,
-    [info?.version, scope],
+    () => !!info?.version && getSeenVersion(scope) === seenToken,
+    [info?.version, scope, seenToken],
   );
 
   const dismiss = () => {
     setDismissed(true);
-    if (info?.version) markVersionSeen(scope, info.version);
+    if (info?.version) markVersionSeen(scope, seenToken);
   };
 
   const handleUpdate = () => {
@@ -90,14 +91,15 @@ export function VersionWatcher({ scope = "vi" }: { scope?: "vi" | "vc" }) {
     window.location.reload();
   };
 
+  const sameSemver = info?.version === APP_VERSION;
   if (!outdated || dismissed || alreadySeen || !info?.version) return null;
 
   return (
     <>
       {!showNotes && (
         <VersionNotice
-          currentVersion={APP_VERSION}
-          newVersion={info.version}
+          currentVersion={sameSemver && BUILD_ID ? `${APP_VERSION} (${BUILD_ID})` : APP_VERSION}
+          newVersion={sameSemver && info.build ? `${info.version} (${info.build})` : info.version}
           highlights={releaseHighlights(release)}
           updating={updating}
           onUpdate={handleUpdate}

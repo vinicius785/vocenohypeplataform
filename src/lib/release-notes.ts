@@ -23,6 +23,8 @@ export type Release = { version: string; summary: string; modules: ReleaseModule
 
 export type VersionInfo = {
   version?: string;
+  /** Commit do deploy (gravado no build). */
+  build?: string;
   releases?: Release[];
   releasesVC?: Release[];
 };
@@ -55,6 +57,21 @@ export function releaseHighlights(release: Release | null | undefined, max = 3):
   const titles = release.modules.flatMap((m) => m.items.map((i) => i.title)).filter(Boolean);
   if (titles.length > 0) return titles.slice(0, max);
   return release.summary ? [release.summary] : [];
+}
+
+/** Há deploy novo? Versão SemVer maior OU `build` diferente do deste bundle (quando ambos
+ * existem). `build` vazio (dev/local) nunca dispara por esse caminho. */
+export function isUpdateAvailable(
+  info: Pick<VersionInfo, "version" | "build"> | null | undefined,
+  current: { version: string; build: string },
+): boolean {
+  if (!info) return false;
+  if (isNewerVersion(info.version, current.version)) return true;
+  // Versão do servidor MENOR que a do bundle = rollback/CDN atrasada: não avisa.
+  if (info.version && isValidSemver(info.version) && isValidSemver(current.version)) {
+    if (compareSemver(info.version, current.version) === -1) return false;
+  }
+  return !!info.build && !!current.build && info.build !== current.build;
 }
 
 const seenKey = (scope: "vi" | "vc") => `vnh:version-seen:${scope}`;
