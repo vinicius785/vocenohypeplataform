@@ -6,6 +6,8 @@ Pergunta que guiou o trabalho: *o que está tornando esta plataforma mais comple
 
 **Executado depois do diagnóstico (2026-10-04, por decisão do produto):** Chat V1 removido (`ChatSection`, `CreateChannelModal`, `chat-sidebar-prefs`; ≈3.100 linhas) e o portal V1 de sessão (`portal-app/*`) reduzido a **um** redirect. O portal por token foi mantido. Itens TD-04 e a linha do Chat V1 em §5.3 passam a "feito"; o restante do diagnóstico segue válido.
 
+**Ganhos rápidos executados (2026-10-04):** PF-05 (`version.json` de 257 KB → 2 KB; histórico em `public/changelog.json`), PF-04 (sem polling de 15 s no Comercial; o card de Comercial do **Início** ainda tem o seu — ver nota), PF-06 (cron de e-mail: 4 consultas por lote em vez de 4 por destinatário, `lib/email-flow-batch.server.ts`), CQ-04 (`secretsMatch` único em `lib/secrets.server.ts`) e a remoção de `ui/accordion` (o pacote `@radix-ui/react-accordion` continua no `package.json`). **Notas:** (1) `InicioDashboard` faz `refetchInterval: 15000` em `["leads"]` sem canal Realtime próprio — não alterado; (2) o cron de e-mail roda 1×/dia (`0 13 * * *`) com `BATCH_SIZE = 50`: o que passar de 50 destinatários vencidos espera o dia seguinte — registro de comportamento, não corrigido.
+
 **Como foi medido.** Grafo de imports e blocos de código por varredura (scripts, não amostragem); migrations em ordem + esquema vivo (`types.ts`); matriz de adoção por módulo; leitura dirigida do código nos pontos críticos. **Limites:** nada foi executado contra o banco vivo nem profilado em runtime. Onde o ganho depende de volume real ou de profiling, está escrito *(medir antes)*.
 
 ---

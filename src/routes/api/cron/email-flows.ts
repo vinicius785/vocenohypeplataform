@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { timingSafeEqual } from "node:crypto";
+import { secretsMatch } from "@/lib/secrets.server";
 import { renderEmailTemplate } from "@/lib/email-template";
 import type { RecipientRule } from "@/lib/email-campaigns-constants";
 
@@ -46,13 +46,6 @@ type Recipient = {
   next_run_at: string | null;
 };
 
-function secretsMatch(provided: string, expected: string): boolean {
-  const a = Buffer.from(provided);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
-}
-
 function siteUrl(): string {
   if (process.env.SITE_URL) return process.env.SITE_URL;
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
@@ -91,6 +84,7 @@ export const Route = createFileRoute("/api/cron/email-flows")({
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { sendEmail } = await import("@/lib/email-provider.server");
+        const { loadEmailRunContext } = await import("@/lib/email-flow-batch.server");
 
         const { data: due, error: dueError } = await supabaseAdmin
           .from("email_campaign_recipients")
@@ -103,25 +97,31 @@ export const Route = createFileRoute("/api/cron/email-flows")({
           return new Response(JSON.stringify({ error: dueError.message }), { status: 500 });
         }
 
+        const dueList = (due ?? []) as Recipient[];
+
+        // Status das campanhas, descadastros, etapas e "quem já abriu algum
+        // envio" em 4 consultas para o lote inteiro (antes: 4 por destinatário).
+        // Falhou → 500 sem ter escrito nem enviado nada; a fila segue intacta.
+        let ctx: Awaited<ReturnType<typeof loadEmailRunContext>>;
+        try {
+          ctx = await loadEmailRunContext(supabaseAdmin, dueList);
+        } catch (err) {
+          console.error("[cron/email-flows] pré-carga em lote falhou", err);
+          return new Response(
+            JSON.stringify({ error: err instanceof Error ? err.message : "pré-carga falhou" }),
+            { status: 500 },
+          );
+        }
+
         let sent = 0;
         let skipped = 0;
         let failed = 0;
         let completed = 0;
 
-        for (const recipient of (due ?? []) as Recipient[]) {
-          const { data: campaign } = await supabaseAdmin
-            .from("email_campaigns")
-            .select("status")
-            .eq("id", recipient.campaign_id)
-            .single();
-          if (!campaign || campaign.status !== "ativa") continue; // pausada — fica na fila, sem perder estado
+        for (const recipient of dueList) {
+          if (ctx.campaignStatus.get(recipient.campaign_id) !== "ativa") continue; // pausada (ou inexistente) — fica na fila, sem perder estado
 
-          const { data: unsub } = await supabaseAdmin
-            .from("email_unsubscribes")
-            .select("email")
-            .eq("email", recipient.email)
-            .maybeSingle();
-          if (unsub) {
+          if (ctx.unsubscribedEmails.has(recipient.email)) {
             await supabaseAdmin
               .from("email_campaign_recipients")
               .update({ status: "unsubscribed", cancelled_reason: "e-mail descadastrado" })
@@ -129,17 +129,8 @@ export const Route = createFileRoute("/api/cron/email-flows")({
             continue;
           }
 
-          const { data: steps } = await supabaseAdmin
-            .from("email_campaign_steps")
-            .select("*")
-            .eq("campaign_id", recipient.campaign_id)
-            .order("position", { ascending: true });
-          const stepList = (steps ?? []) as Step[];
-
-          const { data: priorSends } = await supabaseAdmin
-            .from("email_sends")
-            .select("opened_at")
-            .eq("recipient_id", recipient.id);
+          const stepList = (ctx.stepsByCampaign.get(recipient.campaign_id) ?? []) as Step[];
+          const openedAnySend = ctx.openedRecipientIds.has(recipient.id);
 
           let currentStepId = recipient.current_step_id;
           let nextRunAt = recipient.next_run_at;
@@ -193,7 +184,7 @@ export const Route = createFileRoute("/api/cron/email-flows")({
               step.recipient_rule === "todos"
                 ? true
                 : step.recipient_rule === "nao_abriu"
-                  ? !(priorSends ?? []).some((s) => s.opened_at)
+                  ? !openedAnySend
                   : recipientStatus !== "responded";
 
             if (rulePasses && step.subject && step.body_html) {
@@ -263,7 +254,7 @@ export const Route = createFileRoute("/api/cron/email-flows")({
         }
 
         return new Response(
-          JSON.stringify({ ok: true, scanned: due?.length ?? 0, sent, skipped, failed, completed }),
+          JSON.stringify({ ok: true, scanned: dueList.length, sent, skipped, failed, completed }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
       },

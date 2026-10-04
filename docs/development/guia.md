@@ -32,7 +32,7 @@ O segredo do webhook de leads **não** é variável: fica em `webhook_settings` 
 
 ## Build, deploy, versão
 - Deploy por observação do branch (Lovable Cloud) / Vercel; **não há CI**.
-- `public/version.json` + `VersionWatcher` avisam o usuário quando há bundle novo; `APP_VERSION` em `lib/app-version.ts`.
+- `public/version.json` + `VersionWatcher` avisam o usuário quando há bundle novo; `APP_VERSION` em `lib/app-version.ts`. O `version.json` é consultado a cada 5 min por aba, então fica **mínimo** (`version` + a release mais recente, ~2 KB); o histórico e o changelog técnico vão em `public/changelog.json`, que o app nunca busca.
 - `scripts/release.ts`: `bump` (SemVer, roda tsc/eslint/testes, commita) e `publish` (insere em `platform_releases`, disparando aviso em tempo real; o Hypito anuncia).
 - Service worker (`sw.js`) existe só para instalação como PWA e **não faz cache**.
 

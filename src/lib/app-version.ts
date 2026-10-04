@@ -3,5 +3,5 @@
  * `public/version.json`. Extraído de `ConfiguracoesSection.tsx` (Etapa de
  * reconstrução de Configurações) pra `VersionWatcher` parar de depender de
  * importar de dentro do componente de tela — mesmo valor de antes, só
- * mudou de arquivo. Bump manual a cada deploy, junto de `public/version.json`. */
+ * mudou de arquivo. Bump manual a cada deploy, junto de `public/version.json` (`version` + a release mais recente; o histórico vai em `public/changelog.json`). */
 export const APP_VERSION = "1.297.0";

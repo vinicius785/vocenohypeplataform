@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { timingSafeEqual } from "node:crypto";
+import { secretsMatch } from "@/lib/secrets.server";
 
 /**
  * Fase A da reconstrução da integração Google Calendar — mecanismo de
@@ -22,13 +22,6 @@ import { timingSafeEqual } from "node:crypto";
  * imediato de alguém editando uma reunião ao mesmo tempo) nunca rodem em
  * paralelo.
  */
-function secretsMatch(provided: string, expected: string): boolean {
-  const a = Buffer.from(provided);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
-}
-
 export const Route = createFileRoute("/api/cron/google-calendar-sync")({
   server: {
     handlers: {

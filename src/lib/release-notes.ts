@@ -1,7 +1,10 @@
-/** Camada de dados do aviso de "Nova versão disponível" — lê o changelog
- * curado (por módulo, linguagem de produto) de `/version.json`, separado do
- * `notes`/`notesVC` técnico legado (que continua existindo só pra registro
- * interno, nunca mostrado ao usuário). Ver `VersionWatcher.tsx`.
+/** Camada de dados do aviso de "Nova versão disponível" — lê de
+ * `/version.json` só o necessário pro aviso: `version` + a release MAIS
+ * recente (`releases[0]`/`releasesVC[0]`, curada por módulo, em linguagem de
+ * produto). Esse arquivo é baixado a cada 5 min por aba, então fica mínimo
+ * (~2 KB): o histórico completo e o changelog técnico (`notes`/`notesVC`,
+ * registro interno, nunca mostrado ao usuário) vivem em `/changelog.json`,
+ * que o app nunca busca. Ver `VersionWatcher.tsx`.
  *
  * CRÍTICO: o toast/modal sempre mostra `releases[0]` (a MAIS recente),
  * nunca filtra por número de versão — se `releases[0]` ficar parado numa
@@ -22,8 +25,6 @@ export type VersionInfo = {
   version?: string;
   releases?: Release[];
   releasesVC?: Release[];
-  notes?: string[];
-  notesVC?: string[];
 };
 
 export async function fetchVersionInfo(): Promise<VersionInfo | null> {

@@ -19,12 +19,12 @@ const CHECK_INTERVAL_MS = 5 * 60_000;
  * que saiu uma versão nova — sem isso a pessoa só percebe dando F5 por
  * acaso.
  *
- * `releases`/`releasesVC` trazem o changelog curado (por módulo, em
- * linguagem de produto — ver `release-notes.ts`) — `releasesVC` é o mesmo
- * conteúdo filtrado só pras mudanças que o cliente percebe no portal,
- * usado quando `scope="vc"`. `notes`/`notesVC` continuam existindo no
- * arquivo como changelog técnico interno (registro de deploy), mas não são
- * mais exibidos ao usuário — só o conteúdo curado aparece na UI.
+ * `releases`/`releasesVC` trazem só a release mais recente do changelog
+ * curado (por módulo, em linguagem de produto — ver `release-notes.ts`) —
+ * `releasesVC` é o mesmo conteúdo filtrado só pras mudanças que o cliente
+ * percebe no portal, usado quando `scope="vc"`. O histórico completo e o
+ * changelog técnico interno (`notes`/`notesVC`) ficam em
+ * `public/changelog.json`, fora deste arquivo que é consultado a cada 5 min.
  */
 export function VersionWatcher({ scope = "vi" }: { scope?: "vi" | "vc" }) {
   const [info, setInfo] = useState<VersionInfo | null>(null);

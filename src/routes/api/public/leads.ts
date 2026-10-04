@@ -1,15 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
-
-/** `!==` vaza quantos caracteres iniciais batem via tempo de resposta —
- * teórico, mas trivial de evitar comparando em tempo constante. */
-function secretsMatch(provided: string, expected: string): boolean {
-  const a = Buffer.from(provided);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
-}
+import { secretsMatch } from "@/lib/secrets.server";
 
 const bodySchema = z.object({
   // Campos do formulário público (nomes em EN, rótulos em PT)
