@@ -1,4 +1,4 @@
-# 04 · Módulos do app interno
+# Módulos do app interno
 
 Todos vivem sob `/time?section=<chave>` (exceto detalhes de cliente e projeto e o Chat V2). Cada módulo = uma `*Section.tsx` em `src/components/` + uma pasta de apoio. Permissão entre parênteses.
 

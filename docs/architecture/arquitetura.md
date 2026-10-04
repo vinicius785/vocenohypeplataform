@@ -1,4 +1,4 @@
-# 02 · Arquitetura (dev)
+# Arquitetura
 
 ## Stack
 | Camada | Tecnologia |
@@ -13,18 +13,6 @@
 
 **Regra de repositório (AGENTS.md):** nunca reescrever histórico já publicado (force-push, rebase/amend/squash) — dessincroniza o Lovable. Arquivos `src/integrations/supabase/*` são gerados.
 
-## Comandos
-```bash
-bun install
-bun run dev        # http://localhost:8080
-bun run build
-bun run typecheck  # tsc --noEmit
-bun run lint
-bun run test       # vitest (65 arquivos, 808 testes na última verificação)
-bun scripts/release.ts bump|publish   # versão + aviso em tempo real
-```
-Nota: `vitest` deve ignorar `.claude/worktrees/**` (cópias antigas fazem testes falharem).
-
 ## Estrutura de pastas
 ```
 src/
@@ -37,7 +25,7 @@ src/
   styles.css  styles/          tokens (oklch) e utilidades
 supabase/migrations/  144 arquivos SQL, timestamp-nomeados, aditivos
 public/               PWA (manifest, sw.js sem cache), version.json, sons
-docs/                 esta documentação + design-system + auditorias
+docs/                 documentação (ver docs/README.md)
 scripts/release.ts    release local (não há CI)
 ```
 
@@ -92,25 +80,5 @@ flowchart TB
 - **Recuperação de senha** com rate limit (`rate-limit.functions.ts`) antes de existir sessão.
 - **Cofre de senhas** (`vault*.functions.ts`) com TOTP próprio e pedidos de acesso.
 
-## Variáveis de ambiente
-| Variável | Uso |
-|---|---|
-| `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` (+ `SUPABASE_*` no servidor) | cliente Supabase |
-| `SUPABASE_SERVICE_ROLE_KEY` | **só servidor**; cliente admin. Não existe localmente por padrão |
-| `APP_URL` | origem canônica (redirect do OAuth Google); nunca derivada do request |
-| `SITE_URL`, `VERCEL_URL`, `VERCEL_ENV` | origem de links e ambiente |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | OAuth do Google Calendar |
-| `CRON_SECRET` | Bearer exigido pelos crons |
-| `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `VITE_VAPID_PUBLIC_KEY` | Web Push |
-| `BLOG_WEBHOOK_URL` | webhook de blog (Make) |
-| `VITE_TURN_URLS`, `VITE_TURN_USERNAME`, `VITE_TURN_CREDENTIAL` | TURN para chamadas |
-O segredo do webhook de leads **não** é variável: fica em `webhook_settings` (só service-role).
-
-## Build, deploy, versão
-- Deploy por observação do branch (Lovable Cloud) / Vercel; **não há CI**.
-- `public/version.json` + `VersionWatcher` avisam o usuário quando há bundle novo; `APP_VERSION` em `lib/app-version.ts`.
-- `scripts/release.ts`: `bump` (SemVer, roda tsc/eslint/testes, commita) e `publish` (insere em `platform_releases`, disparando aviso em tempo real; o Hypito anuncia).
-- Service worker (`sw.js`) existe só para instalação como PWA e **não faz cache**.
-
-## Convenções de código
-Alias `@/*` → `src/*`; Prettier 100 colunas, aspas duplas, vírgulas finais; `server-only` do Next é bloqueado (usar `*.server.ts`); migrations novas como arquivos novos, nunca editar antigas.
+## Comandos, variáveis de ambiente, deploy e convenções
+Vivem em [`../development/guia.md`](../development/guia.md) (fonte única).

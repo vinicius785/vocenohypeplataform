@@ -1,4 +1,4 @@
-# 03 · Dados e segurança
+# Dados e acesso
 
 Backend: Supabase projeto `kehjxyzrolltsdaqzkww`. 144 migrations aditivas em `supabase/migrations/`. RLS ligada em todas as tabelas de domínio.
 
@@ -48,4 +48,5 @@ Limitações aceitas e documentadas:
 - **MFA/TOTP**; rate limit de login e recuperação; `X-Frame-Options`, `nosniff`, `Referrer-Policy` (Vercel).
 - Webhook de leads com `X-Webhook-Secret` (segredo em `webhook_settings`, rotacionável por admin); Resend com assinatura Svix; crons com `Authorization: Bearer $CRON_SECRET`.
 - Markdown do blog sanitizado (DOMPurify). Páginas por token têm `noindex, nofollow`.
-- Relatórios completos: `docs/security-audit-report.md` e `docs/security-remediation-plan.md`.
+- Estado de segurança e histórico: [`../security/README.md`](../security/README.md). **RLS pendente**: dados internos e buckets ainda abertos a contas de cliente até a migration `20261004000000` ser aplicada ([`../security/rls-internal-only.md`](../security/rls-internal-only.md)).
+- Verificação do esquema vivo: `src/integrations/supabase/types.ts` (gerado) lista 103 tabelas; 6 criadas por migrations foram removidas depois (`projeto_fases`, `influencer_approvals`, `email_flows`, `email_flow_enrollments`, `shared_calendar_connection`, `vault_access_requests`).

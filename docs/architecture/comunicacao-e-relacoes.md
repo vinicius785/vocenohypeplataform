@@ -1,4 +1,4 @@
-# 06 · Como as partes se comunicam e como as funcionalidades se ligam
+# Como as partes se comunicam e como as funcionalidades se ligam
 
 ## 1. Os canais de comunicação
 
@@ -118,7 +118,7 @@ Leitura da cadeia:
 Portal V2 → `respondCampanhaInfluSession` → `campanha_influenciadores.data` (inclui `lastClientAction`) → Realtime UPDATE → AppShell mostra item no sino e atualiza o card da campanha; o portal também reflete via seu próprio canal.
 
 **B. Cliente envia uma demanda**
-Portal → `submitClientDemandSession` → insere em `campanha_tarefas` → Realtime INSERT → notificação + toast na equipe, e a tarefa entra em "Meu trabalho".
+Portal **por token** → `submitClientDemand` (`cliente-link.functions`; o V2 ainda não tem essa tela) → insere em `campanha_tarefas` → Realtime INSERT → notificação + toast na equipe, e a tarefa entra em "Meu trabalho".
 
 **C. Lead chega de um formulário**
 Typeform/Make → `POST /api/public/leads` (segredo) → `leads` → Realtime → pipeline atualiza e AppShell notifica. Ao ganhar/criar pela UI, `lead.won`/`lead.created` saem para os webhooks configurados.

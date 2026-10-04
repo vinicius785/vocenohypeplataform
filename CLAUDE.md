@@ -18,10 +18,13 @@ bun run dev         # start dev server (vite dev) — http://localhost:8080
 bun run build       # production build
 bun run build:dev   # build with mode=development
 bun run preview     # preview a production build
+bun run typecheck    # tsc --noEmit
 bun run lint         # eslint .
 bun run format       # prettier --write .
-bun run test         # vitest run — unit tests, see vitest.config.ts
+bun run test         # vitest run — unit tests, see vitest.config.ts (ignora .claude/worktrees)
 ```
+
+**Documentation:** `docs/README.md` is the index (one source of truth per subject). Commands/env/deploy: `docs/development/guia.md`. Security state: `docs/security/README.md`. Design System contract: `docs/design-system/DESIGN-SYSTEM.md`. Architectural decisions: `docs/decisions/`.
 
 ### Environment
 
@@ -86,7 +89,13 @@ Tables: `profiles`, `user_roles`, `leads`, `chat_channels`, `chat_messages`, `ch
 
 ## Known incomplete / in-progress work
 
-- `src/routes/api/public/leads.ts`: the `X-Webhook-Secret` check is active — the secret lives in the `webhook_settings` table (service-role only, no `authenticated`/`anon` grants), managed via `getLeadsWebhookConfig`/`regenerateLeadsWebhookSecret` in `src/lib/integrations.functions.ts` (admin-only). There is no `LEADS_WEBHOOK_SECRET` env var — that reference below is stale, kept only because `.env`/deploy docs may still mention it from an earlier design.
+- `src/routes/api/public/leads.ts`: the `X-Webhook-Secret` check is active — the secret lives in the `webhook_settings` table (service-role only, no `authenticated`/`anon` grants), managed via `getLeadsWebhookConfig`/`regenerateLeadsWebhookSecret` in `src/lib/integrations.functions.ts` (admin-only). There is **no** `LEADS_WEBHOOK_SECRET` env var.
 - `.lovable/plan.md` documents the original design for migrating the Comercial pipeline from `localStorage` (`comercial:leads`) to the `leads` table + this webhook, so that Make/Typeform-originated leads show up for everyone. The `leads` table, `comercial.functions.ts`, and the webhook route already exist, matching that plan.
 - **Server-side permission enforcement (fixed 2026-08-30, was a known gap since the 2026-08-14 audit):** every domain table now has an RLS policy calling `public.has_permission(auth.uid(), '<permission>')` (defined in `20260729190000_permission_scoped_rls.sql`, ORs with `is_admin()`) — `financeiro_lancamentos`, `leads`, `banco_influenciadores`, `campanha_tarefas`/`campanha_influenciadores`/`campanha_documentos`, `marketing_tasks`, `projetos`, `reunioes` were already gated; `clientes`, `projeto_tarefas`, `marketing_standalone_tasks`, and `metas` were closed in migration `close_remaining_permission_gaps`. Server functions using `context.supabase` (the RLS-scoped client, e.g. `comercial.functions.ts`) inherit this automatically; server functions using `supabaseAdmin` (service-role, bypasses RLS) all already gate explicitly via `assertAdmin`/`is_admin()` (`team.functions.ts`, `integrations.functions.ts`, `vault.functions.ts`, `vault-totp.functions.ts`, `email-campaigns.functions.ts`) — confirmed by a full sweep of every `*.functions.ts` file, no bypasses found. Known accepted limitation: `clientes`'s policy is `has_permission('clientes') OR has_permission('campanhas')` since campaign data lives inside the client row (JSONB) — RLS can't separate "edit client info" from "edit its embedded campaign" any finer than that (same limitation already noted in `permissions.ts`'s comment for `clientes`/`campanhas`). Verified against real current `profiles.permissions` data before applying: every existing team member already held the matching permission (or was admin), so this closed the gap with zero visible behavior change.
 - **`"membros"` permission is decorative (2026-08-29):** shown in Configurações → Time e permissões (and in the permission-editing UI) as "Gerenciar membros", but granting it to a non-admin does **not** unlock real member CRUD — `team.functions.ts`'s `createTeamMember`/`updateTeamMember`/`deleteTeamMember`/`resetMemberPassword` still call `assertAdmin` unconditionally. It was left decorative on purpose: `updateTeamMember`'s payload includes a `role` field that can promote/demote to admin, and there's no field-level split between "edit permissions" and "grant admin" — wiring the permission for real today would let anyone holding it self-promote (or promote a peer) to admin via the same endpoint. Fixing this means splitting that endpoint (or adding a role-change-specific check) before `"membros"` can be trusted server-side.
+
+## Rules added by the 2026-10 audit
+- **Layering:** `src/lib/**` must not import *values* from `src/components/**` (domain types/logic go in `lib/`, e.g. `lib/influencer-model.ts`; see `docs/decisions/0001`). A `lib → component` import once pulled 7,000 lines of UI and recharts into the initial bundle.
+- **RLS and client accounts:** portal client users are plain `authenticated` users on the same Supabase project/anon key. Any new policy or storage policy must say whether a *client account* passes it; internal-only data uses `is_internal_team_member(auth.uid()) OR is_admin(auth.uid())`. **Pending migration** `20261004000000_restrict_internal_data_to_internal_members.sql` is written but NOT applied — verify against the live DB first (`docs/security/rls-internal-only.md`).
+- **Public (no-session) server functions:** token validated + zod + a rate limit for writes; never return raw `error.message` (use `throwSafeDbError`).
+- **Git hygiene:** never `git add -A` over `src` blindly — a stray `portal-auth.functions 2.ts` copy was committed once that way.

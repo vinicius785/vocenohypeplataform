@@ -9,14 +9,14 @@ que não é puramente técnica.
 
 | Achado | Correção | Arquivo(s) |
 |---|---|---|
-| XSS armazenado no blog (Achado #1) | `escape()` passou a codificar aspas; esquema de URL restrito a http(s); sanitização final via DOMPurify | [`src/components/marketing/blog/markdown.ts`](../src/components/marketing/blog/markdown.ts) |
+| XSS armazenado no blog (Achado #1) | `escape()` passou a codificar aspas; esquema de URL restrito a http(s); sanitização final via DOMPurify | [`src/components/marketing/blog/markdown.ts`](../../src/components/marketing/blog/markdown.ts) |
 | `campanha_cronograma` sem RLS por permissão (Achado #2) | Políticas trocadas por `has_permission('campanhas')`, mesmo padrão de `campanha_tarefas` | migração `20260917150000_close_campanha_cronograma_rls_gap.sql` |
 | Buckets sem limite de tamanho (Achado #3) | `file_size_limit = 100MB` em 5 buckets que não tinham nenhum | migração `20260917150300_add_storage_bucket_size_limits.sql` |
 | Sem headers de segurança básicos (Achado #4, parcial) | `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` | `vercel.json` |
 | `chat_messages` vazava canais privados (Achado #5) | Política de SELECT passou a checar `is_private`/`allowed_member_ids` do canal, igual já acontecia pra `chat_channels` | migração `20260917150100_restrict_chat_messages_to_channel_members.sql` |
 | RPCs de Chat sem checar posse da conversa (Achado #5b) | `toggle_message_reaction`/`heal_voice_attachment_duration` passaram a verificar membership antes de agir | migração `20260917150400_chat_message_rpcs_verify_channel_access.sql` |
 | `hypito_payload` forjável (Achado #8) | `CHECK` constraint: só pode existir se `author_id = HYPITO_AUTHOR_ID` | migração `20260917150200_hypito_payload_author_check.sql` |
-| Hypito lia dado antes de checar permissão (Achado #10) | `assertCan` adicionado em `getScopedTasks` e no ramo de projetos de `listScopeCandidates` | [`src/lib/hypito-tools.server.ts`](../src/lib/hypito-tools.server.ts) |
+| Hypito lia dado antes de checar permissão (Achado #10) | `assertCan` adicionado em `getScopedTasks` e no ramo de projetos de `listScopeCandidates` | `src/lib/hypito-tools.server.ts` _(arquivo não existe mais neste repositório em 2026-10-03; o Hypito roda fora dele)_ |
 
 Todas verificadas: `bunx tsc --noEmit` limpo, `bun run lint` 0 erros, `bun run test` 289/290 (a
 mesma falha pré-existente e não relacionada), `bun run build` com sucesso, e testes de regressão

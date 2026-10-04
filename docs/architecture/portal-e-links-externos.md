@@ -1,4 +1,4 @@
-# 05 · Portal do cliente, links externos e integrações
+# Portal do cliente, links externos e integrações
 
 ## Portal do cliente — três gerações
 | Rota | Estado | Acesso |
@@ -20,7 +20,7 @@ Layout `PortalV2Shell`. Guard (`portal-v2/route.tsx`): exige sessão, MFA resolv
 | Notificações, Perfil, Conta, Segurança | Conta e preferências |
 | Configurações → Acessos | Administradores do cliente convidam e gerenciam pessoas (papéis e campanhas) |
 
-Ações do cliente (server functions `portal-auth.functions`, sufixo `Session`): responder influenciador (aprovar/recusar/reabrir), responder entrega, editar briefing/observações/anexos, comentar, enviar demanda, reportar bug (cai na Central de Problemas), enviar NPS, abrir relatório, curtir/comentar artigo do blog. Papéis: `client_standard` (admin), `client_approver` (aprova), `client_viewer` (lê).
+Ações do cliente no V2 (server functions `portal-auth.functions`, sufixo `Session`): **responder influenciador** (aprovar/recusar), **responder entrega**, abrir **relatório** (URL assinada) e **NPS** (porta obrigatória). As demais funções `Session` (reabrir aprovação, editar briefing/observações/anexos, enviar demanda, reportar bug, artigos do blog) existem mas **nenhuma tela do V2 as chama** hoje; essas ações vivem no portal por token (`cliente-link.functions`). Papéis: `client_standard` (admin), `client_approver` (aprova), `client_viewer` (lê).
 
 ### Portal por token (`portal.$token/*`)
 Mesmo conteúdo essencial (início, campanhas, aprovações, relatórios, solicitações) sem login, via `cliente-link.functions` (as mesmas ações, sufixo sem `Session`). Visual próprio em `components/portal/*`. Idiomas via `portal-i18n`. `noindex`.
