@@ -1,4 +1,5 @@
 import type { Campaign } from "@/components/VincularCampanhaDialog";
+import { cartoonAvatarDataUrl, type AvatarSpec } from "./demo-avatars";
 import type { Task } from "@/components/tasks/TaskBoard";
 import type { CampaignDoc, CronogramaItem } from "@/lib/campanha-scoped-store";
 import type { EntregaStage, InfluStatus } from "@/lib/campanha-status";
@@ -226,6 +227,8 @@ type CastPlan = {
   recusa?: { motivoLabel: string; comentario: string };
   entregas: EntregaPlan[];
   perfil: { interacoes: number; visualizacoes: number; taxaInteracao: number; atencao: number };
+  /** Avatar cartoon (SVG gerado por código; nenhuma foto de pessoa real). */
+  avatar: AvatarSpec;
   clienteComentario?: { ha: number; texto: string };
   equipeComentario?: { ha: number; texto: string };
 };
@@ -243,6 +246,14 @@ const CAST: CastPlan[] = [
     enviadoHa: 1,
     entregas: [],
     perfil: { interacoes: 18200, visualizacoes: 412000, taxaInteracao: 4.4, atencao: 61 },
+    avatar: {
+      bg: ["#fde68a", "#fca5a5"],
+      skin: "#e8b48f",
+      hair: "#3b2418",
+      hairStyle: "longo-ondulado",
+      shirt: "#f472b6",
+      earrings: true,
+    },
   },
   {
     key: "rafael",
@@ -256,6 +267,14 @@ const CAST: CastPlan[] = [
     enviadoHa: 1,
     entregas: [],
     perfil: { interacoes: 9100, visualizacoes: 187000, taxaInteracao: 4.9, atencao: 58 },
+    avatar: {
+      bg: ["#a7f3d0", "#6ee7b7"],
+      skin: "#c98f64",
+      hair: "#1f1a17",
+      hairStyle: "curto",
+      shirt: "#2563eb",
+      beard: true,
+    },
   },
   {
     key: "camila",
@@ -270,6 +289,13 @@ const CAST: CastPlan[] = [
     decisaoHa: 13,
     clienteComentario: { ha: 9, texto: "Adoramos o tom do primeiro roteiro, bem natural!" },
     perfil: { interacoes: 11300, visualizacoes: 236000, taxaInteracao: 5.1, atencao: 64 },
+    avatar: {
+      bg: ["#bae6fd", "#c4b5fd"],
+      skin: "#f1c7a5",
+      hair: "#7c4a21",
+      hairStyle: "rabo",
+      shirt: "#10b981",
+    },
     entregas: [
       {
         key: "camila-reels-abertura",
@@ -357,6 +383,14 @@ const CAST: CastPlan[] = [
       texto: "Combinar com o Lucas o horário de postagem das Stories para a manhã.",
     },
     perfil: { interacoes: 14800, visualizacoes: 318000, taxaInteracao: 4.7, atencao: 59 },
+    avatar: {
+      bg: ["#fed7aa", "#fdba74"],
+      skin: "#a8734a",
+      hair: "#18120e",
+      hairStyle: "curto",
+      shirt: "#f59e0b",
+      glasses: true,
+    },
     entregas: [
       {
         key: "lucas-reels-familia",
@@ -436,6 +470,13 @@ const CAST: CastPlan[] = [
     },
     entregas: [],
     perfil: { interacoes: 15900, visualizacoes: 355000, taxaInteracao: 4.5, atencao: 55 },
+    avatar: {
+      bg: ["#fbcfe8", "#ddd6fe"],
+      skin: "#f6d3b8",
+      hair: "#e0b455",
+      hairStyle: "longo-liso",
+      shirt: "#8b5cf6",
+    },
   },
   {
     key: "thiago",
@@ -448,6 +489,15 @@ const CAST: CastPlan[] = [
       "Público de 30 a 45 anos interessado em experiências na natureza — aderente ao perfil que o cliente descreveu.",
     entregas: [],
     perfil: { interacoes: 7200, visualizacoes: 141000, taxaInteracao: 5.3, atencao: 63 },
+    avatar: {
+      bg: ["#bbf7d0", "#99f6e4"],
+      skin: "#7a4d33",
+      hair: "#111111",
+      hairStyle: "bone",
+      cap: "#ef4444",
+      shirt: "#0f766e",
+      beard: true,
+    },
   },
   {
     key: "julia",
@@ -460,6 +510,14 @@ const CAST: CastPlan[] = [
       "Audiência feminina de 28 a 40 anos, forte em conteúdo de hospedagem e design de interiores.",
     entregas: [],
     perfil: { interacoes: 10400, visualizacoes: 224000, taxaInteracao: 4.6, atencao: 60 },
+    avatar: {
+      bg: ["#fecaca", "#fde68a"],
+      skin: "#e9b99a",
+      hair: "#a0482a",
+      hairStyle: "coque",
+      shirt: "#f97316",
+      freckles: true,
+    },
   },
 ];
 
@@ -819,6 +877,7 @@ export function buildDemoScenario(input: BuildDemoScenarioInput): DemoScenario {
     const data: Influ = {
       id: influId,
       nome: p.nome,
+      foto: cartoonAvatarDataUrl(p.avatar, p.key),
       nicho: p.nicho,
       redes: [rede],
       entregas,
