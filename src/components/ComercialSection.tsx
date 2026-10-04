@@ -41,6 +41,7 @@ import { PipelineSummary } from "./comercial/PipelineSummary";
 import { PeriodMenu } from "@/components/shared/PeriodMenu";
 import { FilterRow, FilterSearch, FilterToolbar } from "@/components/shared/FilterToolbar";
 import { SortSelect, FilterPanel, LeadFiltersSummary } from "./comercial/LeadFiltersBar";
+import { ComercialRecursosMenu } from "./comercial/ComercialRecursosMenu";
 import { ComercialTarefasBoard } from "./comercial/ComercialTarefasBoard";
 import { PipelineBoard } from "./comercial/PipelineBoard";
 import { LeadDrawer, type OpportunityActionInput } from "./comercial/LeadDrawer";
@@ -268,6 +269,7 @@ export function ComercialSection() {
             description="Pipeline e acompanhamento de oportunidades."
             actionsSlot={
               <>
+                <ComercialRecursosMenu />
                 <Button variant="primary" size="comfortable" onClick={() => openNewLead()}>
                   <Plus className="h-4 w-4" /> Novo lead
                 </Button>

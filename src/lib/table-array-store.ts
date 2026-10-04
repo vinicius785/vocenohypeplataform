@@ -10,6 +10,7 @@ export type ArrayStoreTable =
   | "marketing_tasks"
   | "marketing_standalone_tasks"
   | "comercial_tarefas"
+  | "comercial_documentos"
   | "task_tags"
   | "metas"
   | "aeo_prompts"

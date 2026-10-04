@@ -8,6 +8,7 @@ import {
   Plus,
   X,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { IconButton } from "@/components/ui/icon-button";
@@ -22,12 +23,20 @@ export function DocumentsTool({
   open,
   onOpenChange,
   campanhaNome,
+  backTo,
+  emptyTitle = "Não há documentos nesta campanha.",
+  maxFileBytes,
   docs,
   onChange,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   campanhaNome: string;
+  /** Ver `CampaignToolShell` — Comercial usa "a página". */
+  backTo?: string;
+  emptyTitle?: string;
+  /** Tamanho máximo de anexo (os anexos ficam inline no registro). Sem limite se omitido. */
+  maxFileBytes?: number;
   docs: CampaignDoc[];
   onChange: (next: CampaignDoc[]) => void;
 }) {
@@ -62,6 +71,12 @@ export function DocumentsTool({
 
   const addFile = (file: File | undefined) => {
     if (!file) return;
+    if (maxFileBytes && file.size > maxFileBytes) {
+      toast.error(
+        `Arquivo muito grande (máx. ${Math.round(maxFileBytes / 1024 / 1024)} MB). Use um link.`,
+      );
+      return;
+    }
     const r = new FileReader();
     r.onload = () => {
       onChange([
@@ -89,6 +104,7 @@ export function DocumentsTool({
       onOpenChange={onOpenChange}
       size={meta.size}
       campanhaNome={campanhaNome}
+      backTo={backTo}
       icon={meta.icon}
       title={meta.label}
       description={meta.description}
@@ -150,7 +166,7 @@ export function DocumentsTool({
         {docs.length === 0 ? (
           <ToolEmpty
             icon={FileText}
-            title="Não há documentos nesta campanha."
+            title={emptyTitle}
             description="Adicione arquivos ou links de referência para centralizar os materiais."
             action={showForm ? undefined : { label: "Adicionar documento", onClick: startAdding }}
           />

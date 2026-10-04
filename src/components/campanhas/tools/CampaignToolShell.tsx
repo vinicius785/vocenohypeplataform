@@ -37,6 +37,7 @@ export function CampaignToolShell({
   onOpenChange,
   size,
   campanhaNome,
+  backTo = "a campanha",
   icon: Icon,
   title,
   description,
@@ -48,6 +49,8 @@ export function CampaignToolShell({
   onOpenChange: (open: boolean) => void;
   size: CampaignToolSize;
   campanhaNome: string;
+  /** Complemento de "Voltar para …" (padrão: "a campanha"). */
+  backTo?: string;
   icon: ComponentType<{ className?: string }>;
   title: string;
   description?: string;
@@ -76,7 +79,7 @@ export function CampaignToolShell({
                   type="button"
                   onClick={close}
                   className="inline-flex min-w-0 items-center gap-1 text-text-secondary hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-                  aria-label={`Voltar para a campanha ${campanhaNome}`}
+                  aria-label={`Voltar para ${backTo} ${campanhaNome}`}
                 >
                   <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
                   <span className="truncate">{campanhaNome}</span>
