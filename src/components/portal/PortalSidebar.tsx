@@ -34,7 +34,7 @@ function NavItem({
       to={to}
       params={params}
       title={collapsed ? label : undefined}
-      className={`relative flex min-h-10 items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
+      className={`nav-item relative flex min-h-10 items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
         active
           ? "bg-brand-subtle font-medium text-text-brand"
           : "text-muted-foreground hover:bg-muted/60"
@@ -43,7 +43,7 @@ function NavItem({
       {active && (
         <span aria-hidden className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-brand" />
       )}
-      <span className="flex h-5 w-5 shrink-0 items-center justify-center">{icon}</span>
+      <span className="nav-icon flex h-5 w-5 shrink-0 items-center justify-center">{icon}</span>
       {!collapsed && <span className="min-w-0 flex-1 truncate">{label}</span>}
       {!collapsed && badge && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />}
     </Link>

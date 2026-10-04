@@ -65,7 +65,7 @@ function NavButton({
       onClick={onClick}
       title={collapsed ? label : undefined}
       aria-current={active ? "page" : undefined}
-      className={`relative flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
+      className={`nav-item relative flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
         collapsed ? "justify-center" : ""
       } ${active ? "bg-brand-subtle font-medium text-text-brand" : "pill-nav-item text-muted-foreground"}`}
     >
@@ -75,7 +75,7 @@ function NavButton({
           className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-brand"
         />
       )}
-      <span className="relative shrink-0">
+      <span className="nav-icon relative shrink-0">
         <Icon className="h-4 w-4" aria-hidden="true" />
       </span>
       {!collapsed && (

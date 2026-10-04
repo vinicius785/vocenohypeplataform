@@ -22,7 +22,7 @@
 | Parte | Regra |
 |---|---|
 | Shell | Altura da viewport; a página não rola, só o Main |
-| Sidebar | 256px (recolhida 68px) a partir de `md`; drawer + backdrop abaixo. Navegação **global** (Geral · Operação · Gestão · Comunicação; rodapé Configurações e Problemas). Funcionalidade interna de módulo nunca vira item |
+| Sidebar | 256px (recolhida 68px) a partir de `md`; drawer + backdrop abaixo. Navegação **global** (Geral · Operação · Gestão · Comunicação; rodapé Configurações e Problemas). Funcionalidade interna de módulo nunca vira item. **Ícone de item reage ao hover/foco** (sobe 1px, inclina 5°, escala 1,1 e engrossa o traço, 200 ms, só CSS): classes `nav-item` no botão/link e `nav-icon` no invólucro do ícone (regra em `styles.css`); vale para a sidebar interna e para os portais; sem animação com `prefers-reduced-motion` e em itens desabilitados |
 | Item de navegação | 36px, `rounded-md`, `text-sm`; ativo: fundo `muted` + barra `brand`; sem permissão: esmaecido + cadeado |
 | Topbar | 64px: menu, busca global e, à direita, timer ativo, tema, notificações. Sem título e sem breadcrumb |
 | Main | Única fonte de padding de página: `p-4` → `md:p-8` |

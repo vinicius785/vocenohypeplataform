@@ -597,7 +597,7 @@ function NavButton({
       title={title ?? (collapsed ? label : undefined)}
       aria-label={collapsed ? label : undefined}
       aria-current={active ? "page" : undefined}
-      className={`relative flex h-9 w-full items-center gap-3 rounded-md px-2.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
+      className={`nav-item relative flex h-9 w-full items-center gap-3 rounded-md px-2.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
         collapsed ? "justify-center" : ""
       } ${
         disabled
@@ -613,7 +613,7 @@ function NavButton({
           className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-brand"
         />
       )}
-      <span className="relative flex shrink-0 items-center">{icon}</span>
+      <span className="nav-icon relative flex shrink-0 items-center">{icon}</span>
       {!collapsed && <span className="min-w-0 flex-1 truncate">{label}</span>}
       {badge}
     </button>
