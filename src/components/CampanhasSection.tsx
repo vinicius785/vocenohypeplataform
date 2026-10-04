@@ -620,19 +620,11 @@ function CampanhaDetail({
   const clientes = useClientes();
   const setClientes = clientesStore.set;
   const fullCliente = clientes.find((cl) => cl.id === cliente.id);
-  const copyClientLink = () => {
+  // Portal do cliente SEM login: abre, em nova aba, o portal como o cliente o vê (somente leitura),
+  // com a sessão e a permissão do próprio time. Substitui o antigo "link do cliente" por token.
+  const openClientPortal = () => {
     if (!fullCliente) return;
-    let token = fullCliente.publicToken;
-    if (!token) {
-      token = crypto.randomUUID().replace(/-/g, "");
-      setClientes((prev) =>
-        prev.map((cl) => (cl.id === fullCliente.id ? { ...cl, publicToken: token } : cl)),
-      );
-    }
-    navigator.clipboard
-      .writeText(`${window.location.origin}/portal/${token}`)
-      .then(() => toast.success("Link do cliente copiado"))
-      .catch(() => toast.error("Não foi possível copiar o link"));
+    window.open(`/preview-cliente/${fullCliente.id}/campanhas/${c.id}`, "_blank", "noopener");
   };
 
   // Página de Inscrição pública — permite o influenciador se candidatar
@@ -1067,10 +1059,10 @@ function CampanhaDetail({
                   <DropdownMenuLabel className="text-[11px] font-medium uppercase tracking-wide text-text-secondary">
                     Compartilhamento
                   </DropdownMenuLabel>
-                  <DropdownMenuItem onSelect={copyClientLink} disabled={!fullCliente}>
-                    <LinkIcon className="h-3.5 w-3.5 text-text-secondary" />
-                    <span className="min-w-0 flex-1 truncate">Link do cliente</span>
-                    <span className="text-[11px] text-text-secondary">Copiar</span>
+                  <DropdownMenuItem onSelect={openClientPortal} disabled={!fullCliente}>
+                    <ExternalLink className="h-3.5 w-3.5 text-text-secondary" />
+                    <span className="min-w-0 flex-1 truncate">Portal do cliente</span>
+                    <span className="text-[11px] text-text-secondary">Abrir</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => setInscricaoOpen(true)} disabled={!fullCliente}>
                     <UserPlus className="h-3.5 w-3.5 text-text-secondary" />

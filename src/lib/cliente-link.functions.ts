@@ -37,9 +37,17 @@ function normalizedInfluStatus(influ: Influ) {
  * nem `campanha_influenciadores` têm policy `anon`.
  */
 
+/** Os links públicos de cliente (`/portal/$token`) foram DESATIVADOS: nenhum token resolve mais,
+ * então toda função por token abaixo responde "link inválido". O time vê o portal do cliente por
+ * `/preview-cliente/$clienteId` (sessão do time) e o cliente entra pelo portal com login. Para
+ * reativar, basta voltar este valor para `true` (os tokens em `clientes.data.publicToken` foram
+ * removidos pela migration 20261006020000 e teriam de ser gerados de novo). */
+const CLIENT_PUBLIC_LINKS_ENABLED = false;
+
 async function findClienteByToken(
   token: string,
 ): Promise<{ clienteId: string; cliente: Cliente } | null> {
+  if (!CLIENT_PUBLIC_LINKS_ENABLED) return null;
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: rows, error } = await supabaseAdmin.from("clientes").select("id, data");
   if (error) throwSafeDbError(error);

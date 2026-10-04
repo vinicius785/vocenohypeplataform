@@ -47,6 +47,7 @@ import { Route as PortalV2SegurancaRouteImport } from './routes/portal-v2/segura
 import { Route as PortalTokenRouteRouteImport } from './routes/portal.$token/route'
 import { Route as AuthenticatedChatV2IndexRouteImport } from './routes/_authenticated/chat-v2.index'
 import { Route as AuthenticatedClientesIdRouteImport } from './routes/_authenticated/clientes.$id'
+import { Route as AuthenticatedPreviewClienteClienteIdRouteRouteImport } from './routes/_authenticated/preview-cliente.$clienteId/route'
 import { Route as AuthenticatedProjetoIdRouteImport } from './routes/_authenticated/projeto.$id'
 import { Route as ApiCronEmailFlowsRouteImport } from './routes/api/cron/email-flows'
 import { Route as ApiCronGoogleCalendarSyncRouteImport } from './routes/api/cron/google-calendar-sync'
@@ -74,6 +75,12 @@ import { Route as PortalTokenSolicitacoesRouteImport } from './routes/portal.$to
 import { Route as AuthenticatedChatV2CampaignIdRouteImport } from './routes/_authenticated/chat-v2.campaign.$id'
 import { Route as AuthenticatedChatV2ChannelIdRouteImport } from './routes/_authenticated/chat-v2.channel.$id'
 import { Route as AuthenticatedChatV2DmIdRouteImport } from './routes/_authenticated/chat-v2.dm.$id'
+import { Route as AuthenticatedPreviewClienteClienteIdIndexRouteImport } from './routes/_authenticated/preview-cliente.$clienteId/index'
+import { Route as AuthenticatedPreviewClienteClienteIdArquivosRouteImport } from './routes/_authenticated/preview-cliente.$clienteId/arquivos'
+import { Route as AuthenticatedPreviewClienteClienteIdCampanhasRouteImport } from './routes/_authenticated/preview-cliente.$clienteId/campanhas'
+import { Route as AuthenticatedPreviewClienteClienteIdConteudosRouteImport } from './routes/_authenticated/preview-cliente.$clienteId/conteudos'
+import { Route as AuthenticatedPreviewClienteClienteIdInicioRouteImport } from './routes/_authenticated/preview-cliente.$clienteId/inicio'
+import { Route as AuthenticatedPreviewClienteClienteIdRelatoriosRouteImport } from './routes/_authenticated/preview-cliente.$clienteId/relatorios'
 import { Route as DemoTokenCampanhasIndexRouteImport } from './routes/demo.$token/campanhas.index'
 import { Route as DemoTokenCampanhasCampanhaIdRouteImport } from './routes/demo.$token/campanhas.$campanhaId'
 import { Route as PortalV2CampanhasCampanhaIdContentRouteImport } from './routes/portal-v2/campanhas.$campanhaId.content'
@@ -84,6 +91,8 @@ import { Route as PortalV2CampanhasCampanhaIdResultsRouteImport } from './routes
 import { Route as PortalV2CampanhasCampanhaIdTimelineRouteImport } from './routes/portal-v2/campanhas.$campanhaId.timeline'
 import { Route as PortalTokenCampanhasIndexRouteImport } from './routes/portal.$token/campanhas.index'
 import { Route as PortalTokenCampanhasCampanhaIdRouteImport } from './routes/portal.$token/campanhas.$campanhaId'
+import { Route as AuthenticatedPreviewClienteClienteIdCampanhasIndexRouteImport } from './routes/_authenticated/preview-cliente.$clienteId/campanhas.index'
+import { Route as AuthenticatedPreviewClienteClienteIdCampanhasCampanhaIdRouteImport } from './routes/_authenticated/preview-cliente.$clienteId/campanhas.$campanhaId'
 import { Route as PortalTokenCampanhasCampanhaIdAprovacoesRouteImport } from './routes/portal.$token/campanhas.$campanhaId.aprovacoes'
 import { Route as PortalTokenCampanhasCampanhaIdRevisarRouteImport } from './routes/portal.$token/campanhas.$campanhaId.revisar'
 
@@ -282,6 +291,12 @@ const AuthenticatedClientesIdRoute = AuthenticatedClientesIdRouteImport.update({
   path: '/clientes/$id',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedPreviewClienteClienteIdRouteRoute =
+  AuthenticatedPreviewClienteClienteIdRouteRouteImport.update({
+    id: '/preview-cliente/$clienteId',
+    path: '/preview-cliente/$clienteId',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedProjetoIdRoute = AuthenticatedProjetoIdRouteImport.update({
   id: '/projeto/$id',
   path: '/projeto/$id',
@@ -425,6 +440,42 @@ const AuthenticatedChatV2DmIdRoute = AuthenticatedChatV2DmIdRouteImport.update({
   path: '/dm/$id',
   getParentRoute: () => AuthenticatedChatV2Route,
 } as any)
+const AuthenticatedPreviewClienteClienteIdIndexRoute =
+  AuthenticatedPreviewClienteClienteIdIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedPreviewClienteClienteIdRouteRoute,
+  } as any)
+const AuthenticatedPreviewClienteClienteIdArquivosRoute =
+  AuthenticatedPreviewClienteClienteIdArquivosRouteImport.update({
+    id: '/arquivos',
+    path: '/arquivos',
+    getParentRoute: () => AuthenticatedPreviewClienteClienteIdRouteRoute,
+  } as any)
+const AuthenticatedPreviewClienteClienteIdCampanhasRoute =
+  AuthenticatedPreviewClienteClienteIdCampanhasRouteImport.update({
+    id: '/campanhas',
+    path: '/campanhas',
+    getParentRoute: () => AuthenticatedPreviewClienteClienteIdRouteRoute,
+  } as any)
+const AuthenticatedPreviewClienteClienteIdConteudosRoute =
+  AuthenticatedPreviewClienteClienteIdConteudosRouteImport.update({
+    id: '/conteudos',
+    path: '/conteudos',
+    getParentRoute: () => AuthenticatedPreviewClienteClienteIdRouteRoute,
+  } as any)
+const AuthenticatedPreviewClienteClienteIdInicioRoute =
+  AuthenticatedPreviewClienteClienteIdInicioRouteImport.update({
+    id: '/inicio',
+    path: '/inicio',
+    getParentRoute: () => AuthenticatedPreviewClienteClienteIdRouteRoute,
+  } as any)
+const AuthenticatedPreviewClienteClienteIdRelatoriosRoute =
+  AuthenticatedPreviewClienteClienteIdRelatoriosRouteImport.update({
+    id: '/relatorios',
+    path: '/relatorios',
+    getParentRoute: () => AuthenticatedPreviewClienteClienteIdRouteRoute,
+  } as any)
 const DemoTokenCampanhasIndexRoute = DemoTokenCampanhasIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -484,6 +535,18 @@ const PortalTokenCampanhasCampanhaIdRoute =
     path: '/campanhas/$campanhaId',
     getParentRoute: () => PortalTokenRouteRoute,
   } as any)
+const AuthenticatedPreviewClienteClienteIdCampanhasIndexRoute =
+  AuthenticatedPreviewClienteClienteIdCampanhasIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedPreviewClienteClienteIdCampanhasRoute,
+  } as any)
+const AuthenticatedPreviewClienteClienteIdCampanhasCampanhaIdRoute =
+  AuthenticatedPreviewClienteClienteIdCampanhasCampanhaIdRouteImport.update({
+    id: '/$campanhaId',
+    path: '/$campanhaId',
+    getParentRoute: () => AuthenticatedPreviewClienteClienteIdCampanhasRoute,
+  } as any)
 const PortalTokenCampanhasCampanhaIdAprovacoesRoute =
   PortalTokenCampanhasCampanhaIdAprovacoesRouteImport.update({
     id: '/aprovacoes',
@@ -533,6 +596,7 @@ export interface FileRoutesByFullPath {
   '/portal-v2/relatorios': typeof PortalV2RelatoriosRoute
   '/portal-v2/seguranca': typeof PortalV2SegurancaRoute
   '/portal-v2/': typeof PortalV2IndexRoute
+  '/preview-cliente/$clienteId': typeof AuthenticatedPreviewClienteClienteIdRouteRouteWithChildren
   '/clientes/$id': typeof AuthenticatedClientesIdRoute
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/cron/email-flows': typeof ApiCronEmailFlowsRoute
@@ -562,6 +626,11 @@ export interface FileRoutesByFullPath {
   '/chat-v2/campaign/$id': typeof AuthenticatedChatV2CampaignIdRoute
   '/chat-v2/channel/$id': typeof AuthenticatedChatV2ChannelIdRoute
   '/chat-v2/dm/$id': typeof AuthenticatedChatV2DmIdRoute
+  '/preview-cliente/$clienteId/arquivos': typeof AuthenticatedPreviewClienteClienteIdArquivosRoute
+  '/preview-cliente/$clienteId/campanhas': typeof AuthenticatedPreviewClienteClienteIdCampanhasRouteWithChildren
+  '/preview-cliente/$clienteId/conteudos': typeof AuthenticatedPreviewClienteClienteIdConteudosRoute
+  '/preview-cliente/$clienteId/inicio': typeof AuthenticatedPreviewClienteClienteIdInicioRoute
+  '/preview-cliente/$clienteId/relatorios': typeof AuthenticatedPreviewClienteClienteIdRelatoriosRoute
   '/demo/$token/campanhas/$campanhaId': typeof DemoTokenCampanhasCampanhaIdRoute
   '/portal-v2/campanhas/$campanhaId/content': typeof PortalV2CampanhasCampanhaIdContentRoute
   '/portal-v2/campanhas/$campanhaId/creators': typeof PortalV2CampanhasCampanhaIdCreatorsRoute
@@ -570,10 +639,13 @@ export interface FileRoutesByFullPath {
   '/portal-v2/campanhas/$campanhaId/results': typeof PortalV2CampanhasCampanhaIdResultsRoute
   '/portal-v2/campanhas/$campanhaId/timeline': typeof PortalV2CampanhasCampanhaIdTimelineRoute
   '/portal/$token/campanhas/$campanhaId': typeof PortalTokenCampanhasCampanhaIdRouteWithChildren
+  '/preview-cliente/$clienteId/': typeof AuthenticatedPreviewClienteClienteIdIndexRoute
   '/demo/$token/campanhas/': typeof DemoTokenCampanhasIndexRoute
   '/portal/$token/campanhas/': typeof PortalTokenCampanhasIndexRoute
+  '/preview-cliente/$clienteId/campanhas/$campanhaId': typeof AuthenticatedPreviewClienteClienteIdCampanhasCampanhaIdRoute
   '/portal/$token/campanhas/$campanhaId/aprovacoes': typeof PortalTokenCampanhasCampanhaIdAprovacoesRoute
   '/portal/$token/campanhas/$campanhaId/revisar': typeof PortalTokenCampanhasCampanhaIdRevisarRoute
+  '/preview-cliente/$clienteId/campanhas/': typeof AuthenticatedPreviewClienteClienteIdCampanhasIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -633,6 +705,10 @@ export interface FileRoutesByTo {
   '/chat-v2/campaign/$id': typeof AuthenticatedChatV2CampaignIdRoute
   '/chat-v2/channel/$id': typeof AuthenticatedChatV2ChannelIdRoute
   '/chat-v2/dm/$id': typeof AuthenticatedChatV2DmIdRoute
+  '/preview-cliente/$clienteId/arquivos': typeof AuthenticatedPreviewClienteClienteIdArquivosRoute
+  '/preview-cliente/$clienteId/conteudos': typeof AuthenticatedPreviewClienteClienteIdConteudosRoute
+  '/preview-cliente/$clienteId/inicio': typeof AuthenticatedPreviewClienteClienteIdInicioRoute
+  '/preview-cliente/$clienteId/relatorios': typeof AuthenticatedPreviewClienteClienteIdRelatoriosRoute
   '/demo/$token/campanhas/$campanhaId': typeof DemoTokenCampanhasCampanhaIdRoute
   '/portal-v2/campanhas/$campanhaId/content': typeof PortalV2CampanhasCampanhaIdContentRoute
   '/portal-v2/campanhas/$campanhaId/creators': typeof PortalV2CampanhasCampanhaIdCreatorsRoute
@@ -641,10 +717,13 @@ export interface FileRoutesByTo {
   '/portal-v2/campanhas/$campanhaId/results': typeof PortalV2CampanhasCampanhaIdResultsRoute
   '/portal-v2/campanhas/$campanhaId/timeline': typeof PortalV2CampanhasCampanhaIdTimelineRoute
   '/portal/$token/campanhas/$campanhaId': typeof PortalTokenCampanhasCampanhaIdRouteWithChildren
+  '/preview-cliente/$clienteId': typeof AuthenticatedPreviewClienteClienteIdIndexRoute
   '/demo/$token/campanhas': typeof DemoTokenCampanhasIndexRoute
   '/portal/$token/campanhas': typeof PortalTokenCampanhasIndexRoute
+  '/preview-cliente/$clienteId/campanhas/$campanhaId': typeof AuthenticatedPreviewClienteClienteIdCampanhasCampanhaIdRoute
   '/portal/$token/campanhas/$campanhaId/aprovacoes': typeof PortalTokenCampanhasCampanhaIdAprovacoesRoute
   '/portal/$token/campanhas/$campanhaId/revisar': typeof PortalTokenCampanhasCampanhaIdRevisarRoute
+  '/preview-cliente/$clienteId/campanhas': typeof AuthenticatedPreviewClienteClienteIdCampanhasIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -684,6 +763,7 @@ export interface FileRoutesById {
   '/portal-v2/relatorios': typeof PortalV2RelatoriosRoute
   '/portal-v2/seguranca': typeof PortalV2SegurancaRoute
   '/portal-v2/': typeof PortalV2IndexRoute
+  '/_authenticated/preview-cliente/$clienteId': typeof AuthenticatedPreviewClienteClienteIdRouteRouteWithChildren
   '/_authenticated/clientes/$id': typeof AuthenticatedClientesIdRoute
   '/_authenticated/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/cron/email-flows': typeof ApiCronEmailFlowsRoute
@@ -713,6 +793,11 @@ export interface FileRoutesById {
   '/_authenticated/chat-v2/campaign/$id': typeof AuthenticatedChatV2CampaignIdRoute
   '/_authenticated/chat-v2/channel/$id': typeof AuthenticatedChatV2ChannelIdRoute
   '/_authenticated/chat-v2/dm/$id': typeof AuthenticatedChatV2DmIdRoute
+  '/_authenticated/preview-cliente/$clienteId/arquivos': typeof AuthenticatedPreviewClienteClienteIdArquivosRoute
+  '/_authenticated/preview-cliente/$clienteId/campanhas': typeof AuthenticatedPreviewClienteClienteIdCampanhasRouteWithChildren
+  '/_authenticated/preview-cliente/$clienteId/conteudos': typeof AuthenticatedPreviewClienteClienteIdConteudosRoute
+  '/_authenticated/preview-cliente/$clienteId/inicio': typeof AuthenticatedPreviewClienteClienteIdInicioRoute
+  '/_authenticated/preview-cliente/$clienteId/relatorios': typeof AuthenticatedPreviewClienteClienteIdRelatoriosRoute
   '/demo/$token/campanhas/$campanhaId': typeof DemoTokenCampanhasCampanhaIdRoute
   '/portal-v2/campanhas/$campanhaId/content': typeof PortalV2CampanhasCampanhaIdContentRoute
   '/portal-v2/campanhas/$campanhaId/creators': typeof PortalV2CampanhasCampanhaIdCreatorsRoute
@@ -721,10 +806,13 @@ export interface FileRoutesById {
   '/portal-v2/campanhas/$campanhaId/results': typeof PortalV2CampanhasCampanhaIdResultsRoute
   '/portal-v2/campanhas/$campanhaId/timeline': typeof PortalV2CampanhasCampanhaIdTimelineRoute
   '/portal/$token/campanhas/$campanhaId': typeof PortalTokenCampanhasCampanhaIdRouteWithChildren
+  '/_authenticated/preview-cliente/$clienteId/': typeof AuthenticatedPreviewClienteClienteIdIndexRoute
   '/demo/$token/campanhas/': typeof DemoTokenCampanhasIndexRoute
   '/portal/$token/campanhas/': typeof PortalTokenCampanhasIndexRoute
+  '/_authenticated/preview-cliente/$clienteId/campanhas/$campanhaId': typeof AuthenticatedPreviewClienteClienteIdCampanhasCampanhaIdRoute
   '/portal/$token/campanhas/$campanhaId/aprovacoes': typeof PortalTokenCampanhasCampanhaIdAprovacoesRoute
   '/portal/$token/campanhas/$campanhaId/revisar': typeof PortalTokenCampanhasCampanhaIdRevisarRoute
+  '/_authenticated/preview-cliente/$clienteId/campanhas/': typeof AuthenticatedPreviewClienteClienteIdCampanhasIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -764,6 +852,7 @@ export interface FileRouteTypes {
     | '/portal-v2/relatorios'
     | '/portal-v2/seguranca'
     | '/portal-v2/'
+    | '/preview-cliente/$clienteId'
     | '/clientes/$id'
     | '/projeto/$id'
     | '/api/cron/email-flows'
@@ -793,6 +882,11 @@ export interface FileRouteTypes {
     | '/chat-v2/campaign/$id'
     | '/chat-v2/channel/$id'
     | '/chat-v2/dm/$id'
+    | '/preview-cliente/$clienteId/arquivos'
+    | '/preview-cliente/$clienteId/campanhas'
+    | '/preview-cliente/$clienteId/conteudos'
+    | '/preview-cliente/$clienteId/inicio'
+    | '/preview-cliente/$clienteId/relatorios'
     | '/demo/$token/campanhas/$campanhaId'
     | '/portal-v2/campanhas/$campanhaId/content'
     | '/portal-v2/campanhas/$campanhaId/creators'
@@ -801,10 +895,13 @@ export interface FileRouteTypes {
     | '/portal-v2/campanhas/$campanhaId/results'
     | '/portal-v2/campanhas/$campanhaId/timeline'
     | '/portal/$token/campanhas/$campanhaId'
+    | '/preview-cliente/$clienteId/'
     | '/demo/$token/campanhas/'
     | '/portal/$token/campanhas/'
+    | '/preview-cliente/$clienteId/campanhas/$campanhaId'
     | '/portal/$token/campanhas/$campanhaId/aprovacoes'
     | '/portal/$token/campanhas/$campanhaId/revisar'
+    | '/preview-cliente/$clienteId/campanhas/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -864,6 +961,10 @@ export interface FileRouteTypes {
     | '/chat-v2/campaign/$id'
     | '/chat-v2/channel/$id'
     | '/chat-v2/dm/$id'
+    | '/preview-cliente/$clienteId/arquivos'
+    | '/preview-cliente/$clienteId/conteudos'
+    | '/preview-cliente/$clienteId/inicio'
+    | '/preview-cliente/$clienteId/relatorios'
     | '/demo/$token/campanhas/$campanhaId'
     | '/portal-v2/campanhas/$campanhaId/content'
     | '/portal-v2/campanhas/$campanhaId/creators'
@@ -872,10 +973,13 @@ export interface FileRouteTypes {
     | '/portal-v2/campanhas/$campanhaId/results'
     | '/portal-v2/campanhas/$campanhaId/timeline'
     | '/portal/$token/campanhas/$campanhaId'
+    | '/preview-cliente/$clienteId'
     | '/demo/$token/campanhas'
     | '/portal/$token/campanhas'
+    | '/preview-cliente/$clienteId/campanhas/$campanhaId'
     | '/portal/$token/campanhas/$campanhaId/aprovacoes'
     | '/portal/$token/campanhas/$campanhaId/revisar'
+    | '/preview-cliente/$clienteId/campanhas'
   id:
     | '__root__'
     | '/'
@@ -914,6 +1018,7 @@ export interface FileRouteTypes {
     | '/portal-v2/relatorios'
     | '/portal-v2/seguranca'
     | '/portal-v2/'
+    | '/_authenticated/preview-cliente/$clienteId'
     | '/_authenticated/clientes/$id'
     | '/_authenticated/projeto/$id'
     | '/api/cron/email-flows'
@@ -943,6 +1048,11 @@ export interface FileRouteTypes {
     | '/_authenticated/chat-v2/campaign/$id'
     | '/_authenticated/chat-v2/channel/$id'
     | '/_authenticated/chat-v2/dm/$id'
+    | '/_authenticated/preview-cliente/$clienteId/arquivos'
+    | '/_authenticated/preview-cliente/$clienteId/campanhas'
+    | '/_authenticated/preview-cliente/$clienteId/conteudos'
+    | '/_authenticated/preview-cliente/$clienteId/inicio'
+    | '/_authenticated/preview-cliente/$clienteId/relatorios'
     | '/demo/$token/campanhas/$campanhaId'
     | '/portal-v2/campanhas/$campanhaId/content'
     | '/portal-v2/campanhas/$campanhaId/creators'
@@ -951,10 +1061,13 @@ export interface FileRouteTypes {
     | '/portal-v2/campanhas/$campanhaId/results'
     | '/portal-v2/campanhas/$campanhaId/timeline'
     | '/portal/$token/campanhas/$campanhaId'
+    | '/_authenticated/preview-cliente/$clienteId/'
     | '/demo/$token/campanhas/'
     | '/portal/$token/campanhas/'
+    | '/_authenticated/preview-cliente/$clienteId/campanhas/$campanhaId'
     | '/portal/$token/campanhas/$campanhaId/aprovacoes'
     | '/portal/$token/campanhas/$campanhaId/revisar'
+    | '/_authenticated/preview-cliente/$clienteId/campanhas/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1249,6 +1362,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedClientesIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/preview-cliente/$clienteId': {
+      id: '/_authenticated/preview-cliente/$clienteId'
+      path: '/preview-cliente/$clienteId'
+      fullPath: '/preview-cliente/$clienteId'
+      preLoaderRoute: typeof AuthenticatedPreviewClienteClienteIdRouteRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/projeto/$id': {
       id: '/_authenticated/projeto/$id'
       path: '/projeto/$id'
@@ -1438,6 +1558,48 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedChatV2DmIdRouteImport
       parentRoute: typeof AuthenticatedChatV2Route
     }
+    '/_authenticated/preview-cliente/$clienteId/': {
+      id: '/_authenticated/preview-cliente/$clienteId/'
+      path: '/'
+      fullPath: '/preview-cliente/$clienteId/'
+      preLoaderRoute: typeof AuthenticatedPreviewClienteClienteIdIndexRouteImport
+      parentRoute: typeof AuthenticatedPreviewClienteClienteIdRouteRoute
+    }
+    '/_authenticated/preview-cliente/$clienteId/arquivos': {
+      id: '/_authenticated/preview-cliente/$clienteId/arquivos'
+      path: '/arquivos'
+      fullPath: '/preview-cliente/$clienteId/arquivos'
+      preLoaderRoute: typeof AuthenticatedPreviewClienteClienteIdArquivosRouteImport
+      parentRoute: typeof AuthenticatedPreviewClienteClienteIdRouteRoute
+    }
+    '/_authenticated/preview-cliente/$clienteId/campanhas': {
+      id: '/_authenticated/preview-cliente/$clienteId/campanhas'
+      path: '/campanhas'
+      fullPath: '/preview-cliente/$clienteId/campanhas'
+      preLoaderRoute: typeof AuthenticatedPreviewClienteClienteIdCampanhasRouteImport
+      parentRoute: typeof AuthenticatedPreviewClienteClienteIdRouteRoute
+    }
+    '/_authenticated/preview-cliente/$clienteId/conteudos': {
+      id: '/_authenticated/preview-cliente/$clienteId/conteudos'
+      path: '/conteudos'
+      fullPath: '/preview-cliente/$clienteId/conteudos'
+      preLoaderRoute: typeof AuthenticatedPreviewClienteClienteIdConteudosRouteImport
+      parentRoute: typeof AuthenticatedPreviewClienteClienteIdRouteRoute
+    }
+    '/_authenticated/preview-cliente/$clienteId/inicio': {
+      id: '/_authenticated/preview-cliente/$clienteId/inicio'
+      path: '/inicio'
+      fullPath: '/preview-cliente/$clienteId/inicio'
+      preLoaderRoute: typeof AuthenticatedPreviewClienteClienteIdInicioRouteImport
+      parentRoute: typeof AuthenticatedPreviewClienteClienteIdRouteRoute
+    }
+    '/_authenticated/preview-cliente/$clienteId/relatorios': {
+      id: '/_authenticated/preview-cliente/$clienteId/relatorios'
+      path: '/relatorios'
+      fullPath: '/preview-cliente/$clienteId/relatorios'
+      preLoaderRoute: typeof AuthenticatedPreviewClienteClienteIdRelatoriosRouteImport
+      parentRoute: typeof AuthenticatedPreviewClienteClienteIdRouteRoute
+    }
     '/demo/$token/campanhas/': {
       id: '/demo/$token/campanhas/'
       path: '/'
@@ -1508,6 +1670,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalTokenCampanhasCampanhaIdRouteImport
       parentRoute: typeof PortalTokenRouteRoute
     }
+    '/_authenticated/preview-cliente/$clienteId/campanhas/': {
+      id: '/_authenticated/preview-cliente/$clienteId/campanhas/'
+      path: '/'
+      fullPath: '/preview-cliente/$clienteId/campanhas/'
+      preLoaderRoute: typeof AuthenticatedPreviewClienteClienteIdCampanhasIndexRouteImport
+      parentRoute: typeof AuthenticatedPreviewClienteClienteIdCampanhasRoute
+    }
+    '/_authenticated/preview-cliente/$clienteId/campanhas/$campanhaId': {
+      id: '/_authenticated/preview-cliente/$clienteId/campanhas/$campanhaId'
+      path: '/$campanhaId'
+      fullPath: '/preview-cliente/$clienteId/campanhas/$campanhaId'
+      preLoaderRoute: typeof AuthenticatedPreviewClienteClienteIdCampanhasCampanhaIdRouteImport
+      parentRoute: typeof AuthenticatedPreviewClienteClienteIdCampanhasRoute
+    }
     '/portal/$token/campanhas/$campanhaId/aprovacoes': {
       id: '/portal/$token/campanhas/$campanhaId/aprovacoes'
       path: '/aprovacoes'
@@ -1542,6 +1718,54 @@ const AuthenticatedChatV2RouteChildren: AuthenticatedChatV2RouteChildren = {
 const AuthenticatedChatV2RouteWithChildren =
   AuthenticatedChatV2Route._addFileChildren(AuthenticatedChatV2RouteChildren)
 
+interface AuthenticatedPreviewClienteClienteIdCampanhasRouteChildren {
+  AuthenticatedPreviewClienteClienteIdCampanhasCampanhaIdRoute: typeof AuthenticatedPreviewClienteClienteIdCampanhasCampanhaIdRoute
+  AuthenticatedPreviewClienteClienteIdCampanhasIndexRoute: typeof AuthenticatedPreviewClienteClienteIdCampanhasIndexRoute
+}
+
+const AuthenticatedPreviewClienteClienteIdCampanhasRouteChildren: AuthenticatedPreviewClienteClienteIdCampanhasRouteChildren =
+  {
+    AuthenticatedPreviewClienteClienteIdCampanhasCampanhaIdRoute:
+      AuthenticatedPreviewClienteClienteIdCampanhasCampanhaIdRoute,
+    AuthenticatedPreviewClienteClienteIdCampanhasIndexRoute:
+      AuthenticatedPreviewClienteClienteIdCampanhasIndexRoute,
+  }
+
+const AuthenticatedPreviewClienteClienteIdCampanhasRouteWithChildren =
+  AuthenticatedPreviewClienteClienteIdCampanhasRoute._addFileChildren(
+    AuthenticatedPreviewClienteClienteIdCampanhasRouteChildren,
+  )
+
+interface AuthenticatedPreviewClienteClienteIdRouteRouteChildren {
+  AuthenticatedPreviewClienteClienteIdArquivosRoute: typeof AuthenticatedPreviewClienteClienteIdArquivosRoute
+  AuthenticatedPreviewClienteClienteIdCampanhasRoute: typeof AuthenticatedPreviewClienteClienteIdCampanhasRouteWithChildren
+  AuthenticatedPreviewClienteClienteIdConteudosRoute: typeof AuthenticatedPreviewClienteClienteIdConteudosRoute
+  AuthenticatedPreviewClienteClienteIdInicioRoute: typeof AuthenticatedPreviewClienteClienteIdInicioRoute
+  AuthenticatedPreviewClienteClienteIdRelatoriosRoute: typeof AuthenticatedPreviewClienteClienteIdRelatoriosRoute
+  AuthenticatedPreviewClienteClienteIdIndexRoute: typeof AuthenticatedPreviewClienteClienteIdIndexRoute
+}
+
+const AuthenticatedPreviewClienteClienteIdRouteRouteChildren: AuthenticatedPreviewClienteClienteIdRouteRouteChildren =
+  {
+    AuthenticatedPreviewClienteClienteIdArquivosRoute:
+      AuthenticatedPreviewClienteClienteIdArquivosRoute,
+    AuthenticatedPreviewClienteClienteIdCampanhasRoute:
+      AuthenticatedPreviewClienteClienteIdCampanhasRouteWithChildren,
+    AuthenticatedPreviewClienteClienteIdConteudosRoute:
+      AuthenticatedPreviewClienteClienteIdConteudosRoute,
+    AuthenticatedPreviewClienteClienteIdInicioRoute:
+      AuthenticatedPreviewClienteClienteIdInicioRoute,
+    AuthenticatedPreviewClienteClienteIdRelatoriosRoute:
+      AuthenticatedPreviewClienteClienteIdRelatoriosRoute,
+    AuthenticatedPreviewClienteClienteIdIndexRoute:
+      AuthenticatedPreviewClienteClienteIdIndexRoute,
+  }
+
+const AuthenticatedPreviewClienteClienteIdRouteRouteWithChildren =
+  AuthenticatedPreviewClienteClienteIdRouteRoute._addFileChildren(
+    AuthenticatedPreviewClienteClienteIdRouteRouteChildren,
+  )
+
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedBancoInfluenciadoresV2Route: typeof AuthenticatedBancoInfluenciadoresV2Route
   AuthenticatedChatV2Route: typeof AuthenticatedChatV2RouteWithChildren
@@ -1551,6 +1775,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedPrimeiroAcessoRoute: typeof AuthenticatedPrimeiroAcessoRoute
   AuthenticatedTimeRoute: typeof AuthenticatedTimeRoute
   AuthenticatedTimeV2Route: typeof AuthenticatedTimeV2Route
+  AuthenticatedPreviewClienteClienteIdRouteRoute: typeof AuthenticatedPreviewClienteClienteIdRouteRouteWithChildren
   AuthenticatedClientesIdRoute: typeof AuthenticatedClientesIdRoute
   AuthenticatedProjetoIdRoute: typeof AuthenticatedProjetoIdRoute
 }
@@ -1566,6 +1791,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedPrimeiroAcessoRoute: AuthenticatedPrimeiroAcessoRoute,
   AuthenticatedTimeRoute: AuthenticatedTimeRoute,
   AuthenticatedTimeV2Route: AuthenticatedTimeV2Route,
+  AuthenticatedPreviewClienteClienteIdRouteRoute:
+    AuthenticatedPreviewClienteClienteIdRouteRouteWithChildren,
   AuthenticatedClientesIdRoute: AuthenticatedClientesIdRoute,
   AuthenticatedProjetoIdRoute: AuthenticatedProjetoIdRoute,
 }
