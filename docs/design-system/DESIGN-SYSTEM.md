@@ -180,7 +180,7 @@ Props: `icon`, `title`, `description?`, `primaryAction?`, `secondaryAction?`, `c
 **Usar:** formulário curto, leitura, confirmação. **Não usar:** para navegação nem tarefas longas (use Drawer ou página). **Confirmação** é sempre o componente de confirmação: título "Excluir X?", mensagem do que se perde, botão "Excluir X" destrutivo; nunca confirmação nativa do navegador.
 
 ### 8.11 Drawer (Sheet)
-**Usar:** criar/editar com 3+ campos, painéis de detalhe. Largura `sm:max-w-md`–`xl`; título + descrição; rodapé fixo com **Cancelar** e a ação primária; fechar com Esc; alterações não salvas pedem confirmação. Criação com o mínimo; detalhes opcionais recolhidos.
+**Usar:** criar/editar com 3+ campos, painéis de detalhe. Largura `sm:max-w-md`–`xl`; título + descrição; rodapé fixo com **Cancelar** e a ação primária; fechar com Esc; alterações não salvas pedem confirmação. Criação com o mínimo; detalhes opcionais recolhidos. **Perfil de entidade** (ex.: lead): cabeçalho com identidade, valor, estado e a próxima ação com a ação principal; abas só para visões diferentes (≤ 3); dados em **leitura compacta com edição inline** (clicar edita, sair salva), não formulário aberto; auditoria (quem alterou o quê) recolhida no fim do histórico, nunca como aba própria.
 
 ### 8.12 Select
 `PRECISA DE DECISÃO → P1`. Até lá, não criar um terceiro estilo.

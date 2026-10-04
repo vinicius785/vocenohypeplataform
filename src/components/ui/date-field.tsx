@@ -189,6 +189,9 @@ export type DateFieldProps = {
    * o campo "Entrega" de tarefas (`TaskBoard.tsx`) passa isso. */
   recurrence?: TaskRecurrence;
   onRecurrenceChange?: (r: TaskRecurrence | undefined) => void;
+  /** Abre o calendário assim que o campo monta (ex.: o campo só aparece
+   * porque a pessoa escolheu "Outra data"). Aditivo; padrão `false`. */
+  autoOpen?: boolean;
 };
 
 /**
@@ -212,8 +215,9 @@ export function DateField({
   contentClassName,
   recurrence,
   onRecurrenceChange,
+  autoOpen = false,
 }: DateFieldProps) {
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = React.useState(autoOpen);
   const [showRecurrenceForm, setShowRecurrenceForm] = React.useState(false);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
 

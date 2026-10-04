@@ -14,6 +14,7 @@ export function SegmentedControl<T extends string>({
   onChange,
   options,
   size = "default",
+  fullWidth = false,
   "aria-label": ariaLabel,
 }: {
   value: T;
@@ -21,6 +22,9 @@ export function SegmentedControl<T extends string>({
   /** `icon` opcional (ícone pequeno antes do rótulo, ex.: filtros). */
   options: readonly { value: T; label: string; icon?: React.ReactNode }[];
   size?: "default" | "sm";
+  /** Ocupa a largura do contêiner e divide as opções por igual (formulários
+   * compactos). Aditivo: nenhum uso existente passa isso. */
+  fullWidth?: boolean;
   "aria-label": string;
 }) {
   const optionValues = options.map((o) => o.value);
@@ -30,7 +34,10 @@ export function SegmentedControl<T extends string>({
     <div
       role="radiogroup"
       aria-label={ariaLabel}
-      className="inline-flex rounded-full border border-border bg-muted p-0.5"
+      className={cn(
+        "rounded-full border border-border bg-muted p-0.5",
+        fullWidth ? "flex w-full" : "inline-flex",
+      )}
     >
       {options.map((opt) => {
         const active = opt.value === resolved;
@@ -42,7 +49,8 @@ export function SegmentedControl<T extends string>({
             aria-checked={active}
             onClick={() => onChange(opt.value)}
             className={cn(
-              "inline-flex cursor-pointer items-center gap-1 rounded-full font-medium transition-colors",
+              "inline-flex cursor-pointer items-center justify-center gap-1 rounded-full font-medium transition-colors",
+              fullWidth && "min-w-0 flex-1",
               size === "sm" ? "px-2.5 py-1 text-[11px]" : "px-3.5 py-1.5 text-xs",
               active
                 ? "bg-background text-foreground shadow-sm"

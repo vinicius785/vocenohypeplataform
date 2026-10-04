@@ -46,7 +46,9 @@ Todos vivem sob `/time?section=<chave>` (exceto detalhes de cliente e projeto e 
 `ReunioesSection`, `meetings/*` (Agenda, Calendário, Disponibilidade, Solicitações, entrada por link), `UpcomingMeetingAlert`, `MeetingReminderToast`. Sincroniza com **Google Calendar** (`google-calendar.functions`, OAuth, cron diário). Pode anexar chamada interna (WebRTC).
 
 ## Comercial
-`ComercialSection`, `comercial/* (PipelineBoard, LeadDrawer, LeadCard, FollowUp, SimuladorPropostaDialog, convertLead)`, `comercial-engine`, `pricing`.
+`ComercialSection`, `comercial/* (PipelineBoard, LeadCard, FollowUp, SimuladorPropostaDialog, convertLead)`, `comercial/LeadDrawer` + `comercial/lead/*` (perfil do lead: `LeadOverview`, `LeadTimeline`, `LeadProposal`, `InlineField`), `comercial-engine`, `comercial-lead-view` (próxima ação e linha do tempo), `comercial-lead-draft` (rascunho → lead salvo), `pricing`.
+
+**Perfil do lead (drawer):** cabeçalho de "cockpit" (identidade, valor, etapa, responsável, próxima ação + ação principal) e 3 abas — *Visão geral* (contexto da negociação → últimas interações → dados editáveis ao clicar), *Proposta* (pacote → composição do preço → preço final → aplicar ao negócio) e *Histórico* (linha do tempo comercial única; "Alterações do lead" é auditoria recolhida no fim). Etapa/valor/histórico seguem sendo do motor; os campos salvam ao sair.
 - Etapas de oportunidade; realtime sobre `leads` (AppShell notifica novo lead).
 - **Simulador de Proposta** (tiers × formatos) e **calculadora pública** por token.
 - `convertLeadToClienteEProjeto`: lead → Cliente (sempre em Captação) + Projeto; grava `crmLeadId`.

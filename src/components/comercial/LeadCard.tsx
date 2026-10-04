@@ -5,6 +5,7 @@ import { daysSinceLastContact, hasNoRecentContact, legacyStage } from "@/lib/com
 import { Button } from "@/components/ui/button";
 import { normalizePhoneDigits } from "@/lib/social-profiles";
 import { avatarAccent, initialsOf } from "@/components/team/member-ui";
+import { nextActionDisplay } from "@/lib/comercial-lead-view";
 
 /**
  * Card da oportunidade — SIMPLIFICADO (correção pedida): empresa, contato/
@@ -14,44 +15,6 @@ import { avatarAccent, initialsOf } from "@/components/team/member-ui";
  * e "sem interação" (contato real, `lastContactAt`) são conceitos
  * diferentes — nunca misturados na mesma linha.
  */
-
-function fmtShortDate(ts: number): string {
-  return new Date(ts).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-}
-
-function isSameCalendarDay(a: Date, b: Date): boolean {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
-
-type NextActionDisplay = { tone: "red" | "amber" | "neutral"; text: string } | null;
-
-/** "Vencida há Xd", "Hoje às HH:mm", "Amanhã", ou a data curta — sempre
- * junto da descrição quando existir. */
-function nextActionDisplay(lead: Lead): NextActionDisplay {
-  if (!lead.nextActionAt) return null;
-  const at = new Date(lead.nextActionAt);
-  const now = new Date();
-  const desc = lead.nextActionDescription ? ` · ${lead.nextActionDescription}` : "";
-
-  if (lead.nextActionAt < now.getTime()) {
-    const days = Math.max(1, Math.ceil((now.getTime() - lead.nextActionAt) / 86_400_000));
-    return { tone: "red", text: `Vencida há ${days}d${desc}` };
-  }
-  if (isSameCalendarDay(at, now)) {
-    const hh = at.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-    return { tone: "amber", text: `Hoje às ${hh}${desc}` };
-  }
-  const tomorrow = new Date(now);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  if (isSameCalendarDay(at, tomorrow)) {
-    return { tone: "neutral", text: `Amanhã${desc}` };
-  }
-  return { tone: "neutral", text: `${fmtShortDate(lead.nextActionAt)}${desc}` };
-}
 
 export function LeadCard({
   lead,

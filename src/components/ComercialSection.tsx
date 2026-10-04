@@ -15,6 +15,7 @@ import {
   runOpportunityAction,
 } from "@/lib/comercial.functions";
 import { registerFollowUp } from "@/lib/commercial-interactions.functions";
+import { applyFollowUpToCaches } from "@/lib/comercial-followup-cache";
 import { type OpportunityActionKind, type OpportunityStage } from "@/lib/comercial-engine";
 import {
   rangeForComercialPeriod,
@@ -140,7 +141,9 @@ export function ComercialSection() {
   } = useQuery({
     queryKey: ["leads", listParams],
     queryFn: () => listLeadsFn({ data: listParams as never }),
-    refetchInterval: 15000,
+    // Sem polling: a lista se atualiza por `invalidate()` — evento Realtime em
+    // `leads` (abaixo), mutações desta tela e os refetchs padrão do React Query
+    // ao voltar o foco da aba e ao reconectar a rede.
     placeholderData: (prev) => prev,
   });
 
@@ -206,8 +209,12 @@ export function ComercialSection() {
   const followUpMutation = useMutation({
     mutationFn: (input: FollowUpInput & { opportunityId: string }) =>
       registerFollowUpFn({ data: input as never }),
-    onSuccess: () => {
+    onSuccess: (row, { opportunityId, ...input }) => {
+      // Reflete NA HORA o que o servidor acabou de gravar (histórico da ficha,
+      // próxima ação e último contato no lead); a releitura abaixo só confirma.
+      applyFollowUpToCaches(queryClient, opportunityId, row, input);
       invalidate();
+      void queryClient.invalidateQueries({ queryKey: ["commercial-interactions"] });
       toast.success("Follow-up registrado");
     },
   });
@@ -244,6 +251,10 @@ export function ComercialSection() {
     deleteMutation.mutate(editing.id);
     closeDrawer();
   };
+
+  // A ficha recebe a versão mais recente do lead na lista (follow-ups e
+  // reuniões mudam próxima ação/último contato por fora da ficha).
+  const drawerLead = editing ? (leads.find((l) => l.id === editing.id) ?? editing) : null;
 
   const kpis = computeComercialKpis(leads, range);
   const openLeads = useMemo(
@@ -358,7 +369,7 @@ export function ComercialSection() {
 
         {showDrawer && (
           <LeadDrawer
-            initial={editing}
+            initial={drawerLead}
             initialStage={createInStage}
             open={showDrawer}
             team={team}

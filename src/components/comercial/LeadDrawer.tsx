@@ -1,30 +1,28 @@
-import { useState, useEffect } from "react";
-import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
-  User,
-  Mail,
-  Phone,
-  Tag,
-  FileText,
-  Star,
-  Briefcase,
-  CheckCircle2,
-  XCircle,
-  History,
-  Calculator,
-  MoreHorizontal,
-  Link2,
   AlertTriangle,
+  Briefcase,
+  Calculator,
+  CheckCircle2,
+  History,
+  Mail,
+  MessageCircle,
   MessageSquare,
+  MoreHorizontal,
+  Phone,
+  XCircle,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { DateField } from "@/components/ui/date-field";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { NativeSelect } from "@/components/ui/native-select";
 import {
   Dialog,
   DialogContent,
@@ -33,14 +31,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { SimuladorPropostaForm } from "@/components/comercial/SimuladorPropostaDialog";
+import { avatarAccent, initialsOf } from "@/components/team/member-ui";
 import { formatBRL, type Lead, type PropostaSnapshot } from "@/lib/comercial";
-import {
-  listFollowUps,
-  INTERACTION_TYPE_LABEL,
-  INTERACTION_OUTCOME_LABEL,
-  type CommercialInteractionRow,
-} from "@/lib/commercial-interactions.functions";
+import { listFollowUps } from "@/lib/commercial-interactions.functions";
 import {
   deriveOpportunityNextStep,
   legacyStage,
@@ -51,17 +44,18 @@ import {
   type OpportunityActionKind,
   type OpportunityStage,
 } from "@/lib/comercial-engine";
-import { loadPricing, fetchPricing } from "@/lib/pricing-store";
-import { BRASILIA_TZ } from "@/lib/timezone";
-import { linkifyText } from "@/lib/linkify";
-import type { TeamMemberLite } from "@/lib/projetos";
-import { useServerFn } from "@tanstack/react-start";
+import { draftToLead, leadToDraft, parseMoney, type LeadDraft } from "@/lib/comercial-lead-draft";
+import { buildCommercialTimeline, nextActionDisplay } from "@/lib/comercial-lead-view";
 import { generatePropostaPublicToken } from "@/lib/comercial.functions";
+import type { TeamMemberLite } from "@/lib/projetos";
+import { useConfirm } from "@/hooks/use-confirm";
+import { valueImpactMessage } from "@/lib/comercial-proposal-form";
 import { convertLeadToClienteEProjeto } from "./convertLead";
-import { NativeSelect } from "@/components/ui/native-select";
+import { LeadHistoryPanel } from "./lead/LeadTimeline";
+import { LeadOverview, type LeadFieldApi } from "./lead/LeadOverview";
+import { LeadProposal, APPLY_CANCELLED, type ApplyResult } from "./lead/LeadProposal";
 
 const labelCls = "block space-y-1.5 text-sm font-medium text-foreground";
-const SOURCES = ["Indicação", "Instagram", "Google", "LinkedIn", "Site", "Evento", "Outro"];
 const PERDIDO_MOTIVOS = [
   "Sem orçamento",
   "Escolheu concorrente",
@@ -82,17 +76,24 @@ export type OpportunityActionInput = {
   toStage?: OpportunityStage;
 };
 
+type DrawerTab = "visao-geral" | "proposta" | "historico";
+
 function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
+const sameDraft = (a: LeadDraft, b: LeadDraft) => JSON.stringify(a) === JSON.stringify(b);
+
 /**
- * Drawer da oportunidade — substitui o antigo painel de 896px com aside
- * de resumo duplicado. Agora é um `<Sheet>` (já existia no design system,
- * subutilizado — ver `InfluencerBoard.tsx`'s `EntregaDetailSheet`) de
- * 608px, com 3 abas (Visão geral/Proposta/Histórico) — Contato e
- * Qualificação viraram blocos compactos dentro de Visão geral, já que
- * cada um tem poucos campos.
+ * Perfil do lead — um "cockpit comercial" num `<Sheet>` de 608px. O
+ * cabeçalho responde de cara: quem é, em que etapa está, quanto vale, quem é
+ * o responsável e qual é a próxima ação (com a ação principal à mão). Abaixo,
+ * 3 abas: Visão geral (contexto da negociação → últimas interações → dados
+ * editáveis ao clicar), Proposta e Histórico (linha do tempo comercial; as
+ * "Alterações do lead" ficam como auditoria recolhida no fim).
+ *
+ * Etapa, histórico e valor continuam sendo decididos só pelo motor
+ * (`onRunAction`); os campos do formulário salvam ao sair (`onAutosave`).
  */
 export function LeadDrawer({
   initial,
@@ -134,26 +135,21 @@ export function LeadDrawer({
   const generateLinkFn = useServerFn(generatePropostaPublicToken);
   const [generatingLink, setGeneratingLink] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
-  const [name, setName] = useState(initial?.name ?? "");
-  const [company, setCompany] = useState(initial?.company ?? "");
-  const [contact, setContact] = useState(initial?.contact ?? "");
-  const [email, setEmail] = useState(initial?.email ?? "");
-  const [phone, setPhone] = useState(initial?.phone ?? "");
-  const [role, setRole] = useState(initial?.role ?? "");
-  const [vertical, setVertical] = useState(initial?.vertical ?? "");
-  const [budget, setBudget] = useState<string>(initial?.budget ? String(initial.budget) : "");
-  const [urgency, setUrgency] = useState<string>(initial?.urgency ?? "");
-  const [experience, setExperience] = useState(initial?.experience ?? "");
-  const [value, setValue] = useState<string>(initial ? String(initial.value ?? "") : "");
-  const [proposta, setProposta] = useState<PropostaSnapshot | undefined>(initial?.proposta);
-  const [stage, setStage] = useState<OpportunityStage>(
-    initial ? legacyStage(initial.stage) : (initialStage ?? "LEAD_RECEBIDO"),
-  );
-  const [source, setSource] = useState(initial?.source ?? "");
-  const [responsible, setResponsible] = useState(initial?.responsible ?? "");
-  const [notes, setNotes] = useState(initial?.notes ?? "");
-  const [score, setScore] = useState<number>(initial?.score ?? 0);
-  const [tab, setTab] = useState("visao-geral");
+
+  // Rascunho do formulário. O ref espelha o estado de forma síncrona: o
+  // salvamento sempre lê o valor MAIS recente, mesmo logo após um `setField`
+  // (antes, o clique nas estrelas salvava a nota anterior por closure velha).
+  const [draft, setDraft] = useState<LeadDraft>(() => leadToDraft(initial, initialStage));
+  const draftRef = useRef(draft);
+  const savedRef = useRef(draft);
+
+  const [tab, setTab] = useState<DrawerTab>("visao-geral");
+  // A aba Proposta guarda trabalho não aplicado: depois de visitada, fica
+  // montada (trocar de aba não apaga) e fechar a ficha pede confirmação.
+  const [proposalVisited, setProposalVisited] = useState(false);
+  const [proposalDirty, setProposalDirty] = useState(false);
+  const { confirm, confirmDialog } = useConfirm();
+  const [auditOpen, setAuditOpen] = useState(false);
   const [error, setError] = useState("");
   const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved" | "error">(
     "idle",
@@ -166,34 +162,148 @@ export function LeadDrawer({
   const [notaNegociacao, setNotaNegociacao] = useState("");
   const [novoValorNegociacao, setNovoValorNegociacao] = useState("");
   const [showGanho, setShowGanho] = useState(false);
-  const [valorGanho, setValorGanho] = useState(String(liveLead?.value ?? value ?? ""));
+  const [valorGanho, setValorGanho] = useState(String(liveLead?.value ?? draft.value ?? ""));
   const [showPerdido, setShowPerdido] = useState(false);
   const [motivoPerdido, setMotivoPerdido] = useState("");
 
-  const parsedValue = Number(value.replace(/[^\d.,]/g, "").replace(",", ".")) || 0;
+  // O Comercial relê a lista depois de cada ação e de cada follow-up; traz
+  // para a ficha só o que muda por fora dela (follow-up/reunião mexem na
+  // próxima ação e no último contato) — nunca os campos em edição.
+  useEffect(() => {
+    if (tab === "proposta") setProposalVisited(true);
+  }, [tab]);
+
+  const initialId = initial?.id;
+  const initialLastContactAt = initial?.lastContactAt;
+  const initialNextActionAt = initial?.nextActionAt;
+  const initialNextActionDescription = initial?.nextActionDescription;
+  useEffect(() => {
+    if (!initialId) return;
+    setLiveLead((prev) => {
+      if (!prev || prev.id !== initialId) return prev;
+      if (
+        prev.lastContactAt === initialLastContactAt &&
+        prev.nextActionAt === initialNextActionAt &&
+        prev.nextActionDescription === initialNextActionDescription
+      ) {
+        return prev;
+      }
+      return {
+        ...prev,
+        lastContactAt: initialLastContactAt,
+        nextActionAt: initialNextActionAt,
+        nextActionDescription: initialNextActionDescription,
+      };
+    });
+  }, [initialId, initialLastContactAt, initialNextActionAt, initialNextActionDescription]);
+
+  const setField: LeadFieldApi["setField"] = (key, value) => {
+    draftRef.current = { ...draftRef.current, [key]: value };
+    setDraft(draftRef.current);
+  };
+
+  const parsedValue = parseMoney(draft.value);
   const nextStep = liveLead ? deriveOpportunityNextStep(liveLead) : null;
-  const currentStageLabel = liveLead ? nextStep!.stageLabel : OPPORTUNITY_STAGE_LABEL[stage];
   const valueDivergesFromProposal =
-    !!proposta && Math.round(proposta.precoFinal) !== Math.round(parsedValue);
+    !!draft.proposta && Math.round(draft.proposta.precoFinal) !== Math.round(parsedValue);
+  const timeline = useMemo(
+    () => buildCommercialTimeline({ interactions: followUps, history: liveLead?.history }),
+    [followUps, liveLead?.history],
+  );
+
+  /** Executa uma ação do motor e atualiza a ficha. Devolve a mensagem de erro
+   * (ou `null` se deu certo) — quem chama decide onde mostrá-la. */
+  const execAction = async (
+    action: OpportunityActionKind,
+    opts: Partial<OpportunityActionInput> = {},
+  ): Promise<string | null> => {
+    if (!liveLead) return null;
+    setRunningAction(action);
+    try {
+      const updated = await onRunAction({ id: liveLead.id, action, ...opts });
+      setLiveLead(updated);
+      const next: LeadDraft = {
+        ...draftRef.current,
+        stage: legacyStage(updated.stage),
+        value: String(updated.value ?? ""),
+        ...(updated.proposta ? { proposta: updated.proposta } : {}),
+      };
+      draftRef.current = next;
+      setDraft(next);
+      savedRef.current = {
+        ...savedRef.current,
+        stage: next.stage,
+        value: next.value,
+        proposta: next.proposta,
+      };
+      return null;
+    } catch (e) {
+      return e instanceof Error ? e.message : "Não foi possível executar a ação.";
+    } finally {
+      setRunningAction(null);
+    }
+  };
 
   const runAction = async (
     action: OpportunityActionKind,
     opts: Partial<OpportunityActionInput> = {},
   ) => {
     if (!liveLead) return;
-    setRunningAction(action);
     setError("");
-    try {
-      const updated = await onRunAction({ id: liveLead.id, action, ...opts });
-      setLiveLead(updated);
-      setStage(legacyStage(updated.stage));
-      setValue(String(updated.value ?? ""));
-      if (updated.proposta) setProposta(updated.proposta);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Não foi possível executar a ação.");
-    } finally {
-      setRunningAction(null);
+    const message = await execAction(action, opts);
+    if (message) setError(message);
+  };
+
+  /** "Usar como valor do negócio": confirma o impacto quando o valor muda,
+   * aplica (motor) e só então reflete na ficha; falhou → nada muda. */
+  const applyProposal = async (
+    precoFinal: number,
+    snapshot: PropostaSnapshot,
+  ): Promise<ApplyResult> => {
+    if (liveLead) {
+      const impact = valueImpactMessage(parsedValue, precoFinal);
+      if (impact && parsedValue > 0) {
+        const ok = await confirm(impact, {
+          title: "Alterar o valor do negócio?",
+          confirmLabel: "Alterar valor",
+        });
+        if (!ok) return APPLY_CANCELLED;
+      }
     }
+    const previous = draftRef.current;
+    draftRef.current = {
+      ...previous,
+      value: String(Math.round(precoFinal)),
+      proposta: snapshot,
+    };
+    setDraft(draftRef.current);
+    if (!liveLead) return null;
+    const message = await execAction("criar_proposta", { proposta: snapshot });
+    if (message) {
+      draftRef.current = {
+        ...draftRef.current,
+        value: previous.value,
+        proposta: previous.proposta,
+      };
+      setDraft(draftRef.current);
+    }
+    return message;
+  };
+
+  /** Fechar a ficha com proposta não aplicada pede confirmação. */
+  const requestClose = async () => {
+    if (proposalDirty) {
+      const discard = await confirm(
+        "As alterações da proposta ainda não foram aplicadas ao negócio e serão perdidas.",
+        {
+          title: "Descartar alterações da proposta?",
+          confirmLabel: "Descartar",
+          destructive: true,
+        },
+      );
+      if (!discard) return;
+    }
+    onClose();
   };
 
   const copyPropostaLink = async () => {
@@ -218,53 +328,23 @@ export function LeadDrawer({
     }
   };
 
-  const buildLead = (): Lead => {
-    const now = Date.now();
-    return {
-      id: liveLead?.id ?? uid(),
-      name: name.trim(),
-      company: company.trim() || undefined,
-      contact: contact.trim() || undefined,
-      email: email.trim() || undefined,
-      phone: phone.trim() || undefined,
-      role: role.trim() || undefined,
-      vertical: vertical.trim() || undefined,
-      budget: budget.trim() ? Number(budget.replace(/[^\d.,]/g, "").replace(",", ".")) : undefined,
-      urgency: (urgency.trim() || undefined) as Lead["urgency"],
-      experience: experience.trim() || undefined,
-      value: parsedValue,
-      proposta,
-      stage: liveLead ? liveLead.stage : stage,
-      tags: liveLead?.tags ?? [],
-      source: source || undefined,
-      responsible: responsible || undefined,
-      notes: notes.trim() || undefined,
-      score,
-      activities: liveLead?.activities ?? [],
-      history: liveLead?.history,
-      createdAt: liveLead?.createdAt ?? now,
-      updatedAt: now,
-      stageEnteredAt: liveLead?.stageEnteredAt ?? now,
-      lastContactAt: liveLead?.lastContactAt,
-      nextActionAt: liveLead?.nextActionAt,
-      expectedCloseAt: liveLead?.expectedCloseAt,
-      probability: liveLead?.probability,
-      clienteId: liveLead?.clienteId,
-      projectId: liveLead?.projectId,
-      wonAt: liveLead?.wonAt,
-      lostAt: liveLead?.lostAt,
-    };
-  };
-
-  const autosaveField = async () => {
-    if (!liveLead) return;
-    const n = name.trim();
-    if (!n) return;
+  /** Salva os campos ao sair deles. Só grava se algo mudou desde o último
+   * salvamento (evita escritas e o aviso "Salvo" a cada blur sem alteração). */
+  const commit: LeadFieldApi["commit"] = async (patch) => {
+    if (patch) {
+      draftRef.current = { ...draftRef.current, ...patch };
+      setDraft(draftRef.current);
+    }
+    if (!liveLead) return; // criação: só grava no "Criar oportunidade"
+    const current = draftRef.current;
+    if (!current.name.trim()) return;
+    if (sameDraft(current, savedRef.current)) return;
     setAutosaveStatus("saving");
     setError("");
     try {
-      const saved = await onAutosave(buildLead());
+      const saved = await onAutosave(draftToLead(current, liveLead, uid));
       setLiveLead(saved);
+      savedRef.current = current;
       setAutosaveStatus("saved");
       setTimeout(() => setAutosaveStatus((s) => (s === "saved" ? "idle" : s)), 1600);
     } catch (e) {
@@ -274,35 +354,75 @@ export function LeadDrawer({
   };
 
   const submit = () => {
-    const n = name.trim();
-    if (!n) {
+    if (!draftRef.current.name.trim()) {
       setError("Informe o nome da oportunidade.");
       return;
     }
-    onSave(buildLead());
+    onSave(draftToLead(draftRef.current, liveLead, uid));
   };
 
-  return (
-    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[608px]">
-        <SheetTitle className="sr-only">{name.trim() || "Nova oportunidade"}</SheetTitle>
+  const title = draft.company.trim() || draft.name.trim() || "Nova oportunidade";
+  const subline = [draft.contact.trim(), draft.role.trim()].filter(Boolean).join(" · ");
+  const committed = liveLead ? nextActionDisplay(liveLead) : null;
+  const phoneDigits = draft.phone.replace(/\D/g, "");
+  const isTerminal = !!nextStep && (nextStep.stage === "GANHO" || nextStep.stage === "PERDIDO");
 
-        {/* Cabeçalho — hierarquia real (Etapa 7): nome/valor protagonistas,
-         * etapa/responsável subordinados, em vez de uma sequência de
-         * textos do mesmo peso. */}
-        <div className="border-b border-border/60 bg-card pr-10">
-          <div className="flex items-start justify-between gap-3 px-6 pt-5">
+  /** Ação principal sugerida pelo motor para a etapa atual. */
+  const primaryAction = (() => {
+    if (!liveLead || !nextStep?.action) return null;
+    switch (nextStep.action) {
+      case "registrar_contato":
+        return { label: "Registrar contato", run: () => runAction("registrar_contato") };
+      case "agendar_reuniao":
+        return { label: "Agendar reunião", run: () => setShowAgendar(true) };
+      case "registrar_reuniao":
+        return { label: "Registrar reunião realizada", run: () => runAction("registrar_reuniao") };
+      case "criar_proposta":
+        return {
+          label: "Criar proposta",
+          icon: <Calculator className="h-3.5 w-3.5" />,
+          run: () => setTab("proposta"),
+        };
+      case "enviar_proposta":
+        return { label: "Enviar proposta", run: () => runAction("enviar_proposta") };
+      case "registrar_negociacao":
+        return {
+          label: "Registrar atualização",
+          run: () => {
+            setNovoValorNegociacao(String(liveLead.value ?? ""));
+            setShowNegociacao(true);
+          },
+        };
+      default:
+        return null;
+    }
+  })();
+
+  const fields: LeadFieldApi = { draft, setField, commit };
+
+  return (
+    <Sheet open={open} onOpenChange={(v) => !v && void requestClose()}>
+      <SheetContent className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[608px]">
+        <SheetTitle className="sr-only">{draft.name.trim() || "Nova oportunidade"}</SheetTitle>
+
+        {/* Cabeçalho — cockpit: identidade, valor, etapa, responsável e a
+         * próxima ação com a ação principal; o resto vive nas abas. */}
+        <div className="border-b border-border/60 bg-background">
+          <div className="flex items-start justify-between gap-3 px-6 pb-3 pr-12 pt-5">
             <div className="min-w-0">
               <h3 className="truncate text-xl font-semibold tracking-tight text-foreground md:text-2xl">
-                {company.trim() || name.trim() || "Nova oportunidade"}
+                {title}
               </h3>
-              {contact.trim() && (
-                <p className="mt-0.5 truncate text-sm text-text-secondary">{contact}</p>
+              {subline && (
+                <p className="mt-0.5 truncate text-sm text-text-secondary" title={subline}>
+                  {subline}
+                </p>
               )}
             </div>
             {autosaveStatus !== "idle" && (
               <span
-                className={`shrink-0 text-[11px] ${
+                role="status"
+                className={`shrink-0 pt-1 text-[11px] ${
                   autosaveStatus === "error" ? "text-destructive" : "text-text-secondary"
                 }`}
               >
@@ -315,481 +435,308 @@ export function LeadDrawer({
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 px-6 pt-3">
-            <span className="whitespace-nowrap text-2xl font-semibold tabular-nums leading-none text-foreground">
-              {formatBRL(parsedValue)}
-            </span>
-            <Badge variant="secondary" size="sm" className={OPPORTUNITY_STAGE_TONE[stage]}>
-              {currentStageLabel}
-            </Badge>
-            {responsible && <span className="text-xs text-text-secondary">{responsible}</span>}
-          </div>
-
-          <div className="flex flex-wrap items-end justify-between gap-3 px-6 pb-5 pt-4">
-            <div className="min-w-0">
-              {liveLead && nextStep && (
-                <>
-                  <div className="text-[11px] font-medium uppercase tracking-wide text-text-secondary">
-                    Próxima ação
-                  </div>
-                  <div className="text-sm font-medium text-foreground">
-                    {nextStep.actionLabel ??
-                      (nextStep.actor === "CLIENTE" ? "Aguardar retorno do cliente" : "Nenhuma")}
-                  </div>
-                  {nextStep.actor && (
-                    <Badge variant="secondary" size="sm" className="mt-1">
-                      {OPPORTUNITY_ACTOR_LABEL[nextStep.actor]}
-                    </Badge>
+          {liveLead && nextStep && (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-6 pb-4">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                  <span className="whitespace-nowrap text-2xl font-semibold tabular-nums leading-none text-foreground">
+                    {formatBRL(parsedValue)}
+                  </span>
+                  <Badge
+                    variant="secondary"
+                    size="sm"
+                    className={OPPORTUNITY_STAGE_TONE[nextStep.stage]}
+                  >
+                    {nextStep.stageLabel}
+                  </Badge>
+                  {draft.responsible && (
+                    <span className="inline-flex items-center gap-1.5 text-sm text-text-secondary">
+                      <span
+                        aria-hidden="true"
+                        className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold ${avatarAccent(
+                          draft.responsible,
+                        )}`}
+                      >
+                        {initialsOf(draft.responsible, "?")}
+                      </span>
+                      {draft.responsible}
+                    </span>
                   )}
-                </>
-              )}
-            </div>
-
-            {liveLead && nextStep && (
-              <div className="flex shrink-0 items-center gap-2">
-                {nextStep.action === "registrar_contato" && (
-                  <ActionButton
-                    label="Registrar contato"
-                    busy={runningAction === "registrar_contato"}
-                    onClick={() => runAction("registrar_contato")}
-                  />
-                )}
-                {nextStep.action === "agendar_reuniao" && (
-                  <ActionButton
-                    label="Agendar reunião"
-                    busy={runningAction === "agendar_reuniao"}
-                    onClick={() => setShowAgendar(true)}
-                  />
-                )}
-                {nextStep.action === "registrar_reuniao" && (
-                  <ActionButton
-                    label="Registrar reunião realizada"
-                    busy={runningAction === "registrar_reuniao"}
-                    onClick={() => runAction("registrar_reuniao")}
-                  />
-                )}
-                {nextStep.action === "criar_proposta" && (
-                  <ActionButton
-                    label="Criar proposta"
-                    icon={<Calculator className="h-3.5 w-3.5" />}
-                    onClick={() => setTab("proposta")}
-                  />
-                )}
-                {nextStep.action === "enviar_proposta" && (
-                  <ActionButton
-                    label="Enviar proposta"
-                    busy={runningAction === "enviar_proposta"}
-                    onClick={() => runAction("enviar_proposta")}
-                  />
-                )}
-                {nextStep.action === "registrar_negociacao" && (
-                  <ActionButton
-                    label="Registrar atualização"
-                    busy={runningAction === "registrar_negociacao"}
-                    onClick={() => {
-                      setNovoValorNegociacao(String(liveLead.value ?? ""));
-                      setShowNegociacao(true);
-                    }}
-                  />
-                )}
-
-                <Popover open={showEtapaMenu} onOpenChange={setShowEtapaMenu}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      aria-label="Mais ações"
-                      className="h-8 w-8"
-                    >
-                      <MoreHorizontal />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent align="end" className="w-64 space-y-1 p-2">
-                    {nextStep.stage === "PROPOSTA_ENVIADA" && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowEtapaMenu(false);
-                          void runAction("revisar_proposta");
-                        }}
-                        className="w-full rounded-md px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted"
-                      >
-                        Revisar proposta
-                      </button>
-                    )}
-                    {nextStep.stage !== "GANHO" && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowEtapaMenu(false);
-                          setValorGanho(String(proposta?.precoFinal ?? liveLead.value ?? ""));
-                          setShowGanho(true);
-                        }}
-                        className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted"
-                      >
-                        <CheckCircle2 className="h-3.5 w-3.5" /> Marcar como ganho
-                      </button>
-                    )}
-                    {nextStep.stage !== "PERDIDO" && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowEtapaMenu(false);
-                          setShowPerdido(true);
-                        }}
-                        className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted"
-                      >
-                        <XCircle className="h-3.5 w-3.5" /> Marcar como perdido
-                      </button>
-                    )}
-                    <div className="border-t border-border pt-1">
-                      <p className="mb-1 px-2 text-[11px] font-medium text-text-secondary">
-                        Alterar etapa manualmente
-                      </p>
-                      <NativeSelect
-                        value={nextStep.stage}
-                        onChange={(e) => {
-                          setShowEtapaMenu(false);
-                          void runAction("alterar_etapa_manual", {
-                            toStage: e.target.value as OpportunityStage,
-                          });
-                        }}
-                      >
-                        {OPPORTUNITY_STAGES.map((s) => (
-                          <option key={s} value={s}>
-                            {OPPORTUNITY_STAGE_LABEL[s]}
-                          </option>
-                        ))}
-                      </NativeSelect>
-                    </div>
-                    {onDelete && (
-                      <div className="border-t border-border pt-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowEtapaMenu(false);
-                            onDelete();
-                          }}
-                          className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium text-destructive hover:bg-destructive/10"
-                        >
-                          <XCircle className="h-3.5 w-3.5" /> Excluir oportunidade
-                        </button>
-                      </div>
-                    )}
-                  </PopoverContent>
-                </Popover>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
-          <TabsList className="mx-6 mt-3 w-fit max-w-[calc(100%-3rem)] shrink-0">
-            <TabsTrigger value="visao-geral">Visão geral</TabsTrigger>
-            <TabsTrigger value="proposta">Proposta</TabsTrigger>
-            {liveLead && <TabsTrigger value="historico-comercial">Histórico comercial</TabsTrigger>}
-            {liveLead && <TabsTrigger value="historico">Alterações do lead</TabsTrigger>}
-          </TabsList>
-
-          <div className="min-h-0 flex-1 overflow-y-auto bg-muted/20 p-6">
-            <TabsContent value="visao-geral" className="mt-0 space-y-4">
-              <Section title="Oportunidade" icon={<Tag className="h-4 w-4" />}>
-                <label className={labelCls}>
-                  <span>Nome da oportunidade *</span>
-                  <Input
-                    autoFocus={!liveLead}
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    onBlur={autosaveField}
-                    placeholder="Ex: Website institucional Acme"
-                    maxLength={120}
-                  />
-                </label>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <label className={labelCls}>
-                    <span>Empresa</span>
-                    <Input
-                      value={company}
-                      onChange={(e) => setCompany(e.target.value)}
-                      onBlur={autosaveField}
-                      maxLength={120}
-                    />
-                  </label>
-                  <label className={labelCls}>
-                    <span>Valor (R$)</span>
-                    <Input
-                      inputMode="decimal"
-                      value={value}
-                      onChange={(e) => setValue(e.target.value)}
-                      onBlur={autosaveField}
-                      placeholder="0"
-                    />
-                    {valueDivergesFromProposal && (
-                      <button
-                        type="button"
-                        onClick={() => setTab("proposta")}
-                        className="flex items-center gap-1 text-[11px] font-normal text-warning-soft-foreground hover:underline"
-                      >
-                        <AlertTriangle className="h-3 w-3" /> Diverge da proposta salva (
-                        {formatBRL(proposta!.precoFinal)})
-                      </button>
-                    )}
-                  </label>
                 </div>
-                {!liveLead && (
-                  <label className={labelCls}>
-                    <span>Etapa inicial</span>
-                    <NativeSelect
-                      value={stage}
-                      onChange={(e) => setStage(e.target.value as OpportunityStage)}
-                    >
-                      {OPPORTUNITY_STAGES.map((s) => (
-                        <option key={s} value={s}>
-                          {OPPORTUNITY_STAGE_LABEL[s]}
-                        </option>
-                      ))}
-                    </NativeSelect>
-                  </label>
-                )}
-              </Section>
-
-              <Section title="Contato" icon={<User className="h-4 w-4" />}>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <label className={labelCls}>
-                    <span>Nome do contato</span>
-                    <Input
-                      value={contact}
-                      onChange={(e) => setContact(e.target.value)}
-                      onBlur={autosaveField}
-                      maxLength={120}
-                    />
-                  </label>
-                  <label className={labelCls}>
-                    <span>Cargo</span>
-                    <Input
-                      value={role}
-                      onChange={(e) => setRole(e.target.value)}
-                      onBlur={autosaveField}
-                      maxLength={120}
-                    />
-                  </label>
-                  <label className={labelCls}>
-                    <span>E-mail</span>
-                    <Input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      onBlur={autosaveField}
-                      maxLength={255}
-                    />
-                  </label>
-                  <label className={labelCls}>
-                    <span>Telefone</span>
-                    <Input
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      onBlur={autosaveField}
-                      maxLength={40}
-                    />
-                  </label>
-                </div>
-                {(phone.trim() || email.trim()) && (
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {phone.trim() && (
-                      <Button asChild variant="outline" size="sm">
-                        <a href={`tel:${phone.replace(/\D/g, "")}`}>
-                          <Phone /> Ligar
+                {(draft.phone.trim() || draft.email.trim()) && (
+                  <div className="flex items-center gap-0.5">
+                    {draft.phone.trim() && (
+                      <Button asChild variant="ghost" size="icon" className="h-8 w-8">
+                        <a href={`tel:${phoneDigits}`} aria-label="Ligar" title="Ligar">
+                          <Phone />
                         </a>
                       </Button>
                     )}
-                    {phone.trim() && (
-                      <Button asChild variant="outline" size="sm">
+                    {draft.phone.trim() && (
+                      <Button asChild variant="ghost" size="icon" className="h-8 w-8">
                         <a
-                          href={`https://wa.me/${phone.replace(/\D/g, "")}`}
+                          href={`https://wa.me/${phoneDigits}`}
                           target="_blank"
                           rel="noreferrer"
+                          aria-label="Abrir WhatsApp"
+                          title="Abrir WhatsApp"
                         >
-                          WhatsApp
+                          <MessageCircle />
                         </a>
                       </Button>
                     )}
-                    {email.trim() && (
-                      <Button asChild variant="outline" size="sm">
-                        <a href={`mailto:${email}`}>
-                          <Mail /> E-mail
+                    {draft.email.trim() && (
+                      <Button asChild variant="ghost" size="icon" className="h-8 w-8">
+                        <a
+                          href={`mailto:${draft.email.trim()}`}
+                          aria-label="Enviar e-mail"
+                          title="Enviar e-mail"
+                        >
+                          <Mail />
                         </a>
                       </Button>
                     )}
                   </div>
                 )}
-              </Section>
+              </div>
 
-              <Section title="Qualificação" icon={<Star className="h-4 w-4" />}>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm font-medium text-foreground">Nota (1 a 5)</span>
-                  <div className="flex h-9 items-center gap-1">
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <button
-                        key={n}
-                        type="button"
-                        onClick={() => {
-                          setScore(score === n ? 0 : n);
-                          setTimeout(autosaveField, 0);
-                        }}
-                        className="rounded p-0.5 hover:bg-muted"
+              {/* Próxima ação — o foco do cockpit. */}
+              <div className="border-t border-border/60 bg-muted/30 px-6 py-3.5">
+                <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-text-secondary">
+                      Próxima ação
+                    </p>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="text-sm font-medium text-foreground">
+                        {nextStep.actionLabel ??
+                          (nextStep.actor === "CLIENTE"
+                            ? "Aguardar retorno do cliente"
+                            : "Nenhuma")}
+                      </span>
+                      {nextStep.actor && (
+                        <Badge variant="secondary" size="sm">
+                          {OPPORTUNITY_ACTOR_LABEL[nextStep.actor]}
+                        </Badge>
+                      )}
+                    </div>
+                    {committed && !isTerminal && (
+                      <p
+                        className={`mt-1 flex items-center gap-1 text-xs ${
+                          committed.tone === "red"
+                            ? "font-medium text-danger-soft-foreground"
+                            : committed.tone === "amber"
+                              ? "font-medium text-warning-soft-foreground"
+                              : "text-text-secondary"
+                        }`}
                       >
-                        <Star
-                          className={`h-4 w-4 ${
-                            n <= score ? "fill-foreground text-foreground" : "text-text-secondary"
-                          }`}
-                        />
-                      </button>
-                    ))}
+                        {committed.tone === "red" && (
+                          <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden="true" />
+                        )}
+                        <span className="min-w-0 truncate" title={committed.text}>
+                          Combinado: {committed.text}
+                        </span>
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex shrink-0 items-center gap-2">
+                    {primaryAction && (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        isLoading={runningAction === nextStep.action}
+                        onClick={primaryAction.run}
+                      >
+                        {runningAction !== nextStep.action && primaryAction.icon}
+                        {primaryAction.label}
+                      </Button>
+                    )}
+                    {onRegisterFollowUp && !isTerminal && (
+                      <Button variant="secondary" size="sm" onClick={onRegisterFollowUp}>
+                        <MessageSquare /> Follow-up
+                      </Button>
+                    )}
+
+                    <Popover open={showEtapaMenu} onOpenChange={setShowEtapaMenu}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          aria-label="Mais ações"
+                          className="h-8 w-8"
+                        >
+                          <MoreHorizontal />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent align="end" className="w-64 space-y-1 p-2">
+                        {nextStep.stage === "PROPOSTA_ENVIADA" && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowEtapaMenu(false);
+                              void runAction("revisar_proposta");
+                            }}
+                            className="w-full rounded-md px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted"
+                          >
+                            Revisar proposta
+                          </button>
+                        )}
+                        {nextStep.stage !== "GANHO" && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowEtapaMenu(false);
+                              setValorGanho(
+                                String(draft.proposta?.precoFinal ?? liveLead.value ?? ""),
+                              );
+                              setShowGanho(true);
+                            }}
+                            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted"
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" /> Marcar como ganho
+                          </button>
+                        )}
+                        {nextStep.stage !== "PERDIDO" && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowEtapaMenu(false);
+                              setShowPerdido(true);
+                            }}
+                            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted"
+                          >
+                            <XCircle className="h-3.5 w-3.5" /> Marcar como perdido
+                          </button>
+                        )}
+                        <div className="border-t border-border pt-1">
+                          <p className="mb-1 px-2 text-[11px] font-medium text-text-secondary">
+                            Alterar etapa manualmente
+                          </p>
+                          <NativeSelect
+                            value={nextStep.stage}
+                            onChange={(e) => {
+                              setShowEtapaMenu(false);
+                              void runAction("alterar_etapa_manual", {
+                                toStage: e.target.value as OpportunityStage,
+                              });
+                            }}
+                          >
+                            {OPPORTUNITY_STAGES.map((s) => (
+                              <option key={s} value={s}>
+                                {OPPORTUNITY_STAGE_LABEL[s]}
+                              </option>
+                            ))}
+                          </NativeSelect>
+                        </div>
+                        <div className="border-t border-border pt-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowEtapaMenu(false);
+                              setTab("historico");
+                              setAuditOpen(true);
+                            }}
+                            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted"
+                          >
+                            <History className="h-3.5 w-3.5" /> Alterações do lead
+                          </button>
+                        </div>
+                        {onDelete && (
+                          <div className="border-t border-border pt-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowEtapaMenu(false);
+                                onDelete();
+                              }}
+                              className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium text-destructive hover:bg-destructive/10"
+                            >
+                              <XCircle className="h-3.5 w-3.5" /> Excluir oportunidade
+                            </button>
+                          </div>
+                        )}
+                      </PopoverContent>
+                    </Popover>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <label className={labelCls}>
-                    <span>Origem</span>
-                    <NativeSelect
-                      value={source}
-                      onChange={(e) => setSource(e.target.value)}
-                      onBlur={autosaveField}
-                    >
-                      <option value="">Selecione...</option>
-                      {SOURCES.map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </NativeSelect>
-                  </label>
-                  <label className={labelCls}>
-                    <span>Responsável</span>
-                    <NativeSelect
-                      value={responsible}
-                      onChange={(e) => setResponsible(e.target.value)}
-                      onBlur={autosaveField}
-                    >
-                      <option value="">Selecione...</option>
-                      {team.map((m) => (
-                        <option key={m.id} value={m.name}>
-                          {m.name}
-                        </option>
-                      ))}
-                    </NativeSelect>
-                  </label>
-                  <label className={labelCls}>
-                    <span>Setor</span>
-                    <Input
-                      value={vertical}
-                      onChange={(e) => setVertical(e.target.value)}
-                      onBlur={autosaveField}
-                      maxLength={120}
-                    />
-                  </label>
-                  <label className={labelCls}>
-                    <span>Orçamento mensal</span>
-                    <Input
-                      value={budget}
-                      onChange={(e) => setBudget(e.target.value)}
-                      onBlur={autosaveField}
-                      placeholder="R$"
-                    />
-                  </label>
-                </div>
-                <label className={labelCls}>
-                  <span>Urgência</span>
-                  <Input
-                    value={urgency}
-                    onChange={(e) => setUrgency(e.target.value)}
-                    onBlur={autosaveField}
-                    maxLength={60}
-                  />
-                </label>
-                <label className={labelCls}>
-                  <span>Observações</span>
-                  <Textarea
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    onBlur={autosaveField}
-                    className="h-20 resize-none py-2"
-                    maxLength={1000}
-                  />
-                </label>
-                <label className={labelCls}>
-                  <span>Experiência com agência</span>
-                  <Textarea
-                    value={experience}
-                    onChange={(e) => setExperience(e.target.value)}
-                    onBlur={autosaveField}
-                    className="h-16 resize-none py-2"
-                    maxLength={500}
-                  />
-                </label>
-              </Section>
+              </div>
+            </>
+          )}
+        </div>
 
-              {liveLead && (liveLead.history?.length ?? 0) > 0 && (
-                <Section title="Últimas interações" icon={<History className="h-4 w-4" />}>
-                  <ul className="space-y-1.5">
-                    {[...(liveLead.history ?? [])]
-                      .sort((a, b) => b.createdAt - a.createdAt)
-                      .slice(0, 3)
-                      .map((h) => (
-                        <li
-                          key={h.id}
-                          className="truncate text-xs text-text-secondary"
-                          title={h.text}
-                        >
-                          • {h.text}
-                        </li>
-                      ))}
-                  </ul>
-                  <button
-                    type="button"
-                    onClick={() => setTab("historico")}
-                    className="text-[11px] font-medium text-foreground hover:underline"
-                  >
-                    Ver histórico completo →
-                  </button>
-                </Section>
+        <Tabs
+          value={tab}
+          onValueChange={(v) => setTab(v as DrawerTab)}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <TabsList className="mx-6 mt-3 w-fit max-w-[calc(100%-3rem)] shrink-0">
+            <TabsTrigger value="visao-geral">Visão geral</TabsTrigger>
+            <TabsTrigger value="proposta">
+              Proposta
+              {proposalDirty && (
+                <span
+                  className="ml-1.5 h-1.5 w-1.5 rounded-full bg-warning"
+                  role="img"
+                  aria-label="alterações não aplicadas"
+                  title="Alterações não aplicadas"
+                />
               )}
+            </TabsTrigger>
+            {liveLead && <TabsTrigger value="historico">Histórico</TabsTrigger>}
+          </TabsList>
+
+          <div className="min-h-0 flex-1 overflow-y-auto p-6">
+            <TabsContent value="visao-geral" className="mt-0">
+              <LeadOverview
+                lead={liveLead}
+                fields={fields}
+                team={team}
+                timeline={timeline}
+                valueDiverges={valueDivergesFromProposal}
+                onOpenProposal={() => setTab("proposta")}
+                onOpenHistory={() => setTab("historico")}
+                onRegisterFollowUp={onRegisterFollowUp}
+              />
             </TabsContent>
 
-            <TabsContent value="proposta" className="mt-0 space-y-4">
-              <ProposalTabContent
-                proposta={proposta}
-                liveLead={liveLead}
+            <TabsContent
+              value="proposta"
+              forceMount={proposalVisited ? true : undefined}
+              className="mt-0 data-[state=inactive]:hidden"
+            >
+              <LeadProposal
+                proposta={draft.proposta}
+                lead={liveLead}
+                currentValue={parsedValue}
                 nextStep={nextStep}
                 runningAction={runningAction}
                 onEnviarProposta={() => runAction("enviar_proposta")}
                 generatingLink={generatingLink}
                 linkCopied={linkCopied}
                 onCopyLink={copyPropostaLink}
-                onApply={(precoFinal, snapshot) => {
-                  setValue(String(Math.round(precoFinal)));
-                  setProposta(snapshot);
-                  if (liveLead) void runAction("criar_proposta", { proposta: snapshot });
-                }}
+                onApply={applyProposal}
+                onDirtyChange={setProposalDirty}
               />
             </TabsContent>
 
             {liveLead && (
-              <TabsContent value="historico-comercial" className="mt-0">
-                <CommercialHistoryTabContent
-                  interactions={followUps}
+              <TabsContent value="historico" className="mt-0">
+                <LeadHistoryPanel
+                  items={timeline}
+                  history={liveLead.history ?? []}
+                  auditOpen={auditOpen}
+                  onAuditOpenChange={setAuditOpen}
                   onRegisterFollowUp={onRegisterFollowUp}
                 />
               </TabsContent>
             )}
 
-            {liveLead && (
-              <TabsContent value="historico" className="mt-0">
-                <HistoryTabContent history={liveLead.history ?? []} />
-              </TabsContent>
-            )}
-
             {error && (
-              <div className="mt-3 flex items-center gap-2 rounded-xl border border-border bg-muted px-3 py-2 text-xs text-foreground">
+              <div
+                role="alert"
+                className="mt-3 flex items-center gap-2 rounded-xl border border-border bg-muted px-3 py-2 text-xs text-foreground"
+              >
                 <XCircle className="h-3.5 w-3.5 shrink-0" />
                 {error}
               </div>
@@ -811,7 +758,7 @@ export function LeadDrawer({
 
         {!liveLead && (
           <div className="flex items-center justify-end gap-2 border-t border-border/60 bg-card px-6 py-4">
-            <Button variant="ghost" size="comfortable" onClick={onClose}>
+            <Button variant="ghost" size="comfortable" onClick={() => void requestClose()}>
               Cancelar
             </Button>
             <Button variant="primary" size="comfortable" onClick={submit}>
@@ -896,6 +843,8 @@ export function LeadDrawer({
         </MiniActionDialog>
       )}
 
+      {confirmDialog}
+
       {showPerdido && (
         <MiniActionDialog
           title="Marcar oportunidade como perdida"
@@ -949,260 +898,6 @@ function ConvertButton({ lead, onConverted }: { lead: Lead; onConverted: (l: Lea
   );
 }
 
-/** Aba Proposta — envolve o Simulador já existente, com destaque de
- * custo/preço/margem em R$ e % e alerta quando a margem final ficar
- * abaixo do percentual configurado em Configurações → Precificação
- * (mesmo `settings.percentuais.margem` que já define o preço calculado —
- * não inventa um segundo "limite" novo). */
-function ProposalTabContent({
-  proposta,
-  liveLead,
-  nextStep,
-  runningAction,
-  onEnviarProposta,
-  generatingLink,
-  linkCopied,
-  onCopyLink,
-  onApply,
-}: {
-  proposta: PropostaSnapshot | undefined;
-  liveLead: Lead | null;
-  nextStep: ReturnType<typeof deriveOpportunityNextStep> | null;
-  runningAction: OpportunityActionKind | null;
-  onEnviarProposta: () => void;
-  generatingLink: boolean;
-  linkCopied: boolean;
-  onCopyLink: () => void;
-  onApply: (precoFinal: number, snapshot: PropostaSnapshot) => void;
-}) {
-  const [margemMinima, setMargemMinima] = useState<number | null>(null);
-  useEffect(() => {
-    setMargemMinima(loadPricing().percentuais.margem);
-    void fetchPricing().then((p) => setMargemMinima(p.percentuais.margem));
-  }, []);
-
-  const margemReaisAtual = proposta ? proposta.precoFinal - proposta.custoTotal : null;
-  const margemPctAtual =
-    proposta && proposta.precoFinal > 0 ? margemReaisAtual! / proposta.precoFinal : null;
-  const margemBaixa =
-    margemPctAtual != null && margemMinima != null && margemPctAtual < margemMinima - 0.001;
-
-  return (
-    <>
-      {proposta && (
-        <Section title="Proposta atual" icon={<Calculator className="h-4 w-4" />}>
-          {/* Preço final protagonista (Etapa 7) — o valor que mais importa
-           * na aba, não mais um MiniStat igual aos outros. */}
-          <div className="rounded-2xl bg-brand p-4 md:p-5">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-brand-foreground-secondary">
-              Preço final ao cliente
-            </p>
-            <p className="mt-1 whitespace-nowrap text-3xl font-semibold tabular-nums leading-none text-brand-foreground">
-              {formatBRL(proposta.precoFinal)}
-            </p>
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            <MiniStat label="Custo total" value={formatBRL(proposta.custoTotal)} />
-            <MiniStat
-              label="Margem (R$)"
-              value={formatBRL(margemReaisAtual ?? 0)}
-              tone={margemBaixa ? "danger" : "neutral"}
-            />
-            <MiniStat
-              label="Margem (%)"
-              value={margemPctAtual != null ? `${Math.round(margemPctAtual * 100)}%` : "—"}
-              tone={margemBaixa ? "danger" : "neutral"}
-            />
-          </div>
-          {margemBaixa && (
-            <p className="flex items-center gap-1.5 rounded-md bg-warning-soft px-2.5 py-1.5 text-[11px] font-medium text-warning-soft-foreground">
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-              Margem abaixo do percentual configurado ({Math.round((margemMinima ?? 0) * 100)}%) —
-              revise o preço final antes de enviar.
-            </p>
-          )}
-          {proposta.ajustadoManualmente && (
-            <p className="text-[11px] text-text-secondary">Ajustado manualmente</p>
-          )}
-          {liveLead && nextStep?.action === "enviar_proposta" && (
-            <div className="flex flex-wrap items-center gap-2">
-              <ActionButton
-                label="Enviar proposta"
-                busy={runningAction === "enviar_proposta"}
-                onClick={onEnviarProposta}
-              />
-            </div>
-          )}
-        </Section>
-      )}
-
-      <Section
-        title="Simulador"
-        icon={<Calculator className="h-4 w-4" />}
-        action={
-          liveLead && (
-            <Button variant="outline" size="sm" isLoading={generatingLink} onClick={onCopyLink}>
-              {!generatingLink && <Link2 />}
-              {linkCopied ? "Link copiado!" : "Calculadora externa"}
-            </Button>
-          )
-        }
-      >
-        <p className="-mt-1 mb-3 text-[11px] text-text-secondary">
-          Monte o pacote, calcule custo/impostos/comissão/bonificação/margem e aplique o preço final
-          ao negócio.
-        </p>
-        <SimuladorPropostaForm
-          initial={proposta}
-          applyLabel={proposta ? "Atualizar proposta" : "Usar como valor do negócio"}
-          onApply={onApply}
-        />
-      </Section>
-    </>
-  );
-}
-
-const HISTORY_ICON: Record<string, typeof CheckCircle2> = {
-  created: CheckCircle2,
-  stage_change: Tag,
-  value_change: FileText,
-  proposal: Calculator,
-  meeting: History,
-  negotiation: FileText,
-  won: CheckCircle2,
-  lost: XCircle,
-};
-
-/** Histórico comercial — follow-ups reais registrados (`commercial_
- * interactions`), separado das alterações técnicas do lead (nome, valor,
- * responsável, etapa) que continuam na aba "Alterações do lead". Ordem
- * cronológica decrescente, com tipo/data/autor/resumo/resultado/próxima
- * ação — exatamente o formato pedido. */
-function CommercialHistoryTabContent({
-  interactions,
-  onRegisterFollowUp,
-}: {
-  interactions: CommercialInteractionRow[];
-  onRegisterFollowUp?: () => void;
-}) {
-  return (
-    <Section title="Histórico comercial" icon={<MessageSquare className="h-4 w-4" />}>
-      {onRegisterFollowUp && (
-        <Button variant="secondary" size="sm" className="mb-3" onClick={onRegisterFollowUp}>
-          <MessageSquare /> Registrar follow-up
-        </Button>
-      )}
-      {interactions.length === 0 ? (
-        <p className="text-xs text-text-secondary">Nenhum follow-up registrado ainda.</p>
-      ) : (
-        <ul className="space-y-5 border-l border-border/60 pl-6">
-          {interactions.map((i) => (
-            <li key={i.id} className="relative text-xs leading-relaxed">
-              <span className="absolute -left-[34px] flex h-5 w-5 items-center justify-center rounded-full bg-muted text-text-secondary">
-                <MessageSquare className="h-3 w-3" />
-              </span>
-              <div className="font-medium text-foreground">
-                {INTERACTION_TYPE_LABEL[i.interaction_type]} —{" "}
-                {new Date(i.occurred_at).toLocaleString("pt-BR", {
-                  timeZone: BRASILIA_TZ,
-                  day: "2-digit",
-                  month: "2-digit",
-                  year: "2-digit",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </div>
-              <div className="text-text-secondary">{i.created_by_name}</div>
-              <div className="mt-0.5 min-w-0 break-words text-foreground [overflow-wrap:anywhere]">
-                {linkifyText(i.summary)}
-              </div>
-              {i.outcome && (
-                <div className="mt-0.5 text-text-secondary">
-                  Resultado: {INTERACTION_OUTCOME_LABEL[i.outcome]}
-                </div>
-              )}
-              {i.next_action_at && (
-                <div className="mt-0.5 text-text-secondary">
-                  Próxima ação: {i.next_action_description || "—"} (
-                  {new Date(i.next_action_at).toLocaleString("pt-BR", {
-                    timeZone: BRASILIA_TZ,
-                    day: "2-digit",
-                    month: "2-digit",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                  )
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-    </Section>
-  );
-}
-
-/** Alterações técnicas do lead (nome, valor, responsável, mudança de
- * etapa) — ícone por tipo de evento (quando conhecido; entradas antigas
- * sem `kind` caem num ícone genérico), data em horário de Brasília (nunca
- * o fuso do navegador). Separado do histórico comercial (follow-ups reais)
- * pra nunca misturar contato real com edição técnica. */
-function HistoryTabContent({ history }: { history: Lead["history"] }) {
-  const sorted = [...(history ?? [])].sort((a, b) => b.createdAt - a.createdAt);
-  return (
-    <Section title="Alterações do lead" icon={<History className="h-4 w-4" />}>
-      {sorted.length === 0 ? (
-        <p className="text-xs text-text-secondary">Sem eventos registrados.</p>
-      ) : (
-        <ul className="space-y-5 border-l border-border/60 pl-6">
-          {sorted.map((h) => {
-            const Icon = (h.kind && HISTORY_ICON[h.kind]) || History;
-            return (
-              <li key={h.id} className="relative text-xs leading-relaxed">
-                <span className="absolute -left-[34px] flex h-5 w-5 items-center justify-center rounded-full bg-muted text-text-secondary">
-                  <Icon className="h-3 w-3" />
-                </span>
-                <div className="min-w-0 break-words text-foreground [overflow-wrap:anywhere]">
-                  {linkifyText(h.text)}
-                </div>
-                <div className="text-text-secondary">
-                  {new Date(h.createdAt).toLocaleString("pt-BR", {
-                    timeZone: BRASILIA_TZ,
-                    day: "2-digit",
-                    month: "2-digit",
-                    year: "2-digit",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </Section>
-  );
-}
-
-function ActionButton({
-  label,
-  icon,
-  busy,
-  onClick,
-}: {
-  label: string;
-  icon?: React.ReactNode;
-  busy?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <Button variant="primary" size="sm" isLoading={busy} onClick={onClick}>
-      {!busy && icon}
-      {label}
-    </Button>
-  );
-}
-
 function MiniActionDialog({
   title,
   confirmLabel = "Confirmar",
@@ -1235,60 +930,5 @@ function MiniActionDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function Section({
-  title,
-  icon,
-  action,
-  children,
-}: {
-  title: string;
-  icon: React.ReactNode;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  // Seção definida por tipografia/espaço, sem card-dentro-de-card: título de
-  // seção do Design System (15px, 600) com ícone secundário e uma borda
-  // inferior discreta separando as seções.
-  return (
-    <div className="space-y-3 border-b border-border/60 pb-5 last:border-b-0">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-foreground">
-          <span className="text-muted-foreground" aria-hidden="true">
-            {icon}
-          </span>
-          <p role="heading" aria-level={3} className="text-[15px] font-semibold">
-            {title}
-          </p>
-        </div>
-        {action}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function MiniStat({
-  label,
-  value,
-  tone = "neutral",
-}: {
-  label: string;
-  value: string;
-  tone?: "neutral" | "danger";
-}) {
-  return (
-    <div>
-      <p className="text-[11px] font-medium uppercase tracking-wide text-text-secondary">{label}</p>
-      <p
-        className={`mt-0.5 text-sm font-semibold tabular-nums ${
-          tone === "danger" ? "text-danger-soft-foreground" : "text-foreground"
-        }`}
-      >
-        {value}
-      </p>
-    </div>
   );
 }

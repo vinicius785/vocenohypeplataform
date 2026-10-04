@@ -1,9 +1,6 @@
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { useEffect, useState } from "react";
-import { Plus, Trash2, RotateCcw, ArrowRight } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import {
   TIERS,
   FORMATOS,
@@ -13,12 +10,22 @@ import {
   type FormatoId,
 } from "@/lib/pricing";
 import { loadPricing, fetchPricing, type PricingSettings } from "@/lib/pricing-store";
-import { formatBRL, type PropostaSnapshot } from "@/lib/comercial";
-import { NativeSelect } from "@/components/ui/native-select";
+import { type PropostaSnapshot } from "@/lib/comercial";
+import {
+  isProposalDirty,
+  proposalBaseline,
+  valueImpactMessage,
+} from "@/lib/comercial-proposal-form";
+import { propostaMargem } from "@/lib/comercial-lead-view";
+import { ComposicaoFinanceira } from "./proposta/ComposicaoFinanceira";
+import { MAX_LINHAS, PacoteEditor } from "./proposta/PacoteEditor";
+import { PrecoFinal } from "./proposta/PrecoFinal";
 
 function newLinha(): PacoteLinha {
   return { id: crypto.randomUUID(), tier: TIERS[1].id, formato: FORMATOS[0].id, qtd: 1 };
 }
+
+const DEFAULT_LINE = { tier: TIERS[1].id as string, formato: FORMATOS[0].id as string, qtd: 1 };
 
 /**
  * Simulador de Proposta — traz pra dentro do Comercial a lógica da planilha
@@ -28,22 +35,40 @@ function newLinha(): PacoteLinha {
  * a propor ao cliente. Ver src/lib/pricing.ts (fórmula) e PrecificacaoTab
  * (ConfiguracoesSection.tsx, onde os percentuais/custos são configurados).
  *
+ * Três blocos, nesta ordem: A) o pacote (o que está sendo vendido),
+ * B) a composição financeira (custos → encargos → resultado) e C) o preço
+ * final com a ação de aplicá-lo ao negócio. A conta (`calcPacote`) e o
+ * snapshot gravado são os mesmos de sempre.
+ *
  * `SimuladorPropostaForm` é o formulário puro, sem Dialog em volta — usado
- * inline na aba Proposta da oportunidade (não faz sentido esconder o
- * simulador atrás de um botão dentro de uma aba que já é sobre a proposta).
- * `SimuladorPropostaDialog` embrulha o mesmo formulário num Dialog, pra
- * qualquer outro lugar que precise dele como painel modal.
+ * inline na aba Proposta da oportunidade. `SimuladorPropostaDialog` embrulha
+ * o mesmo formulário num Dialog, pra qualquer outro lugar que o precise como
+ * painel modal.
  */
 export function SimuladorPropostaForm({
   initial,
   applyLabel = "Usar como valor do negócio",
+  currentValue,
+  applying = false,
+  applyError = null,
+  onDirtyChange,
   onApply,
 }: {
   initial?: PropostaSnapshot;
   applyLabel?: string;
+  /** Valor atual do negócio — quando informado, a ação de aplicar diz o que
+   * vai mudar ("passa de X para Y"). */
+  currentValue?: number;
+  /** Aplicação em andamento / erro da última tentativa (a tela de cima é
+   * quem persiste; aqui só se mostra o estado). */
+  applying?: boolean;
+  applyError?: string | null;
+  /** Avisa quando há alterações ainda NÃO aplicadas (para não perdê-las). */
+  onDirtyChange?: (dirty: boolean) => void;
   onApply: (precoFinal: number, snapshot: PropostaSnapshot) => void;
 }) {
   const [settings, setSettings] = useState<PricingSettings>(() => loadPricing());
+  const [pricingLoading, setPricingLoading] = useState(true);
   const [linhas, setLinhas] = useState<PacoteLinha[]>(() =>
     initial?.linhas.length
       ? initial.linhas.map((l) => ({
@@ -57,9 +82,17 @@ export function SimuladorPropostaForm({
   const [precoManual, setPrecoManual] = useState<number | null>(
     initial?.ajustadoManualmente ? Math.round(initial.precoFinal) : null,
   );
+  const [focusId, setFocusId] = useState<string | null>(null);
+  const [announce, setAnnounce] = useState("");
 
   useEffect(() => {
-    void fetchPricing().then(setSettings);
+    let alive = true;
+    void fetchPricing()
+      .then((p) => alive && setSettings(p))
+      .finally(() => alive && setPricingLoading(false));
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const { custoTotal, precoFinal: precoCalculado } = calcPacote(
@@ -68,22 +101,51 @@ export function SimuladorPropostaForm({
     settings.percentuais,
   );
   // Preço exibido: o calculado, a não ser que a pessoa tenha digitado por
-  // cima manualmente. A quebra abaixo (imposto/comissão/bonificação/margem)
-  // é sempre derivada DESSE valor exibido — não do preço calculado puro —
-  // pra continuar batendo com o percentual mesmo depois de um ajuste manual.
+  // cima manualmente. A composição financeira é sempre derivada DESSE valor
+  // exibido — não do preço calculado puro — pra continuar batendo com o
+  // percentual mesmo depois de um ajuste manual.
   const editadoManualmente = precoManual !== null;
   const precoFinalExibido = precoManual ?? precoCalculado;
-  const breakdown = {
-    imposto: precoFinalExibido * settings.percentuais.imposto,
-    comissao: precoFinalExibido * settings.percentuais.comissao,
-    bonificacao: precoFinalExibido * settings.percentuais.bonificacao,
-    lucro: precoFinalExibido * settings.percentuais.margem,
-  };
+
+  const baseline = useMemo(() => proposalBaseline(initial, DEFAULT_LINE), [initial]);
+  const dirty = isProposalDirty(
+    { linhas: linhas.map(({ tier, formato, qtd }) => ({ tier, formato, qtd })), precoManual },
+    baseline,
+  );
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
 
   const updateLinha = (id: string, patch: Partial<PacoteLinha>) =>
     setLinhas((ls) => ls.map((l) => (l.id === id ? { ...l, ...patch } : l)));
-  const addLinha = () => setLinhas((ls) => (ls.length >= 10 ? ls : [...ls, newLinha()]));
-  const removeLinha = (id: string) => setLinhas((ls) => ls.filter((l) => l.id !== id));
+
+  const addLinha = () => {
+    if (linhas.length >= MAX_LINHAS) return;
+    const nova = newLinha();
+    setLinhas((ls) => [...ls, nova]);
+    setFocusId(nova.id);
+    setAnnounce(`Linha ${linhas.length + 1} adicionada`);
+  };
+
+  const removeLinha = (id: string) => {
+    const idx = linhas.findIndex((l) => l.id === id);
+    if (idx < 0 || linhas.length === 1) return;
+    const removed = linhas[idx];
+    setLinhas((ls) => ls.filter((l) => l.id !== id));
+    setAnnounce(`Linha ${idx + 1} removida`);
+    toast("Linha removida", {
+      duration: 6000,
+      action: {
+        label: "Desfazer",
+        onClick: () =>
+          setLinhas((ls) =>
+            ls.some((l) => l.id === removed.id) || ls.length >= MAX_LINHAS
+              ? ls
+              : [...ls.slice(0, idx), removed, ...ls.slice(idx)],
+          ),
+      },
+    });
+  };
 
   const apply = () => {
     const snapshot: PropostaSnapshot = {
@@ -98,135 +160,59 @@ export function SimuladorPropostaForm({
     onApply(precoFinalExibido, snapshot);
   };
 
+  const applied =
+    !dirty &&
+    !!initial &&
+    currentValue !== undefined &&
+    !applyError &&
+    Math.round(precoFinalExibido) === Math.round(initial.precoFinal) &&
+    Math.round(currentValue) === Math.round(initial.precoFinal);
+
   return (
-    <div className="space-y-5">
-      <div className="space-y-2">
-        <p className="text-sm font-medium text-foreground">Pacote de influenciadores</p>
-        {linhas.map((l, i) => (
-          <div
-            key={l.id}
-            className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/20 p-2"
-          >
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-background text-[11px] font-semibold text-text-secondary">
-              {i + 1}
-            </span>
-            <NativeSelect
-              value={l.tier}
-              onChange={(e) => updateLinha(l.id, { tier: e.target.value as TierId })}
-            >
-              {TIERS.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.label}
-                </option>
-              ))}
-            </NativeSelect>
-            <NativeSelect
-              value={l.formato}
-              onChange={(e) => updateLinha(l.id, { formato: e.target.value as FormatoId })}
-            >
-              {FORMATOS.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.label}
-                </option>
-              ))}
-            </NativeSelect>
-            <Input
-              type="number"
-              min={1}
-              aria-label="Quantidade"
-              value={l.qtd}
-              onChange={(e) => updateLinha(l.id, { qtd: Math.max(1, Number(e.target.value)) })}
-              className="w-16 shrink-0 px-2 text-center"
-            />
-            <button
-              type="button"
-              onClick={() => removeLinha(l.id)}
-              disabled={linhas.length === 1}
-              className="shrink-0 rounded p-1 text-text-secondary hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-              aria-label="Remover linha"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        ))}
-        <Button variant="ghost" size="sm" onClick={addLinha} disabled={linhas.length >= 10}>
-          <Plus /> Adicionar linha
-        </Button>
-      </div>
+    <div className="space-y-6">
+      <PacoteEditor
+        linhas={linhas}
+        custos={settings.custos}
+        focusId={focusId}
+        onUpdate={updateLinha}
+        onAdd={addLinha}
+        onRemove={removeLinha}
+      />
 
-      <div className="surface-card overflow-hidden">
-        <div className="flex items-center justify-between bg-muted/40 px-4 py-2.5">
-          <span className="text-xs font-medium text-text-secondary">Custo dos influenciadores</span>
-          <span className="text-sm font-semibold text-foreground">{formatBRL(custoTotal)}</span>
-        </div>
-        <div className="space-y-1.5 px-4 py-3 text-xs">
-          <BreakdownRow
-            label="Imposto"
-            pct={settings.percentuais.imposto}
-            value={breakdown.imposto}
-          />
-          <BreakdownRow
-            label="Comissão de vendas"
-            pct={settings.percentuais.comissao}
-            value={breakdown.comissao}
-          />
-          <BreakdownRow
-            label="Bonificação"
-            pct={settings.percentuais.bonificacao}
-            value={breakdown.bonificacao}
-          />
-          <BreakdownRow
-            label="Margem de lucro"
-            pct={settings.percentuais.margem}
-            value={breakdown.lucro}
-            emphasis
-          />
-        </div>
-        <div className="flex items-center gap-2 border-t border-border/60 px-4 py-2.5 text-[11px] text-text-secondary">
-          <ArrowRight className="h-3 w-3 shrink-0" />
-          Percentuais definidos em Configurações → Precificação.
-        </div>
-      </div>
+      <ComposicaoFinanceira
+        custoTotal={custoTotal}
+        precoFinal={precoFinalExibido}
+        percentuais={settings.percentuais}
+        loading={pricingLoading}
+      />
 
-      {/* Preço final + ação de aplicar na mesma superfície azul — visualmente
-       * ligados (Etapa 7), sem borda grossa. */}
-      <div className="rounded-2xl bg-brand p-4 md:p-5">
-        <div className="flex items-center justify-between gap-2">
-          <label className="text-[11px] font-medium uppercase tracking-wide text-brand-foreground-secondary">
-            Preço final ao cliente
-          </label>
-          {editadoManualmente && (
-            <button
-              type="button"
-              onClick={() => setPrecoManual(null)}
-              className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-foreground-secondary hover:text-brand-foreground"
-            >
-              <RotateCcw className="h-3 w-3" /> usar valor calculado
-            </button>
-          )}
-        </div>
-        {/* Correção de contraste (Etapa 8): antes era `bg-black/10` sobre o
-         * próprio azul — lia como uma variação mais escura da mesma
-         * superfície, não como um campo editável. `bg-background` +
-         * `text-foreground` são o par de maior contraste do app (quase
-         * preto no claro, quase branco no escuro — sempre nítido contra o
-         * card, que é azul nos dois temas) e já são validados em toda a
-         * plataforma. */}
-        <FormattedNumberInput
-          mode="currency"
-          value={precoManual ?? Math.round(precoCalculado)}
-          onValueChange={(v) => setPrecoManual(v ?? null)}
-          className="mt-2 h-12 w-full rounded-md border border-black/10 bg-background px-4 text-2xl font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-brand-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-brand"
-        />
-        <p className="mt-2 text-[11px] text-brand-foreground-secondary">
-          {editadoManualmente
-            ? "Ajustado manualmente — a quebra acima recalcula com base neste valor."
-            : "Calculado a partir do custo + percentuais. Pode editar por cima."}
-        </p>
-        <Button size="comfortable" className="mt-4 w-full" onClick={apply}>
-          {applyLabel}
-        </Button>
-      </div>
+      <PrecoFinal
+        precoCalculado={precoCalculado}
+        precoManual={precoManual}
+        precoExibido={precoFinalExibido}
+        onPrecoChange={setPrecoManual}
+        onResetManual={() => setPrecoManual(null)}
+        margem={propostaMargem({ precoFinal: precoFinalExibido, custoTotal })}
+        margemMinima={settings.percentuais.margem}
+        currentValue={currentValue}
+        impactMessage={
+          currentValue !== undefined ? valueImpactMessage(currentValue, precoFinalExibido) : null
+        }
+        applyLabel={applyLabel}
+        applying={applying}
+        applied={applied}
+        applyError={applyError}
+        blockedReason={
+          precoFinalExibido > 0
+            ? null
+            : "Defina os custos em Configurações → Precificação ou informe o preço final para aplicar."
+        }
+        onApply={apply}
+      />
+
+      <p className="sr-only" role="status" aria-live="polite">
+        {announce}
+      </p>
     </div>
   );
 }
@@ -269,29 +255,6 @@ export function SimuladorPropostaDialog({
           </div>
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-function BreakdownRow({
-  label,
-  pct,
-  value,
-  emphasis,
-}: {
-  label: string;
-  pct: number;
-  value: number;
-  emphasis?: boolean;
-}) {
-  return (
-    <div
-      className={`flex items-center justify-between ${emphasis ? "font-medium text-foreground" : "text-text-secondary"}`}
-    >
-      <span>
-        {label} <span className="text-text-secondary">({(pct * 100).toFixed(1)}%)</span>
-      </span>
-      <span>{formatBRL(value)}</span>
     </div>
   );
 }
