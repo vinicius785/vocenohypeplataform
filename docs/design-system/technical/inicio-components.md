@@ -12,7 +12,7 @@ Inventário dos componentes **realmente usados** pela página Início. Localiza�
 - **Props:** `children`, `className` (usado para `lg:col-span-2`), `ref`.
 - **Variantes/estados:** nenhum (não tem hover próprio; interatividade fica nas linhas internas).
 - **Tokens:** `SURFACE.raised` (`border-border/60 bg-card`, escuro `oklch(0.17 0 0)`), raio 2xl.
-- **Reuso:** `RemindersCard`, `QuickBreakCard`, `MuralNovidades`, e no portal do cliente (`ClientCampaignProgressList`, `ClientAttentionList`, `ClientActivityList`). Hoje **os outros módulos internos não o usam** (usam `bg-card rounded-[20–24px]` próprios).
+- **Reuso:** `RemindersCard`, `MuralNovidades`, e no portal do cliente (`ClientCampaignProgressList`, `ClientAttentionList`, `ClientActivityList`). Hoje **os outros módulos internos não o usam** (usam `bg-card rounded-[20–24px]` próprios).
 
 ### `CardHeader` — `InicioDashboard.tsx`
 - **Responsabilidade:** cabeçalho de card, "integrado" (sem `border-b`).
@@ -48,7 +48,6 @@ Card de largura total com o artigo em destaque (capa `sm:w-40 md:w-44 rounded-xl
 | `RemindersCard` | Lembretes pessoais pendentes | `Card` + `CardHeader` (ação: contador `text-[11px]` + botão `+`); corpo `space-y-1 p-3 md:p-4`; linha `rounded-lg px-2 py-1.5 text-xs hover:bg-muted/40` com checkbox `accent-brand`; ponto `bg-danger` se vencido; rodapé "Ver todos" |
 | `ReminderFormDialog` | criar/editar lembrete | `Dialog` |
 | `RemindersFullView` | lista completa de lembretes | `Dialog`/painel |
-| `QuickBreakCard` | jogos (ZIP, Termo) | `Card` + `CardHeader`; texto auxiliar `text-xs`; grade 2 colunas de mini-tiles `rounded-xl border border-border/60 p-3` com ícone em círculo `h-8 w-8 bg-muted`, nome `text-sm font-semibold`, botão `w-full` |
 | `WeatherHeaderEffect` | ambientação do cabeçalho (canvas) | `absolute inset-0`, `pointer-events-none`; respeita `prefers-reduced-motion`; só `condition`/`isDay` |
 
 ## C. Componentes compartilhados usados pelo Início
@@ -59,7 +58,7 @@ Card de largura total com o artigo em destaque (capa `sm:w-40 md:w-44 rounded-xl
 | `EmptyState` | `shared/EmptyState.tsx` | sempre `compact` (`px-4 py-6`; ícone em círculo `h-10 w-10 bg-muted text-muted-foreground`; título `text-sm font-medium`; sem descrição/ações) — props: `icon`, `title`, `description?`, `primaryAction?`, `secondaryAction?`, `compact` |
 | `Badge` | `ui/badge.tsx` | `variant="secondary"` para o nome do projeto na linha de tarefa; base `rounded-md border px-2.5 py-0.5 text-xs font-semibold` |
 | `IconButton` | `ui/icon-button.tsx` | `X` de dispensar (`h-7 w-7`, `tone` neutral → `ghost`, tooltip obrigatório) |
-| `Button` | `ui/button.tsx` | botões `sm` (`h-8 text-xs`) nos mini-tiles de jogo, etc. |
+| `Button` | `ui/button.tsx` | botões `sm` (`h-8 text-xs`) etc. |
 | `AvatarStack` | `meetings/AvatarStack.tsx` | participantes da próxima reunião (`max={3}`, `size="sm"`) |
 | `TaskStatusBadge`, `TaskDeadlineBadge` | `tasks/task-ui.tsx` | `size="xs"`; status `px-1.5 py-0.5 text-[10px]` com ícone `h-3 w-3` e `TASK_STATUS_TONE`; prazo `text-[11px] tabular-nums` com ponto `h-1.5 w-1.5` |
 | `Dialog` | `ui/dialog.tsx` | leitor de artigo (`max-w-4xl`) |
@@ -78,7 +77,6 @@ Card de largura total com o artigo em destaque (capa `sm:w-40 md:w-44 rounded-xl
 | **Mural de novidades** | comunicação interna | artigo em destaque + anteriores | ler artigo (Dialog), dispensar | 3ª; largura total | (bloco só existe com itens) | capa + categoria + título | lista `divide-y` |
 | **Comentários atribuídos** | "Quem me chamou?" | menções recentes (autor, trecho, tempo) | abrir origem; dispensar; "Limpar todos" (com confirmação) | 4ª; 2/3 | `EmptyState compact` | ponto `bg-brand` = não lido; seta no hover | mostra 3 + "Ver todos (N)" |
 | **Lembretes** | lembretes privados | título, vencimento | marcar concluído; criar; "Ver todos" | 4ª; 1/3 | `EmptyState compact` com ação de criar | checkbox + ponto `bg-danger` se vencido | lista curta + "Ver todos" abre vista completa |
-| **Pausa rápida** | pausa entre tarefas | 2 jogos | jogar | 5ª; largura total; some se `gamesEnabled` falso | — | 2 mini-tiles | — |
 | **Financeiro** (só com permissão) | alerta de vencidos | "Vencido a receber" / "Vencido a pagar" (tiles `bg-muted/40 rounded-lg p-3`, valor `text-lg font-semibold`) | rodapé "Ir para Financeiro" | 6ª | valor R$ 0 | — | — |
 | **Comercial** (só com permissão) | leads novos | nome, empresa, valor | rodapé "Ir para Comercial" | 6ª | `EmptyState compact` "Nenhum lead novo no momento." | `ul.divide-y`, linha `px-4 py-2` | lista limitada |
 

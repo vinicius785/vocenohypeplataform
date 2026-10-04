@@ -2,6 +2,8 @@
 
 Mapear → auditar → classificar → priorizar → implementar → validar. Nada foi reescrito "por sensação": cada mudança abaixo tem uma medição ou evidência de código. O que **não** foi possível verificar está dito na seção 12.
 
+> **Atualização (2026-10-03, depois da auditoria):** os jogos (Termo/Zip, card "Pausa rápida" da Início) foram removidos do app. Onde este relatório os menciona (lazy-load, `games/zip/fixture.ts`), refere-se ao estado anterior à remoção. As tabelas de jogos permanecem no banco, sem uso.
+
 ## 1. Método e limites
 - **Medido no build**: tamanho de chunks e fechamento de imports estáticos (`performance/README.md`).
 - **Análise estática**: grafo de imports (arquivos não alcançáveis, ciclos), migrations em ordem (policies efetivas, índices, funções `SECURITY DEFINER`), varredura de server functions, `bun audit`.

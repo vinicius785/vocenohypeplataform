@@ -86,7 +86,6 @@ INÍCIO  PageContainer (max-w-[1280px], space-y-6 md:space-y-8)
 ├── Linha comentários/lembretes          grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-3     [visible.comments || visible.reminders]
 │   ├── Card "Comentários atribuídos"    lg:col-span-2
 │   └── RemindersCard "Lembretes"        1 coluna
-├── QuickBreakCard "Pausa rápida"        largura total, só se `gamesEnabled` e `visible.quickBreak`
 └── Linha financeiro/comercial           grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-2     [(financeiro && canFinanceiro) || (comercial && canComercial)]
     ├── Card "Financeiro"                só com permissão `financeiro`
     └── Card "Comercial"                 só com permissão `comercial`
@@ -96,7 +95,7 @@ Detalhes verificados no código:
 
 - **A ordem do corpo é fixa no JSX.** A preferência `order` (reordenar cards) é salva e lida, mas só é aplicada à lista exibida no menu "Personalizar" (`visibleCardDefs`, linha ~391), **não** à ordem dos blocos no corpo (ver [achados da auditoria](../AUDIT-FINDINGS.md)).
 - **Visibilidade** de cada card vem de `dashboardPrefs.visible` (persistida em localStorage `inicio.dashboardPrefs.cache` e no servidor `data.dashboard_prefs`); `financeiro`/`comercial` são **sempre revalidados contra a permissão atual** no render.
-- Cards: `stats` (Resumo), `work`, `agenda`, `comments`, `reminders`, `quickBreak`, `financeiro`, `comercial` (`CARD_DEFS`).
+- Cards: `stats` (Resumo), `work`, `agenda`, `comments`, `reminders`, `financeiro`, `comercial` (`CARD_DEFS`).
 
 ## 4. Grid e gutters
 

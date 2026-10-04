@@ -14,7 +14,6 @@ INÍCIO  (PageContainer standard, space-y-6 md:space-y-8)
 ├── Meu trabalho (2/3)  +  Agenda (1/3)
 ├── Mural de novidades (largura total)
 ├── Comentários atribuídos (2/3)  +  Lembretes (1/3)
-├── Pausa rápida (largura total, só com jogos habilitados)
 └── Financeiro  +  Comercial  (1/2 + 1/2, cada um só com permissão)
 ```
 
@@ -34,7 +33,6 @@ INÍCIO  (PageContainer standard, space-y-6 md:space-y-8)
 | **Mural de novidades** | comunicação interna | artigo em destaque (capa + categoria + título) + anteriores | ler (Dialog `max-w-4xl`), dispensar | bloco não aparece | lista `divide-y` |
 | **Comentários atribuídos** | quem me chamou | menções (autor, trecho, tempo); ponto `bg-brand` = não lido | abrir origem, dispensar, "Limpar todos" (confirmação) | estado vazio compacto | 3 itens + "Ver todos (N)" |
 | **Lembretes** | pessoais/privados | título + vencimento; ponto `bg-danger` se vencido | concluir, criar, "Ver todos" | estado vazio com ação de criar | lista curta + vista completa |
-| **Pausa rápida** | respiro entre tarefas | 2 mini-jogos (ZIP, Termo) | jogar | — | — |
 | **Financeiro** | alerta de vencidos | "Vencido a receber" / "Vencido a pagar" (tiles de valor) | "Ir para Financeiro" | R$ 0 | — |
 | **Comercial** | leads novos | nome, empresa, valor | "Ir para Comercial" | "Nenhum lead novo no momento." | lista limitada |
 
@@ -49,4 +47,4 @@ INÍCIO  (PageContainer standard, space-y-6 md:space-y-8)
 
 ## 5. Componentes exclusivos do Início
 
-`HeaderIndicatorCell`, `Tab` (pill), `PriorityFlag`, `MuralNovidades`, `ManageCardsMenu`, `RemindersCard`, `ReminderFormDialog`, `RemindersFullView`, `QuickBreakCard`, `WeatherHeaderEffect`. (`Card`/`CardHeader` nasceram aqui mas são tratados como padrão reutilizável — ver `DESIGN-SYSTEM.md` §9 e `DECISIONS.md` C7.)
+`HeaderIndicatorCell`, `Tab` (pill), `PriorityFlag`, `MuralNovidades`, `ManageCardsMenu`, `RemindersCard`, `ReminderFormDialog`, `RemindersFullView`, `WeatherHeaderEffect`. (`Card`/`CardHeader` nasceram aqui mas são tratados como padrão reutilizável — ver `DESIGN-SYSTEM.md` §9 e `DECISIONS.md` C7.)

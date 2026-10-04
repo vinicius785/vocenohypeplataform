@@ -89,7 +89,7 @@ Bordas em listas do Início: `divide-y divide-border/70` (listas de card), `bord
 
 `RADIUS` (design-tokens): `control: rounded-md` · `card: rounded-xl` · `cardMobile: rounded-2xl` · `overlay: rounded-2xl` · `pill: rounded-full`.
 
-**Uso real no Início:** `rounded-2xl` (cards, cabeçalho) 4 · `rounded-xl` (próxima reunião, tiles de jogo, capa do Mural) 4 · `rounded-lg` (linhas clicáveis, tiles de valor, thumbnails) 9 · `rounded-md` 2 · `rounded-full` (abas pill, avatares, pontos, badges) 16.
+**Uso real no Início:** `rounded-2xl` (cards, cabeçalho) 4 · `rounded-xl` (próxima reunião, capa do Mural) 4 · `rounded-lg` (linhas clicáveis, tiles de valor, thumbnails) 9 · `rounded-md` 2 · `rounded-full` (abas pill, avatares, pontos, badges) 16.
 
 ## 4. Espaçamento (observado — o Início não usa tokens `SPACING`)
 

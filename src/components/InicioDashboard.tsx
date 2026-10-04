@@ -105,8 +105,6 @@ import { rowToReminder, pendingReminders } from "@/lib/reminders";
 import { RemindersCard } from "@/components/inicio/RemindersCard";
 import { ReminderFormDialog } from "@/components/inicio/ReminderFormDialog";
 import { RemindersFullView } from "@/components/inicio/RemindersFullView";
-import { QuickBreakCard } from "@/components/inicio/QuickBreakCard";
-import { useGamesEnabled } from "@/lib/games/feature-flag";
 
 const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
@@ -211,7 +209,6 @@ export type CardKey =
   | "agenda"
   | "comments"
   | "reminders"
-  | "quickBreak"
   | "financeiro"
   | "comercial";
 /** `permission`, quando presente, é checado contra `SECTION_PERMISSION`
@@ -247,7 +244,6 @@ const CARD_DEFS: {
     description: "Menções recentes em comentários",
   },
   { key: "reminders", label: "Lembretes", description: "Seus lembretes pessoais e privados" },
-  { key: "quickBreak", label: "Pausa rápida", description: "ZIP e Termo, uma pausa entre tarefas" },
 ];
 const CARD_KEYS = CARD_DEFS.map((c) => c.key);
 const DEFAULT_VISIBLE: Record<CardKey, boolean> = {
@@ -256,7 +252,6 @@ const DEFAULT_VISIBLE: Record<CardKey, boolean> = {
   agenda: true,
   comments: true,
   reminders: true,
-  quickBreak: true,
   financeiro: true,
   comercial: true,
 };
@@ -359,15 +354,9 @@ export function InicioDashboard() {
   const access = useMyAccess();
   const canFinanceiro = hasPermission(access, SECTION_PERMISSION.financeiro);
   const canComercial = hasPermission(access, SECTION_PERMISSION.comercial);
-  // Contenção temporária dos jogos (ZIP/Termo) — "Pausa rápida" só
-  // aparece pra quem tem acesso de admin ou em desenvolvimento, até os
-  // critérios de aceite da reconstrução passarem (ver
-  // `games/feature-flag.ts`). Nunca removido do código, só desligado.
-  const gamesEnabled = useGamesEnabled();
-  const unsortedVisibleCardDefs = CARD_DEFS.filter((c) => {
-    if (c.key === "quickBreak") return gamesEnabled;
-    return !c.permission || (c.permission === "financeiro" ? canFinanceiro : canComercial);
-  });
+  const unsortedVisibleCardDefs = CARD_DEFS.filter(
+    (c) => !c.permission || (c.permission === "financeiro" ? canFinanceiro : canComercial),
+  );
   const financeiroEntries = useFinanceiroEntries();
   const financeiroVencido = useMemo(() => {
     if (!canFinanceiro) return { aReceber: 0, aPagar: 0 };
@@ -1216,8 +1205,6 @@ export function InicioDashboard() {
           )}
         </div>
       )}
-
-      {visible.quickBreak && gamesEnabled && <QuickBreakCard />}
 
       {reminderFormOpen && (
         <ReminderFormDialog

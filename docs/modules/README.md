@@ -20,7 +20,7 @@ Todos vivem sob `/time?section=<chave>` (exceto detalhes de cliente e projeto e 
 | Marketing (dentro de Comercial/Marketing) | E-mail, blog, AEO, tráfego pago, editorial |
 
 ## Início
-`InicioDashboard.tsx` (+ `components/inicio/`). Cards: **Meu trabalho** (tarefas via `task-aggregation`), **Agenda**, **Mural**, **Comentários**, **Lembretes** (`reminders.functions`, `personal_reminders`), **Pausa rápida** (jogos), cabeçalho climático (`weather-*`, Open-Meteo), diálogo "Bom dia" e avisos de release. Preferências por usuário em tempo real. É a **origem da linguagem visual** do design system.
+`InicioDashboard.tsx` (+ `components/inicio/`). Cards: **Meu trabalho** (tarefas via `task-aggregation`), **Agenda**, **Mural**, **Comentários**, **Lembretes** (`reminders.functions`, `personal_reminders`), cabeçalho climático (`weather-*`, Open-Meteo), diálogo "Bom dia" e avisos de release. Preferências por usuário em tempo real. É a **origem da linguagem visual** do design system.
 
 ## Clientes
 `ClientesSection`, `clientes/ClienteCard · ClienteFiltersBar · ClienteFormSheet · ClienteDetailPage · ClienteContratosSection · ClienteFinancialSummary · PortalAccessSection · ClienteStatusControl`.

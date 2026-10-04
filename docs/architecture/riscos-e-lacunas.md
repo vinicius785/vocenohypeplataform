@@ -5,7 +5,7 @@ Atualizado em 2026-10-03 (após a auditoria técnica). Detalhes e matriz de prio
 ## O que **não** foi verificado
 - **Banco vivo**: a análise de RLS/índices é estática (migrations + `types.ts`); nada foi executado contra produção. Consultas de verificação em [`../security/rls-internal-only.md`](../security/rls-internal-only.md).
 - **Dados reais**: volume e qualidade dos registros não foram consultados (afeta a decisão sobre carga das stores).
-- **Telas autenticadas**: o app exige login; o visual foi validado só em harness isolado, e o comportamento de lazy-load (diálogo de tarefa, jogos) só por build, não no navegador logado.
+- **Telas autenticadas**: o app exige login; o visual foi validado só em harness isolado, e o comportamento de lazy-load (diálogo de tarefa) só por build, não no navegador logado.
 - **Hypito**: o serviço não está neste repositório; comportamento deduzido de tabelas e permissões.
 - **Funções de servidor**: autorização e validação de entrada conferidas por varredura (middleware, zod, rate limit); o corpo de cada uma não foi revisado.
 - **Portal por token**: conteúdo de cada tela não lido em detalhe.

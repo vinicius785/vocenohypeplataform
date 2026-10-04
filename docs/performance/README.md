@@ -16,7 +16,7 @@ Carga inicial = **fechamento de imports estáticos** a partir do chunk de entrad
 ### O que causou cada ganho
 1. **Modelo de influenciadores extraído para `lib/influencer-model.ts`.** `lib/projetos.ts` (store carregada no `beforeLoad` de toda página autenticada) importava valores de `InfluencerBoard.tsx` (≈7.100 linhas de UI), então a UI inteira — e, por ela, o recharts (≈360 KB) — entrava no bundle inicial. Agora o board é um chunk próprio (≈128 KB) carregado só em Campanhas/Projetos. O chunk `projetos` caiu de 168 KB para 12 KB.
 2. **`TaskDialog` lazy no `TaskModalStack`** e **pessoas/motivos de tarefa extraídos para `tasks/task-people.tsx`**: o workspace de tarefas (editor rico, ≈600 KB) saiu do shell; só carrega ao abrir uma tarefa.
-3. **Jogos (Termo/Zip) lazy** no card "Pausa rápida": o dicionário do Termo (128 KB de fonte) não viaja mais com a Início.
+3. **Jogos (Termo/Zip) lazy** no card "Pausa rápida": o dicionário do Termo (128 KB de fonte) não viaja mais com a Início. _(Os jogos foram removidos do app depois desta medição; o ganho passou a ser definitivo.)_
 4. Inicialização do `_authenticated`: MFA + perfil + ambiente em **paralelo** (antes 3 idas ao servidor em fila antes de qualquer tela). Ganho esperado ≈ 2 round-trips; não medido em ms (sem acesso a rede de produção).
 5. Cronômetro do shell só "tica" quando há timer rodando (antes: 1 re-render/s mesmo ocioso).
 

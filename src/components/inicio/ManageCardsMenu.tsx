@@ -22,7 +22,6 @@ import {
   TrendingUp,
   MessageSquare,
   Bell,
-  Coffee,
   CloudSun,
   RotateCcw,
   GripVertical,
@@ -54,7 +53,6 @@ const CARD_ICON: Record<CardKey, React.ReactNode> = {
   comercial: <TrendingUp className="h-4 w-4" />,
   comments: <MessageSquare className="h-4 w-4" />,
   reminders: <Bell className="h-4 w-4" />,
-  quickBreak: <Coffee className="h-4 w-4" />,
 };
 
 function ToggleRow({

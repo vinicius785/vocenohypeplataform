@@ -21,7 +21,7 @@ Backend: Supabase projeto `kehjxyzrolltsdaqzkww`. 144 migrations aditivas em `su
 | **Hypito** | `hypito_action_log`, `hypito_alerts_sent`, `hypito_conversation_state`, `hypito_daily_briefing_runs`, `hypito_meeting_reminders_sent`, `hypito_pending_actions`, `hypito_reminders`, `hypito_report_runs`, `hypito_report_settings`, `hypito_user_prefs` | Assistente/automações |
 | **Plataforma** | `workspace_settings`, `shared_state`, `platform_releases`, `outgoing_webhooks`, `webhook_settings`, `push_subscriptions`, `personal_reminders` | Config global e avisos de versão |
 | **Segurança** | `vault_secret`, `vault_totp_secrets`, `vault_totp_attempts`, `vault_access_requests` | Cofre de senhas |
-| **Extras** | `daily_game_sessions(+archive)`, `sudoku_daily_results`, `zip_daily_results` | Jogos diários |
+| **Legado sem uso** | `daily_game_sessions(+archive)`, `sudoku_daily_results`, `zip_daily_results` | Jogos removidos do app em 2026-10-03; tabelas e dados mantidos, nenhum código lê ou grava nelas |
 
 (`projeto_fases` foi removida na migration `20261003120000`.)
 
