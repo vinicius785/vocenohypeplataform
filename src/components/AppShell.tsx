@@ -58,6 +58,7 @@ import { SURFACE, type SemanticTone } from "@/lib/design-tokens";
 import { cn } from "@/lib/utils";
 import { loadWorkspace, subscribeWorkspace, type Workspace } from "@/lib/workspace-store";
 import { BomDiaDialog } from "./BomDiaDialog";
+import { VersionWatcher } from "./VersionWatcher";
 import { ReportProblemSheet } from "./problemas/ReportProblemSheet";
 import { rememberNavigationContext } from "@/lib/problem-context";
 import { MeetingReminderToast } from "./MeetingReminderToast";
@@ -356,6 +357,7 @@ export function AppShell({
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
       <BomDiaDialog />
+      <VersionWatcher />
       <MeetingReminderToast />
       <ReportProblemSheet />
       {mobileOpen && (

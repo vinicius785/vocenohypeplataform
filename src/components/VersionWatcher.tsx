@@ -1,16 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, RefreshCw, Sparkles, X } from "lucide-react";
 import { APP_VERSION } from "@/lib/app-version";
 import {
   fetchVersionInfo,
   getSeenVersion,
+  isNewerVersion,
   markVersionSeen,
+  releaseHighlights,
   type Release,
   type VersionInfo,
 } from "@/lib/release-notes";
 import { ReleaseNotesDialog } from "./ReleaseNotesDialog";
+import { VersionNotice } from "./VersionNotice";
 
 const CHECK_INTERVAL_MS = 5 * 60_000;
+/** Intervalo mínimo entre duas consultas (foco/visibilidade/timer não geram rajada). */
+const MIN_GAP_MS = 60_000;
 
 /**
  * `public/version.json` é atualizado manualmente junto com APP_VERSION a
@@ -34,22 +38,41 @@ export function VersionWatcher({ scope = "vi" }: { scope?: "vi" | "vc" }) {
 
   useEffect(() => {
     let cancelled = false;
+    let lastCheck = 0;
+    let inFlight = false;
     const check = async () => {
-      const data = await fetchVersionInfo();
-      if (!cancelled && data?.version) setInfo(data);
+      // Offline, aba em segundo plano, consulta em andamento ou checada há pouco: não consulta.
+      if (inFlight || (typeof navigator !== "undefined" && navigator.onLine === false)) return;
+      if (Date.now() - lastCheck < MIN_GAP_MS) return;
+      inFlight = true;
+      lastCheck = Date.now();
+      try {
+        const data = await fetchVersionInfo();
+        if (!cancelled && data?.version) setInfo(data);
+      } finally {
+        inFlight = false;
+      }
     };
-    check();
-    const iv = window.setInterval(check, CHECK_INTERVAL_MS);
-    const onFocus = () => check();
-    window.addEventListener("focus", onFocus);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void check();
+    };
+    void check();
+    const iv = window.setInterval(() => {
+      if (document.visibilityState === "visible") void check();
+    }, CHECK_INTERVAL_MS);
+    window.addEventListener("focus", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", onVisible);
     return () => {
       cancelled = true;
       window.clearInterval(iv);
-      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("focus", onVisible);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", onVisible);
     };
   }, []);
 
-  const outdated = !!info?.version && info.version !== APP_VERSION;
+  const outdated = isNewerVersion(info?.version, APP_VERSION);
   const releases = scope === "vc" ? info?.releasesVC : info?.releases;
   const release: Release | null = releases?.[0] ?? null;
   const alreadySeen = useMemo(
@@ -67,68 +90,20 @@ export function VersionWatcher({ scope = "vi" }: { scope?: "vi" | "vc" }) {
     window.location.reload();
   };
 
-  if (!outdated || dismissed || alreadySeen) return null;
+  if (!outdated || dismissed || alreadySeen || !info?.version) return null;
 
   return (
     <>
       {!showNotes && (
-        <div className="fixed bottom-4 right-4 z-[200] w-full max-w-sm rounded-xl border border-border bg-background p-4 shadow-lg">
-          <div className="flex items-start gap-3">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-subtle text-text-brand">
-              <Sparkles className="h-4 w-4" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-foreground">Nova versão disponível</p>
-                  <p className="text-[11px] tabular-nums text-muted-foreground">
-                    {APP_VERSION} → {info.version}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={dismiss}
-                  className="shrink-0 cursor-pointer rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                  aria-label="Dispensar"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-
-              {release?.summary && (
-                <p className="mt-1.5 line-clamp-1 text-xs text-muted-foreground">
-                  {release.summary}
-                </p>
-              )}
-
-              <div className="mt-3 flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowNotes(true)}
-                  className="cursor-pointer text-xs font-medium text-foreground underline underline-offset-4 hover:no-underline"
-                >
-                  Ver novidades
-                </button>
-                <button
-                  type="button"
-                  onClick={handleUpdate}
-                  disabled={updating}
-                  className="ml-auto inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-brand-foreground hover:bg-brand-hover disabled:cursor-default disabled:opacity-70"
-                >
-                  {updating ? (
-                    <>
-                      <Loader2 className="h-3 w-3 animate-spin" /> Atualizando...
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw className="h-3 w-3" /> Atualizar agora
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <VersionNotice
+          currentVersion={APP_VERSION}
+          newVersion={info.version}
+          highlights={releaseHighlights(release)}
+          updating={updating}
+          onUpdate={handleUpdate}
+          onDismiss={dismiss}
+          onShowNotes={() => setShowNotes(true)}
+        />
       )}
 
       <ReleaseNotesDialog

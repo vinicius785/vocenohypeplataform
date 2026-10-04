@@ -1,33 +1,43 @@
 {
-  "version": "1.297.0",
+  "version": "1.298.0",
   "releases": [
     {
-      "version": "1.279.0",
-      "summary": "Chat com mensagens mais organizadas, prévia de links/imagens/PDFs e integração mais profunda com o Hypito.",
+      "version": "1.298.0",
+      "summary": "Comercial com Kanban de tarefas e Recursos, sidebar compacta mais clara e portal do cliente para o time.",
       "modules": [
         {
-          "name": "CHAT",
-          "tagline": "Conversas, canais e Hypito",
+          "name": "COMERCIAL",
+          "tagline": "Pipeline, tarefas e recursos",
           "items": [
             {
-              "title": "Mensagens longas e links organizados",
-              "description": "Mensagens extensas agora podem ser recolhidas (\"Ver mensagem completa\"), e links do Google Drive, YouTube ou de páginas da própria plataforma ganham um card de prévia em vez de aparecer como texto cru."
+              "title": "Kanban de tarefas no Comercial",
+              "description": "Um quadro de tarefas abaixo do pipeline, com os mesmos status das demais áreas, até 4 cards por coluna e Ver mais para o restante."
             },
             {
-              "title": "Imagens e PDFs funcionais",
-              "description": "Imagens abrem numa visualização ampliada com zoom e navegação entre várias fotos da mesma mensagem. PDFs enviados no chat ganham um card com Visualizar e Baixar, sempre com um link novo — nunca mais um arquivo que \"quebra\" depois de um tempo."
+              "title": "Pipeline mais enxuto",
+              "description": "O gráfico de funil saiu; cada etapa mostra 4 oportunidades e abre o restante em Ver mais."
             },
             {
-              "title": "Lista de conversas com grupos recolhíveis",
-              "description": "Diretas, Canais, Campanhas e Projetos agora podem ser recolhidos — a preferência fica salva no navegador."
+              "title": "Botão Recursos",
+              "description": "Documentos do Comercial (links e anexos) no mesmo formato das campanhas."
+            }
+          ]
+        },
+        {
+          "name": "PLATAFORMA",
+          "tagline": "Navegação e acesso",
+          "items": [
+            {
+              "title": "Sidebar reduzida refinada",
+              "description": "Alvos de clique maiores, dicas ao passar o mouse, botão de recolher dentro da barra e perfil acessível."
             },
             {
-              "title": "Comandos de barra e emoji no campo de mensagem",
-              "description": "Digitar \"/tarefa\", \"/lembrete\", \"/hypito\" ou \"/reuniao\" no campo de mensagem já aciona o Hypito ou leva direto pra agenda. O campo também ganhou um seletor de emoji."
+              "title": "Portal do cliente para o time",
+              "description": "Em Recursos da campanha, Portal do cliente abre a visão do cliente sem login (somente leitura). Os links públicos antigos foram desativados."
             },
             {
-              "title": "Card de tarefa mencionada mais completo",
-              "description": "Ao mencionar uma tarefa no chat, o card agora mostra o projeto ou campanha, se está bloqueada e o progresso das subtarefas — com botões para alterar o status ou comentar sem sair da conversa."
+              "title": "Aviso de nova versão restaurado",
+              "description": "Quem está com a plataforma aberta volta a ser avisado quando sai uma versão nova."
             }
           ]
         }

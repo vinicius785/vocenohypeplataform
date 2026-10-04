@@ -37,13 +37,33 @@ export async function fetchVersionInfo(): Promise<VersionInfo | null> {
   }
 }
 
+import { compareSemver, isValidSemver } from "@/lib/semver";
+
+/** O servidor está numa versão MAIS NOVA que a do bundle carregado? SemVer real (não
+ * igualdade de texto): um `version.json` mais antigo que o bundle (rollback, CDN atrasada)
+ * nunca gera aviso. Versões fora do padrão caem na comparação de igualdade. */
+export function isNewerVersion(server: string | undefined, current: string): boolean {
+  if (!server) return false;
+  if (isValidSemver(server) && isValidSemver(current)) return compareSemver(server, current) === 1;
+  return server !== current;
+}
+
+/** Até `max` linhas curtas do que mudou: os títulos dos itens da release (por módulo); sem
+ * itens, cai no `summary`. */
+export function releaseHighlights(release: Release | null | undefined, max = 3): string[] {
+  if (!release) return [];
+  const titles = release.modules.flatMap((m) => m.items.map((i) => i.title)).filter(Boolean);
+  if (titles.length > 0) return titles.slice(0, max);
+  return release.summary ? [release.summary] : [];
+}
+
 const seenKey = (scope: "vi" | "vc") => `vnh:version-seen:${scope}`;
 
-/** Última versão que o usuário já dispensou/visualizou o aviso — evita
- * reabrir o toast de forma invasiva pra uma versão que ele já viu. */
+/** Última versão cujo aviso foi dispensado NESTA SESSÃO (aba). Dispensar não é uma decisão
+ * permanente: em outra sessão/aba o aviso volta enquanto a pessoa seguir na versão antiga. */
 export function getSeenVersion(scope: "vi" | "vc"): string | null {
   try {
-    return localStorage.getItem(seenKey(scope));
+    return sessionStorage.getItem(seenKey(scope));
   } catch {
     return null;
   }
@@ -51,8 +71,8 @@ export function getSeenVersion(scope: "vi" | "vc"): string | null {
 
 export function markVersionSeen(scope: "vi" | "vc", version: string): void {
   try {
-    localStorage.setItem(seenKey(scope), version);
+    sessionStorage.setItem(seenKey(scope), version);
   } catch {
-    /* localStorage indisponível — não é crítico, só reaparece o toast */
+    /* storage indisponível — não é crítico, o aviso só volta a aparecer */
   }
 }
