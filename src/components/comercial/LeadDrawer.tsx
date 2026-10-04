@@ -45,7 +45,11 @@ import {
   type OpportunityStage,
 } from "@/lib/comercial-engine";
 import { draftToLead, leadToDraft, parseMoney, type LeadDraft } from "@/lib/comercial-lead-draft";
-import { buildCommercialTimeline, nextActionDisplay } from "@/lib/comercial-lead-view";
+import {
+  buildCommercialTimeline,
+  contactSubline,
+  nextActionDisplay,
+} from "@/lib/comercial-lead-view";
 import { generatePropostaPublicToken } from "@/lib/comercial.functions";
 import type { TeamMemberLite } from "@/lib/projetos";
 import { useConfirm } from "@/hooks/use-confirm";
@@ -362,7 +366,7 @@ export function LeadDrawer({
   };
 
   const title = draft.company.trim() || draft.name.trim() || "Nova oportunidade";
-  const subline = [draft.contact.trim(), draft.role.trim()].filter(Boolean).join(" · ");
+  const subline = contactSubline(draft.contact, draft.role);
   const committed = liveLead ? nextActionDisplay(liveLead) : null;
   const phoneDigits = draft.phone.replace(/\D/g, "");
   const isTerminal = !!nextStep && (nextStep.stage === "GANHO" || nextStep.stage === "PERDIDO");

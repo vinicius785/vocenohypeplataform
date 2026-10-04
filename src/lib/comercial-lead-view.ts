@@ -17,6 +17,7 @@ import {
   type CommercialInteractionRow,
   type InteractionType,
 } from "@/lib/commercial-interactions.functions";
+import { deriveOpportunityNextStep, NO_CONTACT_ALERT_DAYS } from "@/lib/comercial-engine";
 import { BRASILIA_TZ, addDaysIso, todayIsoInBrasilia } from "@/lib/timezone";
 
 // ---------------------------------------------------------------------------
@@ -37,29 +38,136 @@ function isSameCalendarDay(a: Date, b: Date): boolean {
 
 export type NextActionDisplay = { tone: "red" | "amber" | "neutral"; text: string } | null;
 
-/** "Vencida há Xd", "Hoje às HH:mm", "Amanhã", ou a data curta — sempre
- * junto da descrição quando existir. Fonte única: o card e o drawer leem
- * daqui, então nunca divergem. */
-export function nextActionDisplay(lead: Lead): NextActionDisplay {
-  if (!lead.nextActionAt) return null;
-  const at = new Date(lead.nextActionAt);
-  const now = new Date();
-  const desc = lead.nextActionDescription ? ` · ${lead.nextActionDescription}` : "";
+/** Quando é a próxima ação combinada, em relação a agora — a base comum das
+ * duas leituras (`nextActionDisplay` e `leadSituation`). */
+type NextActionTiming =
+  | { kind: "overdue"; tone: "red"; days: number }
+  | { kind: "today"; tone: "amber"; time: string }
+  | { kind: "tomorrow"; tone: "neutral" }
+  | { kind: "date"; tone: "neutral"; date: string };
 
-  if (lead.nextActionAt < now.getTime()) {
-    const days = Math.max(1, Math.ceil((now.getTime() - lead.nextActionAt) / 86_400_000));
-    return { tone: "red", text: `Vencida há ${days}d${desc}` };
+function nextActionTiming(
+  nextActionAt: number | undefined,
+  now: Date = new Date(),
+): NextActionTiming | null {
+  if (!nextActionAt) return null;
+  const at = new Date(nextActionAt);
+  if (nextActionAt < now.getTime()) {
+    return {
+      kind: "overdue",
+      tone: "red",
+      days: Math.max(1, Math.ceil((now.getTime() - nextActionAt) / 86_400_000)),
+    };
   }
   if (isSameCalendarDay(at, now)) {
-    const hh = at.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-    return { tone: "amber", text: `Hoje às ${hh}${desc}` };
+    return {
+      kind: "today",
+      tone: "amber",
+      time: at.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+    };
   }
   const tomorrow = new Date(now);
   tomorrow.setDate(tomorrow.getDate() + 1);
-  if (isSameCalendarDay(at, tomorrow)) {
-    return { tone: "neutral", text: `Amanhã${desc}` };
+  if (isSameCalendarDay(at, tomorrow)) return { kind: "tomorrow", tone: "neutral" };
+  return { kind: "date", tone: "neutral", date: fmtShortDate(nextActionAt) };
+}
+
+/** "Vencida há Xd", "Hoje às HH:mm", "Amanhã", ou a data curta — sempre
+ * junto da descrição quando existir. Usada no drawer e no diálogo de
+ * follow-up (o card usa `leadSituation`, com frases mais naturais). */
+export function nextActionDisplay(lead: Lead): NextActionDisplay {
+  const timing = nextActionTiming(lead.nextActionAt);
+  if (!timing) return null;
+  const desc = lead.nextActionDescription ? ` · ${lead.nextActionDescription}` : "";
+  switch (timing.kind) {
+    case "overdue":
+      return { tone: "red", text: `Vencida há ${timing.days}d${desc}` };
+    case "today":
+      return { tone: "amber", text: `Hoje às ${timing.time}${desc}` };
+    case "tomorrow":
+      return { tone: "neutral", text: `Amanhã${desc}` };
+    case "date":
+      return { tone: "neutral", text: `${timing.date}${desc}` };
   }
-  return { tone: "neutral", text: `${fmtShortDate(lead.nextActionAt)}${desc}` };
+}
+
+/** "Contato · Cargo" sem repetição: leads que chegam por webhook costumam ter o
+ * mesmo texto nos dois campos ("Head of Growth / Digital · Head of Growth /
+ * Digital") — nesse caso aparece uma vez só. */
+export function contactSubline(contact?: string, role?: string): string {
+  const parts = [contact?.trim(), role?.trim()].filter((p): p is string => !!p);
+  if (parts.length === 2 && parts[0].toLowerCase() === parts[1].toLowerCase()) return parts[0];
+  return parts.join(" · ");
+}
+
+// ---------------------------------------------------------------------------
+// Situação comercial do lead no card do Kanban
+// ---------------------------------------------------------------------------
+
+export type LeadSituation = {
+  /** Rótulo discreto antes do texto ("Próxima ação:"), quando faz sentido. */
+  prefix?: string;
+  text: string;
+  /** `danger`/`warning` só para ação vencida/de hoje; o resto é texto neutro. */
+  tone: "danger" | "warning" | "neutral" | "muted";
+};
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/**
+ * A UMA frase que o card mostra sobre o estado real do lead — a que responde
+ * "o que preciso fazer?". Prioridade: (1) lead encerrado; (2) próxima ação
+ * combinada; (3) aguardando o cliente; (4) tempo desde o último contato.
+ * Só lê dados que o lead já tem (nada de interação/resultado, que vivem no
+ * drawer).
+ */
+export function leadSituation(lead: Lead, now: Date = new Date()): LeadSituation {
+  const step = deriveOpportunityNextStep(lead);
+
+  if (step.stage === "GANHO") return { text: "Ganho", tone: "muted" };
+  if (step.stage === "PERDIDO") {
+    return { text: lead.lossReason ? `Perdido — ${lead.lossReason}` : "Perdido", tone: "muted" };
+  }
+
+  const timing = nextActionTiming(lead.nextActionAt, now);
+  const lastContactDays =
+    lead.lastContactAt === undefined
+      ? null
+      : Math.max(0, Math.floor((now.getTime() - lead.lastContactAt) / 86_400_000));
+
+  if (timing) {
+    const when =
+      timing.kind === "overdue"
+        ? `vencida há ${plural(timing.days, "dia", "dias")}`
+        : timing.kind === "today"
+          ? `hoje às ${timing.time}`
+          : timing.kind === "tomorrow"
+            ? "amanhã"
+            : timing.date;
+    const desc = lead.nextActionDescription?.trim();
+    const tone = timing.tone === "red" ? "danger" : timing.tone === "amber" ? "warning" : "neutral";
+    return desc
+      ? { prefix: "Próxima ação:", text: `${desc} · ${when}`, tone }
+      : { prefix: "Próxima ação", text: timing.kind === "date" ? `em ${when}` : when, tone };
+  }
+
+  if (step.actor === "CLIENTE") {
+    return {
+      text:
+        lastContactDays !== null && lastContactDays >= NO_CONTACT_ALERT_DAYS
+          ? `Aguardando retorno há ${plural(lastContactDays, "dia", "dias")}`
+          : "Aguardando retorno",
+      tone: "neutral",
+    };
+  }
+
+  if (lastContactDays === null) return { text: "Nunca contatado", tone: "muted" };
+  if (lastContactDays >= NO_CONTACT_ALERT_DAYS) {
+    return { text: `Sem contato há ${plural(lastContactDays, "dia", "dias")}`, tone: "muted" };
+  }
+  if (lastContactDays === 0) return { text: "Contato hoje", tone: "neutral" };
+  if (lastContactDays === 1) return { text: "Contato ontem", tone: "neutral" };
+  return { text: `Contato há ${lastContactDays} dias`, tone: "neutral" };
 }
 
 // ---------------------------------------------------------------------------

@@ -40,7 +40,7 @@ import {
   type FollowUpFormState,
   type FollowUpInput,
 } from "@/lib/comercial-followup-form";
-import { formatTimelineWhen, nextActionDisplay } from "@/lib/comercial-lead-view";
+import { contactSubline, formatTimelineWhen, nextActionDisplay } from "@/lib/comercial-lead-view";
 import { formatDateToIso } from "@/lib/utils";
 
 export type { FollowUpInput };
@@ -241,7 +241,7 @@ export function FollowUpDialog({
     }
   };
 
-  const contactLine = [lead.contact, lead.role].filter(Boolean).join(" · ");
+  const contactLine = contactSubline(lead.contact, lead.role);
 
   return (
     <>

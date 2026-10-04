@@ -18,7 +18,9 @@ vi.mock("@/lib/commercial-interactions.functions", () => ({
 const {
   buildCommercialTimeline,
   formatTimelineWhen,
+  contactSubline,
   historyEventKind,
+  leadSituation,
   nextActionDisplay,
   propostaMargem,
 } = await import("./comercial-lead-view");
@@ -187,5 +189,111 @@ describe("propostaMargem", () => {
   });
   it("preço zero não divide por zero", () => {
     expect(propostaMargem({ precoFinal: 0, custoTotal: 0 })).toEqual({ reais: 0, pct: null });
+  });
+});
+
+describe("leadSituation — a frase do card", () => {
+  const NOW = new Date(2026, 9, 4, 12, 0, 0); // 04/10/2026 12:00 local
+  const H = 3_600_000;
+  const DAY = 86_400_000;
+  const lead = (over: Partial<Lead> = {}) =>
+    ({ id: "o1", name: "x", stage: "CONTATO_FEITO", ...over }) as Lead;
+  const at = (d: number, h: number, m = 0) => new Date(2026, 9, d, h, m).getTime();
+
+  it("lead encerrado", () => {
+    expect(leadSituation(lead({ stage: "GANHO" }), NOW)).toEqual({ text: "Ganho", tone: "muted" });
+    expect(leadSituation(lead({ stage: "PERDIDO", lossReason: "Sem orçamento" }), NOW)).toEqual({
+      text: "Perdido — Sem orçamento",
+      tone: "muted",
+    });
+    expect(leadSituation(lead({ stage: "PERDIDO" }), NOW).text).toBe("Perdido");
+  });
+
+  it("com próxima ação, ela vem primeiro (sem descrição)", () => {
+    expect(leadSituation(lead({ nextActionAt: at(5, 9) }), NOW)).toEqual({
+      prefix: "Próxima ação",
+      text: "amanhã",
+      tone: "neutral",
+    });
+    expect(leadSituation(lead({ nextActionAt: at(4, 15, 30) }), NOW)).toEqual({
+      prefix: "Próxima ação",
+      text: "hoje às 15:30",
+      tone: "warning",
+    });
+    expect(leadSituation(lead({ nextActionAt: at(9, 9) }), NOW).text).toBe("em 09/10");
+  });
+
+  it("com descrição: 'Próxima ação: <o que> · <quando>'", () => {
+    const s = leadSituation(
+      lead({ nextActionAt: at(5, 9), nextActionDescription: "Enviar proposta" }),
+      NOW,
+    );
+    expect(s).toEqual({
+      prefix: "Próxima ação:",
+      text: "Enviar proposta · amanhã",
+      tone: "neutral",
+    });
+    expect(
+      leadSituation(lead({ nextActionAt: at(9, 9), nextActionDescription: "Ligar" }), NOW).text,
+    ).toBe("Ligar · 09/10");
+  });
+
+  it("ação vencida: tom de alerta e há quantos dias", () => {
+    expect(
+      leadSituation(lead({ nextActionAt: at(2, 9), nextActionDescription: "Ligar" }), NOW),
+    ).toMatchObject({ text: "Ligar · vencida há 3 dias", tone: "danger" });
+    expect(leadSituation(lead({ nextActionAt: NOW.getTime() - 2 * H }), NOW).text).toBe(
+      "vencida há 1 dia",
+    );
+  });
+
+  it("a próxima ação ganha de 'sem contato' (uma frase só)", () => {
+    const s = leadSituation(
+      lead({ nextActionAt: at(5, 9), lastContactAt: NOW.getTime() - 10 * DAY }),
+      NOW,
+    );
+    expect(s.prefix).toBe("Próxima ação");
+  });
+
+  it("aguardando o cliente (proposta enviada), com o tempo quando já passou do limite", () => {
+    expect(leadSituation(lead({ stage: "PROPOSTA_ENVIADA" }), NOW).text).toBe("Aguardando retorno");
+    expect(
+      leadSituation(
+        lead({ stage: "PROPOSTA_ENVIADA", lastContactAt: NOW.getTime() - 6 * DAY }),
+        NOW,
+      ).text,
+    ).toBe("Aguardando retorno há 6 dias");
+    expect(
+      leadSituation(
+        lead({ stage: "PROPOSTA_ENVIADA", lastContactAt: NOW.getTime() - 1 * DAY }),
+        NOW,
+      ).text,
+    ).toBe("Aguardando retorno");
+  });
+
+  it("sem próxima ação: tempo desde o último contato, em linguagem natural", () => {
+    const withContact = (ms: number) => lead({ lastContactAt: NOW.getTime() - ms });
+    expect(leadSituation(lead(), NOW)).toEqual({ text: "Nunca contatado", tone: "muted" });
+    expect(leadSituation(withContact(6 * DAY), NOW)).toEqual({
+      text: "Sem contato há 6 dias",
+      tone: "muted",
+    });
+    expect(leadSituation(withContact(5 * DAY), NOW).text).toBe("Sem contato há 5 dias");
+    expect(leadSituation(withContact(3 * DAY), NOW).text).toBe("Contato há 3 dias");
+    expect(leadSituation(withContact(1 * DAY + H), NOW).text).toBe("Contato ontem");
+    expect(leadSituation(withContact(H), NOW).text).toBe("Contato hoje");
+  });
+});
+
+describe("contactSubline", () => {
+  it("contato · cargo; um só quando são iguais (webhook); vazios somem", () => {
+    expect(contactSubline("Marina", "Gerente")).toBe("Marina · Gerente");
+    expect(contactSubline("Head of Growth / Digital", " head of growth / digital ")).toBe(
+      "Head of Growth / Digital",
+    );
+    expect(contactSubline("Outro", "Outro")).toBe("Outro");
+    expect(contactSubline("Marina", undefined)).toBe("Marina");
+    expect(contactSubline(undefined, "Gerente")).toBe("Gerente");
+    expect(contactSubline("", "  ")).toBe("");
   });
 });
