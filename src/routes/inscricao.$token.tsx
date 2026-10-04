@@ -1,12 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useMemo, useRef, useState } from "react";
 import { Check, Loader2 } from "lucide-react";
 import {
   getInscricaoCampanhaData,
   submitInscricaoCampanha,
 } from "@/lib/inscricao-campanha.functions";
 import { NICHOS } from "@/lib/influencer-model";
+import { resolveLocalizacao, toItems, UF_NAMES } from "@/lib/campanha-localidades";
 import { normalizeSocialInput, isDuplicateProfile } from "@/lib/social-profiles";
 import { fetchWorkspace } from "@/lib/workspace-store";
 import {
@@ -30,6 +31,8 @@ import {
   type RespostaValue,
 } from "@/components/inscricao/InscricaoParts";
 import { inputClass } from "@/components/inscricao/input-class";
+
+const BrazilMap = lazy(() => import("@/components/inscricao/BrazilMap"));
 
 type InscricaoData = Awaited<ReturnType<typeof getInscricaoCampanhaData>>;
 
@@ -61,15 +64,19 @@ function Fact({ label, value }: { label: string; value?: string }) {
   );
 }
 
-function BriefRow({ label, value }: { label: string; value?: string }) {
-  if (!value) return null;
+function BulletOrText({ items, muted }: { items: string[]; muted?: boolean }) {
+  const tone = muted ? "text-text-secondary" : "text-foreground";
+  if (items.length === 1)
+    return <p className={`mt-3 text-lg leading-relaxed ${tone}`}>{items[0]}</p>;
   return (
-    <div>
-      <dt className="text-xs font-medium uppercase tracking-widest text-text-secondary">{label}</dt>
-      <dd className="mt-2 whitespace-pre-wrap text-base leading-relaxed text-foreground">
-        {value}
-      </dd>
-    </div>
+    <ul className={`mt-3 space-y-2 text-base leading-relaxed ${tone}`}>
+      {items.map((it) => (
+        <li key={it} className="flex gap-3">
+          <span aria-hidden="true" className="mt-2.5 h-1 w-1 shrink-0 rounded-full bg-current" />
+          <span className="min-w-0">{it}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -293,9 +300,25 @@ function InscricaoPage() {
   const missing = steps.filter((s) => !s.done);
   const pct = steps.length ? Math.round(((steps.length - missing.length) / steps.length) * 100) : 0;
   const sobre = page.sobre;
-  const hasBrief =
-    sobre.objetivo || sobre.requisitos || sobre.publicoDesejado || sobre.infoImportante;
-  const hasFacts = sobre.periodo || sobre.regioes || sobre.tipoConteudo;
+  const loc = resolveLocalizacao(sobre);
+  const hasLocal = loc.states.length > 0 || loc.localidades.length > 0 || loc.headline.length > 0;
+  const localHeadline =
+    loc.headline.join(" · ") ||
+    (loc.states.length > 0
+      ? loc.states.length <= 3
+        ? loc.states.map((u) => UF_NAMES[u]).join(" · ")
+        : `${loc.states.length} estados`
+      : "");
+  const requisitos = toItems(sobre.requisitos);
+  const infoItems = toItems(sobre.infoImportante);
+  const hasInfo =
+    hasLocal ||
+    !!sobre.periodo ||
+    !!sobre.tipoConteudo ||
+    !!sobre.objetivo ||
+    requisitos.length > 0 ||
+    infoItems.length > 0 ||
+    !!loc.publico;
   const hasDos = page.showDos && page.dos.length > 0;
   const hasDonts = page.showDonts && page.donts.length > 0;
   const validRedes = redes.filter((r) => r.handle.trim());
@@ -359,22 +382,15 @@ function InscricaoPage() {
                   {page.publicSubtitle}
                 </p>
               )}
-              {hasFacts && (
-                <dl className="mt-10 grid grid-cols-1 gap-x-12 gap-y-6 sm:grid-cols-[0.7fr_1.5fr_1fr]">
-                  <Fact label="Período" value={sobre.periodo} />
-                  <Fact label="Regiões" value={sobre.regioes} />
-                  <Fact label="Formato" value={sobre.tipoConteudo} />
-                </dl>
-              )}
               {page.description && (
-                <p className="mt-10 max-w-3xl whitespace-pre-wrap text-base leading-relaxed text-foreground/85 sm:text-lg">
+                <p className="mt-8 max-w-3xl whitespace-pre-wrap text-base leading-relaxed text-foreground/85 sm:text-lg">
                   {page.description}
                 </p>
               )}
             </section>
 
-            {/* BRIEFING */}
-            {hasBrief && (
+            {/* SOBRE A CAMPANHA — onde (mapa + localidades), quando/como, o que esperam. */}
+            {hasInfo && (
               <section aria-labelledby="sobre" className="mt-20">
                 <h2
                   id="sobre"
@@ -382,15 +398,88 @@ function InscricaoPage() {
                 >
                   Sobre a campanha
                 </h2>
-                <dl className="mt-6 grid grid-cols-1 gap-x-16 gap-y-8 sm:grid-cols-2">
-                  <BriefRow label="Objetivo" value={sobre.objetivo} />
-                  <BriefRow label="Público desejado" value={sobre.publicoDesejado} />
-                  <BriefRow label="Requisitos" value={sobre.requisitos} />
-                </dl>
-                {sobre.infoImportante && (
-                  <p className="mt-8 max-w-3xl whitespace-pre-wrap text-sm leading-relaxed text-text-secondary">
-                    {sobre.infoImportante}
-                  </p>
+
+                {hasLocal && (
+                  <div
+                    className={`mt-8 grid items-center gap-10 ${
+                      loc.states.length > 0 ? "md:grid-cols-[minmax(0,22rem)_1fr] md:gap-16" : ""
+                    }`}
+                  >
+                    {loc.states.length > 0 && (
+                      <Suspense fallback={<div className="aspect-square w-full max-w-sm" />}>
+                        <BrazilMap
+                          states={loc.states}
+                          label={`Mapa do Brasil com destaque em: ${loc.states.map((u) => UF_NAMES[u]).join(", ")}`}
+                        />
+                      </Suspense>
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium uppercase tracking-widest text-text-secondary">
+                        Onde a campanha acontece
+                      </p>
+                      {localHeadline && (
+                        <p className="mt-2 text-3xl font-semibold leading-tight tracking-tight text-foreground">
+                          {localHeadline}
+                        </p>
+                      )}
+                      {loc.localidades.length > 0 && (
+                        <ul className="mt-5 space-y-1.5 text-base text-foreground/90 sm:columns-2 sm:gap-10">
+                          {loc.localidades.map((l) => (
+                            <li key={l.nome} className="break-inside-avoid">
+                              {l.nome}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {(sobre.periodo || sobre.tipoConteudo) && (
+                  <dl className="mt-14 grid grid-cols-1 gap-x-16 gap-y-8 sm:grid-cols-2">
+                    <Fact label="Período" value={sobre.periodo} />
+                    <Fact label="Formato" value={sobre.tipoConteudo} />
+                  </dl>
+                )}
+
+                {sobre.objetivo && (
+                  <div className="mt-14 max-w-2xl">
+                    <h3 className="text-xs font-medium uppercase tracking-widest text-text-secondary">
+                      Objetivo
+                    </h3>
+                    <p className="mt-3 whitespace-pre-wrap text-lg leading-relaxed text-foreground">
+                      {sobre.objetivo}
+                    </p>
+                  </div>
+                )}
+
+                {requisitos.length > 0 && (
+                  <div className="mt-14 max-w-2xl">
+                    <h3 className="text-xs font-medium uppercase tracking-widest text-text-secondary">
+                      Requisitos
+                    </h3>
+                    <BulletOrText items={requisitos} />
+                  </div>
+                )}
+
+                {infoItems.length > 0 && (
+                  <div className="mt-14 max-w-2xl">
+                    <h3 className="text-xs font-medium uppercase tracking-widest text-text-secondary">
+                      Informações importantes
+                    </h3>
+                    <BulletOrText items={infoItems} muted />
+                  </div>
+                )}
+
+                {loc.publico && (
+                  <div className="mt-14 max-w-2xl">
+                    <h3 className="text-xs font-medium uppercase tracking-widest text-text-secondary">
+                      Público
+                    </h3>
+                    <p className="mt-3 whitespace-pre-wrap text-lg leading-relaxed text-foreground">
+                      {loc.publico}
+                    </p>
+                  </div>
                 )}
               </section>
             )}
