@@ -27,8 +27,36 @@ export type ArrayStoreTable =
  * is awaited once in `_authenticated/route.tsx`'s `beforeLoad`, before any
  * component using `get()` mounts.
  */
-export function createTableArrayStore<T extends { id: string }>(table: ArrayStoreTable) {
+export function createTableArrayStore<T extends { id: string }>(
+  table: ArrayStoreTable,
+  options: {
+    /**
+     * Itens que existem no banco e no cache, mas NÃO aparecem em `get()` (hoje: a Demo,
+     * `clientes.data.demoSessionId`). Regras:
+     *  - `get()` devolve só os visíveis; `getAll()` devolve tudo;
+     *  - o `updater` de `set()` continua recebendo a lista COMPLETA (editar o item oculto
+     *    pelo seu detalhe funciona, e `prev.map(...)` preserva as linhas ocultas);
+     *  - `set()` NUNCA apaga item oculto: se o `updater` devolver uma lista sem ele (por ex.
+     *    construída a partir de `get()`), a linha é preservada — o banco não perde dado.
+     * Sem `isHidden` o comportamento é exatamente o de antes.
+     */
+    isHidden?: (item: T) => boolean;
+  } = {},
+) {
+  const { isHidden } = options;
   let cache: T[] = [];
+  // Visão sem os itens ocultos, memoizada pela REFERÊNCIA do cache (todo update do cache cria
+  // um array novo): `useSyncExternalStore` exige snapshot estável entre mudanças.
+  let visibleSource: T[] | null = null;
+  let visibleCache: T[] = [];
+  function getVisible(): T[] {
+    if (!isHidden) return cache;
+    if (visibleSource !== cache) {
+      visibleSource = cache;
+      visibleCache = cache.filter((x) => !isHidden(x));
+    }
+    return visibleCache;
+  }
   let loaded = false;
   const listeners = new Set<() => void>();
   const emit = () => listeners.forEach((l) => l());
@@ -73,7 +101,9 @@ export function createTableArrayStore<T extends { id: string }>(table: ArrayStor
   }
 
   return {
-    get: () => cache,
+    get: getVisible,
+    /** Lista COMPLETA, inclusive itens ocultos (`options.isHidden`). */
+    getAll: () => cache,
     isLoaded: () => loaded,
     subscribe: (l: () => void) => {
       listeners.add(l);
@@ -96,8 +126,15 @@ export function createTableArrayStore<T extends { id: string }>(table: ArrayStor
     },
     set: (updater: (prev: T[]) => T[], onError?: (err: Error) => void) => {
       const prev = cache;
-      const next = updater(prev);
-      if (next === prev) return;
+      const updated = updater(prev);
+      if (updated === prev) return;
+      // Itens ocultos que o `updater` deixou de fora são PRESERVADOS (nunca apagados daqui).
+      let next = updated;
+      if (isHidden) {
+        const keptIds = new Set(updated.map((x) => x.id));
+        const preserved = prev.filter((x) => isHidden(x) && !keptIds.has(x.id));
+        if (preserved.length > 0) next = [...updated, ...preserved];
+      }
       const prevById = new Map(prev.map((x) => [x.id, x]));
       const nextIds = new Set(next.map((x) => x.id));
       cache = next;

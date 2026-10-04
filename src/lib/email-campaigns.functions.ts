@@ -3,6 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertAdmin } from "@/lib/integrations.functions";
 import { z } from "zod";
 import { CAMPAIGN_OBJETIVOS, RECIPIENT_RULES, SEND_MODES } from "@/lib/email-campaigns-constants";
+import { toClientePickerOptions } from "@/lib/demo/demo-scans";
 
 /**
  * Server functions da área de e-mail (Campanhas): CRUD de campanha/
@@ -459,17 +460,7 @@ export const listClientesForPicker = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data, error } = await context.supabase.from("clientes").select("id, data");
     if (error) throw new Error(error.message);
-    return (data ?? [])
-      .map((row) => {
-        const d = row.data as Record<string, unknown>;
-        return {
-          id: row.id,
-          empresa: (d.empresa as string) ?? "",
-          email: (d.email as string) ?? "",
-          responsavel: (d.responsavel as string) ?? "",
-        };
-      })
-      .filter((c) => !!c.email);
+    return toClientePickerOptions(data ?? []);
   });
 
 export const listBancoInfluenciadoresForPicker = createServerFn({ method: "GET" })

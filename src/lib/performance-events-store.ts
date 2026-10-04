@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { isDemoTaskId } from "@/lib/campanha-scoped-store";
 import {
   DEFAULT_PERFORMANCE_SETTINGS,
   type DateRange,
@@ -78,6 +79,8 @@ function fromRow(row: PerformanceEventRow): PerformanceEvent {
  * salvamento da tarefa/reunião que o disparou — falha aqui não pode
  * impedir a ação principal do usuário, só fica registrada no console. */
 export function recordPerformanceEvent(input: NewPerformanceEvent): void {
+  // Tarefa de uma campanha de DEMONSTRAÇÃO nunca conta no desempenho de ninguém.
+  if (input.taskOrigin === "campanha" && input.taskId && isDemoTaskId(input.taskId)) return;
   void supabase.auth.getSession().then(() =>
     supabase
       .from("performance_events")

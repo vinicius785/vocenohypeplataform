@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { throwSafeDbError } from "@/lib/portal-db-error";
+import { findClienteRowByPublicToken } from "@/lib/demo/demo-scans";
+import { isDemoCliente } from "@/lib/demo/demo-visibility";
 import type { Cliente } from "@/lib/clientes-store";
 import type { Campaign } from "@/components/VincularCampanhaDialog";
 import type { Influ, Entrega, InfluActivityEventKind } from "@/lib/influencer-model";
@@ -41,10 +43,9 @@ async function findClienteByToken(
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: rows, error } = await supabaseAdmin.from("clientes").select("id, data");
   if (error) throwSafeDbError(error);
-  for (const row of (rows ?? []) as { id: string; data: Cliente }[]) {
-    if (row.data.publicToken === token) return { clienteId: row.id, cliente: row.data };
-  }
-  return null;
+  // Clientes de DEMONSTRAÇÃO nunca resolvem por `publicToken` (a Demo tem o próprio acesso).
+  const row = findClienteRowByPublicToken((rows ?? []) as { id: string; data: Cliente }[], token);
+  return row ? { clienteId: row.id, cliente: row.data } : null;
 }
 
 /**
@@ -900,10 +901,13 @@ const RespondEntregaInput = z
  * influenciador guardado no dado, então o alvo é sempre os admins (mesmo
  * fallback usado no aviso de senha esquecida). */
 export async function notifyTeamEntregaResponse(
-  clienteNome: string,
+  cliente: { empresa: string; demoSessionId?: string },
   entrega: Entrega,
   status: "aprovado" | "reprovado",
 ) {
+  // A demonstração nunca dispara Web Push aos admins (o time já está operando a demo).
+  if (isDemoCliente(cliente)) return;
+  const clienteNome = cliente.empresa;
   try {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: roles } = await supabaseAdmin
@@ -938,7 +942,7 @@ export const respondCampanhaEntrega = createServerFn({ method: "POST" })
     if (!entrega) throw new Error("Entrega não encontrada.");
     const next = applyEntregaApproval(influ, data.entregaId, data.status, data.motivo?.trim());
     await saveInfluRow(data.campanhaId, data.influencerId, next);
-    void notifyTeamEntregaResponse(found.cliente.empresa, entrega, data.status);
+    void notifyTeamEntregaResponse(found.cliente, entrega, data.status);
     return { ok: true };
   });
 

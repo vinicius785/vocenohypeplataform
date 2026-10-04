@@ -36,7 +36,9 @@ import {
 import { EmptyState } from "@/components/shared/EmptyState";
 import { KpiCell, KpiStrip } from "@/components/shared/Kpi";
 import { ClienteLogo } from "@/components/clientes/ClienteLogo";
-import { useClientes, clientesStore } from "@/lib/clientes-store";
+import { useClientes, useClientesComDemo, clientesStore } from "@/lib/clientes-store";
+import { isDemoCliente } from "@/lib/demo/demo-visibility";
+import { DemoChip } from "@/components/demo/DemoChip";
 import {
   VincularCampanhaDialog,
   type Campaign,
@@ -123,7 +125,12 @@ export { BankFields, type BankInfo };
  * Types & constants
  * ============================================================ */
 
-type Row = { cliente: { id: string; empresa: string; photo?: string }; campanha: Campaign };
+type Row = {
+  /** `demo`: cliente de DEMONSTRAÇÃO — só existe no detalhe (a lista usa `useClientes`, que o
+   * esconde), aberto a partir do lead; mostra o selo e nada mais muda. */
+  cliente: { id: string; empresa: string; photo?: string; demo?: boolean };
+  campanha: Campaign;
+};
 
 /* Task types shared via ./tasks/TaskBoard */
 /* Influenciadores types/UI shared via @/components/influenciadores/InfluencerBoard */
@@ -176,7 +183,25 @@ export function CampanhasSection() {
     [clientes],
   );
 
-  const current = openId ? (rows.find((r) => r.campanha.id === openId) ?? null) : null;
+  // A campanha de DEMONSTRAÇÃO não está em `rows` (listas, KPIs e filtros não a veem), mas o
+  // detalhe precisa abri-la — o time chega nela pelo lead (Etapa 3), por `openId`.
+  const clientesComDemo = useClientesComDemo();
+  const demoRows: Row[] = useMemo(
+    () =>
+      clientesComDemo.filter(isDemoCliente).flatMap((c) =>
+        (c.campanhas ?? []).map((camp) => ({
+          cliente: { id: c.id, empresa: c.empresa, photo: c.photo, demo: true },
+          campanha: camp,
+        })),
+      ),
+    [clientesComDemo],
+  );
+
+  const current: Row | null = openId
+    ? (rows.find((r) => r.campanha.id === openId) ??
+      demoRows.find((r) => r.campanha.id === openId) ??
+      null)
+    : null;
 
   // Influenciadores de verdade (já atribuídos), por campanha — o mesmo
   // dado que o detalhe da campanha já carrega, aqui só agregado pra toda a
@@ -978,6 +1003,7 @@ function CampanhaDetail({
                       </DropdownMenuContent>
                     )}
                   </DropdownMenu>
+                  {cliente.demo && <DemoChip />}
                   <span className="inline-flex items-center gap-1 text-xs font-medium text-text-secondary">
                     <Calendar className="h-3.5 w-3.5" />
                     {isRecorrente
@@ -1067,7 +1093,7 @@ function CampanhaDetail({
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   {canArchiveOrRestore && status !== "archived" && (
-                    <DropdownMenuItem onSelect={archiveCampaign}>
+                    <DropdownMenuItem onSelect={archiveCampaign} disabled={cliente.demo}>
                       <Archive className="h-3.5 w-3.5 text-text-secondary" />
                       {ARCHIVE_ACTION.actionLabel}
                     </DropdownMenuItem>
@@ -1079,8 +1105,11 @@ function CampanhaDetail({
                     </DropdownMenuItem>
                   )}
                   {canArchiveOrRestore && <DropdownMenuSeparator />}
+                  {/* Uma demonstração não é arquivada nem excluída por aqui: o ciclo de vida dela
+                   * (reiniciar, encerrar) é da própria Demo. */}
                   <DropdownMenuItem
                     onSelect={() => void requestDeleteCampanha()}
+                    disabled={cliente.demo}
                     className="text-destructive focus:text-destructive"
                   >
                     <Trash2 className="h-3.5 w-3.5" /> Excluir campanha

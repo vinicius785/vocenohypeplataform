@@ -359,7 +359,7 @@ export const respondCampanhaEntregaSession = createServerFn({ method: "POST" })
       actorName,
     );
     await saveInfluRow(data.campanhaId, data.influencerId, next);
-    void notifyTeamEntregaResponse(cliente.empresa, entrega, data.status);
+    void notifyTeamEntregaResponse(cliente, entrega, data.status);
     return { ok: true };
   });
 

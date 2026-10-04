@@ -5,6 +5,7 @@
 // de client.server.ts.
 import { Resend } from "resend";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { DEMO_EMAIL_BLOCKED_MESSAGE, isDemoRecipient } from "@/lib/demo/demo-guards";
 
 export type EmailProviderConfig = {
   provider: string;
@@ -42,6 +43,9 @@ export async function sendEmail(opts: {
   subject: string;
   html: string;
 }): Promise<SendEmailResult> {
+  // Gargalo único de e-mail: destinatário de DEMONSTRAÇÃO (domínio reservado `.invalid`) nunca
+  // chega ao provedor — vale para cron, convites e qualquer caminho futuro.
+  if (isDemoRecipient(opts.to)) return { ok: false, error: DEMO_EMAIL_BLOCKED_MESSAGE };
   const config = await getEmailProviderConfig();
   if (!config) return { ok: false, error: "Provedor de e-mail não configurado." };
 

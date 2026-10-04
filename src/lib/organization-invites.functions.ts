@@ -22,6 +22,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { z } from "zod";
+import { assertOrganizationIsNotDemo } from "@/lib/demo/demo-guards";
 
 /** The only two client-facing roles as of the role-collapse migration
  * (`20260922184944_collapse_client_roles_to_standard_viewer.sql`):
@@ -260,6 +261,12 @@ export const inviteClientUser = createServerFn({ method: "POST" })
     if (org.type !== "client") {
       throw new Error("Só é possível convidar usuários para organizações de clientes.");
     }
+    // A organização de uma DEMONSTRAÇÃO nunca recebe convite (defesa em profundidade: a
+    // interface já esconde a Demo e a organização é `suspended`, sem membros).
+    await assertOrganizationIsNotDemo(
+      context.supabase as unknown as Parameters<typeof assertOrganizationIsNotDemo>[0],
+      org.id,
+    );
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     return inviteClientUserCore(supabaseAdmin, context.userId, data);

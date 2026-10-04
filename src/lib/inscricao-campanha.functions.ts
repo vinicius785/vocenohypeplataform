@@ -15,6 +15,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { throwSafeDbError } from "@/lib/portal-db-error";
+import { findCampanhaBySignupTokenInRows } from "@/lib/demo/demo-scans";
 
 /**
  * Link público de INSCRIÇÃO de influenciadores numa campanha
@@ -30,11 +31,8 @@ async function findCampanhaBySignupToken(
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: rows, error } = await supabaseAdmin.from("clientes").select("id, data");
   if (error) throwSafeDbError(error);
-  for (const row of (rows ?? []) as { id: string; data: Cliente }[]) {
-    const campanha = row.data.campanhas?.find((c) => c.signupToken === token);
-    if (campanha) return { clienteId: row.id, cliente: row.data, campanha };
-  }
-  return null;
+  // Campanhas de DEMONSTRAÇÃO nunca resolvem por `signupToken` (a Demo não tem inscrição pública).
+  return findCampanhaBySignupTokenInRows((rows ?? []) as { id: string; data: Cliente }[], token);
 }
 
 // Token é `crypto.randomUUID().replace(/-/g, "")` (32 hex chars) — rejeita

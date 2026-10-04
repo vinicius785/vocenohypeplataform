@@ -78,7 +78,7 @@ import {
   primeNotifSound,
 } from "@/lib/chat-store";
 
-import { useClientes, type Cliente } from "@/lib/clientes-store";
+import { isDemoCampanhaId, useClientes, type Cliente } from "@/lib/clientes-store";
 import { routeForConvoId } from "@/components/chat-v2/chat-v2-utils";
 import { notificationSummary } from "@/lib/voice-messages";
 import { type NotifPrefs, loadNotifPrefs, subscribeNotifPrefs } from "@/lib/notif-prefs";
@@ -1381,6 +1381,8 @@ function useCampanhaAprovacaoNotifier(clientes: Cliente[]): {
       campanha_id: string;
       data: Influ;
     }): ClienteActionItem | null => {
+      // Demonstração nunca vira notificação do time (nem toast).
+      if (isDemoCampanhaId(row.campanha_id)) return null;
       const action = row.data.lastClientAction;
       if (!action) return null;
       const key = `${row.id}:${action.at}`;
@@ -1405,7 +1407,9 @@ function useCampanhaAprovacaoNotifier(clientes: Cliente[]): {
       .from("campanha_influenciadores")
       .select("id, campanha_id, data")
       .then(({ data: rows }) => {
-        const typedRows = (rows ?? []) as { id: string; campanha_id: string; data: Influ }[];
+        const typedRows = (
+          (rows ?? []) as { id: string; campanha_id: string; data: Influ }[]
+        ).filter((row) => !isDemoCampanhaId(row.campanha_id));
         const actionItems = typedRows
           .map(toItem)
           .filter((x): x is ClienteActionItem => x !== null && !seenRef.current.has(x.key));
@@ -1529,6 +1533,8 @@ function useClientDemandNotifier(clientes: Cliente[]): {
       campanha_id: string;
       data: Task;
     }): ClientDemandItem | null => {
+      // Demonstração nunca vira "Nova solicitação" no sino do time.
+      if (isDemoCampanhaId(row.campanha_id)) return null;
       if (!row.data.tags?.includes("Cliente")) return null;
       const key = `demand:${row.id}`;
       const empresa = empresaDaCampanha(row.campanha_id);

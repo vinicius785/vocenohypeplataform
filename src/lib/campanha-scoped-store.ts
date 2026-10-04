@@ -1,6 +1,8 @@
 import type { Influ } from "@/lib/influencer-model";
 import type { Task } from "@/components/tasks/TaskBoard";
 import { createScopedArrayStore } from "./scoped-table-store";
+import { clientesStore, getDemoCampanhaIds } from "./clientes-store";
+import { demoIdsKey, demoTaskIdsOf, withoutDemoCampanhas } from "./demo/demo-visibility";
 
 export type CampaignDoc = {
   id: string;
@@ -71,6 +73,33 @@ export async function initCampanhaScopedSync(): Promise<void> {
   }
 }
 
+/**
+ * A Demo (campanha de um cliente marcado `demoSessionId`) fica FORA de todo agregado
+ * "de todas as campanhas" (`getAll*` abaixo) — mas continua acessível pelos acessores
+ * por campanha (`load*(campanhaId)`), que o detalhe da campanha usa. Os ids vêm das
+ * `campanhas[]` dos clientes marcados no store de clientes (sem consulta extra).
+ *
+ * Os assinantes (`on*Change`) também são avisados quando o CONJUNTO de campanhas de demo
+ * muda (a Demo chegou ao cache depois dos dados da campanha), para quem agrega recalcular.
+ */
+function onDemoIdsChange(cb: () => void): () => void {
+  let last = demoIdsKey(getDemoCampanhaIds());
+  return clientesStore.subscribe(() => {
+    const next = demoIdsKey(getDemoCampanhaIds());
+    if (next === last) return;
+    last = next;
+    cb();
+  });
+}
+
+function subscribeWithDemoIds(
+  subscribe: (cb: () => void) => () => void,
+  cb: () => void,
+): () => void {
+  const offs = [subscribe(cb), onDemoIdsChange(cb)];
+  return () => offs.forEach((off) => off());
+}
+
 export function loadCampanhaInflus(campanhaId: string): Influ[] {
   return influsStore.get(campanhaId);
 }
@@ -78,12 +107,13 @@ export function saveCampanhaInflus(campanhaId: string, list: Influ[]) {
   influsStore.set(campanhaId, () => list);
 }
 export function onCampanhaInflusChange(cb: () => void): () => void {
-  return influsStore.subscribe(cb);
+  return subscribeWithDemoIds(influsStore.subscribe, cb);
 }
 /** All campanha->influencers, for cross-campaign lookups (e.g. a bank
- * influencer's history across every campaign they've been part of). */
+ * influencer's history across every campaign they've been part of). SEM as campanhas
+ * de demonstração. */
 export function getAllCampanhaInflus(): Map<string, Influ[]> {
-  return influsStore.getAll();
+  return withoutDemoCampanhas(influsStore.getAll(), getDemoCampanhaIds());
 }
 
 export function loadCampanhaTarefas(campanhaId: string): Task[] {
@@ -93,12 +123,20 @@ export function saveCampanhaTarefas(campanhaId: string, list: Task[]) {
   tarefasStore.set(campanhaId, () => list);
 }
 export function onCampanhaTarefasChange(cb: () => void): () => void {
-  return tarefasStore.subscribe(cb);
+  return subscribeWithDemoIds(tarefasStore.subscribe, cb);
 }
 /** All campanha->tarefas, para achar timers ativos em qualquer campanha
- * (indicador global no cabeçalho). */
+ * (indicador global no cabeçalho). SEM as campanhas de demonstração. */
 export function getAllCampanhaTarefas(): Map<string, Task[]> {
-  return tarefasStore.getAll();
+  return withoutDemoCampanhas(tarefasStore.getAll(), getDemoCampanhaIds());
+}
+
+/** A tarefa (ou subtarefa) pertence a uma campanha de demonstração? Usado para a Demo não
+ * contar no ledger de desempenho do time. */
+export function isDemoTaskId(taskId: string): boolean {
+  const demoIds = getDemoCampanhaIds();
+  if (demoIds.size === 0) return false;
+  return demoTaskIdsOf(tarefasStore.getAll(), demoIds).has(taskId);
 }
 
 export function loadCampanhaDocs(campanhaId: string): CampaignDoc[] {

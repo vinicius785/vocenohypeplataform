@@ -1,6 +1,7 @@
 import { useSyncExternalStore, useRef } from "react";
 import type { Campaign } from "@/components/VincularCampanhaDialog";
 import { createTableArrayStore } from "./table-array-store";
+import { demoCampanhaIdsOf, isDemoCliente, NO_DEMO_IDS } from "./demo/demo-visibility";
 
 export type Cliente = {
   id: string;
@@ -54,6 +55,11 @@ export type Cliente = {
   proximoPasso?: string;
   previsaoFechamento?: string;
   observacaoNegociacao?: string;
+  /** Marcador de cliente de DEMONSTRAÇÃO (Demo operacional) — gravado só pelo servidor, ao
+   * criar a demo; o banco o torna imutável. Cliente marcado some de `useClientes()` e de todo
+   * agregado do time (ver `lib/demo/demo-visibility.ts`); só o detalhe da campanha o enxerga
+   * (`useClientesComDemo`). Ausente em todo cliente real. */
+  demoSessionId?: string;
 };
 
 export type ClienteActivityEntry = {
@@ -66,7 +72,7 @@ export type ClienteActivityEntry = {
 
 export type ClienteStatus = "capture" | "active" | "closed" | "archived";
 
-const store = createTableArrayStore<Cliente>("clientes");
+const store = createTableArrayStore<Cliente>("clientes", { isHidden: isDemoCliente });
 
 export function initClientesSync(): Promise<void> {
   const p = store.init();
@@ -75,7 +81,10 @@ export function initClientesSync(): Promise<void> {
 }
 
 export const clientesStore = {
+  /** Só clientes REAIS (a demonstração fica de fora). */
   get: store.get,
+  /** Inclui a demonstração — para o detalhe da campanha e para decidir "isto é demo?". */
+  getAll: store.getAll,
   set: store.set,
   subscribe: store.subscribe,
   hydrateOne: store.hydrateOne,
@@ -83,6 +92,30 @@ export const clientesStore = {
 
 export function useClientes() {
   return useSyncExternalStore(clientesStore.subscribe, clientesStore.get, clientesStore.get);
+}
+
+/** Como `useClientes`, mas INCLUI a demonstração. Só para o detalhe da campanha (aberto a
+ * partir do lead) — listas, KPIs e agregados usam `useClientes`. */
+export function useClientesComDemo() {
+  return useSyncExternalStore(clientesStore.subscribe, clientesStore.getAll, clientesStore.getAll);
+}
+
+// Conjunto de campanhas de demo, memoizado pela referência do cache completo.
+let demoIdsSource: Cliente[] | null = null;
+let demoIds: ReadonlySet<string> = NO_DEMO_IDS;
+
+/** Ids das campanhas de demonstração presentes no cache. */
+export function getDemoCampanhaIds(): ReadonlySet<string> {
+  const all = clientesStore.getAll();
+  if (all !== demoIdsSource) {
+    demoIdsSource = all;
+    demoIds = demoCampanhaIdsOf(all);
+  }
+  return demoIds;
+}
+
+export function isDemoCampanhaId(campanhaId: string): boolean {
+  return getDemoCampanhaIds().has(campanhaId);
 }
 
 /**

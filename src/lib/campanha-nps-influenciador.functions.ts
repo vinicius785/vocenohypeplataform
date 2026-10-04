@@ -25,6 +25,7 @@ import type { Influ } from "@/lib/influencer-model";
 import { ensurePrimary } from "@/lib/social-profiles";
 import { InfluNpsAnswerSchema, InfluNpsTokenSchema } from "@/lib/campanha-nps-influenciador";
 import { throwSafeDbError } from "@/lib/portal-db-error";
+import { findCampanhaByIdInRows } from "@/lib/demo/demo-scans";
 
 type NpsInfluRow = {
   id: string;
@@ -55,11 +56,9 @@ async function findCampanhaNomeEPeriodo(
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: rows, error } = await supabaseAdmin.from("clientes").select("data");
   if (error) throwSafeDbError(error);
-  for (const row of (rows ?? []) as { data: Cliente }[]) {
-    const campanha = row.data.campanhas?.find((c) => c.id === campanhaId);
-    if (campanha) return { nome: campanha.nome, dataInicio: campanha.dataInicio };
-  }
-  return null;
+  // Campanhas de DEMONSTRAÇÃO não têm link público de NPS.
+  const campanha = findCampanhaByIdInRows((rows ?? []) as { data: Cliente }[], campanhaId);
+  return campanha ? { nome: campanha.nome, dataInicio: campanha.dataInicio } : null;
 }
 
 /** Dados pra renderizar a experiência pública de encerramento — identidade
