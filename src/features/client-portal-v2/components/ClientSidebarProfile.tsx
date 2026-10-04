@@ -4,6 +4,7 @@ import { LogOut, Settings } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useClientProfile, initialsFromName } from "../lib/client-profile";
+import { usePortalRuntime } from "../runtime/portal-runtime";
 
 export const CLIENT_ROLE_LABEL: Record<string, string> = {
   client_admin: "Administrador",
@@ -22,7 +23,50 @@ export const CLIENT_ROLE_LABEL: Record<string, string> = {
  * aqui dentro, mais um botão "Configurações" solto embaixo, todos
  * levando pro mesmo lugar).
  */
-export function ClientSidebarProfile({
+export function ClientSidebarProfile(props: {
+  name: string;
+  secondary: string;
+  email: string;
+  collapsed: boolean;
+}) {
+  const { capabilities } = usePortalRuntime();
+  return capabilities.accountMenu ? (
+    <AccountSidebarProfile {...props} />
+  ) : (
+    <StaticSidebarProfile {...props} />
+  );
+}
+
+/** Sem conta (Demo): só identifica quem está vendo — sem Configurações, sem Sair, sem consulta
+ * ao perfil da sessão. */
+function StaticSidebarProfile({
+  name,
+  secondary,
+  collapsed,
+}: {
+  name: string;
+  secondary: string;
+  collapsed: boolean;
+}) {
+  return (
+    <div
+      title={collapsed ? name : undefined}
+      className={`flex w-full items-center gap-2.5 p-1.5 ${collapsed ? "justify-center" : ""}`}
+    >
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-muted text-[11px] font-semibold text-muted-foreground">
+        {initialsFromName(name)}
+      </div>
+      {!collapsed && (
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-xs font-medium text-foreground">{name || "Sem nome"}</p>
+          <p className="truncate text-xs text-muted-foreground">{secondary}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AccountSidebarProfile({
   name,
   secondary,
   email,

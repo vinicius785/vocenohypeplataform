@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Check, ChevronDown, Download, Eye, Film, Paperclip, X } from "lucide-react";
-import { respondCampanhaEntregaSession } from "@/lib/portal-auth.functions";
+import { usePortalRuntime } from "../../runtime/portal-runtime";
 import { usePortalSessionData } from "@/components/portal/portal-session-context";
 import { InfluencerDrawerSection } from "./InfluencerDrawerSection";
 import { ClientFileViewer } from "../files/ClientFileViewer";
@@ -187,14 +186,14 @@ export function ClientInfluencerDeliverables({
 }) {
   const { reload, readOnly } = usePortalSessionData();
   const queryClient = useQueryClient();
-  const respondFn = useServerFn(respondCampanhaEntregaSession);
+  const { api } = usePortalRuntime();
   const [expandedId, setExpandedId] = useState<string | null>(initialOpenEntregaId ?? null);
   const [adjustingId, setAdjustingId] = useState<string | null>(null);
   const [openFile, setOpenFile] = useState<ClientFile | null>(null);
 
   const mutation = useMutation({
     mutationFn: (vars: { entregaId: string; status: "aprovado" | "reprovado"; motivo?: string }) =>
-      respondFn({ data: { campanhaId, influencerId, ...vars } }),
+      api.respondEntrega({ campanhaId, influencerId, ...vars }),
     onSuccess: () => {
       reload();
       queryClient.invalidateQueries();

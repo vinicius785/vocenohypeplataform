@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { ArrowLeft, Calendar } from "lucide-react";
-import { useNavigate } from "@tanstack/react-router";
+import { usePortalNavigate } from "../../runtime/portal-runtime";
 import { ClienteLogo } from "@/components/clientes/ClienteLogo";
 import { Badge } from "@/components/ui/badge";
 import type { CampaignSummary } from "../../types/attention";
@@ -30,7 +30,7 @@ export function ClientCampaignHeader({
    * direita no desktop, cai pra linha própria no mobile. */
   cycleSelector?: ReactNode;
 }) {
-  const navigate = useNavigate();
+  const navigate = usePortalNavigate();
   const status = getClientFacingStatus(campaign);
   const periodLabel = campaign.prazo
     ? `Prazo ${new Date(campaign.prazo).toLocaleDateString("pt-BR")}`

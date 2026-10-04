@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { usePortalNavigate } from "../runtime/portal-runtime";
 import { Bell, CheckSquare, Sparkles } from "lucide-react";
 import { usePortalSessionData } from "@/components/portal/portal-session-context";
 import { deriveAttentionItems, deriveRecentActivity } from "../lib/derive";
@@ -17,7 +17,7 @@ const MAX_ITEMS = 6;
  */
 export function NotificationsPopover() {
   const { data } = usePortalSessionData();
-  const navigate = useNavigate();
+  const navigate = usePortalNavigate();
   const [open, setOpen] = useState(false);
   const [, forceRerender] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);

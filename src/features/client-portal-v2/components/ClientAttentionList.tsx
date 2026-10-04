@@ -1,5 +1,5 @@
 import { AlertCircle, ArrowRight, CheckCircle2 } from "lucide-react";
-import { useNavigate } from "@tanstack/react-router";
+import { usePortalNavigate } from "../runtime/portal-runtime";
 import { Card, CardHeader } from "@/components/shared/SectionCard";
 import { EmptyState } from "@/components/shared/EmptyState";
 import type { AttentionItem } from "../types/attention";
@@ -26,7 +26,7 @@ const PRIORITY_DOT: Record<AttentionItem["priority"], string> = {
  * item.
  */
 export function ClientAttentionList({ items }: { items: AttentionItem[] }) {
-  const navigate = useNavigate();
+  const navigate = usePortalNavigate();
 
   return (
     <Card>

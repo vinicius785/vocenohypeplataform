@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
 import { Download, Eye, FileText, Paperclip } from "lucide-react";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { getFreshRelatorioUrlSession } from "@/lib/portal-auth.functions";
+import { usePortalRuntime } from "../../runtime/portal-runtime";
 import { CampaignSection } from "./CampaignSection";
 import { ClientFileViewer } from "../files/ClientFileViewer";
 import type { ClientFile } from "../../types/files";
@@ -22,7 +21,7 @@ export function ClientCampaignResources({
    * nunca uma segunda página, só um anel de foco na linha certa. */
   highlightReportId?: string;
 }) {
-  const freshUrlFn = useServerFn(getFreshRelatorioUrlSession);
+  const { api } = usePortalRuntime();
   const [openFile, setOpenFile] = useState<ClientFile | null>(null);
 
   const reports = campaign.relatorios;
@@ -90,8 +89,9 @@ export function ClientCampaignResources({
                             competenciaLabel: r.mes,
                             createdAt: r.uploadedAt,
                             regenerate: async () => {
-                              const result = await freshUrlFn({
-                                data: { campanhaId: campaign.id, relatorioId: r.id },
+                              const result = await api.freshRelatorioUrl({
+                                campanhaId: campaign.id,
+                                relatorioId: r.id,
                               });
                               return result.url;
                             },

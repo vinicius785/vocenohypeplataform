@@ -9,6 +9,7 @@ import {
   type PortalSessionData,
 } from "@/components/portal/portal-session-context";
 import { PortalV2Shell } from "@/features/client-portal-v2/layouts/PortalV2Shell";
+import { RealPortalRuntime } from "@/features/client-portal-v2/runtime/real-runtime";
 import { NpsForm, NpsGateError } from "@/features/client-portal-v2/components/PendingNpsGate";
 import { decideNpsGuard, NPS_ROUTE } from "@/features/client-portal-v2/nps-guard";
 
@@ -140,10 +141,12 @@ function PortalV2Layout() {
     return <NpsForm pendentes={clienteData.pendentes} onSubmitted={() => router.invalidate()} />;
   }
   return (
-    <PortalSessionDataProvider initialData={clienteData}>
-      <PortalV2Shell>
-        <Outlet />
-      </PortalV2Shell>
-    </PortalSessionDataProvider>
+    <RealPortalRuntime>
+      <PortalSessionDataProvider initialData={clienteData}>
+        <PortalV2Shell>
+          <Outlet />
+        </PortalV2Shell>
+      </PortalSessionDataProvider>
+    </RealPortalRuntime>
   );
 }

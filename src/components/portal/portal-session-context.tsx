@@ -35,12 +35,28 @@ export function usePortalSessionData(): PortalSessionContextValue {
   return ctx;
 }
 
+/**
+ * De onde o provider busca os dados e como fica sabendo de mudanças. Ausente = o portal real
+ * (`getPortalDataForSession` + Realtime `postgres_changes`, que exige sessão). A Demo passa a
+ * própria fonte: busca por token e sinal por Broadcast (cliente sem sessão não recebe
+ * `postgres_changes`).
+ */
+export type PortalSessionSource = {
+  load: () => Promise<unknown>;
+  /** Assina sinais de mudança; devolve o cancelamento. */
+  subscribe?: (onSignal: () => void) => () => void;
+  /** Falha ao recarregar (ex.: o link foi revogado). O portal real não usa. */
+  onError?: (error: unknown) => void;
+};
+
 export function PortalSessionDataProvider({
   initialData,
   children,
+  source,
 }: {
   initialData: PortalSessionData;
   children: React.ReactNode;
+  source?: PortalSessionSource;
 }) {
   const getDataFn = useServerFn(getPortalDataForSession);
   const router = useRouter();
@@ -50,7 +66,7 @@ export function PortalSessionDataProvider({
   dataRef.current = data;
 
   const reload = () => {
-    getDataFn()
+    (source ? source.load() : getDataFn())
       .then((row) => {
         // NPS ficou pendente no meio da sessão: o servidor não manda mais
         // dados — reexecuta o guard de rota (redireciona pra /portal-v2/nps).
@@ -61,9 +77,10 @@ export function PortalSessionDataProvider({
         setData(row as PortalSessionData);
         document.title = `${(row as PortalSessionData).clienteNome || "Portal"} · Hype`;
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         /* mantém os últimos dados bons em tela, mesma tolerância do
          * provider por token. */
+        source?.onError?.(error);
       });
   };
 
@@ -85,6 +102,10 @@ export function PortalSessionDataProvider({
   }, []);
 
   useEffect(() => {
+    if (source) {
+      // Fonte própria (Demo): sinal de mudança → um `reload()`.
+      return source.subscribe?.(() => reload());
+    }
     const channel = supabase
       .channel("rt-portal-app-campanha-influenciadores")
       .on(

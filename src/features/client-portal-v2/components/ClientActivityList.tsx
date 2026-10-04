@@ -1,5 +1,5 @@
 import { Sparkles } from "lucide-react";
-import { useNavigate } from "@tanstack/react-router";
+import { usePortalNavigate } from "../runtime/portal-runtime";
 import { Card, CardHeader } from "@/components/shared/SectionCard";
 import { EmptyState } from "@/components/shared/EmptyState";
 import type { ActivityEntry } from "../types/attention";
@@ -21,7 +21,7 @@ function relativeLabel(iso: string): string {
  * texto + contexto + horário), estado vazio composto (nunca só uma
  * frase solta). */
 export function ClientActivityList({ entries }: { entries: ActivityEntry[] }) {
-  const navigate = useNavigate();
+  const navigate = usePortalNavigate();
 
   return (
     <Card>

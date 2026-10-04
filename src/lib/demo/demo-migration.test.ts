@@ -15,10 +15,13 @@ import { DEMO_SCHEMA_VERSION, type DemoEventKind, type DemoSessionRow } from "./
 
 const MIGRATIONS = path.resolve(__dirname, "../../../supabase/migrations");
 const DEMO_FILE = "20261005000000_demo_operacional.sql";
+/** Redefine `demo_apply_scenario` (a coluna `campanha_nps.campanha_id` é uuid no banco vivo). */
+const FIX_FILE = "20261005120000_demo_apply_scenario_fix.sql";
 const read = (f: string) => readFileSync(path.join(MIGRATIONS, f), "utf8");
 const sql = read(DEMO_FILE);
 const norm = (s: string) => s.replace(/--.*$/gm, "").replace(/\s+/g, " ").trim().toLowerCase();
 const flat = norm(sql);
+const flatOf = (file: string) => norm(read(file));
 
 function tableColumns(table: string): string[] {
   const m = new RegExp(`create table public\\.${table} \\(([\\s\\S]*?)\\n\\);`).exec(sql);
@@ -45,7 +48,8 @@ describe("ordem e escopo da migration", () => {
     expect(files.indexOf(DEMO_FILE)).toBeGreaterThan(
       files.indexOf("20261004000000_restrict_internal_data_to_internal_members.sql"),
     );
-    expect(files[files.length - 1]).toBe(DEMO_FILE);
+    expect(files.indexOf(FIX_FILE)).toBeGreaterThan(files.indexOf(DEMO_FILE));
+    expect(files[files.length - 1]).toBe(FIX_FILE);
   });
 
   it("é aditiva: nenhum DROP de tabela/coluna e nenhum ALTER de tabela existente", () => {
@@ -123,7 +127,7 @@ describe("esquema ⇄ tipos TypeScript", () => {
   });
 
   it("as tabelas limpas no reinício == as removidas na compensação (adapter)", () => {
-    const applyBody = functionBody(DEMO_FILE, "demo_apply_scenario");
+    const applyBody = functionBody(FIX_FILE, "demo_apply_scenario");
     const deleted = [...applyBody.matchAll(/delete from public\.([a-z_]+) where campanha_id/g)].map(
       (m) => m[1],
     );
@@ -132,7 +136,7 @@ describe("esquema ⇄ tipos TypeScript", () => {
 });
 
 describe("isolamento por construção em demo_apply_scenario", () => {
-  const body = functionBody(DEMO_FILE, "demo_apply_scenario");
+  const body = functionBody(FIX_FILE, "demo_apply_scenario");
 
   it("toda linha filha usa o campanha_id DA SESSÃO — nunca um valor vindo do payload", () => {
     expect(body).not.toMatch(/->>? '(campanha_id|campanhaid|organization_id|cliente_id)'/);
@@ -292,5 +296,41 @@ describe("demo_prerequisites ⇄ migration 20261004", () => {
 
   it("os sinais exigem `is_internal_team_member` no texto da policy", () => {
     expect(flat.match(/qual ilike '%is_internal_team_member%'/g)).toHaveLength(2);
+  });
+});
+
+describe("correção de demo_apply_scenario (uuid = text no banco vivo)", () => {
+  const original = functionBody(DEMO_FILE, "demo_apply_scenario");
+  const fixed = functionBody(FIX_FILE, "demo_apply_scenario");
+
+  it("é a função original com UMA linha trocada: a comparação de campanha_nps passa a ser por texto", () => {
+    expect(original).toContain(
+      "delete from public.campanha_nps where campanha_id = s.campanha_id::text;",
+    );
+    expect(fixed).toContain(
+      "delete from public.campanha_nps where campanha_id::text = s.campanha_id::text;",
+    );
+    expect(
+      original.replace(
+        "delete from public.campanha_nps where campanha_id = s.campanha_id::text;",
+        "delete from public.campanha_nps where campanha_id::text = s.campanha_id::text;",
+      ),
+    ).toBe(fixed);
+  });
+
+  it("nenhuma comparação direta uuid = text sobrou na limpeza (as demais colunas são uuid)", () => {
+    expect(fixed).not.toMatch(/campanha_id = s\.campanha_id::text/);
+  });
+
+  it("mantém SECURITY DEFINER, search_path fixo e execução só para service_role", () => {
+    const raw = flatOf(FIX_FILE);
+    expect(raw).toContain("security definer");
+    expect(raw).toContain("set search_path = public");
+    expect(raw).toContain(
+      "revoke all on function public.demo_apply_scenario(uuid, jsonb) from public, anon, authenticated",
+    );
+    expect(raw).toContain(
+      "grant execute on function public.demo_apply_scenario(uuid, jsonb) to service_role",
+    );
   });
 });

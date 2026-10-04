@@ -10,6 +10,7 @@ import {
   closeDemo,
   createDemo,
   getDemoForLead,
+  getDemoLink,
   renewDemoAccess,
   restartDemo,
   revokeDemoAccess,
@@ -58,6 +59,7 @@ export function LeadDemoSection({ leadId, leadLabel }: { leadId: string; leadLab
   const closeFn = useServerFn(closeDemo);
   const revokeFn = useServerFn(revokeDemoAccess);
   const renewFn = useServerFn(renewDemoAccess);
+  const linkFn = useServerFn(getDemoLink);
 
   const { data, isLoading, isError } = useQuery({
     queryKey,
@@ -94,6 +96,24 @@ export function LeadDemoSection({ leadId, leadLabel }: { leadId: string; leadLab
       openDemoCampaign(session.campanha_id);
       return;
     }
+    if (action === "copiar_link" || action === "abrir_cliente") {
+      setPending(action);
+      try {
+        const { token } = await linkFn({ data: { sessionId: session.id } });
+        const url = `${window.location.origin}/demo/${token}`;
+        if (action === "copiar_link") {
+          await navigator.clipboard.writeText(url);
+          toast.success(DEMO_ACTION_SUCCESS.copiar_link);
+        } else {
+          window.open(url, "_blank", "noopener,noreferrer");
+        }
+      } catch (e) {
+        toast.error("Não foi possível obter o link", { description: messageOf(e) });
+      } finally {
+        setPending(null);
+      }
+      return;
+    }
     const sure = DEMO_ACTION_CONFIRM[action];
     if (
       sure &&
@@ -106,7 +126,10 @@ export function LeadDemoSection({ leadId, leadLabel }: { leadId: string; leadLab
       return;
     }
     const sessionId = session.id;
-    const call: Record<Exclude<DemoCardAction, "abrir">, () => Promise<unknown>> = {
+    const call: Record<
+      Exclude<DemoCardAction, "abrir" | "copiar_link" | "abrir_cliente">,
+      () => Promise<unknown>
+    > = {
       reiniciar: () => restartFn({ data: { sessionId } }),
       renovar: () => renewFn({ data: { sessionId } }),
       novo_link: () => renewFn({ data: { sessionId, newLink: true } }),

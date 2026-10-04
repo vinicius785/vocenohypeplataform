@@ -1,7 +1,5 @@
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
-import { supabase } from "@/integrations/supabase/client";
+import { usePortalIdentity, usePortalNavigate } from "../runtime/portal-runtime";
 import { PageContainer } from "@/components/shared/PageContainer";
 import { usePortalSessionData } from "@/components/portal/portal-session-context";
 import {
@@ -26,12 +24,7 @@ function getGreeting(hour: number): string {
 }
 
 function useFirstName(): string {
-  const { data: session } = useQuery({
-    queryKey: ["portal-v2-user"],
-    queryFn: async () => (await supabase.auth.getUser()).data.user,
-    staleTime: 5 * 60 * 1000,
-  });
-  const name = (session?.user_metadata?.full_name as string | undefined) ?? session?.email ?? "";
+  const { name } = usePortalIdentity(null);
   return name.split(" ")[0] || name || "";
 }
 
@@ -46,7 +39,7 @@ function useFirstName(): string {
  */
 export function InicioV2() {
   const { data } = usePortalSessionData();
-  const navigate = useNavigate();
+  const navigate = usePortalNavigate();
   const firstName = useFirstName();
   const now = new Date();
 

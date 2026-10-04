@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { usePortalNavigate } from "../runtime/portal-runtime";
 import {
   FileText,
   Film,
@@ -76,7 +76,7 @@ const TYPE_ICON: Record<ClientFileKind, typeof FileText> = {
  */
 export function ArquivosV2({ openFileId }: { openFileId?: string }) {
   const { data } = usePortalSessionData();
-  const navigate = useNavigate();
+  const navigate = usePortalNavigate();
   const [query, setQuery] = useState("");
   const [campaignFilter, setCampaignFilter] = useState("todas");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("todos");

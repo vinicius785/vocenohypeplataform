@@ -1,5 +1,5 @@
 import { ChevronRight, Film } from "lucide-react";
-import { useNavigate } from "@tanstack/react-router";
+import { usePortalNavigate } from "../../runtime/portal-runtime";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { ENTREGA_STAGE_TONE } from "@/lib/campanha-status";
 import { CampaignSection } from "./CampaignSection";
@@ -17,7 +17,7 @@ import type { ContentItem } from "../../types/content";
  * mídia, tipo + status já traduzidos pro cliente (`statusCliente`, mesma
  * fonte usada no drawer — nunca um segundo mapeamento de estágio). */
 export function ClientCampaignDeliverables({ items }: { items: ContentItem[] }) {
-  const navigate = useNavigate();
+  const navigate = usePortalNavigate();
 
   return (
     <CampaignSection
@@ -89,8 +89,7 @@ export function ClientCampaignDeliverables({ items }: { items: ContentItem[] }) 
                 type="button"
                 onClick={() =>
                   navigate({
-                    to: "/portal-v2/campanhas/$campanhaId",
-                    params: { campanhaId: item.campanhaId },
+                    to: `/portal-v2/campanhas/${item.campanhaId}`,
                     // Faz MERGE com a busca atual (nunca substitui) — este
                     // card é clicado de dentro da própria página da
                     // campanha, já com `?competencia=` setado quando é

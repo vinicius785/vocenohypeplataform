@@ -16,8 +16,8 @@ import type { DemoSessionView } from "@/lib/demo/demo-types";
  * `LeadDemoSection`). Sem demo: um convite curto e o botão de criar. Com demo: o estado, o
  * resumo, "Abrir campanha" e o menu •••.
  *
- * "Copiar link" entra junto com a rota `/demo/$token` (Etapa 4): copiar agora entregaria um
- * link que ainda não abre.
+ * "Copiar link" só aparece com a demo ativa (um link expirado, revogado ou encerrado não se
+ * compartilha).
  */
 export function LeadDemoCardView({
   session,
@@ -76,6 +76,17 @@ export function LeadDemoCardView({
                 Criar nova demonstração
               </Button>
             ) : null}
+            {view.canShareLink && (
+              <Button
+                variant="secondary"
+                size="sm"
+                isLoading={pending === "copiar_link"}
+                disabled={busy}
+                onClick={() => onAction("copiar_link")}
+              >
+                {DEMO_ACTION_LABEL.copiar_link}
+              </Button>
+            )}
             <Button variant="secondary" size="sm" disabled={busy} onClick={() => onAction("abrir")}>
               {DEMO_ACTION_LABEL.abrir}
             </Button>

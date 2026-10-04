@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { usePortalNavigate } from "../runtime/portal-runtime";
 import { PageContainer } from "@/components/shared/PageContainer";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { usePortalSessionData } from "@/components/portal/portal-session-context";
@@ -54,7 +54,7 @@ export function CampanhaDetailV2({
   openReportId?: string;
 }) {
   const { data } = usePortalSessionData();
-  const navigate = useNavigate();
+  const navigate = usePortalNavigate();
   const campaignRaw = data.campanhas.find((c) => c.id === campanhaId);
 
   const activeCycle = useMemo(
@@ -79,8 +79,7 @@ export function CampanhaDetailV2({
 
   const goTo = (search: Record<string, string | undefined>) =>
     navigate({
-      to: "/portal-v2/campanhas/$campanhaId",
-      params: { campanhaId },
+      to: `/portal-v2/campanhas/${campanhaId}`,
       search: { competencia, ...search },
     });
 
@@ -94,8 +93,7 @@ export function CampanhaDetailV2({
     // novo ciclo (checado no efeito abaixo, que fecha o drawer sozinho
     // quando a participação não existe nesse mês).
     navigate({
-      to: "/portal-v2/campanhas/$campanhaId",
-      params: { campanhaId },
+      to: `/portal-v2/campanhas/${campanhaId}`,
       search: { competencia: cycleKey(nextCycle) },
     });
   };

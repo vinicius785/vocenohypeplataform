@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Check, X } from "lucide-react";
-import { respondCampanhaInfluSession } from "@/lib/portal-auth.functions";
+import { usePortalRuntime } from "../../runtime/portal-runtime";
 import { PERFIL_REJEICAO_MOTIVOS } from "@/lib/campanha-status";
 import { usePortalSessionData } from "@/components/portal/portal-session-context";
 import type { PublicInfluencer } from "@/lib/portal-types";
@@ -25,7 +24,7 @@ export function ClientInfluencerStatusActions({
 }) {
   const { reload, readOnly } = usePortalSessionData();
   const queryClient = useQueryClient();
-  const respondFn = useServerFn(respondCampanhaInfluSession);
+  const { api } = usePortalRuntime();
   const [rejecting, setRejecting] = useState(false);
   const [motivo, setMotivo] = useState<(typeof PERFIL_REJEICAO_MOTIVOS)[number] | "">("");
   const [comentario, setComentario] = useState("");
@@ -35,7 +34,7 @@ export function ClientInfluencerStatusActions({
       status: "aprovado" | "reprovado";
       motivoLabel?: (typeof PERFIL_REJEICAO_MOTIVOS)[number];
       comentario?: string;
-    }) => respondFn({ data: { campanhaId, influencerId: influencer.id, ...vars } }),
+    }) => api.respondInflu({ campanhaId, influencerId: influencer.id, ...vars }),
     onSuccess: () => {
       reload();
       queryClient.invalidateQueries();

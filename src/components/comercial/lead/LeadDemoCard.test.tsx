@@ -81,7 +81,10 @@ describe("LeadDemoCardView", () => {
     expect(render(session("ativo"))).not.toMatch(/token"|\/demo\//);
   });
 
-  it("não oferece 'Copiar link' ainda (a rota /demo/$token chega na Etapa 4)", () => {
-    expect(render(session("ativo"))).not.toMatch(/Copiar/i);
+  it("'Copiar link' só com a demo ativa", () => {
+    expect(render(session("ativo"))).toContain("Copiar link");
+    for (const a of ["expirado", "revogado", "encerrado"] as const) {
+      expect(render(session(a)), a).not.toContain("Copiar link");
+    }
   });
 });

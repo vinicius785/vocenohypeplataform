@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
+import { usePortalNavigate, usePortalRuntime } from "../runtime/portal-runtime";
 import { FileText, MoreVertical, Download } from "lucide-react";
 import { PageContainer } from "@/components/shared/PageContainer";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -11,7 +10,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { usePortalSessionData } from "@/components/portal/portal-session-context";
-import { getFreshRelatorioUrlSession } from "@/lib/portal-auth.functions";
 import { PortalPageHeader } from "../components/shared/PortalPageHeader";
 import { PortalListPanel, PortalListRow } from "../components/shared/PortalListPanel";
 import { portalFieldBase } from "../components/shared/portal-field-styles";
@@ -62,8 +60,8 @@ function competenceLabel(mes: string): string {
  */
 export function RelatoriosV2({ openFileId }: { openFileId?: string }) {
   const { data } = usePortalSessionData();
-  const navigate = useNavigate();
-  const freshUrlFn = useServerFn(getFreshRelatorioUrlSession);
+  const navigate = usePortalNavigate();
+  const { api } = usePortalRuntime();
   const [campaignFilter, setCampaignFilter] = useState<string>("todas");
   const [sortBy, setSortBy] = useState<"recentes" | "antigos" | "campanha">("recentes");
 
@@ -111,8 +109,9 @@ export function RelatoriosV2({ openFileId }: { openFileId?: string }) {
     competenciaLabel: competenceLabel(r.mes),
     createdAt: r.uploadedAt,
     regenerate: async () => {
-      const result = await freshUrlFn({
-        data: { campanhaId: r.campanhaId, relatorioId: r.id },
+      const result = await api.freshRelatorioUrl({
+        campanhaId: r.campanhaId,
+        relatorioId: r.id,
       });
       return result.url;
     },

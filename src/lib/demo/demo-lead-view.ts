@@ -7,6 +7,8 @@ import type { DemoAccessState, DemoSessionView } from "./demo-types";
 
 export type DemoCardAction =
   | "abrir"
+  | "copiar_link"
+  | "abrir_cliente"
   | "reiniciar"
   | "renovar"
   | "novo_link"
@@ -23,10 +25,14 @@ export type DemoCardView = {
   menu: DemoCardAction[];
   /** Pode criar uma nova demo para este lead (a atual está encerrada). */
   canCreateNew: boolean;
+  /** O link funciona agora: faz sentido copiá-lo e abri-lo como cliente. */
+  canShareLink: boolean;
 };
 
 export const DEMO_ACTION_LABEL: Record<DemoCardAction, string> = {
   abrir: "Abrir campanha",
+  copiar_link: "Copiar link",
+  abrir_cliente: "Abrir como cliente",
   reiniciar: "Reiniciar demonstração",
   renovar: "Renovar validade do link",
   novo_link: "Gerar novo link",
@@ -95,8 +101,9 @@ const BY_ACCESS: Record<DemoAccessState, (s: DemoSessionView, now: Date) => Demo
     statusLabel: "Ativa",
     tone: "success",
     summary: `Link válido até ${formatDemoDate(s.token_expires_at)} · ${daysLeftLabel(s.token_expires_at, now)}`,
-    menu: ["renovar", "novo_link", "reiniciar", "revogar", "encerrar"],
+    menu: ["abrir_cliente", "renovar", "novo_link", "reiniciar", "revogar", "encerrar"],
     canCreateNew: false,
+    canShareLink: true,
   }),
   expirado: (s) => ({
     statusLabel: "Link expirado",
@@ -104,6 +111,7 @@ const BY_ACCESS: Record<DemoAccessState, (s: DemoSessionView, now: Date) => Demo
     summary: `Expirou em ${formatDemoDate(s.token_expires_at)}. Renove para o cliente voltar a acessar.`,
     menu: ["renovar", "novo_link", "reiniciar", "encerrar"],
     canCreateNew: false,
+    canShareLink: false,
   }),
   revogado: (s) => ({
     statusLabel: "Acesso revogado",
@@ -111,6 +119,7 @@ const BY_ACCESS: Record<DemoAccessState, (s: DemoSessionView, now: Date) => Demo
     summary: `Revogado em ${formatDemoDate(s.access_revoked_at)}. Gere um novo link para o cliente voltar a acessar.`,
     menu: ["novo_link", "reiniciar", "encerrar"],
     canCreateNew: false,
+    canShareLink: false,
   }),
   encerrado: (s) => ({
     statusLabel: "Encerrada",
@@ -118,6 +127,7 @@ const BY_ACCESS: Record<DemoAccessState, (s: DemoSessionView, now: Date) => Demo
     summary: `Encerrada em ${formatDemoDate(s.closed_at)}. A campanha continua visível só para o time.`,
     menu: [],
     canCreateNew: true,
+    canShareLink: false,
   }),
 };
 
@@ -126,7 +136,11 @@ export function describeDemo(session: DemoSessionView, now: Date): DemoCardView 
 }
 
 /** Mensagem de sucesso (toast) de cada ação. */
-export const DEMO_ACTION_SUCCESS: Record<Exclude<DemoCardAction, "abrir">, string> = {
+export const DEMO_ACTION_SUCCESS: Record<
+  Exclude<DemoCardAction, "abrir" | "abrir_cliente">,
+  string
+> = {
+  copiar_link: "Link copiado",
   reiniciar: "Demonstração reiniciada",
   renovar: "Validade renovada",
   novo_link: "Novo link gerado",

@@ -1,6 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { useRouterState } from "@tanstack/react-router";
 import {
   Home,
   Megaphone,
@@ -18,6 +17,12 @@ import { NotificationsPopover } from "../components/NotificationsPopover";
 import { ClientThemeMenu } from "../components/ClientThemeMenu";
 import { ClientSidebarProfile, CLIENT_ROLE_LABEL } from "../components/ClientSidebarProfile";
 import { PendingNpsGate } from "../components/PendingNpsGate";
+import {
+  usePortalIdentity,
+  usePortalNavigate,
+  usePortalRuntime,
+  type PortalNavItem,
+} from "../runtime/portal-runtime";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /**
@@ -44,7 +49,12 @@ const NAV_ITEMS = [
   { key: "campanhas", label: "Campanhas", icon: Megaphone, href: "/portal-v2/campanhas" },
   { key: "relatorios", label: "Relatórios", icon: FileBarChart, href: "/portal-v2/relatorios" },
   { key: "arquivos", label: "Arquivos", icon: FolderOpen, href: "/portal-v2/arquivos" },
-] as const;
+] as const satisfies ReadonlyArray<{
+  key: PortalNavItem;
+  label: string;
+  icon: typeof Home;
+  href: string;
+}>;
 
 function NavButton({
   active,
@@ -85,9 +95,10 @@ function NavButton({
   );
 }
 
-function useMultiClientEnv(): boolean {
+function useMultiClientEnv(enabled: boolean): boolean {
   const [multiEnv, setMultiEnv] = useState(false);
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
     (async () => {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -101,21 +112,13 @@ function useMultiClientEnv(): boolean {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [enabled]);
   return multiEnv;
 }
 
 function useAuthIdentity(): { name: string; secondary: string; email: string } {
   const { data } = usePortalSessionData();
-  const { data: authUser } = useQuery({
-    queryKey: ["portal-v2-user"],
-    queryFn: async () => (await supabase.auth.getUser()).data.user,
-    staleTime: 5 * 60 * 1000,
-  });
-  const name = (authUser?.user_metadata?.full_name as string | undefined) || authUser?.email || "";
-  const roleLabel = CLIENT_ROLE_LABEL[data.role] ?? null;
-  const email = authUser?.email ?? "";
-  return { name, secondary: roleLabel ?? "", email };
+  return usePortalIdentity(CLIENT_ROLE_LABEL[data.role] ?? null);
 }
 
 function SidebarContent({
@@ -128,8 +131,9 @@ function SidebarContent({
   onNavigate?: () => void;
 }) {
   const { data } = usePortalSessionData();
-  const navigate = useNavigate();
-  const multiEnv = useMultiClientEnv();
+  const navigate = usePortalNavigate();
+  const { paths, capabilities } = usePortalRuntime();
+  const multiEnv = useMultiClientEnv(capabilities.environmentSwitch);
   const { name: userName, secondary, email } = useAuthIdentity();
 
   return (
@@ -146,12 +150,12 @@ function SidebarContent({
         {NAV_ITEMS.map((item) => (
           <NavButton
             key={item.key}
-            active={currentPath.startsWith(item.href)}
+            active={paths.isActive(currentPath, item.key)}
             collapsed={collapsed}
             icon={item.icon}
             label={item.label}
             onClick={() => {
-              navigate({ to: item.href });
+              navigate({ to: paths[item.key]() });
               onNavigate?.();
             }}
           />
@@ -184,7 +188,8 @@ export function PortalV2Shell({ children }: { children: ReactNode }) {
   );
 }
 
-function PortalV2ShellInner({ children }: { children: ReactNode }) {
+export function PortalV2ShellInner({ children }: { children: ReactNode }) {
+  const { banner } = usePortalRuntime();
   const [collapsed, setCollapsed] = useState(() => {
     try {
       return localStorage.getItem(COLLAPSE_KEY) === "1";
@@ -294,6 +299,7 @@ function PortalV2ShellInner({ children }: { children: ReactNode }) {
             <PortalV2Breadcrumb currentPath={currentPath} />
           </div>
           <div className="flex items-center gap-1">
+            {banner}
             <ClientThemeMenu />
             <NotificationsPopover />
           </div>
@@ -305,12 +311,13 @@ function PortalV2ShellInner({ children }: { children: ReactNode }) {
 }
 
 function PortalV2Breadcrumb({ currentPath }: { currentPath: string }) {
-  const active = NAV_ITEMS.find((item) => currentPath.startsWith(item.href));
+  const { paths } = usePortalRuntime();
+  const active = NAV_ITEMS.find((item) => paths.isActive(currentPath, item.key));
   // Configurações não é um item de NAV_ITEMS (só existe dentro do popover
   // do usuário) — sem este caso o título cairia no genérico "Portal".
   const label =
     active?.label ??
-    (currentPath.startsWith("/portal-v2/configuracoes") ? "Configurações" : "Portal");
+    (currentPath.startsWith(`${paths.base}/configuracoes`) ? "Configurações" : "Portal");
   return <p className="truncate text-sm font-medium text-foreground">{label}</p>;
 }
 

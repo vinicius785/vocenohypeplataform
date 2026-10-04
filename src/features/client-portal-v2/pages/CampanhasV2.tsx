@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { usePortalNavigate } from "../runtime/portal-runtime";
 import { Megaphone } from "lucide-react";
 import { PageContainer } from "@/components/shared/PageContainer";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -30,7 +30,7 @@ function statusOf(campaign: CampaignSummary): Exclude<CampaignStatusFilter, "tod
  */
 export function CampanhasV2() {
   const { data } = usePortalSessionData();
-  const navigate = useNavigate();
+  const navigate = usePortalNavigate();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<CampaignStatusFilter>("todas");
 
@@ -114,9 +114,7 @@ export function CampanhasV2() {
               campaign={c}
               clientLogo={data.clienteFoto}
               clientName={data.clienteNome}
-              onOpen={() =>
-                navigate({ to: "/portal-v2/campanhas/$campanhaId", params: { campanhaId: c.id } })
-              }
+              onOpen={() => navigate({ to: `/portal-v2/campanhas/${c.id}` })}
             />
           ))}
         </div>

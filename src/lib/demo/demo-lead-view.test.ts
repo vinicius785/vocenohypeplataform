@@ -39,7 +39,15 @@ describe("describeDemo", () => {
     const v = describeDemo(session("ativo"), NOW);
     expect(v).toMatchObject({ statusLabel: "Ativa", tone: "success", canCreateNew: false });
     expect(v.summary).toBe("Link válido até 19/10 · 14 dias restantes");
-    expect(v.menu).toEqual(["renovar", "novo_link", "reiniciar", "revogar", "encerrar"]);
+    expect(v.menu).toEqual([
+      "abrir_cliente",
+      "renovar",
+      "novo_link",
+      "reiniciar",
+      "revogar",
+      "encerrar",
+    ]);
+    expect(v.canShareLink).toBe(true);
   });
 
   it("perto do fim, o resumo avisa em vez de contar dias", () => {
@@ -68,6 +76,14 @@ describe("describeDemo", () => {
     expect(v.summary).toContain("07/10");
   });
 
+  it("só a demo ATIVA oferece compartilhar o link (link morto não se copia)", () => {
+    for (const a of ["expirado", "revogado", "encerrado"] as const) {
+      const v = describeDemo(session(a), NOW);
+      expect(v.canShareLink, a).toBe(false);
+      expect(v.menu, a).not.toContain("abrir_cliente");
+    }
+  });
+
   it("só a encerrada permite nova demo (uma ativa por lead)", () => {
     for (const a of ["ativo", "expirado", "revogado"] as const) {
       expect(describeDemo(session(a), NOW).canCreateNew, a).toBe(false);
@@ -78,6 +94,8 @@ describe("describeDemo", () => {
 describe("rótulos e confirmações", () => {
   const all: DemoCardAction[] = [
     "abrir",
+    "copiar_link",
+    "abrir_cliente",
     "reiniciar",
     "renovar",
     "novo_link",
@@ -87,8 +105,8 @@ describe("rótulos e confirmações", () => {
 
   it("toda ação tem rótulo; toda ação do menu (exceto abrir) tem mensagem de sucesso", () => {
     for (const a of all) expect(DEMO_ACTION_LABEL[a], a).toBeTruthy();
-    for (const a of all.filter((x) => x !== "abrir")) {
-      expect(DEMO_ACTION_SUCCESS[a as Exclude<DemoCardAction, "abrir">], a).toBeTruthy();
+    for (const a of all.filter((x) => x !== "abrir" && x !== "abrir_cliente")) {
+      expect(DEMO_ACTION_SUCCESS[a as keyof typeof DEMO_ACTION_SUCCESS], a).toBeTruthy();
     }
   });
 

@@ -27,6 +27,7 @@ import { Route as AuthenticatedTimeRouteImport } from './routes/_authenticated/t
 import { Route as AuthenticatedTimeV2RouteImport } from './routes/_authenticated/time-v2'
 import { Route as BugsTokenRouteImport } from './routes/bugs.$token'
 import { Route as CalculadoraPropostaTokenRouteImport } from './routes/calculadora-proposta.$token'
+import { Route as DemoTokenRouteRouteImport } from './routes/demo.$token/route'
 import { Route as InscricaoTokenRouteImport } from './routes/inscricao.$token'
 import { Route as NpsInfluenciadorTokenRouteImport } from './routes/nps-influenciador.$token'
 import { Route as PortalAppSplatRouteImport } from './routes/portal-app.$'
@@ -52,6 +53,12 @@ import { Route as ApiCronGoogleCalendarSyncRouteImport } from './routes/api/cron
 import { Route as ApiGoogleOauthCallbackRouteImport } from './routes/api/google/oauth-callback'
 import { Route as ApiPublicLeadsRouteImport } from './routes/api/public/leads'
 import { Route as ApiWebhooksResendRouteImport } from './routes/api/webhooks/resend'
+import { Route as DemoTokenIndexRouteImport } from './routes/demo.$token/index'
+import { Route as DemoTokenArquivosRouteImport } from './routes/demo.$token/arquivos'
+import { Route as DemoTokenCampanhasRouteImport } from './routes/demo.$token/campanhas'
+import { Route as DemoTokenConteudosRouteImport } from './routes/demo.$token/conteudos'
+import { Route as DemoTokenInicioRouteImport } from './routes/demo.$token/inicio'
+import { Route as DemoTokenRelatoriosRouteImport } from './routes/demo.$token/relatorios'
 import { Route as EmailDescadastroTokenRouteImport } from './routes/email.descadastro.$token'
 import { Route as PortalV2CampanhasIndexRouteImport } from './routes/portal-v2/campanhas.index'
 import { Route as PortalV2CampanhasCampanhaIdRouteImport } from './routes/portal-v2/campanhas.$campanhaId'
@@ -67,6 +74,8 @@ import { Route as PortalTokenSolicitacoesRouteImport } from './routes/portal.$to
 import { Route as AuthenticatedChatV2CampaignIdRouteImport } from './routes/_authenticated/chat-v2.campaign.$id'
 import { Route as AuthenticatedChatV2ChannelIdRouteImport } from './routes/_authenticated/chat-v2.channel.$id'
 import { Route as AuthenticatedChatV2DmIdRouteImport } from './routes/_authenticated/chat-v2.dm.$id'
+import { Route as DemoTokenCampanhasIndexRouteImport } from './routes/demo.$token/campanhas.index'
+import { Route as DemoTokenCampanhasCampanhaIdRouteImport } from './routes/demo.$token/campanhas.$campanhaId'
 import { Route as PortalV2CampanhasCampanhaIdContentRouteImport } from './routes/portal-v2/campanhas.$campanhaId.content'
 import { Route as PortalV2CampanhasCampanhaIdCreatorsRouteImport } from './routes/portal-v2/campanhas.$campanhaId.creators'
 import { Route as PortalV2CampanhasCampanhaIdFilesRouteImport } from './routes/portal-v2/campanhas.$campanhaId.files'
@@ -172,6 +181,11 @@ const CalculadoraPropostaTokenRoute =
     path: '/calculadora-proposta/$token',
     getParentRoute: () => rootRouteImport,
   } as any)
+const DemoTokenRouteRoute = DemoTokenRouteRouteImport.update({
+  id: '/demo/$token',
+  path: '/demo/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const InscricaoTokenRoute = InscricaoTokenRouteImport.update({
   id: '/inscricao/$token',
   path: '/inscricao/$token',
@@ -299,6 +313,36 @@ const ApiWebhooksResendRoute = ApiWebhooksResendRouteImport.update({
   path: '/api/webhooks/resend',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DemoTokenIndexRoute = DemoTokenIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DemoTokenRouteRoute,
+} as any)
+const DemoTokenArquivosRoute = DemoTokenArquivosRouteImport.update({
+  id: '/arquivos',
+  path: '/arquivos',
+  getParentRoute: () => DemoTokenRouteRoute,
+} as any)
+const DemoTokenCampanhasRoute = DemoTokenCampanhasRouteImport.update({
+  id: '/campanhas',
+  path: '/campanhas',
+  getParentRoute: () => DemoTokenRouteRoute,
+} as any)
+const DemoTokenConteudosRoute = DemoTokenConteudosRouteImport.update({
+  id: '/conteudos',
+  path: '/conteudos',
+  getParentRoute: () => DemoTokenRouteRoute,
+} as any)
+const DemoTokenInicioRoute = DemoTokenInicioRouteImport.update({
+  id: '/inicio',
+  path: '/inicio',
+  getParentRoute: () => DemoTokenRouteRoute,
+} as any)
+const DemoTokenRelatoriosRoute = DemoTokenRelatoriosRouteImport.update({
+  id: '/relatorios',
+  path: '/relatorios',
+  getParentRoute: () => DemoTokenRouteRoute,
+} as any)
 const EmailDescadastroTokenRoute = EmailDescadastroTokenRouteImport.update({
   id: '/email/descadastro/$token',
   path: '/email/descadastro/$token',
@@ -381,6 +425,17 @@ const AuthenticatedChatV2DmIdRoute = AuthenticatedChatV2DmIdRouteImport.update({
   path: '/dm/$id',
   getParentRoute: () => AuthenticatedChatV2Route,
 } as any)
+const DemoTokenCampanhasIndexRoute = DemoTokenCampanhasIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DemoTokenCampanhasRoute,
+} as any)
+const DemoTokenCampanhasCampanhaIdRoute =
+  DemoTokenCampanhasCampanhaIdRouteImport.update({
+    id: '/$campanhaId',
+    path: '/$campanhaId',
+    getParentRoute: () => DemoTokenCampanhasRoute,
+  } as any)
 const PortalV2CampanhasCampanhaIdContentRoute =
   PortalV2CampanhasCampanhaIdContentRouteImport.update({
     id: '/content',
@@ -450,6 +505,7 @@ export interface FileRoutesByFullPath {
   '/criar-senha': typeof CriarSenhaRoute
   '/redefinir-senha': typeof RedefinirSenhaRoute
   '/selecionar-ambiente': typeof SelecionarAmbienteRoute
+  '/demo/$token': typeof DemoTokenRouteRouteWithChildren
   '/portal/$token': typeof PortalTokenRouteRouteWithChildren
   '/banco-influenciadores-v2': typeof AuthenticatedBancoInfluenciadoresV2Route
   '/chat-v2': typeof AuthenticatedChatV2RouteWithChildren
@@ -484,6 +540,11 @@ export interface FileRoutesByFullPath {
   '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
   '/api/public/leads': typeof ApiPublicLeadsRoute
   '/api/webhooks/resend': typeof ApiWebhooksResendRoute
+  '/demo/$token/arquivos': typeof DemoTokenArquivosRoute
+  '/demo/$token/campanhas': typeof DemoTokenCampanhasRouteWithChildren
+  '/demo/$token/conteudos': typeof DemoTokenConteudosRoute
+  '/demo/$token/inicio': typeof DemoTokenInicioRoute
+  '/demo/$token/relatorios': typeof DemoTokenRelatoriosRoute
   '/email/descadastro/$token': typeof EmailDescadastroTokenRoute
   '/portal-v2/campanhas/$campanhaId': typeof PortalV2CampanhasCampanhaIdRouteWithChildren
   '/portal-v2/configuracoes/acessos': typeof PortalV2ConfiguracoesAcessosRoute
@@ -494,12 +555,14 @@ export interface FileRoutesByFullPath {
   '/portal/$token/relatorios': typeof PortalTokenRelatoriosRoute
   '/portal/$token/solicitacoes': typeof PortalTokenSolicitacoesRoute
   '/chat-v2/': typeof AuthenticatedChatV2IndexRoute
+  '/demo/$token/': typeof DemoTokenIndexRoute
   '/portal-v2/campanhas/': typeof PortalV2CampanhasIndexRoute
   '/portal-v2/configuracoes/': typeof PortalV2ConfiguracoesIndexRoute
   '/portal/$token/': typeof PortalTokenIndexRoute
   '/chat-v2/campaign/$id': typeof AuthenticatedChatV2CampaignIdRoute
   '/chat-v2/channel/$id': typeof AuthenticatedChatV2ChannelIdRoute
   '/chat-v2/dm/$id': typeof AuthenticatedChatV2DmIdRoute
+  '/demo/$token/campanhas/$campanhaId': typeof DemoTokenCampanhasCampanhaIdRoute
   '/portal-v2/campanhas/$campanhaId/content': typeof PortalV2CampanhasCampanhaIdContentRoute
   '/portal-v2/campanhas/$campanhaId/creators': typeof PortalV2CampanhasCampanhaIdCreatorsRoute
   '/portal-v2/campanhas/$campanhaId/files': typeof PortalV2CampanhasCampanhaIdFilesRoute
@@ -507,6 +570,7 @@ export interface FileRoutesByFullPath {
   '/portal-v2/campanhas/$campanhaId/results': typeof PortalV2CampanhasCampanhaIdResultsRoute
   '/portal-v2/campanhas/$campanhaId/timeline': typeof PortalV2CampanhasCampanhaIdTimelineRoute
   '/portal/$token/campanhas/$campanhaId': typeof PortalTokenCampanhasCampanhaIdRouteWithChildren
+  '/demo/$token/campanhas/': typeof DemoTokenCampanhasIndexRoute
   '/portal/$token/campanhas/': typeof PortalTokenCampanhasIndexRoute
   '/portal/$token/campanhas/$campanhaId/aprovacoes': typeof PortalTokenCampanhasCampanhaIdAprovacoesRoute
   '/portal/$token/campanhas/$campanhaId/revisar': typeof PortalTokenCampanhasCampanhaIdRevisarRoute
@@ -548,6 +612,10 @@ export interface FileRoutesByTo {
   '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
   '/api/public/leads': typeof ApiPublicLeadsRoute
   '/api/webhooks/resend': typeof ApiWebhooksResendRoute
+  '/demo/$token/arquivos': typeof DemoTokenArquivosRoute
+  '/demo/$token/conteudos': typeof DemoTokenConteudosRoute
+  '/demo/$token/inicio': typeof DemoTokenInicioRoute
+  '/demo/$token/relatorios': typeof DemoTokenRelatoriosRoute
   '/email/descadastro/$token': typeof EmailDescadastroTokenRoute
   '/portal-v2/campanhas/$campanhaId': typeof PortalV2CampanhasCampanhaIdRouteWithChildren
   '/portal-v2/configuracoes/acessos': typeof PortalV2ConfiguracoesAcessosRoute
@@ -558,12 +626,14 @@ export interface FileRoutesByTo {
   '/portal/$token/relatorios': typeof PortalTokenRelatoriosRoute
   '/portal/$token/solicitacoes': typeof PortalTokenSolicitacoesRoute
   '/chat-v2': typeof AuthenticatedChatV2IndexRoute
+  '/demo/$token': typeof DemoTokenIndexRoute
   '/portal-v2/campanhas': typeof PortalV2CampanhasIndexRoute
   '/portal-v2/configuracoes': typeof PortalV2ConfiguracoesIndexRoute
   '/portal/$token': typeof PortalTokenIndexRoute
   '/chat-v2/campaign/$id': typeof AuthenticatedChatV2CampaignIdRoute
   '/chat-v2/channel/$id': typeof AuthenticatedChatV2ChannelIdRoute
   '/chat-v2/dm/$id': typeof AuthenticatedChatV2DmIdRoute
+  '/demo/$token/campanhas/$campanhaId': typeof DemoTokenCampanhasCampanhaIdRoute
   '/portal-v2/campanhas/$campanhaId/content': typeof PortalV2CampanhasCampanhaIdContentRoute
   '/portal-v2/campanhas/$campanhaId/creators': typeof PortalV2CampanhasCampanhaIdCreatorsRoute
   '/portal-v2/campanhas/$campanhaId/files': typeof PortalV2CampanhasCampanhaIdFilesRoute
@@ -571,6 +641,7 @@ export interface FileRoutesByTo {
   '/portal-v2/campanhas/$campanhaId/results': typeof PortalV2CampanhasCampanhaIdResultsRoute
   '/portal-v2/campanhas/$campanhaId/timeline': typeof PortalV2CampanhasCampanhaIdTimelineRoute
   '/portal/$token/campanhas/$campanhaId': typeof PortalTokenCampanhasCampanhaIdRouteWithChildren
+  '/demo/$token/campanhas': typeof DemoTokenCampanhasIndexRoute
   '/portal/$token/campanhas': typeof PortalTokenCampanhasIndexRoute
   '/portal/$token/campanhas/$campanhaId/aprovacoes': typeof PortalTokenCampanhasCampanhaIdAprovacoesRoute
   '/portal/$token/campanhas/$campanhaId/revisar': typeof PortalTokenCampanhasCampanhaIdRevisarRoute
@@ -585,6 +656,7 @@ export interface FileRoutesById {
   '/criar-senha': typeof CriarSenhaRoute
   '/redefinir-senha': typeof RedefinirSenhaRoute
   '/selecionar-ambiente': typeof SelecionarAmbienteRoute
+  '/demo/$token': typeof DemoTokenRouteRouteWithChildren
   '/portal/$token': typeof PortalTokenRouteRouteWithChildren
   '/_authenticated/banco-influenciadores-v2': typeof AuthenticatedBancoInfluenciadoresV2Route
   '/_authenticated/chat-v2': typeof AuthenticatedChatV2RouteWithChildren
@@ -619,6 +691,11 @@ export interface FileRoutesById {
   '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
   '/api/public/leads': typeof ApiPublicLeadsRoute
   '/api/webhooks/resend': typeof ApiWebhooksResendRoute
+  '/demo/$token/arquivos': typeof DemoTokenArquivosRoute
+  '/demo/$token/campanhas': typeof DemoTokenCampanhasRouteWithChildren
+  '/demo/$token/conteudos': typeof DemoTokenConteudosRoute
+  '/demo/$token/inicio': typeof DemoTokenInicioRoute
+  '/demo/$token/relatorios': typeof DemoTokenRelatoriosRoute
   '/email/descadastro/$token': typeof EmailDescadastroTokenRoute
   '/portal-v2/campanhas/$campanhaId': typeof PortalV2CampanhasCampanhaIdRouteWithChildren
   '/portal-v2/configuracoes/acessos': typeof PortalV2ConfiguracoesAcessosRoute
@@ -629,12 +706,14 @@ export interface FileRoutesById {
   '/portal/$token/relatorios': typeof PortalTokenRelatoriosRoute
   '/portal/$token/solicitacoes': typeof PortalTokenSolicitacoesRoute
   '/_authenticated/chat-v2/': typeof AuthenticatedChatV2IndexRoute
+  '/demo/$token/': typeof DemoTokenIndexRoute
   '/portal-v2/campanhas/': typeof PortalV2CampanhasIndexRoute
   '/portal-v2/configuracoes/': typeof PortalV2ConfiguracoesIndexRoute
   '/portal/$token/': typeof PortalTokenIndexRoute
   '/_authenticated/chat-v2/campaign/$id': typeof AuthenticatedChatV2CampaignIdRoute
   '/_authenticated/chat-v2/channel/$id': typeof AuthenticatedChatV2ChannelIdRoute
   '/_authenticated/chat-v2/dm/$id': typeof AuthenticatedChatV2DmIdRoute
+  '/demo/$token/campanhas/$campanhaId': typeof DemoTokenCampanhasCampanhaIdRoute
   '/portal-v2/campanhas/$campanhaId/content': typeof PortalV2CampanhasCampanhaIdContentRoute
   '/portal-v2/campanhas/$campanhaId/creators': typeof PortalV2CampanhasCampanhaIdCreatorsRoute
   '/portal-v2/campanhas/$campanhaId/files': typeof PortalV2CampanhasCampanhaIdFilesRoute
@@ -642,6 +721,7 @@ export interface FileRoutesById {
   '/portal-v2/campanhas/$campanhaId/results': typeof PortalV2CampanhasCampanhaIdResultsRoute
   '/portal-v2/campanhas/$campanhaId/timeline': typeof PortalV2CampanhasCampanhaIdTimelineRoute
   '/portal/$token/campanhas/$campanhaId': typeof PortalTokenCampanhasCampanhaIdRouteWithChildren
+  '/demo/$token/campanhas/': typeof DemoTokenCampanhasIndexRoute
   '/portal/$token/campanhas/': typeof PortalTokenCampanhasIndexRoute
   '/portal/$token/campanhas/$campanhaId/aprovacoes': typeof PortalTokenCampanhasCampanhaIdAprovacoesRoute
   '/portal/$token/campanhas/$campanhaId/revisar': typeof PortalTokenCampanhasCampanhaIdRevisarRoute
@@ -656,6 +736,7 @@ export interface FileRouteTypes {
     | '/criar-senha'
     | '/redefinir-senha'
     | '/selecionar-ambiente'
+    | '/demo/$token'
     | '/portal/$token'
     | '/banco-influenciadores-v2'
     | '/chat-v2'
@@ -690,6 +771,11 @@ export interface FileRouteTypes {
     | '/api/google/oauth-callback'
     | '/api/public/leads'
     | '/api/webhooks/resend'
+    | '/demo/$token/arquivos'
+    | '/demo/$token/campanhas'
+    | '/demo/$token/conteudos'
+    | '/demo/$token/inicio'
+    | '/demo/$token/relatorios'
     | '/email/descadastro/$token'
     | '/portal-v2/campanhas/$campanhaId'
     | '/portal-v2/configuracoes/acessos'
@@ -700,12 +786,14 @@ export interface FileRouteTypes {
     | '/portal/$token/relatorios'
     | '/portal/$token/solicitacoes'
     | '/chat-v2/'
+    | '/demo/$token/'
     | '/portal-v2/campanhas/'
     | '/portal-v2/configuracoes/'
     | '/portal/$token/'
     | '/chat-v2/campaign/$id'
     | '/chat-v2/channel/$id'
     | '/chat-v2/dm/$id'
+    | '/demo/$token/campanhas/$campanhaId'
     | '/portal-v2/campanhas/$campanhaId/content'
     | '/portal-v2/campanhas/$campanhaId/creators'
     | '/portal-v2/campanhas/$campanhaId/files'
@@ -713,6 +801,7 @@ export interface FileRouteTypes {
     | '/portal-v2/campanhas/$campanhaId/results'
     | '/portal-v2/campanhas/$campanhaId/timeline'
     | '/portal/$token/campanhas/$campanhaId'
+    | '/demo/$token/campanhas/'
     | '/portal/$token/campanhas/'
     | '/portal/$token/campanhas/$campanhaId/aprovacoes'
     | '/portal/$token/campanhas/$campanhaId/revisar'
@@ -754,6 +843,10 @@ export interface FileRouteTypes {
     | '/api/google/oauth-callback'
     | '/api/public/leads'
     | '/api/webhooks/resend'
+    | '/demo/$token/arquivos'
+    | '/demo/$token/conteudos'
+    | '/demo/$token/inicio'
+    | '/demo/$token/relatorios'
     | '/email/descadastro/$token'
     | '/portal-v2/campanhas/$campanhaId'
     | '/portal-v2/configuracoes/acessos'
@@ -764,12 +857,14 @@ export interface FileRouteTypes {
     | '/portal/$token/relatorios'
     | '/portal/$token/solicitacoes'
     | '/chat-v2'
+    | '/demo/$token'
     | '/portal-v2/campanhas'
     | '/portal-v2/configuracoes'
     | '/portal/$token'
     | '/chat-v2/campaign/$id'
     | '/chat-v2/channel/$id'
     | '/chat-v2/dm/$id'
+    | '/demo/$token/campanhas/$campanhaId'
     | '/portal-v2/campanhas/$campanhaId/content'
     | '/portal-v2/campanhas/$campanhaId/creators'
     | '/portal-v2/campanhas/$campanhaId/files'
@@ -777,6 +872,7 @@ export interface FileRouteTypes {
     | '/portal-v2/campanhas/$campanhaId/results'
     | '/portal-v2/campanhas/$campanhaId/timeline'
     | '/portal/$token/campanhas/$campanhaId'
+    | '/demo/$token/campanhas'
     | '/portal/$token/campanhas'
     | '/portal/$token/campanhas/$campanhaId/aprovacoes'
     | '/portal/$token/campanhas/$campanhaId/revisar'
@@ -790,6 +886,7 @@ export interface FileRouteTypes {
     | '/criar-senha'
     | '/redefinir-senha'
     | '/selecionar-ambiente'
+    | '/demo/$token'
     | '/portal/$token'
     | '/_authenticated/banco-influenciadores-v2'
     | '/_authenticated/chat-v2'
@@ -824,6 +921,11 @@ export interface FileRouteTypes {
     | '/api/google/oauth-callback'
     | '/api/public/leads'
     | '/api/webhooks/resend'
+    | '/demo/$token/arquivos'
+    | '/demo/$token/campanhas'
+    | '/demo/$token/conteudos'
+    | '/demo/$token/inicio'
+    | '/demo/$token/relatorios'
     | '/email/descadastro/$token'
     | '/portal-v2/campanhas/$campanhaId'
     | '/portal-v2/configuracoes/acessos'
@@ -834,12 +936,14 @@ export interface FileRouteTypes {
     | '/portal/$token/relatorios'
     | '/portal/$token/solicitacoes'
     | '/_authenticated/chat-v2/'
+    | '/demo/$token/'
     | '/portal-v2/campanhas/'
     | '/portal-v2/configuracoes/'
     | '/portal/$token/'
     | '/_authenticated/chat-v2/campaign/$id'
     | '/_authenticated/chat-v2/channel/$id'
     | '/_authenticated/chat-v2/dm/$id'
+    | '/demo/$token/campanhas/$campanhaId'
     | '/portal-v2/campanhas/$campanhaId/content'
     | '/portal-v2/campanhas/$campanhaId/creators'
     | '/portal-v2/campanhas/$campanhaId/files'
@@ -847,6 +951,7 @@ export interface FileRouteTypes {
     | '/portal-v2/campanhas/$campanhaId/results'
     | '/portal-v2/campanhas/$campanhaId/timeline'
     | '/portal/$token/campanhas/$campanhaId'
+    | '/demo/$token/campanhas/'
     | '/portal/$token/campanhas/'
     | '/portal/$token/campanhas/$campanhaId/aprovacoes'
     | '/portal/$token/campanhas/$campanhaId/revisar'
@@ -861,6 +966,7 @@ export interface RootRouteChildren {
   CriarSenhaRoute: typeof CriarSenhaRoute
   RedefinirSenhaRoute: typeof RedefinirSenhaRoute
   SelecionarAmbienteRoute: typeof SelecionarAmbienteRoute
+  DemoTokenRouteRoute: typeof DemoTokenRouteRouteWithChildren
   PortalTokenRouteRoute: typeof PortalTokenRouteRouteWithChildren
   BugsTokenRoute: typeof BugsTokenRoute
   CalculadoraPropostaTokenRoute: typeof CalculadoraPropostaTokenRoute
@@ -1001,6 +1107,13 @@ declare module '@tanstack/react-router' {
       path: '/calculadora-proposta/$token'
       fullPath: '/calculadora-proposta/$token'
       preLoaderRoute: typeof CalculadoraPropostaTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/demo/$token': {
+      id: '/demo/$token'
+      path: '/demo/$token'
+      fullPath: '/demo/$token'
+      preLoaderRoute: typeof DemoTokenRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/inscricao/$token': {
@@ -1178,6 +1291,48 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiWebhooksResendRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/demo/$token/': {
+      id: '/demo/$token/'
+      path: '/'
+      fullPath: '/demo/$token/'
+      preLoaderRoute: typeof DemoTokenIndexRouteImport
+      parentRoute: typeof DemoTokenRouteRoute
+    }
+    '/demo/$token/arquivos': {
+      id: '/demo/$token/arquivos'
+      path: '/arquivos'
+      fullPath: '/demo/$token/arquivos'
+      preLoaderRoute: typeof DemoTokenArquivosRouteImport
+      parentRoute: typeof DemoTokenRouteRoute
+    }
+    '/demo/$token/campanhas': {
+      id: '/demo/$token/campanhas'
+      path: '/campanhas'
+      fullPath: '/demo/$token/campanhas'
+      preLoaderRoute: typeof DemoTokenCampanhasRouteImport
+      parentRoute: typeof DemoTokenRouteRoute
+    }
+    '/demo/$token/conteudos': {
+      id: '/demo/$token/conteudos'
+      path: '/conteudos'
+      fullPath: '/demo/$token/conteudos'
+      preLoaderRoute: typeof DemoTokenConteudosRouteImport
+      parentRoute: typeof DemoTokenRouteRoute
+    }
+    '/demo/$token/inicio': {
+      id: '/demo/$token/inicio'
+      path: '/inicio'
+      fullPath: '/demo/$token/inicio'
+      preLoaderRoute: typeof DemoTokenInicioRouteImport
+      parentRoute: typeof DemoTokenRouteRoute
+    }
+    '/demo/$token/relatorios': {
+      id: '/demo/$token/relatorios'
+      path: '/relatorios'
+      fullPath: '/demo/$token/relatorios'
+      preLoaderRoute: typeof DemoTokenRelatoriosRouteImport
+      parentRoute: typeof DemoTokenRouteRoute
+    }
     '/email/descadastro/$token': {
       id: '/email/descadastro/$token'
       path: '/email/descadastro/$token'
@@ -1282,6 +1437,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/chat-v2/dm/$id'
       preLoaderRoute: typeof AuthenticatedChatV2DmIdRouteImport
       parentRoute: typeof AuthenticatedChatV2Route
+    }
+    '/demo/$token/campanhas/': {
+      id: '/demo/$token/campanhas/'
+      path: '/'
+      fullPath: '/demo/$token/campanhas/'
+      preLoaderRoute: typeof DemoTokenCampanhasIndexRouteImport
+      parentRoute: typeof DemoTokenCampanhasRoute
+    }
+    '/demo/$token/campanhas/$campanhaId': {
+      id: '/demo/$token/campanhas/$campanhaId'
+      path: '/$campanhaId'
+      fullPath: '/demo/$token/campanhas/$campanhaId'
+      preLoaderRoute: typeof DemoTokenCampanhasCampanhaIdRouteImport
+      parentRoute: typeof DemoTokenCampanhasRoute
     }
     '/portal-v2/campanhas/$campanhaId/content': {
       id: '/portal-v2/campanhas/$campanhaId/content'
@@ -1503,6 +1672,41 @@ const PortalV2RouteRouteWithChildren = PortalV2RouteRoute._addFileChildren(
   PortalV2RouteRouteChildren,
 )
 
+interface DemoTokenCampanhasRouteChildren {
+  DemoTokenCampanhasCampanhaIdRoute: typeof DemoTokenCampanhasCampanhaIdRoute
+  DemoTokenCampanhasIndexRoute: typeof DemoTokenCampanhasIndexRoute
+}
+
+const DemoTokenCampanhasRouteChildren: DemoTokenCampanhasRouteChildren = {
+  DemoTokenCampanhasCampanhaIdRoute: DemoTokenCampanhasCampanhaIdRoute,
+  DemoTokenCampanhasIndexRoute: DemoTokenCampanhasIndexRoute,
+}
+
+const DemoTokenCampanhasRouteWithChildren =
+  DemoTokenCampanhasRoute._addFileChildren(DemoTokenCampanhasRouteChildren)
+
+interface DemoTokenRouteRouteChildren {
+  DemoTokenArquivosRoute: typeof DemoTokenArquivosRoute
+  DemoTokenCampanhasRoute: typeof DemoTokenCampanhasRouteWithChildren
+  DemoTokenConteudosRoute: typeof DemoTokenConteudosRoute
+  DemoTokenInicioRoute: typeof DemoTokenInicioRoute
+  DemoTokenRelatoriosRoute: typeof DemoTokenRelatoriosRoute
+  DemoTokenIndexRoute: typeof DemoTokenIndexRoute
+}
+
+const DemoTokenRouteRouteChildren: DemoTokenRouteRouteChildren = {
+  DemoTokenArquivosRoute: DemoTokenArquivosRoute,
+  DemoTokenCampanhasRoute: DemoTokenCampanhasRouteWithChildren,
+  DemoTokenConteudosRoute: DemoTokenConteudosRoute,
+  DemoTokenInicioRoute: DemoTokenInicioRoute,
+  DemoTokenRelatoriosRoute: DemoTokenRelatoriosRoute,
+  DemoTokenIndexRoute: DemoTokenIndexRoute,
+}
+
+const DemoTokenRouteRouteWithChildren = DemoTokenRouteRoute._addFileChildren(
+  DemoTokenRouteRouteChildren,
+)
+
 interface PortalTokenCampanhasCampanhaIdRouteChildren {
   PortalTokenCampanhasCampanhaIdAprovacoesRoute: typeof PortalTokenCampanhasCampanhaIdAprovacoesRoute
   PortalTokenCampanhasCampanhaIdRevisarRoute: typeof PortalTokenCampanhasCampanhaIdRevisarRoute
@@ -1554,6 +1758,7 @@ const rootRouteChildren: RootRouteChildren = {
   CriarSenhaRoute: CriarSenhaRoute,
   RedefinirSenhaRoute: RedefinirSenhaRoute,
   SelecionarAmbienteRoute: SelecionarAmbienteRoute,
+  DemoTokenRouteRoute: DemoTokenRouteRouteWithChildren,
   PortalTokenRouteRoute: PortalTokenRouteRouteWithChildren,
   BugsTokenRoute: BugsTokenRoute,
   CalculadoraPropostaTokenRoute: CalculadoraPropostaTokenRoute,

@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { MessageSquare, Send } from "lucide-react";
-import { addInfluClienteComentario } from "@/lib/portal-auth.functions";
+import { usePortalRuntime } from "../../runtime/portal-runtime";
 import { usePortalSessionData } from "@/components/portal/portal-session-context";
 import { InfluencerDrawerSection } from "./InfluencerDrawerSection";
 import type { PublicComment } from "@/lib/portal-types";
@@ -27,12 +26,12 @@ export function ClientInfluencerComments({
 }) {
   const { reload, readOnly } = usePortalSessionData();
   const queryClient = useQueryClient();
-  const addCommentFn = useServerFn(addInfluClienteComentario);
+  const { api } = usePortalRuntime();
   const [text, setText] = useState("");
 
   const mutation = useMutation({
     mutationFn: (vars: { text: string }) =>
-      addCommentFn({ data: { campanhaId, influencerId, ...vars } }),
+      api.addComentario({ campanhaId, influencerId, ...vars }),
     onSuccess: () => {
       reload();
       queryClient.invalidateQueries();
