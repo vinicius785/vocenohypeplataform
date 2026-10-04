@@ -41,6 +41,7 @@ import { PipelineSummary } from "./comercial/PipelineSummary";
 import { PeriodMenu } from "@/components/shared/PeriodMenu";
 import { FilterRow, FilterSearch, FilterToolbar } from "@/components/shared/FilterToolbar";
 import { SortSelect, FilterPanel, LeadFiltersSummary } from "./comercial/LeadFiltersBar";
+import { ComercialTarefasBoard } from "./comercial/ComercialTarefasBoard";
 import { PipelineBoard } from "./comercial/PipelineBoard";
 import { LeadDrawer, type OpportunityActionInput } from "./comercial/LeadDrawer";
 import { FollowUpDialog, type FollowUpInput } from "./comercial/FollowUpDialog";
@@ -257,10 +258,6 @@ export function ComercialSection() {
   const drawerLead = editing ? (leads.find((l) => l.id === editing.id) ?? editing) : null;
 
   const kpis = computeComercialKpis(leads, range);
-  const openLeads = useMemo(
-    () => leads.filter((l) => l.stage !== "GANHO" && l.stage !== "PERDIDO"),
-    [leads],
-  );
 
   return (
     <>
@@ -279,12 +276,7 @@ export function ComercialSection() {
           />
         </div>
 
-        <PipelineSummary
-          kpis={kpis}
-          openLeads={openLeads}
-          filters={filters}
-          onFilter={goToPipelineWithFilter}
-        />
+        <PipelineSummary kpis={kpis} filters={filters} onFilter={goToPipelineWithFilter} />
 
         {/* Busca + Filtros + Ordenar + Período; filtros ativos logo abaixo. O período
          * é contexto (vale para os KPIs e para o Kanban), não filtro: não gera chip. */}
@@ -353,6 +345,8 @@ export function ComercialSection() {
             )}
           </div>
         )}
+
+        <ComercialTarefasBoard />
 
         {followUpLead && (
           <FollowUpDialog

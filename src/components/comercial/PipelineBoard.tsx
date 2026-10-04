@@ -11,6 +11,8 @@ import {
   type OpportunityStage,
 } from "@/lib/comercial-engine";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { KanbanVerMais } from "@/components/shared/KanbanVerMais";
+import { splitColumn } from "@/lib/kanban-limit";
 import { LeadCard } from "./LeadCard";
 
 /**
@@ -138,7 +140,7 @@ export function PipelineBoard({
                       Sem oportunidades
                     </div>
                   ) : (
-                    items.map((lead) => (
+                    splitColumn(items).visible.map((lead) => (
                       <LeadCard
                         key={lead.id}
                         lead={lead}
@@ -151,6 +153,32 @@ export function PipelineBoard({
                       />
                     ))
                   )}
+                  <KanbanVerMais
+                    hiddenCount={splitColumn(items).hiddenCount}
+                    title={OPPORTUNITY_STAGE_LABEL[stage]}
+                    total={items.length}
+                  >
+                    {(close) =>
+                      items.map((lead) => (
+                        <LeadCard
+                          key={lead.id}
+                          lead={lead}
+                          dragging={false}
+                          draggable={false}
+                          onOpen={() => {
+                            close();
+                            onOpenLead(lead);
+                          }}
+                          onDragStart={() => {}}
+                          onDragEnd={() => {}}
+                          onRegisterFollowUp={() => {
+                            close();
+                            onRegisterFollowUp(lead);
+                          }}
+                        />
+                      ))
+                    }
+                  </KanbanVerMais>
                 </div>
               </div>
             );

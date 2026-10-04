@@ -2630,6 +2630,30 @@ export type Database = {
         };
         Relationships: [];
       };
+      comercial_tarefas: {
+        Row: {
+          created_at: string;
+          data: Json;
+          id: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [];
+      };
       marketing_standalone_tasks: {
         Row: {
           created_at: string;

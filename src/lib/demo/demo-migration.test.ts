@@ -49,7 +49,6 @@ describe("ordem e escopo da migration", () => {
       files.indexOf("20261004000000_restrict_internal_data_to_internal_members.sql"),
     );
     expect(files.indexOf(FIX_FILE)).toBeGreaterThan(files.indexOf(DEMO_FILE));
-    expect(files[files.length - 1]).toBe(FIX_FILE);
   });
 
   it("é aditiva: nenhum DROP de tabela/coluna e nenhum ALTER de tabela existente", () => {

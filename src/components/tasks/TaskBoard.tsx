@@ -154,6 +154,7 @@ import {
   PRIORITY_TONE,
   type TaskPriority,
 } from "@/lib/task-status";
+import { KanbanVerMais } from "@/components/shared/KanbanVerMais";
 import {
   Avatar,
   DEADLINE_CHANGE_MOTIVOS,
@@ -1103,7 +1104,11 @@ export function TaskBoard({
   initialOpenTaskId,
   onInitialOpenTaskHandled,
   viewToggle = false,
+  columnLimit,
 }: {
+  /** Opt-in (Comercial): máx. de cards por coluna; o resto fica em "Ver mais (N)"
+   * (Sheet com todos). Omitido, o board é idêntico ao de sempre. */
+  columnLimit?: number;
   /** Opt-in (Campanhas): mostra o alternador "Lista | Kanban", com Lista
    * como padrão e estado vazio compacto. Omitido (Projetos/Marketing),
    * o board continua exatamente como antes — só Kanban. */
@@ -1996,8 +2001,255 @@ export function TaskBoard({
                         taskCompletedAt(b).localeCompare(taskCompletedAt(a)),
                       )
                     : sortTasksBy(allItems, sortPrimary, sortSecondary);
-                  const items = isDone && !showAllDone ? sortedItems.slice(0, 4) : sortedItems;
+                  const items =
+                    isDone && !showAllDone && columnLimit === undefined
+                      ? sortedItems.slice(0, 4)
+                      : sortedItems;
                   const hiddenCount = allItems.length - items.length;
+                  const visibleItems =
+                    columnLimit !== undefined ? items.slice(0, columnLimit) : items;
+                  const renderCard = (t: BoardItem, inSheet: boolean) => (
+                    <div
+                      key={t.id}
+                      draggable={!inSheet && !isMobile && !t.__parentTask}
+                      onDragStart={() =>
+                        !inSheet && !isMobile && !t.__parentTask && setDragId(t.id)
+                      }
+                      onDragEnd={() => setDragId(null)}
+                      onClick={() =>
+                        setTaskDialog({
+                          mode: "edit",
+                          data: t.__parentTask ?? t,
+                          openSubtaskId: t.__parentTask ? t.id : undefined,
+                        })
+                      }
+                      className={`group relative cursor-pointer rounded-2xl bg-card p-3.5 text-sm transition-all hover:bg-card/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand dark:shadow-none ${dragId === t.id ? "scale-[0.98] opacity-50 shadow-lg" : ""}`}
+                    >
+                      {/* Nível 1 — título (maior peso visual do card, no
+                        máximo 2 linhas — nada compete com ele aqui). */}
+                      <div className="flex items-start gap-2">
+                        {t.__parentTask && (
+                          <span
+                            title={`Subtarefa de "${t.__parentTask.title}"`}
+                            className="mt-0.5 inline-flex shrink-0 items-center rounded border border-border bg-muted/60 px-1 py-0.5 text-[11px] font-semibold uppercase leading-none tracking-wide text-muted-foreground"
+                          >
+                            Sub
+                          </span>
+                        )}
+                        <span className="line-clamp-2 flex-1 font-semibold leading-snug text-foreground">
+                          {t.title}
+                        </span>
+                        <CardQuickActions
+                          onOpen={() =>
+                            setTaskDialog({
+                              mode: "edit",
+                              data: t.__parentTask ?? t,
+                              openSubtaskId: t.__parentTask ? t.id : undefined,
+                            })
+                          }
+                          onDelete={async (e) => {
+                            e.stopPropagation();
+                            const ok = await confirmTaskDelete(
+                              `Excluir "${t.title}"? Essa ação não pode ser desfeita.`,
+                            );
+                            if (!ok) return;
+                            if (t.__parentTask) {
+                              const parent = t.__parentTask;
+                              persist(
+                                tasks.map((x) =>
+                                  x.id === parent.id
+                                    ? {
+                                        ...x,
+                                        subtasks: (x.subtasks ?? []).filter((s) => s.id !== t.id),
+                                      }
+                                    : x,
+                                ),
+                              );
+                            } else {
+                              persist(tasks.filter((x) => x.id !== t.id));
+                              // Mesmo cuidado do "Excluir" do detalhe:
+                              // sem isso, dependências ficavam órfãs.
+                              void cleanupDependenciesForTask(t.id);
+                            }
+                          }}
+                        />
+                      </div>
+
+                      {/* Nível 2 — indicador de descrição + progresso de
+                        subtarefas ("2/4", nunca só a contagem total —
+                        comunica progresso, não só existência). */}
+                      {(!isDescriptionEmpty(t.description) || (t.subtasks?.length ?? 0) > 0) && (
+                        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                          {!isDescriptionEmpty(t.description) && (
+                            <span title="Tem descrição">
+                              <FileText className="h-3 w-3" />
+                            </span>
+                          )}
+                          {(t.subtasks?.length ?? 0) > 0 &&
+                            (() => {
+                              const total = t.subtasks!.length;
+                              const done = t.subtasks!.filter(
+                                (s) => s.status === "Concluído",
+                              ).length;
+                              const allDone = done === total;
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setExpandedCards((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(t.id)) next.delete(t.id);
+                                      else next.add(t.id);
+                                      return next;
+                                    });
+                                  }}
+                                  className={`inline-flex items-center gap-1 hover:text-foreground ${allDone ? "text-emerald-600 dark:text-emerald-400" : ""}`}
+                                >
+                                  {allDone ? (
+                                    <Check className="h-3 w-3" />
+                                  ) : expandedCards.has(t.id) ? (
+                                    <ChevronDown className="h-3 w-3" />
+                                  ) : (
+                                    <ChevronRight className="h-3 w-3" />
+                                  )}
+                                  {done}/{total} subtarefas
+                                </button>
+                              );
+                            })()}
+                        </div>
+                      )}
+
+                      {/* Nível 3 — responsáveis + prazo + prioridade, numa
+                        única linha. Tarefa bloqueada nunca mostra o prazo
+                        como atraso aqui — só o prazo original em tom
+                        neutro (o indicador de bloqueio é uma linha própria
+                        logo abaixo). */}
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                        {getTaskAssignees(t).length > 0 && (
+                          <AssigneeStack names={getTaskAssignees(t)} members={members} />
+                        )}
+                        {(t.dueDate || t.performanceDueDate) && <CardDeadlineBadge task={t} />}
+                        {t.priority !== "Normal" && (
+                          <TaskPriorityFlag priority={t.priority} size="xs" />
+                        )}
+                      </div>
+
+                      {/* Bloqueio — linha própria, âmbar (nunca vermelho:
+                        bloqueio não é erro). Some sozinho quando a tarefa
+                        sai do status "Bloqueada" (fonte de verdade real é
+                        `task_blocks`, isto é só o cache denormalizado). */}
+                      {t.status === "Bloqueada" && t.blockedState && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="mt-2 flex min-w-0">
+                              <TaskBlockIndicator blocked={t.blockedState} size="xs" />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-64">
+                            <p>{t.blockedState.reason}</p>
+                            {t.blockedState.requiredAction && (
+                              <p className="text-muted-foreground">
+                                Precisa acontecer: {t.blockedState.requiredAction}
+                              </p>
+                            )}
+                            <p className="text-muted-foreground">
+                              Desde {fmtDateCompact(t.blockedState.blockedAt.slice(0, 10))} ·{" "}
+                              {t.blockedState.pausesDeadline
+                                ? "prazo pausado"
+                                : "prazo continua correndo"}
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+
+                      {/* Nível 4 — etiquetas / comentários / anexos / dependências */}
+                      {((t.tags?.length ?? 0) > 0 ||
+                        (t.comments?.length ?? 0) > 0 ||
+                        (t.attachments?.length ?? 0) > 0 ||
+                        (pendingDepCountByTaskId.get(t.id) ?? 0) > 0) && (
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                          {(t.tags?.length ?? 0) > 0 && (
+                            <>
+                              <Tag className="h-3 w-3 shrink-0" />
+                              <CardTags tags={t.tags!} taskTags={taskTags} />
+                            </>
+                          )}
+                          {(t.comments?.length ?? 0) > 0 && (
+                            <span className="inline-flex items-center gap-1">
+                              <MessageSquare className="h-3 w-3" /> {t.comments!.length}
+                            </span>
+                          )}
+                          {(t.attachments?.length ?? 0) > 0 && (
+                            <span className="inline-flex items-center gap-1">
+                              <Paperclip className="h-3 w-3" /> {t.attachments!.length}
+                            </span>
+                          )}
+                          {(pendingDepCountByTaskId.get(t.id) ?? 0) > 0 && (
+                            <span
+                              className="inline-flex items-center gap-1"
+                              title={`${pendingDepCountByTaskId.get(t.id)} dependências pendentes`}
+                            >
+                              <Link2 className="h-3 w-3" /> {pendingDepCountByTaskId.get(t.id)}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Subtarefas expandidas direto no card — cada uma como uma
+                          prévia compacta; clicar nela abre a própria subtarefa
+                          (o diálogo é sempre o da tarefa-mãe por baixo, mas já
+                          chega direto na subtarefa — ver `openSubtaskId`). */}
+                      {expandedCards.has(t.id) && (t.subtasks?.length ?? 0) > 0 && (
+                        <div className="mt-2 space-y-1.5 border-t border-border pt-2">
+                          {t.subtasks!.map((s) => (
+                            <div
+                              key={s.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setTaskDialog({ mode: "edit", data: t, openSubtaskId: s.id });
+                              }}
+                              className="flex cursor-pointer flex-wrap items-center gap-x-2 gap-y-1 rounded px-1.5 py-1 text-[11px] hover:bg-muted/40"
+                            >
+                              <span
+                                className={`h-2.5 w-2.5 shrink-0 rounded-full ${TASK_STATUS_DOT[s.status]}`}
+                                title={s.status}
+                              />
+                              <span
+                                className={`min-w-0 flex-1 truncate ${s.status === "Concluído" ? "text-muted-foreground line-through" : "text-foreground"}`}
+                              >
+                                {s.title}
+                              </span>
+                              {!isDescriptionEmpty(s.description) && (
+                                <span
+                                  title="Tem descrição"
+                                  className="shrink-0 text-muted-foreground"
+                                >
+                                  <FileText className="h-3 w-3" />
+                                </span>
+                              )}
+                              {getTaskAssignees(s).length > 0 && (
+                                <AssigneeStack names={getTaskAssignees(s)} members={members} />
+                              )}
+                              {s.dueDate && (
+                                <span className="shrink-0 text-muted-foreground">
+                                  {fmtDateCompact(s.dueDate)}
+                                </span>
+                              )}
+                              <span
+                                className={`inline-flex shrink-0 items-center gap-1 font-medium ${PRIORITY_TONE[s.priority]}`}
+                              >
+                                <Flag className="h-3 w-3" /> {s.priority}
+                              </span>
+                              {(s.attachments?.length ?? 0) > 0 && (
+                                <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
                   return (
                     <div
                       key={col.key}
@@ -2076,256 +2328,21 @@ export function TaskBoard({
                             Nenhuma tarefa
                           </div>
                         )}
-                        {items.map((t) => (
-                          <div
-                            key={t.id}
-                            draggable={!isMobile && !t.__parentTask}
-                            onDragStart={() => !isMobile && !t.__parentTask && setDragId(t.id)}
-                            onDragEnd={() => setDragId(null)}
-                            onClick={() =>
-                              setTaskDialog({
-                                mode: "edit",
-                                data: t.__parentTask ?? t,
-                                openSubtaskId: t.__parentTask ? t.id : undefined,
-                              })
-                            }
-                            className={`group relative cursor-pointer rounded-2xl bg-card p-3.5 text-sm transition-all hover:bg-card/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand dark:shadow-none ${dragId === t.id ? "scale-[0.98] opacity-50 shadow-lg" : ""}`}
+                        {visibleItems.map((t) => renderCard(t, false))}
+                        {columnLimit !== undefined && (
+                          <KanbanVerMais
+                            hiddenCount={items.length - visibleItems.length}
+                            title={col.label}
+                            total={items.length}
                           >
-                            {/* Nível 1 — título (maior peso visual do card, no
-                        máximo 2 linhas — nada compete com ele aqui). */}
-                            <div className="flex items-start gap-2">
-                              {t.__parentTask && (
-                                <span
-                                  title={`Subtarefa de "${t.__parentTask.title}"`}
-                                  className="mt-0.5 inline-flex shrink-0 items-center rounded border border-border bg-muted/60 px-1 py-0.5 text-[11px] font-semibold uppercase leading-none tracking-wide text-muted-foreground"
-                                >
-                                  Sub
-                                </span>
-                              )}
-                              <span className="line-clamp-2 flex-1 font-semibold leading-snug text-foreground">
-                                {t.title}
-                              </span>
-                              <CardQuickActions
-                                onOpen={() =>
-                                  setTaskDialog({
-                                    mode: "edit",
-                                    data: t.__parentTask ?? t,
-                                    openSubtaskId: t.__parentTask ? t.id : undefined,
-                                  })
-                                }
-                                onDelete={async (e) => {
-                                  e.stopPropagation();
-                                  const ok = await confirmTaskDelete(
-                                    `Excluir "${t.title}"? Essa ação não pode ser desfeita.`,
-                                  );
-                                  if (!ok) return;
-                                  if (t.__parentTask) {
-                                    const parent = t.__parentTask;
-                                    persist(
-                                      tasks.map((x) =>
-                                        x.id === parent.id
-                                          ? {
-                                              ...x,
-                                              subtasks: (x.subtasks ?? []).filter(
-                                                (s) => s.id !== t.id,
-                                              ),
-                                            }
-                                          : x,
-                                      ),
-                                    );
-                                  } else {
-                                    persist(tasks.filter((x) => x.id !== t.id));
-                                    // Mesmo cuidado do "Excluir" do detalhe:
-                                    // sem isso, dependências ficavam órfãs.
-                                    void cleanupDependenciesForTask(t.id);
-                                  }
-                                }}
-                              />
-                            </div>
-
-                            {/* Nível 2 — indicador de descrição + progresso de
-                        subtarefas ("2/4", nunca só a contagem total —
-                        comunica progresso, não só existência). */}
-                            {(!isDescriptionEmpty(t.description) ||
-                              (t.subtasks?.length ?? 0) > 0) && (
-                              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-                                {!isDescriptionEmpty(t.description) && (
-                                  <span title="Tem descrição">
-                                    <FileText className="h-3 w-3" />
-                                  </span>
-                                )}
-                                {(t.subtasks?.length ?? 0) > 0 &&
-                                  (() => {
-                                    const total = t.subtasks!.length;
-                                    const done = t.subtasks!.filter(
-                                      (s) => s.status === "Concluído",
-                                    ).length;
-                                    const allDone = done === total;
-                                    return (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setExpandedCards((prev) => {
-                                            const next = new Set(prev);
-                                            if (next.has(t.id)) next.delete(t.id);
-                                            else next.add(t.id);
-                                            return next;
-                                          });
-                                        }}
-                                        className={`inline-flex items-center gap-1 hover:text-foreground ${allDone ? "text-emerald-600 dark:text-emerald-400" : ""}`}
-                                      >
-                                        {allDone ? (
-                                          <Check className="h-3 w-3" />
-                                        ) : expandedCards.has(t.id) ? (
-                                          <ChevronDown className="h-3 w-3" />
-                                        ) : (
-                                          <ChevronRight className="h-3 w-3" />
-                                        )}
-                                        {done}/{total} subtarefas
-                                      </button>
-                                    );
-                                  })()}
+                            {(close) => (
+                              <div onClickCapture={close} className="space-y-2.5">
+                                {items.map((t) => renderCard(t, true))}
                               </div>
                             )}
-
-                            {/* Nível 3 — responsáveis + prazo + prioridade, numa
-                        única linha. Tarefa bloqueada nunca mostra o prazo
-                        como atraso aqui — só o prazo original em tom
-                        neutro (o indicador de bloqueio é uma linha própria
-                        logo abaixo). */}
-                            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-                              {getTaskAssignees(t).length > 0 && (
-                                <AssigneeStack names={getTaskAssignees(t)} members={members} />
-                              )}
-                              {(t.dueDate || t.performanceDueDate) && (
-                                <CardDeadlineBadge task={t} />
-                              )}
-                              {t.priority !== "Normal" && (
-                                <TaskPriorityFlag priority={t.priority} size="xs" />
-                              )}
-                            </div>
-
-                            {/* Bloqueio — linha própria, âmbar (nunca vermelho:
-                        bloqueio não é erro). Some sozinho quando a tarefa
-                        sai do status "Bloqueada" (fonte de verdade real é
-                        `task_blocks`, isto é só o cache denormalizado). */}
-                            {t.status === "Bloqueada" && t.blockedState && (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <div className="mt-2 flex min-w-0">
-                                    <TaskBlockIndicator blocked={t.blockedState} size="xs" />
-                                  </div>
-                                </TooltipTrigger>
-                                <TooltipContent className="max-w-64">
-                                  <p>{t.blockedState.reason}</p>
-                                  {t.blockedState.requiredAction && (
-                                    <p className="text-muted-foreground">
-                                      Precisa acontecer: {t.blockedState.requiredAction}
-                                    </p>
-                                  )}
-                                  <p className="text-muted-foreground">
-                                    Desde {fmtDateCompact(t.blockedState.blockedAt.slice(0, 10))} ·{" "}
-                                    {t.blockedState.pausesDeadline
-                                      ? "prazo pausado"
-                                      : "prazo continua correndo"}
-                                  </p>
-                                </TooltipContent>
-                              </Tooltip>
-                            )}
-
-                            {/* Nível 4 — etiquetas / comentários / anexos / dependências */}
-                            {((t.tags?.length ?? 0) > 0 ||
-                              (t.comments?.length ?? 0) > 0 ||
-                              (t.attachments?.length ?? 0) > 0 ||
-                              (pendingDepCountByTaskId.get(t.id) ?? 0) > 0) && (
-                              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-                                {(t.tags?.length ?? 0) > 0 && (
-                                  <>
-                                    <Tag className="h-3 w-3 shrink-0" />
-                                    <CardTags tags={t.tags!} taskTags={taskTags} />
-                                  </>
-                                )}
-                                {(t.comments?.length ?? 0) > 0 && (
-                                  <span className="inline-flex items-center gap-1">
-                                    <MessageSquare className="h-3 w-3" /> {t.comments!.length}
-                                  </span>
-                                )}
-                                {(t.attachments?.length ?? 0) > 0 && (
-                                  <span className="inline-flex items-center gap-1">
-                                    <Paperclip className="h-3 w-3" /> {t.attachments!.length}
-                                  </span>
-                                )}
-                                {(pendingDepCountByTaskId.get(t.id) ?? 0) > 0 && (
-                                  <span
-                                    className="inline-flex items-center gap-1"
-                                    title={`${pendingDepCountByTaskId.get(t.id)} dependências pendentes`}
-                                  >
-                                    <Link2 className="h-3 w-3" />{" "}
-                                    {pendingDepCountByTaskId.get(t.id)}
-                                  </span>
-                                )}
-                              </div>
-                            )}
-
-                            {/* Subtarefas expandidas direto no card — cada uma como uma
-                          prévia compacta; clicar nela abre a própria subtarefa
-                          (o diálogo é sempre o da tarefa-mãe por baixo, mas já
-                          chega direto na subtarefa — ver `openSubtaskId`). */}
-                            {expandedCards.has(t.id) && (t.subtasks?.length ?? 0) > 0 && (
-                              <div className="mt-2 space-y-1.5 border-t border-border pt-2">
-                                {t.subtasks!.map((s) => (
-                                  <div
-                                    key={s.id}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setTaskDialog({ mode: "edit", data: t, openSubtaskId: s.id });
-                                    }}
-                                    className="flex cursor-pointer flex-wrap items-center gap-x-2 gap-y-1 rounded px-1.5 py-1 text-[11px] hover:bg-muted/40"
-                                  >
-                                    <span
-                                      className={`h-2.5 w-2.5 shrink-0 rounded-full ${TASK_STATUS_DOT[s.status]}`}
-                                      title={s.status}
-                                    />
-                                    <span
-                                      className={`min-w-0 flex-1 truncate ${s.status === "Concluído" ? "text-muted-foreground line-through" : "text-foreground"}`}
-                                    >
-                                      {s.title}
-                                    </span>
-                                    {!isDescriptionEmpty(s.description) && (
-                                      <span
-                                        title="Tem descrição"
-                                        className="shrink-0 text-muted-foreground"
-                                      >
-                                        <FileText className="h-3 w-3" />
-                                      </span>
-                                    )}
-                                    {getTaskAssignees(s).length > 0 && (
-                                      <AssigneeStack
-                                        names={getTaskAssignees(s)}
-                                        members={members}
-                                      />
-                                    )}
-                                    {s.dueDate && (
-                                      <span className="shrink-0 text-muted-foreground">
-                                        {fmtDateCompact(s.dueDate)}
-                                      </span>
-                                    )}
-                                    <span
-                                      className={`inline-flex shrink-0 items-center gap-1 font-medium ${PRIORITY_TONE[s.priority]}`}
-                                    >
-                                      <Flag className="h-3 w-3" /> {s.priority}
-                                    </span>
-                                    {(s.attachments?.length ?? 0) > 0 && (
-                                      <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                        {isDone && hiddenCount > 0 && (
+                          </KanbanVerMais>
+                        )}
+                        {isDone && columnLimit === undefined && hiddenCount > 0 && (
                           <button
                             type="button"
                             onClick={() => setShowAllDone(true)}
@@ -2334,15 +2351,18 @@ export function TaskBoard({
                             Mostrar tudo ({allItems.length})
                           </button>
                         )}
-                        {isDone && showAllDone && allItems.length > 4 && (
-                          <button
-                            type="button"
-                            onClick={() => setShowAllDone(false)}
-                            className="w-full rounded-md px-2 py-1.5 text-center text-[11px] font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                          >
-                            Mostrar só as recentes
-                          </button>
-                        )}
+                        {isDone &&
+                          columnLimit === undefined &&
+                          showAllDone &&
+                          allItems.length > 4 && (
+                            <button
+                              type="button"
+                              onClick={() => setShowAllDone(false)}
+                              className="w-full rounded-md px-2 py-1.5 text-center text-[11px] font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                            >
+                              Mostrar só as recentes
+                            </button>
+                          )}
                       </div>
                     </div>
                   );
