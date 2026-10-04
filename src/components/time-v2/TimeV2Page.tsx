@@ -1,7 +1,6 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, CircleDot, Copy, Link2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SegmentedControl } from "@/components/ui/segmented-control";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { OPEN_STATUSES } from "@/lib/score";
 import type { ScorePeriodMode } from "@/lib/performance-engine";
@@ -16,6 +15,7 @@ import { TeamDeliveriesWeek } from "@/components/team/TeamDeliveriesWeek";
 import { TeamInsights } from "@/components/team/TeamInsights";
 import { PageContainer } from "@/components/shared/PageContainer";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { PeriodMenu } from "@/components/shared/PeriodMenu";
 import { MemberProfileV2 } from "./MemberProfileV2";
 import { TimeMembersTable } from "./TimeMembersTable";
 import {
@@ -43,19 +43,17 @@ import {
 import { useTeamResponseTime } from "./use-response-time";
 import { totalSecondsByUser } from "./time-v2-utils";
 
-const PERIOD_OPTIONS: { value: ScorePeriodMode; label: string }[] = [
-  { value: "semana", label: "Semana" },
-  { value: "mes", label: "Mês" },
-  { value: "30dias", label: "30 dias" },
-  { value: "trimestre", label: "Trimestre" },
-];
-
 const PERIOD_GROUP_LABEL: Record<ScorePeriodMode, string> = {
   semana: "Nesta semana",
   mes: "Neste mês",
   "30dias": "Últimos 30 dias",
   trimestre: "Últimos 3 meses",
 };
+
+const PERIOD_OPTIONS = (Object.keys(PERIOD_GROUP_LABEL) as ScorePeriodMode[]).map((value) => ({
+  value,
+  label: PERIOD_GROUP_LABEL[value],
+}));
 
 const FILTERS: { key: MemberFilter; label: string; icon: ReactNode }[] = [
   { key: "atencao", label: "Atenção", icon: <AlertTriangle className="h-3.5 w-3.5" /> },
@@ -259,18 +257,6 @@ export function TimeV2Page() {
             }
           />
 
-          {/* Contexto global: o período vale para os KPIs e para a tabela de membros. */}
-          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Período">
-            <span className="text-sm text-text-secondary">Período</span>
-            <SegmentedControl
-              aria-label="Período"
-              size="sm"
-              value={scorePeriod}
-              onChange={setScorePeriod}
-              options={PERIOD_OPTIONS}
-            />
-          </div>
-
           {error && (
             <div className="flex items-start justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-xs text-destructive">
               <span>{error}</span>
@@ -370,6 +356,8 @@ export function TimeV2Page() {
                 options={MEMBER_SORT_LABEL}
                 onChange={(key) => setSort({ key, dir: DEFAULT_SORT_DIR[key] })}
               />
+              {/* Contexto (não é filtro): vale para os KPIs e para a tabela de membros. */}
+              <PeriodMenu value={scorePeriod} options={PERIOD_OPTIONS} onChange={setScorePeriod} />
             </FilterRow>
             <FilterChips
               chips={FILTERS.filter((f) => filters.has(f.key)).map((f) => ({

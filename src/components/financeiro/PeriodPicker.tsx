@@ -33,8 +33,9 @@ const segCls =
  * Contexto global do Financeiro — UMA unidade: `[ ‹ | Outubro de 2026 ▾ | › ]`.
  * Responde "que período estou vendo?" no próprio rótulo; as setas trocam o mês;
  * o centro abre os atalhos (Este mês, Hoje, últimos 30 dias, personalizado…).
- * Não é filtro de dados: vive na linha de contexto, uma vez, e vale para Resumo,
- * Lançamentos e Por campanha. Fora do modo mensal as setas ficam desativadas
+ * Não é filtro de dados: aparece uma vez e vale para Resumo, Lançamentos e Por
+ * campanha. Em Lançamentos fica na linha de busca/filtros (`AdvancedFilterBar`);
+ * nas telas sem essa linha, à direita da navegação do Financeiro. Fora do modo mensal as setas ficam desativadas
  * (escolha "Este mês" para navegar mês a mês).
  */
 export function PeriodPicker({ filtered }: { filtered: Filtered }) {

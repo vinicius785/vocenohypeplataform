@@ -11,7 +11,7 @@
 **Arquitetura de UX (valem tanto quanto o visual).**
 1. **Página única por contexto.** O conteúdo de um mesmo contexto vive numa página, com hierarquia clara e, quando há ≥3 seções, navegação por âncora. Nunca página → aba → subaba → filtro → modal para uma única tarefa.
 2. **Abas só para visões diferentes da mesma tarefa**, nunca para esconder conteúdo.
-3. **Contexto uma vez.** Período, mês, cliente, projeto ou outro escopo global é definido num único lugar da página (abaixo do cabeçalho) e não se repete dentro de filtros.
+3. **Contexto uma vez.** Período, mês, cliente, projeto ou outro escopo global é definido num único lugar da página e não se repete dentro de filtros. **O período é um menu seletor (`PeriodMenu`; no Financeiro, `PeriodPicker`) na mesma linha da busca, dos Filtros e da Ordenação**, no fim da linha. É contexto, não filtro: não gera chip nem conta no "Filtros · n". Telas sem linha de busca/filtros (ex.: Financeiro → Resumo) mantêm o período à direita da linha de navegação da página. Nunca como faixa de segmentos.
 4. **Filtros: um só mecanismo** — Busca + botão "Filtros" + filtros ativos (chips) + ordenação. Sem barra por dimensão e sem filtro dentro de filtro.
 5. **Ação perto do que modifica.** Uma ação primária por contexto; destrutivas atrás de menu e de confirmação.
 6. **Um fluxo de rolagem.** Rola a página. Scroll interno só em tabelas, listas muito extensas e áreas de trabalho (Kanban, chat, editor). Nunca scroll dentro de scroll.

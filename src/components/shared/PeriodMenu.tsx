@@ -8,7 +8,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
  * `Período [ 📅 Este mês ▾ ]` — uma unidade só, com a mesma anatomia do
  * controle do Financeiro (que ainda soma setas de mês). O rótulo responde
  * "que período estou vendo?" e os atalhos abrem num popover. Não é filtro
- * de dados: vive na linha de contexto, uma vez por página.
+ * de dados: vive na linha de busca/filtros/ordenação, no fim, uma vez por
+ * página (padrão da plataforma — ver DESIGN-SYSTEM.md, princípio 3).
  */
 export function PeriodMenu<T extends string>({
   value,

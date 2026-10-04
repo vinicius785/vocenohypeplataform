@@ -266,16 +266,6 @@ export function ComercialSection() {
               </>
             }
           />
-
-          {/* Contexto global: o período vale para os KPIs e para o Kanban; fica
-           * uma vez, logo abaixo do cabeçalho, fora de Filtros. */}
-          <div className="flex justify-end">
-            <PeriodMenu
-              value={period}
-              options={COMERCIAL_PERIOD_OPTIONS}
-              onChange={(v) => patchSearch({ cPeriod: v })}
-            />
-          </div>
         </div>
 
         <PipelineSummary
@@ -285,7 +275,8 @@ export function ComercialSection() {
           onFilter={goToPipelineWithFilter}
         />
 
-        {/* Busca + Filtros + Ordenar; filtros ativos logo abaixo. */}
+        {/* Busca + Filtros + Ordenar + Período; filtros ativos logo abaixo. O período
+         * é contexto (vale para os KPIs e para o Kanban), não filtro: não gera chip. */}
         <FilterToolbar>
           <FilterRow>
             <FilterSearch
@@ -298,6 +289,11 @@ export function ComercialSection() {
               sort={sort}
               direction={direction}
               onChange={(s, d) => patchSearch({ cSort: s, cDir: d })}
+            />
+            <PeriodMenu
+              value={period}
+              options={COMERCIAL_PERIOD_OPTIONS}
+              onChange={(v) => patchSearch({ cPeriod: v })}
             />
           </FilterRow>
           <LeadFiltersSummary

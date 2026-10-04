@@ -3,6 +3,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FilterChips, FilterSearch } from "@/components/shared/FilterToolbar";
+import { PeriodPicker } from "./PeriodPicker";
 import { useClientes } from "@/lib/clientes-store";
 import {
   type EntryStatus,
@@ -320,6 +321,9 @@ export function AdvancedFilterBar({ filtered }: { filtered: Filtered }) {
             </div>
           </PopoverContent>
         </Popover>
+
+        {/* Contexto (não é filtro): vale para a lista e para os KPIs; não gera chip. */}
+        <PeriodPicker filtered={filtered} />
       </div>
 
       <FilterChips

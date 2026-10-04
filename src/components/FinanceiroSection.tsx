@@ -111,7 +111,10 @@ export function FinanceiroSection() {
     <PageContainer className="space-y-5 md:space-y-6">
       {/* Topo = UMA unidade: título + ação primária, e logo abaixo uma única
        * linha de contexto (navegação do Financeiro à esquerda, período à
-       * direita). Sem segundo cabeçalho, sem faixa só para o período. */}
+       * direita). Sem segundo cabeçalho, sem faixa só para o período. Em
+       * Lançamentos o período passa para a linha de busca/filtros (padrão da
+       * plataforma: período ao lado de filtros e ordenação); nas telas sem
+       * barra de filtros ele fica aqui. */}
       <div className="space-y-4">
         <PageHeader
           title="Financeiro"
@@ -137,7 +140,7 @@ export function FinanceiroSection() {
           </div>
           {/* O período vale pro Resumo, pra lista de Lançamentos e pra visão "Por
            * campanha"; Análises → Geral olha todo o histórico, então não o mostra. */}
-          {(topTab !== "analises" || analiseView === "campanhas") && (
+          {topTab !== "lancamentos" && (topTab !== "analises" || analiseView === "campanhas") && (
             <PeriodPicker filtered={filtered} />
           )}
         </div>
