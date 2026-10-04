@@ -32,7 +32,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   getClienteOrganizationId,
   inviteClientUser,
@@ -45,8 +44,6 @@ import {
   updateClientMemberCampaigns,
   updateClientMemberRole,
 } from "@/lib/organization-invites.functions";
-import { deactivateClientToken } from "@/lib/clientes.functions";
-import { clientesStore } from "@/lib/clientes-store";
 import { isInviteCosmeticallyExpired } from "@/lib/access-audit-labels";
 
 /**
@@ -173,11 +170,9 @@ function MemberRowMenu({
 export function PortalAccessSection({
   clienteId,
   clienteNome,
-  publicToken,
 }: {
   clienteId: string;
   clienteNome?: string;
-  publicToken?: string;
 }) {
   const { confirm, confirmDialog } = useConfirm();
   const getOrgIdFn = useServerFn(getClienteOrganizationId);
@@ -190,8 +185,6 @@ export function PortalAccessSection({
   const suspendFn = useServerFn(suspendClientMember);
   const reactivateFn = useServerFn(reactivateClientMember);
   const removeFn = useServerFn(removeClientAccess);
-  const deactivateTokenFn = useServerFn(deactivateClientToken);
-  const [deactivatingToken, setDeactivatingToken] = useState(false);
 
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [members, setMembers] = useState<Member[] | null>(null);
@@ -378,80 +371,11 @@ export function PortalAccessSection({
     );
   };
 
-  const handleDeactivateToken = async () => {
-    if (
-      !(await confirm(
-        "Isso desativa o link antigo do portal (/portal/...) para este cliente — só faça isso depois de confirmar que ele já está usando o novo login.\nEssa ação não tem volta automática (seria preciso gerar um link novo depois).",
-        { title: "Desativar o link antigo?", confirmLabel: "Desativar link", destructive: true },
-      ))
-    )
-      return;
-    setDeactivatingToken(true);
-    try {
-      await deactivateTokenFn({ data: { clienteId } });
-      clientesStore.set((prev) =>
-        prev.map((cl) => (cl.id === clienteId ? { ...cl, publicToken: undefined } : cl)),
-      );
-    } catch (e) {
-      window.alert(e instanceof Error ? e.message : "Falha ao desativar o link.");
-    } finally {
-      setDeactivatingToken(false);
-    }
-  };
-
   if (!organizationId) return null;
 
   return (
     <div>
       {confirmDialog}
-      {publicToken && (
-        <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
-          <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">
-            Acesso antigo ainda ativo
-          </p>
-          <p className="mt-1 text-xs text-text-secondary">
-            Este cliente ainda pode acessar o portal pelo link compartilhado. Migre os usuários para
-            login e senha antes de desativá-lo.
-            {members && members.some((m) => m.status === "active") && (
-              <> Recomendamos desativar assim que possível.</>
-            )}
-          </p>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-amber-500/40 text-amber-700 hover:bg-amber-500/10 dark:text-amber-400"
-              disabled={deactivatingToken}
-              onClick={handleDeactivateToken}
-            >
-              Desativar acesso antigo
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                void navigator.clipboard.writeText(
-                  `${window.location.origin}/portal/${publicToken}`,
-                );
-              }}
-            >
-              Copiar link antigo
-            </Button>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="ghost" size="sm">
-                  Ver instruções de migração
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-72 text-xs text-text-secondary">
-                Convide cada pessoa do cliente pelo botão "Convidar usuário" acima, usando o e-mail
-                que ela vai usar para logar. Depois que todas confirmarem o novo acesso, desative o
-                link antigo — ele deixa de funcionar imediatamente para quem ainda o usava.
-              </PopoverContent>
-            </Popover>
-          </div>
-        </div>
-      )}
       <div className="mb-2 flex items-center justify-between gap-3">
         <div>
           <h4 className="text-sm font-semibold text-foreground">Acessos ao portal</h4>

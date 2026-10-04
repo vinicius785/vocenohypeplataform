@@ -489,11 +489,7 @@ export function ClienteDetailPage({ clienteId }: { clienteId: string }) {
 
         {/* ===== Acessos ao portal ===== */}
         <section id="acessos-ao-portal" className={cn(SURFACE.card, "p-5 md:p-6")}>
-          <PortalAccessSection
-            clienteId={cliente.id}
-            clienteNome={cliente.empresa}
-            publicToken={cliente.publicToken}
-          />
+          <PortalAccessSection clienteId={cliente.id} clienteNome={cliente.empresa} />
         </section>
 
         {/* ===== Histórico (colapsável, fechado por padrão) ===== */}

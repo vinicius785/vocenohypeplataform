@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
-  AlertTriangle,
   ArrowLeft,
   Calendar,
   ExternalLink,
@@ -79,15 +78,13 @@ import { useMyAccess } from "@/lib/permissions";
 import { PageContainer } from "@/components/shared/PageContainer";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { OPEN_CAMPANHA_TASK_KEY, OPEN_CAMPANHA_TASK_EVENT } from "./AppShell";
-import { TaskBoard, matchesDeadlinePeriod, type Task } from "./tasks/TaskBoard";
-import { usePerformanceSettings } from "@/lib/performance-events-store";
+import { TaskBoard, type Task } from "./tasks/TaskBoard";
 import {
   parseMoney,
   fmtBRL,
   fmtDate,
   normalizeInflus,
   totalAceito,
-  approvalSlaOverdueDays,
   type Influ,
   type BankInfo,
   type Entrega,
@@ -587,7 +584,6 @@ function CampanhaDetail({
   const enviados = visibleInflus.filter(
     (i) => i.status !== "EM_CURADORIA" && i.status !== "INSCRITO",
   ).length;
-  const emAprovacao = visibleInflus.filter((i) => i.status === "ENVIADO_AO_CLIENTE").length;
 
   // Budget
   const orcamento = parseMoney(c.orcamento);
@@ -687,102 +683,7 @@ function CampanhaDetail({
   const pctPublicadas =
     allEntregas.length > 0 ? Math.round((entregasPublicadas / allEntregas.length) * 100) : 0;
 
-  // ---- Precisa de atenção — SÓ sinais já calculados em algum lugar do app,
-  // nenhuma regra nova: atraso/"vence hoje" de tarefa = mesmo
-  // `matchesDeadlinePeriod` (+ corte de horário configurável) do filtro de
-  // prazo do TaskBoard; SLA de aprovação = `approvalSlaOverdueDays` (mesmo
-  // aviso do card do influenciador); "quem age" de entrega =
-  // `nextActionForEntrega`; orçamento estourado = `overBudget` dos KPIs.
-  const tasksRef = useRef<HTMLElement>(null);
-  const influsRef = useRef<HTMLElement>(null);
   const entregasRef = useRef<HTMLElement>(null);
-  const scrollToRef = (el: HTMLElement | null) =>
-    el?.scrollIntoView({ behavior: "smooth", block: "start" });
-  const { settings: performanceSettings } = usePerformanceSettings();
-  const cutoffHour = performanceSettings.deadlineCutoffHour;
-  const tasksMatching = (key: "atrasada" | "hoje") =>
-    visibleTasks.filter(
-      (t) =>
-        matchesDeadlinePeriod(t, key, cutoffHour) ||
-        (t.subtasks ?? []).some((st) => matchesDeadlinePeriod(st, key, cutoffHour)),
-    ).length;
-  const tarefasAtrasadas = tasksMatching("atrasada");
-  const tarefasHoje = tasksMatching("hoje");
-  const aprovacaoForaDoSla = visibleInflus.filter((i) => approvalSlaOverdueDays(i) !== null).length;
-  const inscritosCount = visibleInflus.filter((i) => i.status === "INSCRITO").length;
-  const pendentesEntregas = allEntregas.filter((x) => x.entrega.stage !== "PUBLICADA");
-  const entregasComCliente = pendentesEntregas.filter(
-    (x) => nextActionForEntrega(x.entrega.stage) === "cliente",
-  ).length;
-  const entregasComTime = pendentesEntregas.filter(
-    (x) => nextActionForEntrega(x.entrega.stage) === "hype",
-  ).length;
-  const nPlural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-  const attentionItems: {
-    key: string;
-    tone: "danger" | "warning" | "neutral";
-    text: string;
-    action: string;
-    onAction: () => void;
-  }[] = [];
-  if (tarefasAtrasadas > 0)
-    attentionItems.push({
-      key: "tarefas-atrasadas",
-      tone: "danger",
-      text: nPlural(tarefasAtrasadas, "tarefa atrasada", "tarefas atrasadas"),
-      action: "Ver tarefas",
-      onAction: () => scrollToRef(tasksRef.current),
-    });
-  if (overBudget)
-    attentionItems.push({
-      key: "orcamento",
-      tone: "danger",
-      text: `Gasto acima do orçamento em ${fmtBRL(gasto - orcamento)}`,
-      action: "Ver influenciadores",
-      onAction: () => scrollToRef(influsRef.current),
-    });
-  if (tarefasHoje > 0)
-    attentionItems.push({
-      key: "tarefas-hoje",
-      tone: "warning",
-      text: nPlural(tarefasHoje, "tarefa vence hoje", "tarefas vencem hoje"),
-      action: "Ver tarefas",
-      onAction: () => scrollToRef(tasksRef.current),
-    });
-  if (emAprovacao > 0)
-    attentionItems.push({
-      key: "aprovacao",
-      tone: aprovacaoForaDoSla > 0 ? "warning" : "neutral",
-      text: `${nPlural(emAprovacao, "perfil aguardando", "perfis aguardando")} aprovação do cliente${
-        aprovacaoForaDoSla > 0 ? ` · ${aprovacaoForaDoSla} acima do prazo` : ""
-      }`,
-      action: "Ver influenciadores",
-      onAction: () => scrollToRef(influsRef.current),
-    });
-  if (inscritosCount > 0)
-    attentionItems.push({
-      key: "inscritos",
-      tone: "neutral",
-      text: `${nPlural(inscritosCount, "inscrição nova", "inscrições novas")} para curadoria`,
-      action: "Ver influenciadores",
-      onAction: () => scrollToRef(influsRef.current),
-    });
-  if (entregasComTime > 0)
-    attentionItems.push({
-      key: "entregas-time",
-      tone: "neutral",
-      text: `${nPlural(entregasComTime, "entrega", "entregas")} com próxima ação: ${NEXT_ACTOR_LABEL.hype}`,
-      action: "Ver entregas",
-      onAction: () => scrollToRef(entregasRef.current),
-    });
-  if (entregasComCliente > 0)
-    attentionItems.push({
-      key: "entregas-cliente",
-      tone: "neutral",
-      text: `${nPlural(entregasComCliente, "entrega aguardando", "entregas aguardando")} o cliente`,
-      action: "Ver entregas",
-      onAction: () => scrollToRef(entregasRef.current),
-    });
 
   const [editOpen, setEditOpen] = useState(false);
   const { confirm: confirmDeleteCampanha, confirmDialog: confirmDeleteCampanhaDialog } =
@@ -1230,57 +1131,10 @@ function CampanhaDetail({
           )}
         </KpiStrip>
 
-        {/* PRECISA DE ATENÇÃO — só existe quando há sinal real (ver
-         * `attentionItems`); sem pendência, nenhum container é renderizado. */}
-        {attentionItems.length > 0 && (
-          <section aria-labelledby="campanha-atencao" className="-mt-2 md:-mt-4 lg:-mt-6 xl:-mt-8">
-            <p
-              role="heading"
-              aria-level={2}
-              id="campanha-atencao"
-              className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-text-secondary"
-            >
-              <AlertTriangle className="h-3.5 w-3.5" /> Precisa de atenção
-            </p>
-            <ul className="mt-1.5 flex flex-col divide-y divide-border/30">
-              {attentionItems.map((item) => (
-                <li key={item.key} className="flex items-center gap-x-3 py-1.5">
-                  <span
-                    aria-hidden
-                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                      item.tone === "danger"
-                        ? "bg-red-500"
-                        : item.tone === "warning"
-                          ? "bg-amber-500"
-                          : "bg-muted-foreground/60"
-                    }`}
-                  />
-                  <span
-                    className={`min-w-0 flex-1 text-sm ${
-                      item.tone === "danger"
-                        ? "font-medium text-red-700 dark:text-red-400"
-                        : "text-foreground"
-                    }`}
-                  >
-                    {item.text}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={item.onAction}
-                    className="shrink-0 whitespace-nowrap text-xs font-medium text-text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-                  >
-                    {item.action} <span aria-hidden>→</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
         {/* TAREFAS — sempre visível na Home, nunca atrás de aba. Lista
          * compacta por padrão, Kanban no alternador do próprio TaskBoard;
          * vazio = uma linha só. */}
-        <section ref={tasksRef} className="scroll-mt-6">
+        <section className="scroll-mt-6">
           <TaskBoard
             tasks={visibleTasks}
             onChange={persistVisibleTasks}
@@ -1293,7 +1147,7 @@ function CampanhaDetail({
 
         {/* INFLUENCIADORES — sempre visível. Cabeçalho (título/resumo por
          * status/busca/visualização/exportar/novo) vem do próprio board. */}
-        <section ref={influsRef} className="scroll-mt-6">
+        <section className="scroll-mt-6">
           <InfluencerBoard
             influs={visibleInflus}
             onChange={persistVisibleInflus}
