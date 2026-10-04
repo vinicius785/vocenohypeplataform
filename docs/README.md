@@ -12,9 +12,11 @@ Uma fonte de verdade por assunto. Antes de criar um documento novo, procure o as
 | Como as partes se comunicam e se relacionam | [`architecture/comunicacao-e-relacoes.md`](./architecture/comunicacao-e-relacoes.md) | dev + produto |
 | Riscos e lacunas conhecidas | [`architecture/riscos-e-lacunas.md`](./architecture/riscos-e-lacunas.md) | todos |
 | **Auditoria técnica 2026-10** (matriz de prioridades, classificação, resultados) | [`architecture/auditoria-2026-10.md`](./architecture/auditoria-2026-10.md) | todos |
+| **Platform Optimization Audit 2026-10** (2ª etapa: causas, performance, banco, DS, UX, matriz P0–P3 — só diagnóstico) | [`architecture/platform-optimization-audit-2026-10.md`](./architecture/platform-optimization-audit-2026-10.md) | todos |
 | Módulos internos (função, arquivos, dados) | [`modules/README.md`](./modules/README.md) | dev + produto |
 | Design System (contrato, decisões, auditoria, aplicação e estado da migração) | [`design-system/`](./design-system/README.md) | design + dev |
 | Segurança (estado atual, auditoria de setembro, RLS pendente) | [`security/README.md`](./security/README.md) | dev |
+| **Segurança — relatório consolidado** (para compartilhar; PDF ao lado) | [`security/relatorio-consolidado.md`](./security/relatorio-consolidado.md) | todos |
 | Performance (medições de bundle e carga inicial) | [`performance/README.md`](./performance/README.md) | dev |
 | Decisões arquiteturais (ADRs) | [`decisions/`](./decisions/) | dev |
 

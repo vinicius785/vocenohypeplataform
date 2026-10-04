@@ -7,6 +7,8 @@ Estado de segurança da plataforma. Relatórios por data ficam nesta pasta; este
 - Separação real: `organization_members` + `organizations.type` (`internal`/`client`), via `is_internal_team_member(uid)`; permissões de módulo por `has_permission`; admin por `is_admin`.
 - Portal do cliente acessa dados por **server functions com service-role** (ignoram RLS) e valida token/papel/campanha no servidor. Com o cliente do usuário usa só `profiles` e o bucket `avatars`.
 
+Para uma visão única e compartilhável (modelo de acesso, controles, superfícies, achados, pendências, o que não foi verificado): [`relatorio-consolidado.md`](./relatorio-consolidado.md) e o PDF `seguranca-plataforma-vnh.pdf`.
+
 ## Histórico
 | Data | Documento | Resumo |
 |---|---|---|
