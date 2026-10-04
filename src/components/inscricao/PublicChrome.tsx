@@ -1,3 +1,5 @@
+import { Instagram, Mail } from "lucide-react";
+
 /** Moldura da página pública de inscrição: cabeçalho e rodapé institucionais, sem nada do
  * workspace (sem sidebar/navegação interna). Só usa informações que existem no produto —
  * não há páginas de privacidade/termos/contato publicadas, então nenhum link é inventado. */
@@ -36,6 +38,13 @@ export function PublicHeader({
             <span className="min-w-0 truncate text-sm text-text-secondary">{contexto}</span>
           </>
         )}
+        <a
+          href="mailto:contato@vocenohype.com"
+          className="ml-auto inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-text-secondary transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+        >
+          <Mail className="h-4 w-4" aria-hidden="true" />
+          Dúvidas?
+        </a>
       </div>
     </header>
   );
@@ -62,9 +71,21 @@ export function PublicFooter({
             </p>
           </div>
         </div>
-        <p className="text-xs text-text-secondary">
-          © {new Date().getFullYear()} {nome}
-        </p>
+        <div className="flex items-center gap-3">
+          <a
+            href="https://www.instagram.com/vocenohype"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Instagram da Você no Hype (@vocenohype)"
+            title="@vocenohype"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+          >
+            <Instagram className="h-[18px] w-[18px]" aria-hidden="true" />
+          </a>
+          <p className="text-xs text-text-secondary">
+            © {new Date().getFullYear()} {nome}
+          </p>
+        </div>
       </div>
     </footer>
   );
