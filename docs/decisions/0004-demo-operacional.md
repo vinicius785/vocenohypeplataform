@@ -152,7 +152,7 @@ As transições incoerentes já são barradas pelas funções puras (`applyEntre
 2. **Esconder a demo** mexe no store de clientes (núcleo): a mudança é num ponto só (`useClientes`/`get`); exige varrer os 15 usos de servidor e agregadores de `campanha_tarefas`.
 3. **Realtime anônimo**: `realtime.send` pode não estar disponível → fallback de polling curto (5 s, só aba visível, só demo ativa).
 4. **Gatilhos de e-mail/NPS**: se a migration não for aplicada antes da primeira demo, um cliente de demo poderia disparar fluxo real. A criação **recusa** se a guarda não existir (checagem de versão do esquema).
-5. **Migration precisa ser aplicada** por você (Lovable/Supabase) — como a `20261004`; sem ela a Demo não liga.
+5. **Migration precisa ser aplicada** por você (SQL Editor do Supabase) — como a `20261004`; sem ela a Demo não liga.
 6. **Anexos de exemplo** e PDF de relatório: precisam de arquivos estáticos e de caminho compatível com a URL assinada.
 7. **Uploads feitos durante a demo** vão para o bucket real (em prefixo da campanha) — limpeza no reset/encerramento.
 8. **Reset atômico** depende de a função SQL ser a única escrita (por isso `demo_apply_scenario`).

@@ -241,7 +241,7 @@ type PortalRuntime = {
 4. **Aprovar** a abstração `PortalRuntime` (14 arquivos V2, padrão idêntico ao atual).
 5. **Decidir** push aos admins para eventos da Demo (sugestão: **suprimir** — o time já está operando a demo).
 6. **Decidir** onde ficam os arquivos de exemplo: cópia para `demo/<sessionId>/` nos buckets existentes (recomendado) ou ramificar `buildClienteLinkData`.
-7. Confirmar se o Lovable aplica migrations sozinho ao receber o push (a evidência de 03/out sugere que **não**).
+7. Migrations são aplicadas à mão no SQL Editor do Supabase (confirmado: o push não as aplica).
 
 ---
 
