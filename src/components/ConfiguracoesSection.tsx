@@ -368,7 +368,7 @@ export function SidebarProfile({ compact = false }: { compact?: boolean } = {}) 
     const rect = open ? avatarRef.current?.getBoundingClientRect() : undefined;
     const label = `${perfil.nome || "Sem nome"} · ${meta.label}${ausenteInfo ? ` ${ausenteInfo}` : ""}`;
     return (
-      <div className="px-3 pt-3">
+      <div className="flex justify-center px-3 pt-3">
         <Tooltip>
           <TooltipTrigger asChild>
             <button
@@ -377,7 +377,7 @@ export function SidebarProfile({ compact = false }: { compact?: boolean } = {}) 
               onClick={() => setOpen((v) => !v)}
               aria-label={`${label}. Alterar status`}
               aria-expanded={open}
-              className="nav-item mx-auto flex h-11 w-11 items-center justify-center rounded-lg transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+              className="nav-item flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 focus-visible:ring-offset-background"
             >
               <span className="relative block h-8 w-8">
                 <span className="block h-full w-full overflow-hidden rounded-full border border-border bg-muted">
