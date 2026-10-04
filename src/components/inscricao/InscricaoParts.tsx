@@ -83,26 +83,29 @@ export function FormStep({
   return (
     <section
       aria-labelledby={`etapa-${n}`}
-      className="border-t border-border/60 pt-8 first:border-t-0 first:pt-0"
+      className="lg:grid lg:grid-cols-[250px_minmax(0,1fr)] lg:gap-14"
     >
-      <div className="flex items-start gap-3">
-        <span
+      <div className="mb-6 lg:mb-0">
+        <p
           aria-hidden="true"
-          className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
-            done ? "bg-foreground text-background" : "bg-muted text-muted-foreground"
+          className={`flex items-center gap-1.5 text-sm font-medium tabular-nums ${
+            done ? "text-foreground" : "text-text-secondary"
           }`}
         >
-          {done ? <Check className="h-3.5 w-3.5" /> : n}
-        </span>
-        <div className="min-w-0">
-          <h3 id={`etapa-${n}`} className="text-base font-semibold text-foreground">
-            {title}
-            {done && <span className="sr-only"> (concluída)</span>}
-          </h3>
-          {description && <p className="mt-0.5 text-sm text-text-secondary">{description}</p>}
-        </div>
+          {done ? <Check className="h-4 w-4" /> : String(n).padStart(2, "0")}
+        </p>
+        <h3
+          id={`etapa-${n}`}
+          className="mt-1.5 text-xl font-semibold tracking-tight text-foreground"
+        >
+          {title}
+          {done && <span className="sr-only"> (concluída)</span>}
+        </h3>
+        {description && (
+          <p className="mt-1.5 text-sm leading-relaxed text-text-secondary">{description}</p>
+        )}
       </div>
-      <div className="mt-5 space-y-4 sm:pl-10">{children}</div>
+      <div className="min-w-0 space-y-5">{children}</div>
     </section>
   );
 }
@@ -137,7 +140,7 @@ export function SocialPicker({
         <div
           role="group"
           aria-labelledby="redes-legenda"
-          className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3"
+          className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3"
         >
           {PLATAFORMAS.map((p) => {
             const n = countOf(p.key);
@@ -153,17 +156,22 @@ export function SocialPicker({
                     if (first) refs.current[first.id]?.focus();
                   }
                 }}
-                className={`flex h-11 items-center justify-between gap-2 rounded-lg border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
+                className={`flex h-14 items-center justify-between gap-2 rounded-xl border px-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
                   n > 0
-                    ? "border-foreground bg-muted text-foreground"
-                    : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-border bg-muted/30 text-foreground hover:bg-muted"
                 }`}
               >
-                {p.label}
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold">{p.label}</span>
+                  <span className={`block text-xs ${n > 0 ? "opacity-70" : "text-text-secondary"}`}>
+                    {n > 0 ? `${n} ${n === 1 ? "perfil" : "perfis"}` : "Adicionar"}
+                  </span>
+                </span>
                 {n > 0 ? (
-                  <Check className="h-4 w-4" aria-label="Adicionada" />
+                  <Check className="h-4 w-4 shrink-0" aria-label="Adicionada" />
                 ) : (
-                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  <Plus className="h-4 w-4 shrink-0 text-text-secondary" aria-hidden="true" />
                 )}
               </button>
             );

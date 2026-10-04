@@ -2,7 +2,7 @@
  * workspace (sem sidebar/navegação interna). Só usa informações que existem no produto —
  * não há páginas de privacidade/termos/contato publicadas, então nenhum link é inventado. */
 function Logo({ logo, nome, size }: { logo?: string; nome: string; size: "sm" | "md" }) {
-  const box = size === "sm" ? "h-7 w-7 text-[11px]" : "h-8 w-8 text-xs";
+  const box = size === "sm" ? "h-8 w-8 text-xs" : "h-9 w-9 text-sm";
   return (
     <div
       className={`${box} flex shrink-0 items-center justify-center overflow-hidden rounded-lg bg-foreground font-semibold text-background`}
@@ -26,15 +26,13 @@ export function PublicHeader({
   contexto?: string;
 }) {
   return (
-    <header className="border-b border-border bg-background">
-      <div className="mx-auto flex h-14 w-full max-w-4xl items-center gap-2.5 px-5">
+    <header className="bg-background">
+      <div className="mx-auto flex h-16 w-full max-w-5xl items-center gap-3 px-6 lg:px-8">
         <Logo logo={logo} nome={nome} size="sm" />
         <span className="text-sm font-semibold text-foreground">{nome}</span>
         {contexto && (
           <>
-            <span aria-hidden="true" className="text-text-secondary">
-              /
-            </span>
+            <span aria-hidden="true" className="h-4 w-px bg-border" />
             <span className="min-w-0 truncate text-sm text-text-secondary">{contexto}</span>
           </>
         )}
@@ -53,8 +51,8 @@ export function PublicFooter({
   className?: string;
 }) {
   return (
-    <footer className={`border-t border-border bg-background ${className}`}>
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 px-5 py-8 sm:flex-row sm:items-center sm:justify-between">
+    <footer className={`mt-8 bg-muted/30 ${className}`}>
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-6 py-10 sm:flex-row sm:items-end sm:justify-between lg:px-8">
         <div className="flex items-center gap-3">
           <Logo logo={logo} nome={nome} size="md" />
           <div>

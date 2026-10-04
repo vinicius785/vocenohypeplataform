@@ -55,8 +55,8 @@ function Fact({ label, value }: { label: string; value?: string }) {
   if (!value) return null;
   return (
     <div className="min-w-0">
-      <dt className="text-xs font-medium uppercase tracking-wide text-text-secondary">{label}</dt>
-      <dd className="mt-0.5 text-sm font-medium text-foreground">{value}</dd>
+      <dt className="text-xs font-medium uppercase tracking-widest text-text-secondary">{label}</dt>
+      <dd className="mt-1.5 text-base font-medium leading-snug text-foreground">{value}</dd>
     </div>
   );
 }
@@ -65,8 +65,10 @@ function BriefRow({ label, value }: { label: string; value?: string }) {
   if (!value) return null;
   return (
     <div>
-      <dt className="text-xs font-medium uppercase tracking-wide text-text-secondary">{label}</dt>
-      <dd className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-foreground">{value}</dd>
+      <dt className="text-xs font-medium uppercase tracking-widest text-text-secondary">{label}</dt>
+      <dd className="mt-2 whitespace-pre-wrap text-base leading-relaxed text-foreground">
+        {value}
+      </dd>
     </div>
   );
 }
@@ -303,7 +305,7 @@ function InscricaoPage() {
       <PublicHeader logo={ws.logo} nome={ws.nome} contexto={page.publicTitle} />
 
       <main
-        className={`mx-auto w-full max-w-4xl flex-1 px-5 py-8 sm:py-12 ${showBar ? "pb-32" : ""}`}
+        className={`mx-auto w-full max-w-5xl flex-1 px-6 py-10 sm:py-16 lg:px-8 ${showBar ? "pb-28" : ""}`}
       >
         {done ? (
           <section
@@ -329,10 +331,10 @@ function InscricaoPage() {
           </section>
         ) : (
           <>
-            {/* HERO */}
+            {/* HERO — o título é o elemento principal; fatos escaneáveis só com tipografia. */}
             <section aria-labelledby="titulo-campanha">
               {page.bannerUrl && (
-                <div className="mb-6 overflow-hidden rounded-2xl border border-border">
+                <div className="mb-10 overflow-hidden rounded-2xl">
                   <img
                     src={page.bannerUrl}
                     alt=""
@@ -348,24 +350,24 @@ function InscricaoPage() {
               )}
               <h1
                 id="titulo-campanha"
-                className="mt-1 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl"
+                className="mt-2 max-w-3xl text-4xl font-semibold leading-[1.08] tracking-tight text-foreground sm:text-5xl"
               >
                 {page.publicTitle}
               </h1>
               {page.publicSubtitle && (
-                <p className="mt-2 max-w-2xl text-base text-text-secondary">
+                <p className="mt-4 max-w-2xl text-lg leading-snug text-text-secondary sm:text-xl">
                   {page.publicSubtitle}
                 </p>
               )}
               {hasFacts && (
-                <dl className="mt-5 grid grid-cols-1 gap-4 border-y border-border/60 py-4 sm:grid-cols-3">
+                <dl className="mt-10 grid grid-cols-1 gap-x-12 gap-y-6 sm:grid-cols-[0.7fr_1.5fr_1fr]">
                   <Fact label="Período" value={sobre.periodo} />
                   <Fact label="Regiões" value={sobre.regioes} />
                   <Fact label="Formato" value={sobre.tipoConteudo} />
                 </dl>
               )}
               {page.description && (
-                <p className="mt-5 max-w-2xl whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                <p className="mt-10 max-w-3xl whitespace-pre-wrap text-base leading-relaxed text-foreground/85 sm:text-lg">
                   {page.description}
                 </p>
               )}
@@ -373,20 +375,20 @@ function InscricaoPage() {
 
             {/* BRIEFING */}
             {hasBrief && (
-              <section aria-labelledby="sobre" className="mt-10">
+              <section aria-labelledby="sobre" className="mt-20">
                 <h2
                   id="sobre"
                   className="text-xs font-semibold uppercase tracking-widest text-text-secondary"
                 >
                   Sobre a campanha
                 </h2>
-                <dl className="mt-4 grid grid-cols-1 gap-x-10 gap-y-5 sm:grid-cols-2">
+                <dl className="mt-6 grid grid-cols-1 gap-x-16 gap-y-8 sm:grid-cols-2">
                   <BriefRow label="Objetivo" value={sobre.objetivo} />
                   <BriefRow label="Público desejado" value={sobre.publicoDesejado} />
                   <BriefRow label="Requisitos" value={sobre.requisitos} />
                 </dl>
                 {sobre.infoImportante && (
-                  <p className="mt-5 whitespace-pre-wrap border-l-2 border-border pl-4 text-sm text-text-secondary">
+                  <p className="mt-8 max-w-3xl whitespace-pre-wrap text-sm leading-relaxed text-text-secondary">
                     {sobre.infoImportante}
                   </p>
                 )}
@@ -394,7 +396,7 @@ function InscricaoPage() {
             )}
 
             {(hasDos || hasDonts) && (
-              <section className="mt-10 grid grid-cols-1 gap-8 sm:grid-cols-2">
+              <section className="mt-16 grid grid-cols-1 gap-10 sm:grid-cols-2">
                 {hasDos && (
                   <div>
                     <h2 className="text-xs font-semibold uppercase tracking-widest text-text-secondary">
@@ -435,20 +437,23 @@ function InscricaoPage() {
 
             {/* SUA INSCRIÇÃO */}
             <div ref={topRef} className="scroll-mt-6" />
-            <section id="inscricao" aria-labelledby="sua-inscricao" className="mt-12">
+            <section id="inscricao" aria-labelledby="sua-inscricao" className="mt-24">
               <h2
                 id="sua-inscricao"
-                className="text-xs font-semibold uppercase tracking-widest text-text-secondary"
+                className="text-3xl font-semibold tracking-tight text-foreground"
               >
                 Sua inscrição
               </h2>
+              <p className="mt-2 max-w-xl text-base text-text-secondary">
+                Conte um pouco sobre você e sua disponibilidade para esta campanha.
+              </p>
 
               {encerrada ? (
-                <p className="surface-card mt-4 p-8 text-center text-sm font-medium text-foreground">
+                <p className="surface-card mt-10 p-8 text-center text-sm font-medium text-foreground">
                   As inscrições para esta campanha estão encerradas.
                 </p>
               ) : reviewing ? (
-                <div className="surface-card mt-4 space-y-5 p-5 sm:p-6">
+                <div className="surface-card mt-10 space-y-5 p-6 sm:p-8">
                   <div>
                     <h3 className="text-lg font-semibold text-foreground">Revise sua inscrição</h3>
                     <p className="mt-0.5 text-sm text-text-secondary">
@@ -519,7 +524,7 @@ function InscricaoPage() {
                     e.preventDefault();
                     review();
                   }}
-                  className="mt-4 space-y-8"
+                  className="mt-12 space-y-16"
                   aria-label="Formulário de inscrição"
                 >
                   <FormStep
@@ -630,7 +635,7 @@ function InscricaoPage() {
                     <FormStep
                       n={stepOf("proposta")}
                       title="Sua proposta"
-                      description="Conte à equipe por que você é a pessoa certa para esta campanha."
+                      description="Conte à equipe sua disponibilidade e o que você pode entregar nesta campanha."
                       done={doneOf("proposta")}
                     >
                       {page.customQuestions.map((q) => (
@@ -648,7 +653,7 @@ function InscricaoPage() {
                           label="Mensagem para a equipe"
                           required={page.fields.mensagem.required}
                           optional={!page.fields.mensagem.required}
-                          hint="Fale sobre você, sua disponibilidade e o que pode entregar."
+                          hint="Explique rapidamente sua disponibilidade e o que você pode entregar."
                           error={shown("mensagem")}
                         >
                           {(a) => (
@@ -700,11 +705,25 @@ function InscricaoPage() {
         <div
           role="region"
           aria-label="Andamento da inscrição"
-          className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85"
+          className="fixed inset-x-0 bottom-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80"
           style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         >
-          <div className="mx-auto flex w-full max-w-4xl items-center gap-4 px-5 py-3">
-            <div className="min-w-0 flex-1">
+          {/* Progresso como um fio sobre a borda superior — sem ocupar altura. */}
+          <div
+            role="progressbar"
+            aria-label="Progresso da inscrição"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={reviewing ? 100 : pct}
+            className="h-px w-full bg-border"
+          >
+            <div
+              className="h-0.5 -translate-y-px bg-brand transition-[width] duration-300"
+              style={{ width: `${reviewing ? 100 : pct}%` }}
+            />
+          </div>
+          <div className="mx-auto flex w-full max-w-5xl items-center gap-4 px-6 py-2.5 lg:px-8">
+            <div className="min-w-0 flex-1 leading-tight">
               <p className="truncate text-sm font-medium text-foreground">
                 {reviewing
                   ? "Revise e envie"
@@ -717,26 +736,13 @@ function InscricaoPage() {
                   ? "Depois do envio não é possível editar."
                   : missing.length === 0
                     ? "Confira e envie sua inscrição."
-                    : `Falta: ${missing.map((s) => s.label).join(", ")}`}
+                    : `${missing.length === 1 ? "Falta" : "Faltam"}: ${missing.map((s) => s.label).join(", ")}`}
               </p>
-              <div
-                role="progressbar"
-                aria-label="Progresso da inscrição"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={reviewing ? 100 : pct}
-                className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-muted"
-              >
-                <div
-                  className="h-full rounded-full bg-foreground transition-[width] duration-300"
-                  style={{ width: `${reviewing ? 100 : pct}%` }}
-                />
-              </div>
             </div>
             {reviewing ? (
               <div className="flex shrink-0 items-center gap-2">
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="comfortable"
                   onClick={() => setReviewing(false)}
                   disabled={submitting}
@@ -768,7 +774,7 @@ function InscricaoPage() {
         </div>
       )}
 
-      <PublicFooter logo={ws.logo} nome={ws.nome} className={showBar ? "pb-20" : ""} />
+      <PublicFooter logo={ws.logo} nome={ws.nome} className={showBar ? "pb-16" : ""} />
     </div>
   );
 }
