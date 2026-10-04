@@ -18,7 +18,7 @@ A plataforma não é lenta nem complexa por falta de componentes: é por **seis 
 | C2 | **Regra de domínio dentro de arquivos de UI gigantes** | `TaskDialog` = **2.695 linhas** num único componente; `InfluencerBoard` = 46 componentes em 6.091 linhas; **13 arquivos > 1.000 linhas somam 30.045 das 92.683 linhas** de `components/` (32%) | Edição arriscada, re-render de árvores inteiras a cada tecla, impossível testar por unidade |
 | C3 | **Não existe taxonomia de controles de página** | `SegmentedControl` faz 3 papéis diferentes (navegação de seção, divisão de dados, modo de visão) com o mesmo visual; Financeiro tem 5, Time 4, Metas 3 | O empilhamento de controles que o Financeiro mostrou **se repete** onde há ≥ 3 camadas (ver §7) |
 | C4 | **Sem utilitários compartilhados de formatação/identidade** | 5 formatadores de BRL (+7 inline), **≥ 20** formatadores de data (com semânticas de fuso diferentes), **≥ 12** `initialsOf`/`initials`, 4 `colorFor` | Inconsistência visível e risco de "dia a menos" por fuso |
-| C5 | **Legado mantido "para rollback" nunca sai** | Chat V1 (`ChatSection`, 2.833 linhas) com redirect para o V2 há muito; 2 portais + redirects `portal-app/*`; `version.json` de 257 KB duplicando `platform_releases`; vitrine `/design-system` de 2.647 linhas | Superfície de manutenção e de bundle sem uso |
+| C5 | **Legado mantido "para rollback" nunca sai** | Chat V1 (`ChatSection`, 2.833 linhas) com redirect para o V2 há muito; portal por token e portal V2 coexistindo + `portal-app/*` (V1 de sessão aposentado, só guarda e redirects); `version.json` de 257 KB duplicando `platform_releases`; vitrine `/design-system` de 2.647 linhas | Superfície de manutenção e de bundle sem uso |
 | C6 | **Adoção do Design System desigual** | Tarefas, Chat, Marketing e Influenciadores usam `<button>` cru 85–110 vezes contra 2–16 `<Button>`; ≈410 usos de paleta direta nos módulos (70% em Tarefas, Marketing, Influenciadores, Configurações e Portal); 20 modais feitos à mão (`fixed inset-0`) | Aparência e acessibilidade divergentes; foco/Esc/aria reimplementados |
 
 **Os 5 achados de maior retorno** (detalhes na §11):
@@ -67,7 +67,7 @@ flowchart TB
 | Camada | O que existe | Observação |
 |---|---|---|
 | Entry points | `router.tsx`, `start.ts`, `server.ts`, `routes/__root.tsx` | `start.ts` anexa o JWT a toda server function e converte erro 500 em página |
-| Rotas | 74 arquivos (sem `routeTree.gen.ts`): app (`_authenticated`), portal V2, portal por token, `portal-app` (só redirects), públicas por token, `/api/*` | Quase todo o app interno é **uma rota** (`/time`) com seções por `?section=` |
+| Rotas | 74 arquivos (sem `routeTree.gen.ts`): app (`_authenticated`), portal V2, portal por token, `portal-app` (V1 de sessão aposentado: 1 guarda + 4 redirects + 1 layout vazio), públicas por token, `/api/*` | Quase todo o app interno é **uma rota** (`/time`) com seções por `?section=` |
 | Módulos | Início, Clientes, Campanhas, Projetos/Tarefas, Reuniões, Comercial, Financeiro, Time, Influenciadores, Metas, Chat, Marketing, Configurações, Problemas | 92.683 linhas em `components/` (+ ≈6.600 em `features/client-portal-v2`) |
 | Estado global | **Sem Redux/Zustand.** 3 `createContext` (2 do portal, 1 de gráfico) | Estado de domínio vive em módulos `lib/*-store.ts` |
 | "Repositories/services" | Não existem como camada. Stores fazem o papel de repositório; `*.functions.ts` de serviço | Padrão implícito, não documentado |
@@ -164,14 +164,14 @@ Regra: **dividir por estado e por seção**, não por "componente pequeno". Não
 | `secretsMatch` (comparação em tempo constante) | 2 crons + webhook de leads | Idêntico (código de **segurança** triplicado) | `lib/secrets.server.ts` | Baixo |
 | `PlatformIcon`, `usePersistedState`, `taskMentionsOf`, `linkPreviewIcon`, `formatAnsweredAt`, `getActorName`, `assertArtigoDoCliente`, `checkMustChangePassword` | pares de arquivos | Idênticos | Módulo da camada correspondente | Baixo |
 | **Chat V1 × V2** | `ChatSection` (2.833 linhas) × `chat-v2/*` (≈3.900) | V1 sem rota (ver §5.3) | V2 | Ver §5.3 |
-| **Portal por token × V2** | `components/portal/*` (2.872) × `features/client-portal-v2/*` (7.814) | O token tem telas que o V2 não tem (solicitações, bug, artigos) | Decisão de produto | Médio |
+| **Portal por token × V2** | Token: 4 rotas reais (≈1.470 linhas) + `portal-widgets` e casca (≈2.620) × V2: `features/client-portal-v2` (7.814). O V2 só compartilha com `components/portal/` o contexto de sessão (≈250 linhas) | O token tem ações que o V2 não tem (reabrir aprovação, editar briefing/anexos, enviar demanda, reportar bug, artigos) | Decisão de produto | Médio |
 | Barras de filtro (Campanhas, Projetos, Clientes, Influenciadores) | 4 arquivos quase idênticos | Dimensões diferentes | Já usam `FilterToolbar`; sobra só `*FiltersBar` por dimensão | Baixo |
 
 ### 5.3 Código morto (classificação)
 | Item | Classe | Evidência |
 |---|---|---|
 | `ChatSection.tsx` (Chat V1, 2.833 linhas) | **REVISAR (quase morto)** | `time.tsx` redireciona `chat` → `/chat-v2` ("continua intacto como referência/rollback"); o ramo que o renderiza só roda no instante antes do redirect. `components/chat/*` é compartilhado com o V2 e **fica** |
-| `routes/portal-app/*` (8 arquivos) | **SEGURO REMOVER** quando não houver link salvo | Só `redirect` para `/portal-v2` |
+| `routes/portal-app/*` (6 arquivos) | **REVISAR** (parte segura de remover) | `inicio`, `campanhas.index`, `campanhas.$campanhaId` e `…revisar` só redirecionam para `/portal-v2`; `campanhas.tsx` é layout vazio (existe só para os filhos). **`route.tsx` (194 linhas) não é redirect puro:** é a guarda de sessão do V1 (MFA, troca de senha, escolha de ambiente) e importa o contexto de sessão. Remover o conjunto só depois de confirmar que nenhum link salvo/e-mail aponta para `/portal-app` |
 | `/time-v2`, `/foco`, `/banco-influenciadores-v2` | REVISAR | Redirects de compatibilidade |
 | `ui/accordion` | **SEGURO REMOVER** | Nenhum uso |
 | `ui/chart` | MANTER (só vitrine) | Usado só por `/design-system` |
