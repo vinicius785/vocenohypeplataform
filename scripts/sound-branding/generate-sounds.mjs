@@ -139,23 +139,68 @@ function chat() {
   return b;
 }
 
-// COMERCIAL — ascendente e mais marcante: E5 → A5 → C#6 (arpejo de Lá maior), final aberto.
+/** Moeda: transiente curto de ruído + parciais metálicos inarmônicos (tilintar de moeda). */
+function coin(buf, freq, t0, { len = 0.22, amp = 0.4 } = {}) {
+  const start = Math.floor(t0 * SR);
+  const n = Math.floor(len * SR);
+  const parts = [
+    [1, 1.0, 1.0],
+    [2.76, 0.55, 0.7],
+    [5.4, 0.3, 0.45],
+    [8.93, 0.14, 0.3],
+  ];
+  let seed = 12345;
+  for (let i = 0; i < n && start + i < buf.length; i++) {
+    const t = i / SR;
+    const attack = Math.min(1, t / 0.0015);
+    let v = 0;
+    for (const [m, a, d] of parts) {
+      v += Math.sin(2 * Math.PI * freq * m * t) * a * Math.exp(-t / ((len / 3.5) * d));
+    }
+    // "clique" metálico inicial (ruído filtrado muito curto)
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    const noise = (seed / 0xffffffff - 0.5) * Math.exp(-t / 0.0025) * 0.7;
+    buf[start + i] += (v * 0.35 + noise) * attack * amp;
+  }
+}
+
+/** Sino de campainha: parciais de sino (1, 2.4, 3.9) com decaimento longo — "ding-dong". */
+function bell(buf, freq, t0, { len = 0.9, amp = 0.5 } = {}) {
+  const start = Math.floor(t0 * SR);
+  const n = Math.floor(len * SR);
+  const parts = [
+    [1, 1.0, 1.0],
+    [2.4, 0.4, 0.55],
+    [3.9, 0.22, 0.35],
+    [5.8, 0.1, 0.22],
+  ];
+  for (let i = 0; i < n && start + i < buf.length; i++) {
+    const t = i / SR;
+    const attack = Math.min(1, t / 0.002);
+    let v = 0;
+    for (const [m, a, d] of parts) {
+      v += Math.sin(2 * Math.PI * freq * m * t) * a * Math.exp(-t / ((len / 3.2) * d));
+    }
+    buf[start + i] += v * 0.4 * attack * amp;
+  }
+}
+
+// COMERCIAL — dinheiro: duas moedinhas tilintando e um brilho ascendente fechando em Lá (A6).
 function commercial() {
-  const b = alloc(1.5);
-  note(b, N.E5, 0.0, { len: 0.28, amp: 0.46, bright: 0.9, ring: 0.8 });
-  note(b, N.A5, 0.115, { len: 0.34, amp: 0.5, bright: 1.0, ring: 0.9 });
-  note(b, N.Cs6, 0.23, { len: 0.6, amp: 0.56, bright: 1.15, ring: 1.0 });
+  const b = alloc(1.3);
+  coin(b, 2637, 0.0, { len: 0.2, amp: 0.45 });
+  coin(b, 3136, 0.085, { len: 0.22, amp: 0.5 });
+  note(b, N.A5, 0.17, { len: 0.34, amp: 0.4, bright: 1.1, ring: 0.8 });
+  note(b, N.E6, 0.25, { len: 0.34, amp: 0.34, bright: 1.1, ring: 0.8 });
+  note(b, N.A6, 0.33, { len: 0.5, amp: 0.3, bright: 0.9, ring: 0.9 });
   return b;
 }
 
-// REUNIÃO — assinatura completa: entrada suave (A4+E5) e nota final clara (A5 + oitava A6).
+// REUNIÃO — carteiro na campainha: "ding-dong" (Dó♯ → Lá), com a nota final longa e clara.
 function meeting() {
   const b = alloc(2.0);
-  swell(b, N.A4, 0.0, { len: 0.55, amp: 0.2, attack: 0.14 });
-  swell(b, N.E5, 0.0, { len: 0.55, amp: 0.17, attack: 0.14 });
-  note(b, N.E5, 0.2, { len: 0.34, amp: 0.4, bright: 0.85, ring: 0.9 });
-  note(b, N.A5, 0.42, { len: 0.86, amp: 0.58, bright: 1.0, ring: 1.1 });
-  note(b, N.A6, 0.42, { len: 0.5, amp: 0.1, bright: 0.5, ring: 0.8 });
+  bell(b, N.Cs6, 0.0, { len: 0.7, amp: 0.46 });
+  bell(b, N.A5, 0.34, { len: 0.95, amp: 0.6 });
   return b;
 }
 
