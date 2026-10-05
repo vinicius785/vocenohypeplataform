@@ -1,25 +1,25 @@
 {
-  "version": "1.321.0",
+  "version": "1.322.0",
   "releases": [
     {
-      "version": "1.321.0",
-      "summary": "Projetos ficou mais simples: três opções saíram.",
+      "version": "1.322.0",
+      "summary": "Novo Calendário Editorial, exclusivo do projeto Marketing.",
       "modules": [
         {
           "name": "PROJETOS",
-          "tagline": "Áreas do projeto",
+          "tagline": "Marketing",
           "items": [
             {
-              "title": "Calendário editorial removido",
-              "description": "A área sai de Novo projeto, da edição e da página do projeto. Ele será refeito do zero em breve."
+              "title": "Calendário Editorial",
+              "description": "No projeto Marketing, em Recursos, planeje os conteúdos por dia com canal, formato, status, responsável e tarefa relacionada."
             },
             {
-              "title": "Tráfego pago removido",
-              "description": "A área também sai de todos os pontos de entrada dos projetos."
+              "title": "Mensal e lista",
+              "description": "Veja o mês em grade ou em lista, filtre por status, canal e responsável, e acompanhe o que está atrasado."
             },
             {
-              "title": "E-mails fora dos projetos",
-              "description": "A opção E-mails não aparece mais ao criar ou editar um projeto."
+              "title": "Rápido de usar",
+              "description": "Crie, edite, duplique, exclua e marque como publicado sem sair da página. No celular, a agenda aparece por dia."
             }
           ]
         }

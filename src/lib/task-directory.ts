@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { isMarketingProject } from "@/lib/marketing-project";
 import { loadProjetos, getTaskAssignees } from "@/lib/projetos";
 import {
   getAllCampanhaTarefas,
@@ -90,7 +91,7 @@ export function useTaskDirectory(): TaskDirectoryEntry[] {
     const projs = loadProjetos();
     let marketingProjectId: string | undefined;
     const projectTasks: TaskDirectoryEntry[] = projs.flatMap((p) => {
-      if (p.name.trim().toUpperCase() === "MARKETING") marketingProjectId = p.id;
+      if (isMarketingProject(p)) marketingProjectId = p.id;
       return (p.tasks ?? []).flatMap((t) => [
         {
           id: t.id,

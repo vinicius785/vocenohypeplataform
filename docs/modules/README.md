@@ -66,7 +66,7 @@ Todos vivem sob `/time?section=<chave>` (exceto detalhes de cliente e projeto e 
 
 ## Marketing
 
-`MarketingSection` + `marketing/*`: **E-mail** (campanhas, passos, públicos, templates, fluxos automáticos, dashboard; provedor Resend), **Blog** (editor markdown, publicação agendada, webhook para o site via Make, curtidas e comentários), **AEO Monitor** (prompts, rodadas, respostas por IA, evidências). Calendário editorial e Tráfego pago foram removidos (dados antigos ficam em `projetos.data.editorial`/`campaigns`, sem tela); a opção "E-mails" saiu da criação/edição de projeto.
+`MarketingSection` + `marketing/*`: **E-mail** (campanhas, passos, públicos, templates, fluxos automáticos, dashboard; provedor Resend), **Blog** (editor markdown, publicação agendada, webhook para o site via Make, curtidas e comentários), **AEO Monitor** (prompts, rodadas, respostas por IA, evidências). Calendário Editorial agora é exclusivo do projeto Marketing (tabela `marketing_conteudos`, Recursos → Calendário Editorial). Tráfego pago foi removido (dados antigos ficam em `projetos.data.editorial`/`campaigns`, sem tela); a opção "E-mails" saiu da criação/edição de projeto.
 
 ## Financeiro
 

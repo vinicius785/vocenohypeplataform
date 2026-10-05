@@ -2678,6 +2678,65 @@ export type Database = {
         };
         Relationships: [];
       };
+      marketing_conteudos: {
+        Row: {
+          canal: string;
+          created_at: string;
+          criado_por: string | null;
+          data: string;
+          descricao: string | null;
+          formato: string;
+          hora: string | null;
+          id: string;
+          projeto_id: string;
+          responsavel_id: string | null;
+          status: string;
+          tarefa_id: string | null;
+          titulo: string;
+          updated_at: string;
+        };
+        Insert: {
+          canal: string;
+          created_at?: string;
+          criado_por?: string | null;
+          data: string;
+          descricao?: string | null;
+          formato: string;
+          hora?: string | null;
+          id?: string;
+          projeto_id: string;
+          responsavel_id?: string | null;
+          status?: string;
+          tarefa_id?: string | null;
+          titulo: string;
+          updated_at?: string;
+        };
+        Update: {
+          canal?: string;
+          created_at?: string;
+          criado_por?: string | null;
+          data?: string;
+          descricao?: string | null;
+          formato?: string;
+          hora?: string | null;
+          id?: string;
+          projeto_id?: string;
+          responsavel_id?: string | null;
+          status?: string;
+          tarefa_id?: string | null;
+          titulo?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "marketing_conteudos_projeto_id_fkey";
+            columns: ["projeto_id"];
+            isOneToOne: false;
+            referencedRelation: "projetos";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       marketing_standalone_tasks: {
         Row: {
           created_at: string;

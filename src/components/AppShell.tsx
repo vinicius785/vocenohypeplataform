@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { isMarketingProject } from "@/lib/marketing-project";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   LayoutGrid,
@@ -1198,7 +1199,7 @@ function ActiveTimerIndicator({ onSelect }: { onSelect: (key: SectionKey) => voi
       // MarketingSection.tsx, senão o deep-link não acha a tarefa lá dentro.
       let marketingProjectId: string | undefined;
       for (const p of loadProjetos()) {
-        if (p.name.trim().toUpperCase() === "MARKETING") marketingProjectId = p.id;
+        if (isMarketingProject(p)) marketingProjectId = p.id;
       }
       const found = findById(loadStandalone() as unknown as MinimalTask[], entry.taskId);
       if (found && marketingProjectId) {

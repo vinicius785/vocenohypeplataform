@@ -6,6 +6,7 @@ import {
   type Project,
   type TaskBlockCategory,
 } from "@/lib/projetos";
+import { isMarketingProject } from "@/lib/marketing-project";
 import { getAllCampanhaTarefas } from "@/lib/campanha-scoped-store";
 import { loadStandalone } from "@/lib/marketing-tasks";
 import { deadlineCutoff } from "@/lib/performance-engine";
@@ -231,7 +232,7 @@ export function loadTasksByAssignee(
   const projs = loadProjetos();
   let marketingProjectId: string | undefined;
   for (const p of projs) {
-    if (p.name.trim().toUpperCase() === "MARKETING") marketingProjectId = p.id;
+    if (isMarketingProject(p)) marketingProjectId = p.id;
     for (const root of p.tasks ?? []) {
       collectAssignedTasks([root], undefined, (t, parentTitle, assignee) => {
         const b = bucketFor(t.dueDate, t.status, t.performanceDueDate, cutoffHour);
@@ -379,7 +380,7 @@ export function loadAllTasksFlat(
   const projs = loadProjetos();
   let marketingProjectId: string | undefined;
   for (const p of projs) {
-    if (p.name.trim().toUpperCase() === "MARKETING") marketingProjectId = p.id;
+    if (isMarketingProject(p)) marketingProjectId = p.id;
     for (const root of p.tasks ?? []) {
       collectAllTasks([root], undefined, (t, parentTitle, assignees) => {
         const b = bucketFor(t.dueDate, t.status, t.performanceDueDate, cutoffHour);
@@ -565,7 +566,7 @@ export function collectTaskCommentMentions(myName: string): TaskCommentMention[]
   const projs = loadProjetos();
   let marketingProjectId: string | undefined;
   for (const p of projs) {
-    if (p.name.trim().toUpperCase() === "MARKETING") marketingProjectId = p.id;
+    if (isMarketingProject(p)) marketingProjectId = p.id;
     for (const root of (p.tasks ?? []) as unknown as CampanhaTaskLike[]) {
       collectFrom(root, p.id, root.id);
     }

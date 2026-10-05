@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { isMarketingProject } from "@/lib/marketing-project";
 import { DateField } from "@/components/ui/date-field";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
@@ -18,6 +19,7 @@ import {
   FolderOpen,
   Newspaper,
   Radar,
+  CalendarDays,
 } from "lucide-react";
 
 import {
@@ -63,6 +65,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { TYPOGRAPHY } from "@/lib/design-tokens";
 import { OPEN_STATUSES } from "@/lib/score";
+import { EditorialCalendarPage } from "@/components/marketing/editorial/EditorialCalendarPage";
 import { BlogPanel } from "@/components/marketing/BlogPanel";
 import { AeoMonitorPanel } from "@/components/marketing/AeoMonitorPanel";
 import { normalizeInflus, type Influ } from "@/lib/influencer-model";
@@ -155,9 +158,9 @@ function renderPanel(
   blogEditingId?: string | null,
   onBlogEditingIdChange?: (id: string | null) => void,
 ) {
-  const isMarketingProject = project.name.trim().toUpperCase() === "MARKETING";
+  const isMarketing = isMarketingProject(project);
   if (k === "kanban")
-    return isMarketingProject ? (
+    return isMarketing ? (
       <MarketingSection
         embedded
         initialOpenTaskId={initialOpenTaskId}
@@ -195,6 +198,8 @@ function ProjetoPage() {
   const [blogOpen, setBlogOpen] = useState(false);
   // AEO Monitor aberto por "Recursos": mesma ideia — a página mostra só o monitor.
   const [aeoOpen, setAeoOpen] = useState(false);
+  // Calendário Editorial: ferramenta exclusiva do projeto Marketing (aberta por "Recursos").
+  const [editorialOpen, setEditorialOpen] = useState(false);
   const { id } = Route.useParams();
   const { taskId } = Route.useSearch();
   const navigate = useNavigate();
@@ -332,9 +337,24 @@ function ProjetoPage() {
   const hasDocs = availableSections.includes("documentos");
   const hasBlog = availableSections.includes("blog");
   const hasAeo = availableSections.includes("aeo_monitor");
+  const hasEditorial = isMarketingProject(project);
   const sections = availableSections.filter(
     (k) => k !== "documentos" && k !== "blog" && k !== "aeo_monitor",
   );
+
+  if (editorialOpen && hasEditorial) {
+    return (
+      <AppShell active="projetos" onSelect={goToSection}>
+        <PageContainer variant="wide" className="space-y-6">
+          <EditorialCalendarPage
+            projectId={project.id}
+            projectName={project.name}
+            onBack={() => setEditorialOpen(false)}
+          />
+        </PageContainer>
+      </AppShell>
+    );
+  }
 
   if (aeoOpen) {
     return (
@@ -431,7 +451,7 @@ function ProjetoPage() {
             </div>
 
             <div className="flex shrink-0 items-center gap-1.5 self-start">
-              {(hasDocs || hasBlog || hasAeo) && (
+              {(hasDocs || hasBlog || hasAeo || hasEditorial) && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="sm" aria-haspopup="menu">
@@ -449,6 +469,12 @@ function ProjetoPage() {
                             {project.docs.length}
                           </span>
                         )}
+                      </DropdownMenuItem>
+                    )}
+                    {hasEditorial && (
+                      <DropdownMenuItem onSelect={() => setEditorialOpen(true)}>
+                        <CalendarDays className="h-3.5 w-3.5 text-text-secondary" />
+                        <span className="min-w-0 flex-1 truncate">Calendário Editorial</span>
                       </DropdownMenuItem>
                     )}
                     {hasAeo && (

@@ -361,6 +361,10 @@ export type Project = {
   cover?: string;
   description: string;
   features: FeatureKey[];
+  /** Marcador ESTÁVEL de projeto de sistema (hoje só `"marketing"`, o Marketing da Você no Hype).
+   * Nunca depende do nome visual — ver `isMarketingProject` em `@/lib/marketing-project`.
+   * Duplicar um projeto NÃO copia este marcador. */
+  systemKey?: "marketing";
   influencerFeatures?: InfluencerFieldKey[];
   layout?: ProjectLayout;
   createdAt: number;
@@ -379,10 +383,6 @@ export type Project = {
   tasks: Task[];
   docs: DocItem[];
   sections?: Partial<Record<FeatureKey, SectionItem[]>>;
-  /** LEGADO: dados do antigo Calendário editorial e do Tráfego pago (removidos do produto). Ficam no
-   * JSON do projeto só para não perder histórico; nenhuma tela lê ou grava. */
-  editorial?: unknown[];
-  campaigns?: unknown[];
   blog?: BlogPost[];
   /** Token do link público/externo de Bugs & Sugestões (só usado pelo
    * Projeto HypeApp) — gerado sob demanda, mesmo padrão de
