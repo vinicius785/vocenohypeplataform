@@ -1,25 +1,25 @@
 {
-  "version": "1.332.0",
+  "version": "1.333.0",
   "releases": [
     {
-      "version": "1.332.0",
-      "summary": "Detalhe do influenciador V2.1: contato no cabeçalho e painel com menos blocos e mais hierarquia.",
+      "version": "1.333.0",
+      "summary": "Detalhe do influenciador: perfil e financeiro em linha única, feedback com link no título e atividade com o nome da entrega.",
       "modules": [
         {
           "name": "CAMPANHAS",
           "tagline": "Detalhe do influenciador",
           "items": [
             {
-              "title": "Contato no cabeçalho",
-              "description": "Telefone e e-mail aparecem logo abaixo do nome, com copiar e WhatsApp; sem contato, 'Adicionar contato'."
+              "title": "Perfil em uma linha",
+              "description": "Seguidores, interação, views e atenção juntos, sem caixas por métrica."
             },
             {
-              "title": "Ordem por prioridade",
-              "description": "Próxima ação, entregas, feedback, perfil, financeiro, contexto, checklist e atividade, sem cartões nem divisores em excesso."
+              "title": "Financeiro como linha-resumo",
+              "description": "Remuneração, pagamento, contrato e dados bancários numa linha clicável; abaixo, só o que falta fazer."
             },
             {
-              "title": "Financeiro mais direto",
-              "description": "Valor e estados em uma faixa, com apenas as pendências em frases curtas e a ação ao lado."
+              "title": "Feedback e atividade",
+              "description": "'Ver feedback completo' no título do bloco e eventos de atividade com o nome da entrega."
             }
           ]
         }

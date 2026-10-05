@@ -232,9 +232,9 @@ export function InlineNote({
         >
           {value}
         </p>
-      ) : (
+      ) : emptyText ? (
         <p className="text-sm text-text-secondary">{emptyText}</p>
-      )}
+      ) : null}
       {footer}
     </section>
   );

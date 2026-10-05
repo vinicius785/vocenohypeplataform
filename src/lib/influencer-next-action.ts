@@ -232,7 +232,7 @@ export function clientFeedbacks(influ: Influ): ClientFeedback[] {
       autorNome: a.veredito.autorNome,
       phase: a.phase,
       statusLabel:
-        a.phase === "reenviado" ? "Reenviado — aguardando aprovação" : "Aguardando novo envio",
+        a.phase === "reenviado" ? "Reenviado · aguardando aprovação" : "Aguardando novo envio",
     });
   }
   if (influ.status === "RECUSADO" && influ.clienteReprovacao) {

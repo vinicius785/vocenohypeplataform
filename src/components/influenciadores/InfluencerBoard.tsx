@@ -4239,14 +4239,21 @@ function PerfilAudienciaSection({
             )}
           </div>
           {stats.length > 0 && (
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-sm">
-              {stats.map((x) => (
-                <div key={x.l} className="min-w-0 truncate">
-                  <dd className="inline font-medium text-foreground">{x.v}</dd>{" "}
-                  <dt className="inline text-text-secondary">{x.l}</dt>
-                </div>
+            <p className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-sm">
+              {stats.map((x, i) => (
+                <span key={x.l} className="inline-flex items-baseline gap-1.5">
+                  {i > 0 && (
+                    <span aria-hidden className="text-text-secondary">
+                      ·
+                    </span>
+                  )}
+                  <span>
+                    <span className="font-medium text-foreground">{x.v}</span>{" "}
+                    <span className="text-text-secondary">{x.l}</span>
+                  </span>
+                </span>
               ))}
-            </dl>
+            </p>
           )}
           <QuietButton onClick={() => setDialog("audiencia")}>Ver audiência →</QuietButton>
         </>
@@ -4609,33 +4616,41 @@ function FinanceiroContratoSection({
       />
       <CockpitTitle>Financeiro</CockpitTitle>
 
-      {/* Estado em uma faixa; cada item abre o detalhe/edição logo abaixo. */}
-      <div className="grid grid-cols-2 gap-y-2 sm:grid-cols-4 sm:divide-x sm:divide-border/60">
-        {cells.map((c) => (
-          <button
-            key={c.key}
-            type="button"
-            aria-expanded={open === c.key}
-            onClick={() => toggle(c.key)}
-            className="min-w-0 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand sm:px-3 sm:first:pl-0"
-          >
-            <span
-              className={`flex items-center gap-1.5 text-base font-semibold ${
-                open === c.key
-                  ? "text-foreground underline underline-offset-4"
-                  : "text-foreground/90"
+      {/* Uma linha-resumo; cada item abre o detalhe/edição logo abaixo. */}
+      <p className="flex flex-wrap items-center gap-x-1 gap-y-1 text-sm">
+        {cells.map((c, i) => (
+          <span key={c.key} className="inline-flex items-center gap-1">
+            {i > 0 && (
+              <span aria-hidden className="mx-1 text-text-secondary">
+                ·
+              </span>
+            )}
+            <button
+              type="button"
+              aria-expanded={open === c.key}
+              onClick={() => toggle(c.key)}
+              className={`inline-flex items-center gap-1.5 rounded hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
+                open === c.key ? "underline underline-offset-4" : ""
               }`}
             >
               <span
                 aria-hidden
                 className={`h-1.5 w-1.5 shrink-0 rounded-full ${TONE_DOT[c.tone]}`}
               />
-              <span className="truncate">{c.value}</span>
-            </span>
-            <span className="block truncate text-[11px] text-text-secondary">{c.label}</span>
-          </button>
+              {c.key === "rem" && c.tone === "ok" ? (
+                <span className="font-semibold text-foreground">{c.value}</span>
+              ) : (
+                <span>
+                  <span className="text-text-secondary">{c.label}</span>{" "}
+                  <span className="font-medium text-foreground">
+                    {c.value.toLowerCase() === "ok" ? "OK" : c.value.toLowerCase()}
+                  </span>
+                </span>
+              )}
+            </button>
+          </span>
         ))}
-      </div>
+      </p>
 
       {pending.length > 0 && (
         <ul className="space-y-1">
@@ -4852,8 +4867,11 @@ function AtividadeRecente({
   activity,
   onOpenActivity,
   limit = 5,
+  entregas = [],
 }: {
   activity: InfluActivity[];
+  /** Para nomear a entrega a que o evento se refere (ex.: — "Reels"). */
+  entregas?: Entrega[];
   onOpenActivity: () => void;
   limit?: number;
 }) {
@@ -4876,7 +4894,13 @@ function AtividadeRecente({
               </p>
               <p className="text-sm text-foreground">
                 <span className="font-medium">{a.author}</span>{" "}
-                <span className="text-text-secondary">{historyActionText(a.action)}</span>
+                <span className="text-text-secondary">
+                  {historyActionText(a.action)}
+                  {(() => {
+                    const e = a.entregaId ? entregas.find((x) => x.id === a.entregaId) : undefined;
+                    return e && !a.action.includes(" — ") ? ` — "${e.tipo}"` : "";
+                  })()}
+                </span>
               </p>
             </li>
           ))}
@@ -5025,7 +5049,7 @@ function WorkspaceDetailBody({
         <CockpitTitle>Contexto da seleção</CockpitTitle>
         <InlineNote
           key={influ.id}
-          label="Por que este influenciador?"
+          label="Motivo da escolha"
           hint="Aparece pro cliente no portal."
           surface={false}
           value={influ.justificativaTime ?? ""}
@@ -5041,7 +5065,7 @@ function WorkspaceDetailBody({
             hint="O que este influenciador precisa saber/fazer nesta campanha — aparece no portal do cliente."
             surface={false}
             value={influ.briefingPersonalizado ?? ""}
-            emptyText="Sem briefing"
+            emptyText={influ.briefingAnexoUrl ? "" : "Sem briefing"}
             addLabel="Adicionar"
             placeholder="Ex: focar no tom descontraído, evitar mencionar concorrentes..."
             onSave={(v) => onPatch({ briefingPersonalizado: v || undefined })}
@@ -5098,7 +5122,12 @@ function WorkspaceDetailBody({
         onApplyToAll={onApplyChecklistToAll}
       />
 
-      <AtividadeRecente activity={influ.activity ?? []} onOpenActivity={onOpenActivity} limit={3} />
+      <AtividadeRecente
+        activity={influ.activity ?? []}
+        entregas={influ.entregas}
+        onOpenActivity={onOpenActivity}
+        limit={3}
+      />
 
       {/* Mais informações — o que se consulta raramente. */}
       <div ref={moreRef} className="scroll-mt-4">

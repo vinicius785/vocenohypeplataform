@@ -170,16 +170,23 @@ export function ClientFeedbackBlock({
     <section aria-label="Feedback do cliente" className="space-y-1.5">
       <CockpitTitle
         action={
-          items.length > 1 ? (
-            <QuietButton onClick={() => setI((n) => (n + 1) % items.length)}>
-              {Math.min(i, items.length - 1) + 1} de {items.length} · Próximo
-            </QuietButton>
-          ) : undefined
+          <span className="flex items-center gap-3">
+            {items.length > 1 && (
+              <QuietButton onClick={() => setI((n) => (n + 1) % items.length)}>
+                {Math.min(i, items.length - 1) + 1}/{items.length} · Próximo
+              </QuietButton>
+            )}
+            {f.entregaId && (
+              <QuietButton onClick={() => onOpen(f.entregaId!)}>
+                Ver feedback completo →
+              </QuietButton>
+            )}
+          </span>
         }
       >
         Feedback do cliente
       </CockpitTitle>
-      <div className="space-y-1.5 border-l-2 border-amber-500/70 pl-3">
+      <div className="space-y-1.5 border-l-2 border-amber-500/50 pl-3">
         <p className="text-xs font-medium text-text-secondary">
           {f.etapaLabel}
           {f.entregaNome ? ` · ${f.entregaNome}` : ""}
@@ -188,12 +195,7 @@ export function ClientFeedbackBlock({
         <p className="text-xs text-text-secondary">
           {[f.autorNome, when].filter(Boolean).join(" · ")}
         </p>
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-          <span className="text-xs font-medium text-foreground">{f.statusLabel}</span>
-          {f.entregaId && (
-            <QuietButton onClick={() => onOpen(f.entregaId!)}>Ver feedback completo →</QuietButton>
-          )}
-        </div>
+        <p className="text-xs font-medium text-foreground">{f.statusLabel}</p>
       </div>
     </section>
   );
