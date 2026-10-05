@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { Search } from "lucide-react";
 import { Highlighted } from "./MentionAutocomplete";
-import { loadMembers } from "@/lib/chat-store";
+import { Avatar, useTeamMembers } from "@/components/tasks/task-people";
 import type { MentionOption } from "@/lib/mention-kinds";
 import type { ReferenceView } from "@/lib/reference-picker";
 import { TASK_STATUS_DOT } from "@/lib/task-status";
@@ -23,32 +23,26 @@ export function TaskStatusDot({ status, className }: { status?: string; classNam
   );
 }
 
+/** Responsável da tarefa. `assignees` guarda o NOME do membro (como no Kanban); aceita id também. */
 function Assignee({ ids }: { ids?: string[] }) {
-  const members = useMemo(() => loadMembers(), []);
-  const first = ids?.map((id) => members.find((m) => m.id === id)).find(Boolean);
+  const team = useTeamMembers();
+  const find = (key: string) => {
+    const k = key.trim().toLowerCase();
+    return team.find((m) => m.id === key || m.name.toLowerCase() === k);
+  };
+  const first = ids?.map(find).find(Boolean);
   if (!first) {
     return (
       <span
-        title="Sem responsável"
+        title={ids && ids.length > 0 ? ids[0] : "Sem responsável"}
         className="h-5 w-5 shrink-0 rounded-full border border-dashed border-border"
       />
     );
   }
   const extra = (ids?.length ?? 1) - 1;
-  const title = first.name + (extra > 0 ? ` e mais ${extra}` : "");
-  return first.photo ? (
-    <img
-      src={first.photo}
-      alt={first.name}
-      title={title}
-      className="h-5 w-5 shrink-0 rounded-full object-cover"
-    />
-  ) : (
-    <span
-      title={title}
-      className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-muted text-[10px] font-medium text-text-secondary"
-    >
-      {first.name.trim()[0]?.toUpperCase() ?? "?"}
+  return (
+    <span title={first.name + (extra > 0 ? ` e mais ${extra}` : "")} className="shrink-0">
+      <Avatar member={first} size={20} />
     </span>
   );
 }

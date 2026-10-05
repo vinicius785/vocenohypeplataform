@@ -1,25 +1,21 @@
 {
-  "version": "1.319.0",
+  "version": "1.319.1",
   "releases": [
     {
-      "version": "1.319.0",
-      "summary": "O # do chat agora abre direto a busca de tarefas, com status e responsável.",
+      "version": "1.319.1",
+      "summary": "O responsável de cada tarefa voltou a aparecer na busca do #.",
       "modules": [
         {
           "name": "CHAT",
           "tagline": "Referenciar tarefas com #",
           "items": [
             {
-              "title": "# abre as tarefas",
-              "description": "Digitar # mostra só tarefas: recentes e as suas ativas primeiro, e a busca pelo título ou pelo projeto."
+              "title": "Foto do responsável",
+              "description": "Na lista de tarefas do #, cada tarefa mostra a foto do responsável, ou as iniciais quando não há foto."
             },
             {
-              "title": "Status e responsável à vista",
-              "description": "Cada tarefa mostra a bolinha com a cor real do status (a mesma do Kanban), o título, o projeto e a foto do responsável."
-            },
-            {
-              "title": "Tarefa legível na mensagem",
-              "description": "Na conversa, a tarefa referenciada aparece com a cor do status e o título, e continua clicável."
+              "title": "Suas tarefas primeiro",
+              "description": "Sem texto digitado, as tarefas em que você é responsável aparecem antes das demais."
             }
           ]
         }

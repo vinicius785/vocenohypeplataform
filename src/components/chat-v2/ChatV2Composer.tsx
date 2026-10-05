@@ -41,6 +41,7 @@ function useV2MentionSources(convoId: string) {
   const tasks = useTaskDirectory();
   const clientes = useClientes();
   const meId = getMe().id;
+  const meName = getMe().name.trim().toLowerCase();
 
   const mentionsEnabled = canMentionPeople(convoId);
   const people = useMemo(
@@ -75,7 +76,7 @@ function useV2MentionSources(convoId: string) {
       assigneeIds: x.assignees,
       // Sem busca, as minhas tarefas ativas aparecem primeiro (depois as demais ativas).
       boost:
-        (x.assignees?.includes(meId) ? 50 : 0) +
+        (x.assignees?.some((a) => a === meId || a.trim().toLowerCase() === meName) ? 50 : 0) +
         (x.status === "Concluído" || x.status === "Arquivado" || x.status === "Aprovado" ? 0 : 10),
       campanhaId: x.campanhaId,
       projectId: x.projectId,
@@ -111,7 +112,7 @@ function useV2MentionSources(convoId: string) {
     return [...t, ...projects, ...campaigns, ...clientOptions].filter(
       (o) => typeof o.label === "string" && o.label.trim() !== "",
     );
-  }, [tasks, clientes, meId]);
+  }, [tasks, clientes, meId, meName]);
 
   return { people, references, recentUserIds, mentionsEnabled };
 }
