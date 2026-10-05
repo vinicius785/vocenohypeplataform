@@ -17,6 +17,7 @@ describe("buildPortalAccessEmail", () => {
     expect(html).toContain("Administrador");
     expect(html).toContain('href="https://app.exemplo.com/criar-senha?x=1&amp;y=2"');
     expect(html.toLowerCase()).not.toContain("senha temporária");
+    expect(html).toContain("Você no Hype");
   });
   it("conta existente: texto do login e papel de visualizador", () => {
     const { html } = buildPortalAccessEmail({
@@ -37,5 +38,13 @@ describe("buildPortalAccessEmail", () => {
     expect(html).not.toContain("<b>X</b>");
     expect(html).toContain("&lt;b&gt;X&lt;/b&gt;");
     expect(html).toContain("A&amp;B");
+  });
+  it("usa o logo quando há URL pública, senão o nome da marca", () => {
+    const withLogo = buildPortalAccessEmail({
+      ...base,
+      logoUrl: "https://app.exemplo.com/brand/logo-arco.png",
+    });
+    expect(withLogo.html).toContain('<img src="https://app.exemplo.com/brand/logo-arco.png"');
+    expect(buildPortalAccessEmail(base).html).not.toContain("<img");
   });
 });

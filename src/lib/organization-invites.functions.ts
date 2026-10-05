@@ -132,6 +132,7 @@ export async function sendPortalAccessInviteEmail(
       role: opts.role,
       actionUrl,
       existingAccount: opts.existingAccount,
+      logoUrl: `${appUrl}/brand/logo-arco.png`,
     });
     const { sendEmail } = await import("@/lib/email-provider.server");
     const result = await sendEmail({ to: opts.email, subject, html });
