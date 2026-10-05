@@ -1,15 +1,4 @@
 import { useMemo, useState } from "react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  LabelList,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-  type TooltipProps,
-} from "recharts";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -160,7 +149,7 @@ function MemberRow({
 
   return (
     <div className="border-t border-border first:border-t-0">
-      <div className="flex items-center gap-3 px-3 py-2.5">
+      <div className="flex items-center gap-3 px-3 py-2">
         <button
           type="button"
           onClick={() => setExpanded((e) => !e)}
@@ -179,7 +168,7 @@ function MemberRow({
           onClick={onOpenMember}
           className="group flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-md text-left"
         >
-          <Avatar className="h-8 w-8 shrink-0">
+          <Avatar className="h-7 w-7 shrink-0">
             {member.photo && <AvatarImage src={member.photo} alt={member.name} />}
             <AvatarFallback className={`text-xs font-semibold ${avatarAccent(member.id)}`}>
               {initialsOf(member.name, member.email)}
@@ -285,20 +274,14 @@ function SortableHeader({
   );
 }
 
-type ChartDatum = WeekdayBucket & { shortLabel: string };
-
-function ChartTooltip({ active, payload }: TooltipProps<number, string>) {
-  if (!active || !payload?.length) return null;
-  const row = payload[0].payload as ChartDatum;
-  return (
-    <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-md">
-      <p className="mb-1 font-semibold text-foreground">{row.label}-feira</p>
-      <p className="text-foreground">
-        {row.totalCompletions} tarefa{row.totalCompletions === 1 ? "" : "s"} concluída
-        {row.totalCompletions === 1 ? "" : "s"}
-      </p>
-    </div>
-  );
+/** Dia de hoje (1=segunda…5=sexta) no fuso de Brasília — só para um destaque sutil. */
+function todayWeekdayBR(): number | null {
+  const wd = new Date().toLocaleDateString("en-US", {
+    weekday: "short",
+    timeZone: "America/Sao_Paulo",
+  });
+  const map: Record<string, number> = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5 };
+  return map[wd] ?? null;
 }
 
 /**
@@ -352,11 +335,6 @@ export function TeamDeliveriesWeek({
   );
   const avgDaily = weekdayData.length > 0 ? thisWeekTotal / weekdayData.length : 0;
 
-  const chartData: ChartDatum[] = weekdayData.map((d) => ({
-    ...d,
-    shortLabel: d.label.slice(0, 3).toUpperCase(),
-  }));
-
   const sortedRows = useMemo(() => {
     const dir = sortDir === "asc" ? 1 : -1;
     return [...memberRows].sort((a, b) => {
@@ -375,88 +353,103 @@ export function TeamDeliveriesWeek({
     }
   };
 
+  const maxDay = Math.max(1, ...weekdayData.map((d) => d.totalCompletions));
+  const today = todayWeekdayBR();
+
   return (
     <div className="surface-card p-5">
-      <div className="flex flex-wrap items-start justify-between gap-2">
+      {/* Título + período; ao lado, o total e a comparação com a semana anterior (mesmo cálculo de sempre). */}
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
         <div>
           <h3 className="text-[15px] font-semibold text-foreground">Entregas da Semana</h3>
-          <p className="mt-0.5 text-[11px] text-text-secondary">{weekRangeLabel}</p>
+          <p className="mt-0.5 text-xs text-text-secondary">{weekRangeLabel}</p>
         </div>
         {thisWeekTotal > 0 && (
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-text-secondary">
-            <span className="font-semibold text-foreground">
+          <p className="flex flex-wrap items-baseline gap-x-2 text-right">
+            <span className="text-lg font-semibold tabular-nums text-foreground">
               {thisWeekTotal} entrega{thisWeekTotal === 1 ? "" : "s"}
             </span>
             {weeklyTrendPct != null && (
               <span
-                className={
+                className={`text-xs font-medium ${
                   weeklyTrendPct > 0
-                    ? "text-emerald-600 dark:text-emerald-400"
+                    ? "text-success-soft-foreground"
                     : weeklyTrendPct < 0
-                      ? "text-destructive"
-                      : ""
-                }
+                      ? "text-danger-soft-foreground"
+                      : "text-text-secondary"
+                }`}
               >
                 {weeklyTrendPct > 0 ? "+" : ""}
                 {Math.round(weeklyTrendPct)}% vs. semana anterior
               </span>
             )}
-            {bestDay && (
-              <span>
-                Melhor dia{" "}
-                <span className="font-medium text-foreground">
-                  {bestDay.label.slice(0, 3).toUpperCase()} · {bestDay.totalCompletions}
-                </span>
-              </span>
-            )}
-            <span>
-              Média diária <span className="font-medium text-foreground">{fmtAvg(avgDaily)}</span>
-            </span>
-          </div>
+          </p>
         )}
       </div>
 
       {thisWeekTotal === 0 ? (
-        <p className="flex h-36 items-center justify-center text-center text-sm text-text-secondary">
+        <p className="py-6 text-center text-sm text-text-secondary">
           Não há entregas registradas nesta semana.
         </p>
       ) : (
-        <div className="mt-3 h-36">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ left: 0, right: 8, top: 16 }}>
-              <CartesianGrid vertical={false} strokeOpacity={0.15} stroke="var(--border)" />
-              <XAxis
-                dataKey="shortLabel"
-                tick={{ fontSize: 11, fill: "var(--text-secondary)" }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis hide />
-              <Tooltip content={<ChartTooltip />} cursor={{ fill: "var(--muted)" }} />
-              <Bar
-                dataKey="totalCompletions"
-                fill="var(--chart-1)"
-                radius={[4, 4, 0, 0]}
-                barSize={40}
-                isAnimationActive={false}
-                cursor="pointer"
-                onClick={(entry: { payload?: WeekdayBucket }) =>
-                  entry.payload && setOpenWeekday(entry.payload)
-                }
-              >
-                <LabelList
-                  dataKey="totalCompletions"
-                  position="top"
-                  style={{ fill: "var(--foreground)", fontSize: 11, fontWeight: 600 }}
-                />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        <>
+          {/* A semana numa linha: dia, número (o protagonista) e uma barra curta proporcional.
+           * Clicar num dia abre as tarefas que compõem o número. */}
+          <ul className="mt-4 grid grid-cols-5 gap-1.5" aria-label="Entregas por dia">
+            {weekdayData.map((d) => {
+              const short = d.label.slice(0, 3).toUpperCase();
+              const isToday = today === d.weekday;
+              const pct =
+                d.totalCompletions > 0 ? Math.max(8, (d.totalCompletions / maxDay) * 100) : 0;
+              return (
+                <li key={d.weekday}>
+                  <button
+                    type="button"
+                    disabled={d.totalCompletions === 0}
+                    onClick={() => setOpenWeekday(d)}
+                    aria-label={`${d.label}-feira: ${d.totalCompletions} entrega${d.totalCompletions === 1 ? "" : "s"}`}
+                    aria-current={isToday ? "date" : undefined}
+                    className={`block w-full rounded-lg px-2 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand enabled:cursor-pointer enabled:hover:bg-muted/60 ${
+                      isToday ? "bg-muted/50 ring-1 ring-inset ring-border" : ""
+                    }`}
+                  >
+                    <span
+                      className={`block text-[11px] uppercase tracking-wide ${isToday ? "font-semibold text-foreground" : "text-text-secondary"}`}
+                    >
+                      {short}
+                    </span>
+                    <span
+                      className={`mt-0.5 block text-xl font-semibold tabular-nums leading-tight ${d.totalCompletions === 0 ? "text-text-secondary/60" : "text-foreground"}`}
+                    >
+                      {d.totalCompletions}
+                    </span>
+                    <span className="mt-1.5 block h-1 w-full overflow-hidden rounded-full bg-muted">
+                      <span
+                        className="block h-full rounded-full bg-foreground/45"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="mt-3 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-text-secondary">
+            {bestDay && (
+              <span>
+                Maior volume: {bestDay.label.toLowerCase()}-feira · {bestDay.totalCompletions}
+              </span>
+            )}
+            <span>Média diária: {fmtAvg(avgDaily)}</span>
+          </p>
+        </>
       )}
 
       {memberRows.length > 0 && (
-        <div className="mt-4 border-t border-border pt-3">
+        <div className="mt-5 border-t border-border/60 pt-4">
+          <h4 className="px-3 pb-2 text-xs font-semibold uppercase tracking-widest text-text-secondary">
+            Desempenho do time
+          </h4>
           <div className="flex items-center gap-3 px-3 pb-1.5">
             <span className="w-3.5 shrink-0" />
             <span className="flex-1 text-[11px] font-medium uppercase tracking-wide text-text-secondary">
@@ -510,7 +503,7 @@ export function TeamDeliveriesWeek({
               className="w-16"
             />
           </div>
-          <div className="overflow-hidden rounded-2xl bg-muted/40">
+          <div className="overflow-hidden rounded-xl border border-border/60">
             {sortedRows.map((row) => (
               <MemberRow
                 key={row.member.id}
