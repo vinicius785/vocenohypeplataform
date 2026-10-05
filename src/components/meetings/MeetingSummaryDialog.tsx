@@ -5,7 +5,6 @@ import {
   Check,
   Pencil,
   CalendarClock,
-  Video,
   LogIn,
   ChevronRight,
   ChevronDown,
@@ -36,11 +35,20 @@ import {
 import { toast } from "sonner";
 import { recordPerformanceEvent } from "@/lib/performance-events-store";
 import { xpForMeeting, DEFAULT_PERFORMANCE_SETTINGS, isValidUuid } from "@/lib/performance-engine";
+import {
+  canRecordAttendance,
+  eligibleAttendeeIds,
+  markAllPresent,
+  setPersonAttendance,
+  type AttendanceChange,
+} from "@/lib/meeting-attendance";
+import { loadMembers } from "@/lib/chat-store";
 import { linkifyText } from "@/lib/linkify";
 import { formatBR, statusTone, statusDot, participantBadge } from "./meeting-status";
 import { joinUrlFor } from "./MeetingLine";
-import { AvatarStack } from "./AvatarStack";
 import { loadTeam, type TeamMember } from "./team";
+import { MeetingPresenceSection } from "./MeetingPresenceSection";
+import { MeetingTranscriptSection } from "./MeetingTranscriptSection";
 
 function MiniAvatar({ member, fallback }: { member?: TeamMember; fallback: string }) {
   if (member?.photo) {
@@ -86,14 +94,11 @@ export function MeetingSummaryDialog({
   onDecline: (m: Meeting) => void;
   onDelete: (id: string) => void;
 }) {
-  const [team, setTeam] = useState<TeamMember[]>([]);
+  const [team, setTeam] = useState<TeamMember[]>(() => loadTeam());
   const [proposing, setProposing] = useState(false);
   const [propData, setPropData] = useState("");
   const [propHora, setPropHora] = useState("");
   const [propNote, setPropNote] = useState("");
-  const [editingAttendance, setEditingAttendance] = useState(false);
-  const [attendanceChecked, setAttendanceChecked] = useState<string[]>([]);
-  const [transcricao, setTranscricao] = useState("");
   const [showAllParticipants, setShowAllParticipants] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   // Depois que a pessoa já respondeu (confirmou/recusou), os botões de
@@ -109,9 +114,6 @@ export function MeetingSummaryDialog({
     setPropData(meeting.data);
     setPropHora(meeting.hora);
     setPropNote("");
-    setEditingAttendance(false);
-    setAttendanceChecked(meeting.attendedBy ?? meeting.participanteIds ?? []);
-    setTranscricao(meeting.transcricao ?? "");
     setChangingResponse(false);
     setShowAllParticipants(false);
     setDetailsOpen(false);
@@ -137,6 +139,14 @@ export function MeetingSummaryDialog({
   const isFinished = meetingEndTime(meeting) < Date.now();
   const isNow = Date.now() >= meetingStartTime(meeting) && Date.now() <= meetingEndTime(meeting);
   const joinUrl = joinUrlFor(meeting);
+  const roleOf = (id: string) => loadMembers().find((m) => m.id === id)?.role;
+  const attendeeIds = eligibleAttendeeIds(meeting, new Set(team.map((t) => t.id)), me.id);
+  const attendees = attendeeIds.map((id) => ({
+    id,
+    name: nameFor(id),
+    photo: memberFor(id)?.photo,
+  }));
+  const canRecord = canRecordAttendance(meeting, meetingStartTime(meeting), Date.now());
   const myResponse = confirmedBy.includes(me.id)
     ? "confirmed"
     : declinedBy.includes(me.id)
@@ -184,25 +194,15 @@ export function MeetingSummaryDialog({
   const dismissProposal = () => {
     onChange({ ...meeting, rescheduleProposal: undefined });
   };
-  const toggleAttendance = (id: string) => {
-    setAttendanceChecked((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    );
-  };
-  const saveAttendance = () => {
-    onChange({
-      ...meeting,
-      attendedBy: attendanceChecked,
-      attendanceRecorded: true,
-      transcricao: transcricao.trim() || undefined,
-    });
-    // "Editar presença" pode rodar mais de uma vez pra mesma reunião — o
-    // ledger não permite corrigir/apagar eventos antigos, então grava
-    // sempre um evento novo por participante; quem lê dedup por
-    // (meeting_id, person_id) tomando o de maior `occurred_at`.
+  // Presença: cada ação grava na hora (sem formulário) e registra no ledger de pontuação só quem
+  // mudou. O ledger não permite corrigir eventos antigos; quem lê dedup por (reunião, pessoa)
+  // tomando o evento mais recente.
+  const applyAttendance = ({ meeting: next, changedIds }: AttendanceChange) => {
+    onChange({ ...next });
     if (isValidUuid(me.id)) {
-      for (const id of meeting.participanteIds ?? []) {
-        const attended = attendanceChecked.includes(id);
+      for (const id of changedIds) {
+        if (!(meeting.participanteIds ?? []).includes(id)) continue; // regra de XP de antes
+        const attended = (next.attendedBy ?? []).includes(id);
         recordPerformanceEvent({
           eventType: "meeting_attendance_recorded",
           personId: id,
@@ -217,7 +217,22 @@ export function MeetingSummaryDialog({
         });
       }
     }
-    setEditingAttendance(false);
+  };
+  const markEveryonePresent = () => {
+    const change = markAllPresent(meeting, attendeeIds);
+    applyAttendance(change);
+    toast.success(`Presença registrada: ${attendeeIds.length} de ${attendeeIds.length} presentes.`);
+  };
+  const setAttendance = (id: string, present: boolean) =>
+    applyAttendance(setPersonAttendance(meeting, id, present, attendeeIds));
+  const saveTranscript = (text: string) => {
+    const clean = text.trim();
+    onChange({
+      ...meeting,
+      transcricao: clean || undefined,
+      transcricaoAtualizadaEm: clean ? new Date().toISOString() : undefined,
+    });
+    toast.success(clean ? "Transcrição salva." : "Transcrição removida.");
   };
 
   const displayStatus = meetingDisplayStatus(meeting);
@@ -226,17 +241,17 @@ export function MeetingSummaryDialog({
     ? participantIds
     : participantIds.slice(0, PARTICIPANTS_PREVIEW);
 
-  const attendedPeople = (meeting.attendedBy ?? [])
-    .map((id) => ({ id, name: nameFor(id), photo: memberFor(id)?.photo }))
-    .filter((p) => p.name);
-
   const hasDetails =
     !!meeting.seriesId ||
     meeting.origem === "google" ||
     !!meeting.meetLink ||
-    (!!meeting.local && !meeting.meetLink) ||
-    !!meeting.notas ||
-    !!meeting.syncStatus;
+    !!meeting.syncStatus ||
+    !!meeting.googleEventId;
+  const hasAgenda = !!meeting.notas || (!!meeting.local && !meeting.meetLink);
+  const cancelled = meeting.status === "Cancelada";
+  const showTranscript = !cancelled && (isFinished || !!meeting.transcricao);
+  // Pode entrar enquanto a reunião ainda não terminou.
+  const canJoin = !!joinUrl && !isFinished && !cancelled;
 
   const source = meetingSource(meeting);
   const copyLink = () => {
@@ -248,26 +263,165 @@ export function MeetingSummaryDialog({
     );
   };
 
+  const presence = (
+    <MeetingPresenceSection
+      meeting={meeting}
+      people={attendees}
+      canEdit={isCreator}
+      canRecord={canRecord}
+      onMarkAll={markEveryonePresent}
+      onSet={setAttendance}
+    />
+  );
+  const transcript = showTranscript ? (
+    <MeetingTranscriptSection meeting={meeting} canEdit={isCreator} onSave={saveTranscript} />
+  ) : null;
+
+  const responseBlock = (
+    <>
+      {/* Sua resposta ao CONVITE — separada da presença (quem confirmou ≠ quem participou) */}
+      {showsResponseSection && (
+        <section aria-label="Sua resposta">
+          {myResponse && !changingResponse ? (
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm text-text-secondary">Sua resposta ao convite</span>
+              <div className="flex items-center gap-3">
+                <span className="inline-flex items-center gap-1.5 text-sm text-foreground">
+                  <Check className="h-3.5 w-3.5 text-success" />
+                  {myResponse === "confirmed" ? "Confirmado" : "Recusado"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setChangingResponse(true)}
+                  className="text-xs font-medium text-text-secondary hover:text-foreground"
+                >
+                  Alterar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-medium text-foreground">Você vai?</span>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={confirm}>
+                    <Check className="h-3.5 w-3.5" /> Confirmar
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={decline}>
+                    <X className="h-3.5 w-3.5" /> Recusar
+                  </Button>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setProposing((v) => !v)}
+                className={`inline-flex items-center gap-1 text-xs font-medium ${
+                  proposing ? "text-foreground" : "text-text-secondary hover:text-foreground"
+                }`}
+              >
+                <CalendarClock className="h-3 w-3" /> Sugerir outro horário
+              </button>
+            </div>
+          )}
+        </section>
+      )}
+
+      {meeting.rescheduleProposal && (
+        <div className="rounded-lg bg-warning-soft px-3 py-2.5 text-sm">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-warning-soft-foreground">
+            <CalendarClock className="h-3.5 w-3.5" />
+            Novo horário sugerido
+          </div>
+          <p className="mt-1.5 text-foreground">
+            {formatBR(meeting.rescheduleProposal.data)} às {meeting.rescheduleProposal.hora}
+            {meeting.rescheduleProposal.proposedByName &&
+              ` — sugerido por ${meeting.rescheduleProposal.proposedByName}`}
+          </p>
+          {meeting.rescheduleProposal.note && (
+            <p className="mt-1 text-xs text-text-secondary">{meeting.rescheduleProposal.note}</p>
+          )}
+          {isCreator && (
+            <div className="mt-2.5 flex gap-2">
+              <button
+                type="button"
+                onClick={acceptProposal}
+                className="rounded-md bg-success-soft px-2.5 py-1 text-xs font-medium text-success-soft-foreground hover:bg-success-soft/70"
+              >
+                Aceitar sugestão
+              </button>
+              <button
+                type="button"
+                onClick={dismissProposal}
+                className="rounded-md px-2.5 py-1 text-xs hover:bg-muted"
+              >
+                Descartar
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {proposing && (
+        <div>
+          <p className="text-sm font-semibold text-foreground">Sugerir novo horário</p>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs font-medium text-text-secondary">Nova data</label>
+              <DateField
+                value={propData || undefined}
+                onChange={(v) => setPropData(v ?? "")}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-text-secondary">Nova hora</label>
+              <input
+                type="time"
+                value={propHora}
+                onChange={(e) => setPropHora(e.target.value)}
+                className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              />
+            </div>
+          </div>
+          <input
+            type="text"
+            value={propNote}
+            onChange={(e) => setPropNote(e.target.value)}
+            placeholder="Observação (opcional)"
+            className="mt-2 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+          />
+          <div className="mt-2 flex gap-2">
+            <Button size="sm" onClick={sendProposal}>
+              Enviar sugestão
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setProposing(false)}>
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+
   return (
     <Sheet open={!!meeting} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent className="flex h-full w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[520px]">
-        {/* Header — título, data+hora numa linha só, e uma faixa de badges
-            (status, origem, recorrência, sincronização) sem depender só de
-            cor pra comunicar cada estado — sempre com ícone + texto. */}
-        <div className="flex items-start gap-3 border-b border-border/60 px-6 pb-4 pt-6">
-          <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-subtle text-text-brand">
-            <Video className="h-4 w-4" />
-          </span>
+      <SheetContent
+        hideClose
+        className="flex h-full w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[600px]"
+      >
+        {/* Header fixo — título, data · horário · duração, selos discretos; à direita a ação
+            principal (entrar), o menu e o fechar. */}
+        <header className="flex items-start gap-3 border-b border-border/60 px-5 pb-4 pt-5 sm:px-6">
           <div className="min-w-0 flex-1">
-            <SheetTitle className="truncate text-base font-semibold leading-tight">
+            <SheetTitle className="break-words text-lg font-semibold leading-tight">
               {meeting.titulo}
             </SheetTitle>
-            <SheetDescription className="sr-only">Resumo da reunião</SheetDescription>
-            <p className="mt-1 truncate text-sm text-text-secondary">
-              {formatBR(meeting.data)} · {meeting.hora}–{endTimeLabel(meeting)}
-            </p>
-            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-              {!showsResponseSection && (
+            <SheetDescription className="mt-1 text-sm text-text-secondary">
+              {formatBR(meeting.data)} · {meeting.hora}–{endTimeLabel(meeting)} · {meeting.duracao}{" "}
+              min
+            </SheetDescription>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              {(cancelled || !showsResponseSection) && (
                 <span
                   className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${statusTone(displayStatus)}`}
                 >
@@ -275,9 +429,11 @@ export function MeetingSummaryDialog({
                   {displayStatus}
                 </span>
               )}
-              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-text-secondary">
-                {source === "google" ? "Google Calendar" : "Plataforma"}
-              </span>
+              {source === "google" && (
+                <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-text-secondary">
+                  Google Calendar
+                </span>
+              )}
               {meeting.seriesId && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-text-secondary">
                   <Repeat className="h-2.5 w-2.5" /> Recorrente
@@ -295,72 +451,102 @@ export function MeetingSummaryDialog({
               )}
             </div>
           </div>
-          {meeting.googleHtmlLink && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
-                  <MoreHorizontal className="h-4 w-4" />
+          <div className="flex shrink-0 items-center gap-1">
+            {canJoin && (
+              <a href={joinUrl!} target="_blank" rel="noreferrer" className="hidden sm:block">
+                <Button variant="primary" size="sm">
+                  <LogIn className="h-3.5 w-3.5" />
+                  {isNow ? "Entrar agora" : "Entrar na reunião"}
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {meeting.googleHtmlLink && (
-                  <DropdownMenuItem asChild>
-                    <a href={meeting.googleHtmlLink} target="_blank" rel="noreferrer">
-                      <ExternalLink className="h-3.5 w-3.5" /> Abrir no Google Calendar
-                    </a>
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
-          {/* Criador/organizador — sempre visível, nunca em Mais detalhes */}
-          {meeting.criadorId && (
-            <div className="mt-3">
-              <p className="text-xs text-text-secondary">Criada por</p>
-              <div className="mt-1 flex items-center gap-2">
-                <MiniAvatar
-                  member={memberFor(meeting.criadorId)}
-                  fallback={nameFor(meeting.criadorId)}
-                />
-                <span className="text-sm text-foreground">{nameFor(meeting.criadorId)}</span>
-              </div>
-            </div>
-          )}
-
-          {/* Ações principais — entrar (quando há link) sempre acompanhada
-           * de "Copiar link", nunca só uma ou outra. */}
-          {(joinUrl ?? meeting.local) && (
-            <div className="mt-4 flex gap-2">
-              {joinUrl && (
-                <a href={joinUrl} target="_blank" rel="noreferrer" className="flex-1">
-                  <Button variant="primary" size="lg" className="w-full">
-                    <LogIn className="h-4 w-4" />
-                    {isNow ? "Entrar agora" : "Entrar na reunião"}
+              </a>
+            )}
+            {((joinUrl ?? meeting.local) || meeting.googleHtmlLink) && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Mais ações">
+                    <MoreHorizontal className="h-4 w-4" />
                   </Button>
-                </a>
-              )}
-              <Button
-                variant="outline"
-                size="lg"
-                className={joinUrl ? "shrink-0 px-3" : "w-full"}
-                onClick={copyLink}
-                aria-label="Copiar link"
-              >
-                <Copy className="h-4 w-4" />
-                {!joinUrl && "Copiar link"}
-              </Button>
-            </div>
-          )}
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {(joinUrl ?? meeting.local) && (
+                    <DropdownMenuItem onSelect={copyLink}>
+                      <Copy className="h-3.5 w-3.5" /> Copiar link
+                    </DropdownMenuItem>
+                  )}
+                  {meeting.googleHtmlLink && (
+                    <DropdownMenuItem asChild>
+                      <a href={meeting.googleHtmlLink} target="_blank" rel="noreferrer">
+                        <ExternalLink className="h-3.5 w-3.5" /> Abrir no Google Calendar
+                      </a>
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={onClose}
+              aria-label="Fechar"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </header>
 
-          {/* Participantes — sempre visível, sem card */}
-          <div className="mt-5">
-            <p className="text-sm font-semibold text-foreground">
-              Participantes · {participantIds.length}
-            </p>
+        {canJoin && (
+          <div className="border-b border-border/60 px-5 py-3 sm:hidden">
+            <a href={joinUrl!} target="_blank" rel="noreferrer">
+              <Button variant="primary" className="w-full">
+                <LogIn className="h-4 w-4" />
+                {isNow ? "Entrar agora" : "Entrar na reunião"}
+              </Button>
+            </a>
+          </div>
+        )}
+
+        {/* Único scroll da tela: header e rodapé ficam fixos. */}
+        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-5 sm:px-6">
+          {/* Participantes + resposta ao convite de cada um */}
+          <section aria-label="Participantes">
+            <h3 className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
+              Participantes · {participantIds.length + (meeting.convidadosExternos?.length ?? 0)}
+            </h3>
             <ul className="-mx-2 mt-1.5">
+              {shownParticipants.map((id) => {
+                const kind = confirmedBy.includes(id)
+                  ? "confirmed"
+                  : declinedBy.includes(id)
+                    ? "declined"
+                    : "pending";
+                const label =
+                  kind === "confirmed"
+                    ? "Confirmado"
+                    : kind === "declined"
+                      ? "Recusado"
+                      : "Pendente";
+                const sub = [id === meeting.criadorId ? "Organizador" : null, roleOf(id)]
+                  .filter(Boolean)
+                  .join(" · ");
+                return (
+                  <li
+                    key={id}
+                    className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/50"
+                  >
+                    <MiniAvatar member={memberFor(id)} fallback={nameFor(id)} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm text-foreground">{nameFor(id)}</p>
+                      {sub && <p className="truncate text-xs text-text-secondary">{sub}</p>}
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${participantBadge(kind)}`}
+                    >
+                      {label}
+                    </span>
+                  </li>
+                );
+              })}
               {(meeting.convidadosExternos?.length ?? 0) > 0
                 ? meeting.convidadosExternos!.map((g) => (
                     <li
@@ -376,38 +562,6 @@ export function MeetingSummaryDialog({
                       {meeting.com} (externo)
                     </li>
                   )}
-              {shownParticipants.map((id) => {
-                const kind = confirmedBy.includes(id)
-                  ? "confirmed"
-                  : declinedBy.includes(id)
-                    ? "declined"
-                    : "pending";
-                const label =
-                  kind === "confirmed"
-                    ? "Confirmado"
-                    : kind === "declined"
-                      ? "Recusado"
-                      : "Pendente";
-                return (
-                  <li
-                    key={id}
-                    className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/50"
-                  >
-                    <MiniAvatar member={memberFor(id)} fallback={nameFor(id)} />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-foreground">{nameFor(id)}</p>
-                      {id === meeting.criadorId && (
-                        <p className="text-xs text-text-secondary">Organizador</p>
-                      )}
-                    </div>
-                    <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${participantBadge(kind)}`}
-                    >
-                      {label}
-                    </span>
-                  </li>
-                );
-              })}
             </ul>
             {participantIds.length > PARTICIPANTS_PREVIEW && !showAllParticipants && (
               <button
@@ -418,293 +572,106 @@ export function MeetingSummaryDialog({
                 Ver todos os {participantIds.length}
               </button>
             )}
-          </div>
+          </section>
 
-          <div className="mt-5 space-y-4 border-t border-border/60 pt-4">
-            {/* Sua resposta — uma linha só quando já respondido */}
-            {showsResponseSection && (
-              <div>
-                {myResponse && !changingResponse ? (
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-semibold text-foreground">Sua resposta</span>
-                    <div className="flex items-center gap-3">
-                      <span className="inline-flex items-center gap-1.5 text-sm text-foreground">
-                        <Check className="h-3.5 w-3.5 text-success" />
-                        {myResponse === "confirmed" ? "Confirmado" : "Recusado"}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setChangingResponse(true)}
-                        className="text-xs font-medium text-text-secondary hover:text-foreground"
-                      >
-                        Alterar
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-semibold text-foreground">Sua resposta</span>
-                      <div className="flex gap-2">
-                        <Button size="sm" onClick={confirm}>
-                          <Check className="h-3.5 w-3.5" /> Confirmar
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={decline}>
-                          <X className="h-3.5 w-3.5" /> Recusar
-                        </Button>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setProposing((v) => !v)}
-                      className={`inline-flex items-center gap-1 text-xs font-medium ${
-                        proposing ? "text-foreground" : "text-text-secondary hover:text-foreground"
-                      }`}
-                    >
-                      <CalendarClock className="h-3 w-3" /> Sugerir outro horário
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+          {isFinished || cancelled ? (
+            <>
+              {!cancelled && presence}
+              {transcript}
+              {responseBlock}
+            </>
+          ) : (
+            <>
+              {responseBlock}
+              {!cancelled && presence}
+              {transcript}
+            </>
+          )}
 
-            {meeting.rescheduleProposal && (
-              <div className="rounded-lg bg-warning-soft px-3 py-2.5 text-sm">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-warning-soft-foreground">
-                  <CalendarClock className="h-3.5 w-3.5" />
-                  Novo horário sugerido
-                </div>
-                <p className="mt-1.5 text-foreground">
-                  {formatBR(meeting.rescheduleProposal.data)} às {meeting.rescheduleProposal.hora}
-                  {meeting.rescheduleProposal.proposedByName &&
-                    ` — sugerido por ${meeting.rescheduleProposal.proposedByName}`}
+          {hasAgenda && (
+            <section aria-label="Pauta" className="space-y-1">
+              <h3 className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
+                Pauta
+              </h3>
+              {meeting.notas && (
+                <p className="whitespace-pre-wrap break-words text-sm text-foreground">
+                  {linkifyText(meeting.notas)}
                 </p>
-                {meeting.rescheduleProposal.note && (
-                  <p className="mt-1 text-xs text-text-secondary">
-                    {meeting.rescheduleProposal.note}
-                  </p>
-                )}
-                {isCreator && (
-                  <div className="mt-2.5 flex gap-2">
-                    <button
-                      type="button"
-                      onClick={acceptProposal}
-                      className="rounded-md bg-success-soft px-2.5 py-1 text-xs font-medium text-success-soft-foreground hover:bg-success-soft/70"
-                    >
-                      Aceitar sugestão
-                    </button>
-                    <button
-                      type="button"
-                      onClick={dismissProposal}
-                      className="rounded-md px-2.5 py-1 text-xs hover:bg-muted"
-                    >
-                      Descartar
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+              )}
+              {meeting.local && !meeting.meetLink && (
+                <p className="break-words text-sm text-text-secondary">
+                  Local / link: {linkifyText(meeting.local)}
+                </p>
+              )}
+            </section>
+          )}
 
-            {proposing && (
-              <div>
-                <p className="text-sm font-semibold text-foreground">Sugerir novo horário</p>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-xs font-medium text-text-secondary">Nova data</label>
-                    <DateField
-                      value={propData || undefined}
-                      onChange={(v) => setPropData(v ?? "")}
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-text-secondary">Nova hora</label>
-                    <input
-                      type="time"
-                      value={propHora}
-                      onChange={(e) => setPropHora(e.target.value)}
-                      className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-                    />
-                  </div>
-                </div>
-                <input
-                  type="text"
-                  value={propNote}
-                  onChange={(e) => setPropNote(e.target.value)}
-                  placeholder="Observação (opcional)"
-                  className="mt-2 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-                />
-                <div className="mt-2 flex gap-2">
-                  <Button size="sm" onClick={sendProposal}>
-                    Enviar sugestão
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => setProposing(false)}>
-                    Cancelar
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* Presença — funcional e discreta, uma linha quando possível */}
-            {meeting.status !== "Cancelada" && (
-              <div>
-                {!editingAttendance ? (
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-semibold text-foreground">Presença</span>
-                    <div className="flex items-center gap-2.5">
-                      {meeting.attendanceRecorded ? (
-                        <>
-                          <AvatarStack people={attendedPeople} max={4} />
-                          <span className="text-sm text-text-secondary">
-                            {attendedPeople.length} participou
-                            {attendedPeople.length === 1 ? "" : "ram"}
-                          </span>
-                        </>
-                      ) : (
-                        <span className="text-sm text-text-secondary">Ainda não registrada</span>
-                      )}
-                      {isCreator && (
-                        <button
-                          type="button"
-                          onClick={() => setEditingAttendance(true)}
-                          className="shrink-0 text-xs font-medium text-text-secondary hover:text-foreground"
-                        >
-                          {meeting.attendanceRecorded ? "Editar" : "Marcar"}
-                        </button>
-                      )}
-                    </div>
-                  </div>
+          {/* Detalhes — só o secundário/técnico, fechado por padrão */}
+          {hasDetails && (
+            <section aria-label="Detalhes">
+              <button
+                type="button"
+                onClick={() => setDetailsOpen((v) => !v)}
+                aria-expanded={detailsOpen}
+                className="flex items-center gap-1 text-sm font-medium text-text-secondary hover:text-foreground"
+              >
+                Detalhes
+                {detailsOpen ? (
+                  <ChevronDown className="h-3.5 w-3.5" />
                 ) : (
-                  <div className="space-y-2">
-                    <p className="text-sm font-semibold text-foreground">Presença</p>
-                    <p className="text-xs text-text-secondary">
-                      Selecione quem participou — sai da lista de pendentes e conta na pontuação.
-                    </p>
-                    <ul className="-mx-2 space-y-0.5">
-                      {(meeting.participanteIds ?? []).map((id) => {
-                        const checked = attendanceChecked.includes(id);
-                        return (
-                          <li key={id}>
-                            <button
-                              type="button"
-                              onClick={() => toggleAttendance(id)}
-                              className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-muted/50 ${
-                                checked ? "text-foreground" : "text-text-secondary"
-                              }`}
-                            >
-                              <MiniAvatar member={memberFor(id)} fallback={nameFor(id)} />
-                              <span className="min-w-0 flex-1 truncate">{nameFor(id)}</span>
-                              {checked && <Check className="h-3.5 w-3.5 shrink-0" />}
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
+                  <ChevronRight className="h-3.5 w-3.5" />
+                )}
+              </button>
+              {detailsOpen && (
+                <dl className="mt-2.5 space-y-3 text-sm">
+                  {meeting.syncStatus && (
                     <div>
-                      <label className="text-xs font-medium text-text-secondary">
-                        Transcrição (opcional)
-                      </label>
-                      <textarea
-                        value={transcricao}
-                        onChange={(e) => setTranscricao(e.target.value)}
-                        rows={4}
-                        placeholder="Cole aqui a transcrição da reunião..."
-                        className="mt-1 w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-                      />
-                    </div>
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={saveAttendance}>
-                        <Check className="h-3.5 w-3.5" /> Salvar presença
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setEditingAttendance(false)}
-                      >
-                        Cancelar
-                      </Button>
-                    </div>
-                  </div>
-                )}
-                {meeting.transcricao && !editingAttendance && (
-                  <div className="mt-2 rounded-lg bg-muted/40 p-2.5">
-                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-text-secondary">
-                      Transcrição
-                    </p>
-                    <p className="max-h-32 overflow-y-auto whitespace-pre-wrap break-words text-xs text-foreground">
-                      {meeting.transcricao}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Mais detalhes — secundário, fechado por padrão */}
-            {hasDetails && (
-              <div>
-                <button
-                  type="button"
-                  onClick={() => setDetailsOpen((v) => !v)}
-                  className="flex items-center gap-1 text-sm font-medium text-text-secondary hover:text-foreground"
-                >
-                  Mais detalhes
-                  {detailsOpen ? (
-                    <ChevronDown className="h-3.5 w-3.5" />
-                  ) : (
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  )}
-                </button>
-                {detailsOpen && (
-                  <div className="mt-2.5 space-y-3 text-sm">
-                    {/* Origem e recorrência já aparecem como badges no
-                     * cabeçalho — aqui só o que não cabe lá: registro de
-                     * sincronização. */}
-                    {meeting.syncStatus && (
-                      <div>
-                        <p className="text-xs text-text-secondary">Sincronização com o Google</p>
-                        <p className="text-foreground">
-                          {meeting.syncStatus === "error"
-                            ? "Falha na última tentativa"
-                            : meeting.syncStatus === "pending"
-                              ? "Sincronizando…"
-                              : "Sincronizada"}
-                          {meeting.lastSyncedAt &&
-                            ` · última vez ${new Date(meeting.lastSyncedAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}`}
-                        </p>
+                      <dt className="text-xs text-text-secondary">Sincronização com o Google</dt>
+                      <dd className="text-foreground">
+                        {meeting.syncStatus === "error"
+                          ? "Falha na última tentativa"
+                          : meeting.syncStatus === "pending"
+                            ? "Sincronizando…"
+                            : "Sincronizada"}
+                        {meeting.lastSyncedAt &&
+                          ` · última vez ${new Date(meeting.lastSyncedAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}`}
                         {meeting.syncStatus === "error" && meeting.lastSyncError && (
-                          <p className="mt-1 text-xs text-danger">{meeting.lastSyncError}</p>
+                          <span className="mt-1 block text-xs text-danger">
+                            {meeting.lastSyncError}
+                          </span>
                         )}
-                      </div>
-                    )}
-                    {meeting.meetLink && (
-                      <div>
-                        <p className="text-xs text-text-secondary">Videoconferência</p>
-                        <p className="text-foreground">Google Meet</p>
-                      </div>
-                    )}
-                    {meeting.local && !meeting.meetLink && (
-                      <div>
-                        <p className="text-xs text-text-secondary">Local / link</p>
-                        <p className="break-words text-foreground">{linkifyText(meeting.local)}</p>
-                      </div>
-                    )}
-                    {meeting.notas && (
-                      <div>
-                        <p className="text-xs text-text-secondary">Pauta</p>
-                        <p className="whitespace-pre-wrap break-words text-foreground">
-                          {linkifyText(meeting.notas)}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+                      </dd>
+                    </div>
+                  )}
+                  {meeting.meetLink && (
+                    <div>
+                      <dt className="text-xs text-text-secondary">Videoconferência</dt>
+                      <dd className="text-foreground">Google Meet</dd>
+                    </div>
+                  )}
+                  {meeting.seriesId && (
+                    <div>
+                      <dt className="text-xs text-text-secondary">Recorrência</dt>
+                      <dd className="text-foreground">
+                        Esta reunião faz parte de uma série. Presença e resposta valem só para esta
+                        data.
+                      </dd>
+                    </div>
+                  )}
+                  {meeting.criadorId && (
+                    <div>
+                      <dt className="text-xs text-text-secondary">Criada por</dt>
+                      <dd className="text-foreground">{nameFor(meeting.criadorId)}</dd>
+                    </div>
+                  )}
+                </dl>
+              )}
+            </section>
+          )}
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between gap-2 border-t border-border/60 px-6 py-3.5">
+        {/* Rodapé fixo: só ações administrativas */}
+        <footer className="flex items-center justify-between gap-2 border-t border-border/60 px-5 py-3.5 sm:px-6">
           <div>
             {isCreator && (
               <button
@@ -726,15 +693,8 @@ export function MeetingSummaryDialog({
                 <Pencil className="h-3.5 w-3.5" /> Editar
               </button>
             )}
-            <button
-              type="button"
-              onClick={onClose}
-              className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs text-text-secondary hover:bg-muted hover:text-foreground"
-            >
-              Fechar
-            </button>
           </div>
-        </div>
+        </footer>
       </SheetContent>
     </Sheet>
   );

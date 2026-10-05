@@ -1,17 +1,25 @@
 {
-  "version": "1.310.1",
+  "version": "1.311.0",
   "releases": [
     {
-      "version": "1.310.1",
-      "summary": "O cronômetro agora também pausa ao sair de Em andamento.",
+      "version": "1.311.0",
+      "summary": "Detalhe da reunião redesenhado: presença de todos com um clique e transcrição em destaque.",
       "modules": [
         {
-          "name": "TAREFAS",
-          "tagline": "Cronômetro",
+          "name": "REUNIÕES",
+          "tagline": "Detalhe da reunião",
           "items": [
             {
-              "title": "Cronômetro pausa ao sair de “Em andamento”",
-              "description": "Se a tarefa muda de Em andamento para qualquer outro status (inclusive Bloqueada e Concluído), o cronômetro para e o tempo trabalhado fica registrado. Ao desbloquear direto para Em andamento, ele volta a contar."
+              "title": "Marcar todos presentes",
+              "description": "Na reunião, um botão registra a presença de todos os participantes de uma vez, com resumo (2 de 2 presentes) e correção individual em um menu compacto. A presença é separada da resposta ao convite e vale só para aquela data."
+            },
+            {
+              "title": "Transcrição em destaque",
+              "description": "A transcrição ganhou uma seção própria: adicionar, ver tamanho e abrir em uma janela grande, sem precisar passar pelo registro de presença."
+            },
+            {
+              "title": "Detalhe mais claro",
+              "description": "Cabeçalho com data, horário e duração, botão Entrar na reunião no topo, participantes com cargo e resposta, e os detalhes técnicos recolhidos."
             }
           ]
         }

@@ -43,7 +43,10 @@ export type Meeting = {
   rescheduleProposal?: RescheduleProposal;
   attendedBy?: string[]; // ids de quem efetivamente participou (marcado depois do horário)
   attendanceRecorded?: boolean; // true assim que o criador confirma a presença
-  transcricao?: string; // colada pelo criador junto com o registro de presença
+  transcricao?: string; // transcrição da reunião, colada/editada pelo criador (seção própria no detalhe)
+  /** Quando a transcrição foi adicionada/editada pela última vez (ISO) — aditivo; reuniões antigas
+   * com transcrição simplesmente não têm a data. */
+  transcricaoAtualizadaEm?: string;
   /** Id do evento no Google Calendar — presente só em reuniões
    * importadas de lá (criadas direto no Google, não pela plataforma).
    * Chave de dedupe do import (`importGoogleEventsToMeetings`, em
