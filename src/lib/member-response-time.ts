@@ -30,11 +30,11 @@ export type MemberResponseTime = {
 
 export type ResponseTimeFilter = "all" | "direct" | "mention";
 
-/** Mínimo de demandas respondidas pra uma média/mediana ser exibida. Com
- * 1-2 demandas a "média" é o tempo de UMA conversa identificável — a RPC já
- * devolve NULL abaixo disso (migration `20261002200000_...`); repetido aqui
- * só como defesa em profundidade no mapeamento do servidor. */
-export const MIN_RESPONSE_SAMPLE = 3;
+/** Mínimo de demandas respondidas pra uma média/mediana ser exibida. Decisão de produto: a métrica
+ * aparece desde a PRIMEIRA resposta (era 3 por privacidade; migration
+ * `20261006040000_response_time_no_min_sample.sql`). A RPC aplica o mesmo valor; repetido aqui só
+ * como defesa em profundidade no mapeamento do servidor. */
+export const MIN_RESPONSE_SAMPLE = 1;
 
 const gate = (answered: number, value: number | null | undefined) =>
   answered >= MIN_RESPONSE_SAMPLE ? (value ?? null) : null;
@@ -111,7 +111,7 @@ export type TeamResponseTime = {
   byMemberId: Map<string, { answered: number; averageSeconds: number | null }>;
   /** Média de TODAS as demandas respondidas do time (ponderada pelo nº de
    * respondidas de cada um — equivale à média sobre o conjunto inteiro).
-   * Só entram membros que passaram da amostra mínima. */
+   * Só entram membros com ao menos uma resposta. */
   teamAverageSeconds: number | null;
 };
 

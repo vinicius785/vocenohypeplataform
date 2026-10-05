@@ -5,7 +5,6 @@ import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   formatResponseDuration,
-  MIN_RESPONSE_SAMPLE,
   segmentOf,
   type MemberResponseTime,
   type ResponseTimeFilter,
@@ -88,8 +87,7 @@ export function ProfileCommunication({
         <>
           {seg.averageSeconds == null ? (
             <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-text-secondary">
-              Sem dados suficientes neste período (mínimo de {MIN_RESPONSE_SAMPLE} respostas para
-              exibir a média).
+              Sem dados suficientes neste período — ainda não há respostas registradas.
             </p>
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

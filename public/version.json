@@ -1,17 +1,17 @@
 {
-  "version": "1.303.1",
+  "version": "1.304.0",
   "releases": [
     {
-      "version": "1.303.1",
-      "summary": "Cada etapa do Pipeline do Comercial ganhou a sua cor.",
+      "version": "1.304.0",
+      "summary": "O tempo de resposta aparece desde a primeira resposta.",
       "modules": [
         {
-          "name": "COMERCIAL",
-          "tagline": "Pipeline mais fácil de ler",
+          "name": "TIME",
+          "tagline": "Comunicação",
           "items": [
             {
-              "title": "Etapas do Pipeline com cor própria",
-              "description": "Lead recebido, Contato feito, Reuniões, Propostas, Negociação, Ganho e Perdido agora têm cores discretas no ponto da coluna, nos filtros, no detalhe e no histórico do lead."
+              "title": "Tempo de resposta sem amostra mínima",
+              "description": "A média e a mediana agora aparecem a partir da primeira resposta do período, em horário útil, na lista do Time e no perfil de cada pessoa."
             }
           ]
         }

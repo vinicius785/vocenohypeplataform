@@ -58,32 +58,47 @@ describe("mapResponseTimeRow", () => {
   });
 });
 
-describe("amostra mínima (privacidade)", () => {
-  it("com menos de 3 respondidas, média/mediana nunca saem — só a contagem", () => {
-    const r = mapResponseTimeRow({
+describe("amostra mínima", () => {
+  it("com 1 resposta já sai média/mediana; com 0 respondidas, nunca", () => {
+    const one = mapResponseTimeRow({
       direct_answered: 1,
       direct_unanswered: 0,
       direct_avg_seconds: 600,
       direct_median_seconds: 600,
-      mention_answered: 1,
-      mention_unanswered: 0,
-      mention_avg_seconds: 1200,
-      mention_median_seconds: 1200,
-      all_avg_seconds: 900,
-      all_median_seconds: 900,
+      mention_answered: 0,
+      mention_unanswered: 2,
+      mention_avg_seconds: null,
+      mention_median_seconds: null,
+      all_avg_seconds: 600,
+      all_median_seconds: 600,
     });
-    expect(r.direct.averageSeconds).toBeNull();
-    expect(r.mention.medianSeconds).toBeNull();
-    expect(r.all.averageSeconds).toBeNull();
+    expect(one.direct.averageSeconds).toBe(600);
+    expect(one.all.averageSeconds).toBe(600);
+    expect(one.mention.averageSeconds).toBeNull();
+    const zero = mapResponseTimeRow({
+      direct_answered: 0,
+      direct_unanswered: 3,
+      direct_avg_seconds: 999,
+      direct_median_seconds: 999,
+      mention_answered: 0,
+      mention_unanswered: 0,
+      mention_avg_seconds: null,
+      mention_median_seconds: null,
+      all_avg_seconds: 999,
+      all_median_seconds: 999,
+    });
+    expect(zero.direct.averageSeconds).toBeNull();
+    expect(zero.all.averageSeconds).toBeNull();
   });
-  it("time: média ponderada só com quem passou da amostra mínima", () => {
+  it("time: média ponderada de todos que têm ao menos uma resposta", () => {
     const t = mapTeamResponseRows([
       { member_id: "a", answered_count: 3, average_seconds: 600 },
-      { member_id: "b", answered_count: 1, average_seconds: 60_000 },
-      { member_id: "c", answered_count: 6, average_seconds: 1200 },
+      { member_id: "b", answered_count: 1, average_seconds: 3000 },
+      { member_id: "c", answered_count: 0, average_seconds: null },
     ]);
-    expect(t.byMemberId.get("b")?.averageSeconds).toBeNull();
-    expect(t.teamAverageSeconds).toBe((600 * 3 + 1200 * 6) / 9);
+    expect(t.byMemberId.get("b")?.averageSeconds).toBe(3000);
+    expect(t.byMemberId.get("c")?.averageSeconds).toBeNull();
+    expect(t.teamAverageSeconds).toBe((600 * 3 + 3000 * 1) / 4);
     expect(mapTeamResponseRows([]).teamAverageSeconds).toBeNull();
   });
 });
