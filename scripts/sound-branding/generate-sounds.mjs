@@ -200,6 +200,17 @@ function commercial() {
   return lowpass(lowpass(b, 4200), 4200);
 }
 
+// ATUALIZAÇÃO — Djavan, "Oceano" (em Ré): a abertura D → G7M → A7 e a volta ao D, subindo.
+function update() {
+  const b = alloc(1.6);
+  const chord = (t, midis, len, amp) => strum(b, midis, t, { gap: 0.014, len, amp });
+  chord(0.0, [50, 57, 62, 66], 0.28, 0.4); // D
+  chord(0.15, [43, 59, 62, 66], 0.28, 0.4); // G7M
+  chord(0.3, [45, 52, 55, 61], 0.28, 0.42); // A7
+  chord(0.47, [50, 57, 62, 66, 74], 0.5, 0.45); // D (resolução, nota aguda)
+  return lowpass(lowpass(b, 4000), 4000);
+}
+
 // REUNIÃO — Roberto Carlos, "Detalhes" (em Lá): a introdução A → A7M → A#º, e o caminho Bm7 → E7 → A.
 function meeting() {
   const b = alloc(1.9);
@@ -245,6 +256,7 @@ const defs = {
   "chat-notification": chat,
   "commercial-notification": commercial,
   "meeting-notification": meeting,
+  "update-notification": update,
 };
 for (const [name, fn] of Object.entries(defs)) {
   let b = fn();

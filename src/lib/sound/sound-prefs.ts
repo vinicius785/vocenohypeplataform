@@ -13,6 +13,7 @@ export type SoundPrefs = {
   chat: boolean;
   commercial: boolean;
   meeting: boolean;
+  update: boolean;
 };
 
 export const DEFAULT_SOUND_PREFS: SoundPrefs = {
@@ -21,6 +22,7 @@ export const DEFAULT_SOUND_PREFS: SoundPrefs = {
   chat: true,
   commercial: true,
   meeting: true,
+  update: true,
 };
 
 const EVENT = "sound-prefs:changed";
@@ -35,6 +37,7 @@ export function normalizeSoundPrefs(raw: unknown): SoundPrefs {
     chat: typeof r.chat === "boolean" ? r.chat : DEFAULT_SOUND_PREFS.chat,
     commercial: typeof r.commercial === "boolean" ? r.commercial : DEFAULT_SOUND_PREFS.commercial,
     meeting: typeof r.meeting === "boolean" ? r.meeting : DEFAULT_SOUND_PREFS.meeting,
+    update: typeof r.update === "boolean" ? r.update : DEFAULT_SOUND_PREFS.update,
   };
 }
 

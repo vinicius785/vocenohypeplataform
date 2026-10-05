@@ -1,8 +1,8 @@
-import { SOUND_MANIFEST, type SoundKind } from "./sound-manifest";
+import { SOUND_KINDS, SOUND_MANIFEST, type SoundKind } from "./sound-manifest";
 import { isSoundAllowed, loadSoundPrefs, withinCooldown, type SoundPrefs } from "./sound-prefs";
 
 /**
- * Ponto ÚNICO de áudio da plataforma: `playSound("chat" | "commercial" | "meeting")`.
+ * Ponto ÚNICO de áudio da plataforma: `playSound("chat" | "commercial" | "meeting" | "update")`.
  *
  * - Um só `AudioContext` e um `GainNode` (volume do usuário × ganho do som); cada arquivo é buscado
  *   e decodificado UMA vez, sob demanda (nada é baixado na inicialização) e reaproveitado.
@@ -128,7 +128,7 @@ export function primeSounds() {
   const p = prefs();
   if (!p.enabled) return;
   // Aquecimento leve e sem som: busca/decodifica apenas os tipos que o usuário deixou ligados.
-  for (const kind of ["chat", "commercial", "meeting"] as SoundKind[]) {
+  for (const kind of SOUND_KINDS) {
     if (p[kind]) void loadBuffer(SOUND_MANIFEST[kind].src);
   }
 }

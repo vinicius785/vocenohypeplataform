@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { APP_VERSION, BUILD_ID } from "@/lib/app-version";
 import {
   fetchVersionInfo,
@@ -11,6 +11,7 @@ import {
 } from "@/lib/release-notes";
 import { ReleaseNotesDialog } from "./ReleaseNotesDialog";
 import { VersionNotice } from "./VersionNotice";
+import { playSound } from "@/lib/sound/sound-manager";
 
 const CHECK_INTERVAL_MS = 5 * 60_000;
 /** Intervalo mínimo entre duas consultas (foco/visibilidade/timer não geram rajada). */
@@ -92,7 +93,17 @@ export function VersionWatcher({ scope = "vi" }: { scope?: "vi" | "vc" }) {
   };
 
   const sameSemver = info?.version === APP_VERSION;
-  if (!outdated || dismissed || alreadySeen || !info?.version) return null;
+  const visible = outdated && !dismissed && !alreadySeen && !!info?.version;
+
+  // Som discreto (Djavan) uma vez por versão anunciada; só no portal do time.
+  const soundedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!visible || scope !== "vi" || soundedFor.current === seenToken) return;
+    soundedFor.current = seenToken;
+    playSound("update");
+  }, [visible, scope, seenToken]);
+
+  if (!visible || !info?.version) return null;
 
   return (
     <>

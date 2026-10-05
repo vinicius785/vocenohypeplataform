@@ -14,6 +14,7 @@ describe("preferências de som", () => {
       chat: true,
       commercial: true,
       meeting: true,
+      update: true,
     });
     expect(DEFAULT_SOUND_PREFS.volume).toBeGreaterThan(0);
     expect(DEFAULT_SOUND_PREFS.volume).toBeLessThan(1);
@@ -50,10 +51,10 @@ describe("cooldown por tipo", () => {
 });
 
 describe("manifest", () => {
-  it("três eventos, assets oficiais em /audio/voce-no-hype com nomes distintos", () => {
-    expect(SOUND_KINDS).toEqual(["chat", "commercial", "meeting"]);
+  it("quatro eventos, assets oficiais em /audio/voce-no-hype com nomes distintos", () => {
+    expect(SOUND_KINDS).toEqual(["chat", "commercial", "meeting", "update"]);
     const srcs = SOUND_KINDS.map((k) => SOUND_MANIFEST[k].src);
-    expect(new Set(srcs).size).toBe(3);
+    expect(new Set(srcs).size).toBe(4);
     for (const s of srcs) expect(s).toMatch(/^\/audio\/voce-no-hype\/.+-notification\.mp3\?v=\w+$/);
   });
 });
