@@ -4,6 +4,10 @@
  * destinatário nem convo_id, e este módulo não tem nenhum tipo que
  * pudesse carregá-los. Definições completas no cabeçalho da migration
  * `20261002120000_member_response_time.sql`.
+ *
+ * TEMPO ÚTIL: o tempo de cada demanda é calculado no banco por `business_seconds_between`
+ * (só 09:00–19:00, America/Sao_Paulo — ver `agency-hours.ts`); os `*_seconds` daqui já são
+ * segundos ÚTEIS. Nenhum cálculo de horário acontece no front-end.
  */
 
 export type ResponseTimeSegment = {

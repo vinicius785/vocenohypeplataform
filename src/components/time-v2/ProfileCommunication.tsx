@@ -1,3 +1,4 @@
+import { AGENCY_HOURS_LABEL } from "@/lib/agency-hours";
 import { useState } from "react";
 import { AtSign, Info, MessagesSquare, MessageSquare } from "lucide-react";
 import { SegmentedControl } from "@/components/ui/segmented-control";
@@ -123,10 +124,10 @@ export function ProfileCommunication({
         <Info className="mt-0.5 h-3 w-3 shrink-0" />
         <p>
           Esta é uma métrica agregada. O conteúdo, participantes e conversas utilizados no cálculo
-          não são exibidos. O tempo é calculado com base nos eventos registrados pela plataforma, em
-          tempo corrido (não há horário de trabalho configurado). Mensagens seguidas da mesma pessoa
-          contam como uma única demanda; mensagens do sistema e do bot ficam fora. Não faz parte do
-          Score.
+          não são exibidos. O tempo é calculado com base nos eventos registrados pela plataforma, só
+          dentro do horário útil da agência ({AGENCY_HOURS_LABEL}); fora dele o relógio não avança.
+          Mensagens seguidas da mesma pessoa contam como uma única demanda; mensagens do sistema e
+          do bot ficam fora. Não faz parte do Score.
         </p>
       </div>
     </div>
