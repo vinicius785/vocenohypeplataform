@@ -75,7 +75,7 @@ describe("tom da entrega e feedback", () => {
       entregaTone(
         ent({ stage: "CONTEUDO_AJUSTES", conteudoReprovacao: { motivo: "m", respondedAt: "x" } }),
       ),
-    ).toBe("alert");
+    ).toBe("adjust");
   });
   it("feedback vivo, mais recente primeiro; sem feedback → lista vazia", () => {
     expect(clientFeedbacks(influ({ entregas: [ent()] }))).toEqual([]);
@@ -104,6 +104,37 @@ describe("tom da entrega e feedback", () => {
       etapaLabel: "Conteúdo",
       statusLabel: "Aguardando novo envio",
       autorNome: "Julia",
+    });
+  });
+
+  it("tom e rodapé do feedback: ajuste (laranja), reenviado (âmbar), seleção recusada (vermelho)", () => {
+    const veredito = { motivo: "x", respondedAt: "2026-10-05T10:00:00Z" };
+    const f = clientFeedbacks(
+      influ({
+        status: "APROVADO",
+        entregas: [
+          ent({ id: "a", stage: "ROTEIRO_AJUSTES", roteiroReprovacao: veredito }),
+          ent({ id: "b", stage: "ROTEIRO_PRODUCAO", roteiroReprovacao: veredito }),
+          ent({ id: "c", stage: "ROTEIRO_APROVACAO", roteiroReprovacao: veredito }),
+        ],
+      }),
+    );
+    const by = Object.fromEntries(f.map((x) => [x.entregaId, x]));
+    expect(by.a).toMatchObject({ tone: "adjust", statusLabel: "Aguardando novo envio" });
+    expect(by.b).toMatchObject({ tone: "adjust", statusLabel: "Aguardando novo envio" });
+    expect(by.c).toMatchObject({ tone: "waiting", statusLabel: "Reenviado para aprovação" });
+
+    const recusado = clientFeedbacks(
+      influ({
+        status: "RECUSADO",
+        clienteReprovacao: { motivo: "Não combina", respondedAt: "2026-10-05T10:00:00Z" },
+      }),
+    );
+    expect(recusado).toHaveLength(1);
+    expect(recusado[0].entregaId).toBeUndefined();
+    expect(recusado[0]).toMatchObject({
+      tone: "danger",
+      etapaLabel: "Seleção",
     });
   });
 });

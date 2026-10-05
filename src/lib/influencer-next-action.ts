@@ -144,14 +144,16 @@ export function nextBestAction(influ: Influ): NextAction {
 
 /* ---------------- Entregas ---------------- */
 
-export type EntregaTone = "ok" | "waiting" | "alert" | "progress" | "neutral";
+/** Cor só como sinal semântico (mesma família do Início): verde concluído/aprovado, âmbar aguardando,
+ * laranja ajuste pedido, azul em andamento. Vermelho fica para rejeição (ver `FeedbackTone`). */
+export type EntregaTone = "ok" | "waiting" | "adjust" | "progress" | "neutral";
 
 export function entregaTone(
   e: Pick<Entrega, "stage" | "roteiroReprovacao" | "conteudoReprovacao">,
 ): EntregaTone {
   const stage: EntregaStage = e.stage ?? "ROTEIRO_PRODUCAO";
   const ajuste = entregaAjusteView(e);
-  if (ajuste && ajuste.phase !== "reenviado") return "alert";
+  if (ajuste && ajuste.phase !== "reenviado") return "adjust";
   switch (stage) {
     case "PUBLICADA":
     case "PUBLICACAO":
@@ -161,13 +163,17 @@ export function entregaTone(
       return "waiting";
     case "ROTEIRO_AJUSTES":
     case "CONTEUDO_AJUSTES":
-      return "alert";
+      return "adjust";
     default:
       return "progress";
   }
 }
 
 /* ---------------- Feedback do cliente ---------------- */
+
+/** Tom do indicador lateral do feedback: ajuste pedido (laranja), reenviado aguardando aprovação
+ * (âmbar) ou seleção não aprovada (vermelho). */
+export type FeedbackTone = "adjust" | "waiting" | "danger";
 
 export type ClientFeedback = {
   key: string;
@@ -179,6 +185,8 @@ export type ClientFeedback = {
   respondedAt: string;
   autorNome?: string;
   phase?: AjustePhase;
+  tone: FeedbackTone;
+  /** O que aconteceu depois do feedback. */
   statusLabel: string;
 };
 
@@ -197,8 +205,8 @@ export function clientFeedbacks(influ: Influ): ClientFeedback[] {
       respondedAt: a.veredito.respondedAt,
       autorNome: a.veredito.autorNome,
       phase: a.phase,
-      statusLabel:
-        a.phase === "reenviado" ? "Reenviado · aguardando aprovação" : "Aguardando novo envio",
+      tone: a.phase === "reenviado" ? "waiting" : "adjust",
+      statusLabel: a.phase === "reenviado" ? "Reenviado para aprovação" : "Aguardando novo envio",
     });
   }
   if (influ.status === "RECUSADO" && influ.clienteReprovacao) {
@@ -208,6 +216,7 @@ export function clientFeedbacks(influ: Influ): ClientFeedback[] {
       motivo: influ.clienteReprovacao.motivo,
       respondedAt: influ.clienteReprovacao.respondedAt,
       autorNome: influ.clienteReprovacao.autorNome,
+      tone: "danger",
       statusLabel: "Não aprovado pelo cliente",
     });
   }

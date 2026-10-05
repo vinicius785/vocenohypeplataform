@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { PagamentoEntrega } from "@/lib/influencer-model";
 import {
   bankFields,
+  contractAttachedAt,
   contratoInfo,
   hasBankData,
   paymentState,
@@ -111,5 +112,30 @@ describe("tom do pagamento", () => {
     expect(paymentTone("agendado")).toBe("info");
     expect(paymentTone("nao_iniciado")).toBe("neutral");
     expect(paymentTone("cancelado")).toBe("neutral");
+  });
+});
+
+describe("data do contrato", () => {
+  it("usa o último evento financeiro 'anexou/substituiu o contrato'", () => {
+    const a = (action: string, createdAt: string, area: string = "financeiro") => ({
+      action,
+      area,
+      createdAt,
+    });
+    expect(contractAttachedAt(undefined)).toBeUndefined();
+    expect(
+      contractAttachedAt([a("definiu a remuneração em R$ 1,00", "2026-10-01T10:00:00Z")]),
+    ).toBeUndefined();
+    expect(
+      contractAttachedAt([
+        a("anexou o contrato", "2026-10-02T10:00:00Z"),
+        a("substituiu o contrato", "2026-10-05T10:00:00Z"),
+        a("removeu o contrato", "2026-10-06T10:00:00Z"),
+      ]),
+    ).toBe("2026-10-05T10:00:00Z");
+    // sem a marca de área financeira não conta (atividade geral não se mistura)
+    expect(
+      contractAttachedAt([a("anexou o contrato", "2026-10-02T10:00:00Z", "geral")]),
+    ).toBeUndefined();
   });
 });

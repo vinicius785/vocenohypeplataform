@@ -207,6 +207,18 @@ export function contratoInfo(contrato: string | undefined, nome?: string): Contr
   return { present: true, name: nome?.trim() || fallback, kind };
 }
 
+/** Quando o contrato foi anexado (ou substituído) pela última vez, lido do histórico financeiro — o
+ * contrato em si não guarda a data. `undefined` para contratos anteriores ao registro de atividade. */
+export function contractAttachedAt(
+  activity: { action: string; area?: string; createdAt: string }[] | undefined,
+): string | undefined {
+  const times = (activity ?? [])
+    .filter((a) => a.area === "financeiro" && /^(anexou|substituiu) o contrato\b/.test(a.action))
+    .map((a) => a.createdAt)
+    .sort();
+  return times.at(-1);
+}
+
 /** `data:` URLs são bloqueadas ao abrir direto numa nova aba: converte em Blob antes. */
 export function openFileUrl(url: string) {
   if (!url.startsWith("data:")) {
