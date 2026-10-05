@@ -381,7 +381,6 @@ function ProjetoPage() {
             >
               <ArrowLeft className="h-3.5 w-3.5" /> {project.name}
             </button>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">AEO Monitor</h1>
           </div>
           <AeoMonitorPanel />
         </PageContainer>

@@ -22,11 +22,11 @@ export function VisibilidadePorCategoria({
   const [aberta, setAberta] = useState<AeoCategoria | null>(null);
 
   return (
-    <div className="surface-card p-4">
-      <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-        Visibilidade por categoria
+    <div>
+      <h3 className="text-xs font-semibold uppercase tracking-widest text-text-secondary">
+        Por categoria
       </h3>
-      <div className="mt-3 space-y-3">
+      <div className="mt-4 space-y-3">
         {AEO_CATEGORIAS.map((c) => (
           <button
             key={c}
@@ -34,13 +34,11 @@ export function VisibilidadePorCategoria({
             onClick={() => setAberta(c)}
             className="block w-full text-left"
           >
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-foreground hover:underline">
-                {c} — {AEO_CATEGORIA_LABEL[c]}
-              </span>
-              <span className="text-muted-foreground">{cats[c]}%</span>
+            <div className="flex items-baseline justify-between gap-3 text-sm">
+              <span className="text-foreground hover:underline">{AEO_CATEGORIA_LABEL[c]}</span>
+              <span className="font-semibold tabular-nums text-foreground">{cats[c]}%</span>
             </div>
-            <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+            <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
               <div
                 className="h-full rounded-full bg-foreground transition-all"
                 style={{ width: `${cats[c]}%` }}

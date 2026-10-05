@@ -12,24 +12,24 @@ export function ConcorrentesSection({
   prompts: AeoPrompt[];
   rodadaId: string;
 }) {
-  const lista = concorrentesMaisCitados(respostas, rodadaId).slice(0, 10);
+  const lista = concorrentesMaisCitados(respostas, rodadaId).slice(0, 5);
   const [aberto, setAberto] = useState<string | null>(null);
 
   return (
-    <div className="surface-card p-4">
-      <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+    <div>
+      <h3 className="text-xs font-semibold uppercase tracking-widest text-text-secondary">
         Concorrentes mais citados
       </h3>
-      <ul className="mt-3 space-y-1.5">
+      <ul className="mt-3 space-y-2">
         {lista.length === 0 && (
-          <li className="text-xs text-muted-foreground">Nenhum concorrente registrado.</li>
+          <li className="text-sm text-text-secondary">Nenhum concorrente registrado.</li>
         )}
         {lista.map((c) => (
           <li key={c.nome}>
             <button
               type="button"
               onClick={() => setAberto(c.nome)}
-              className="flex w-full items-center justify-between text-xs hover:underline"
+              className="flex w-full items-center justify-between gap-3 text-sm hover:underline"
             >
               <span className="text-foreground">{c.nome}</span>
               <span className="text-muted-foreground">

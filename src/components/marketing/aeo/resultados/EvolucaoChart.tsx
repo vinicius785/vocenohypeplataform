@@ -10,7 +10,7 @@ import {
 } from "recharts";
 import { AEO_IAS, type AeoIa, type AeoResposta, type AeoRodada } from "@/lib/aeo-store";
 import { serieEvolucao } from "@/lib/aeo-engine";
-import { inputCls, fmtDate } from "../aeo-ui-utils";
+import { fmtDate } from "../aeo-ui-utils";
 import { NativeSelect } from "@/components/ui/native-select";
 
 export function EvolucaoChart({
@@ -28,17 +28,18 @@ export function EvolucaoChart({
   const data = serie.map((s) => ({ label: fmtDate(s.label), pct: s.pct }));
 
   return (
-    <div className="surface-card p-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-widest text-text-secondary">
           Evolução da visibilidade
         </h3>
         <NativeSelect
           value={filtro}
           onChange={(e) => setFiltro(e.target.value as AeoIa | "Geral")}
-          className={inputCls}
+          aria-label="Evolução por IA"
+          size="sm"
         >
-          <option value="Geral">Geral</option>
+          <option value="Geral">Todas as IAs</option>
           {AEO_IAS.map((ia) => (
             <option key={ia} value={ia}>
               {ia}
@@ -47,11 +48,11 @@ export function EvolucaoChart({
         </NativeSelect>
       </div>
       {data.length < 2 ? (
-        <p className="mt-4 text-xs text-muted-foreground">
-          Ainda não há rodadas suficientes pra mostrar uma tendência.
+        <p className="mt-3 text-sm text-text-secondary">
+          Ainda não há rodadas suficientes para mostrar uma tendência.
         </p>
       ) : (
-        <div className="mt-3 h-64">
+        <div className="mt-3 h-56">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={data}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
@@ -66,7 +67,7 @@ export function EvolucaoChart({
               <Line
                 type="monotone"
                 dataKey="pct"
-                name={filtro}
+                name={filtro === "Geral" ? "Todas as IAs" : filtro}
                 stroke="var(--chart-1)"
                 strokeWidth={2}
                 dot={{ r: 3 }}

@@ -2,7 +2,10 @@ import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import {
+  AEO_CATEGORIA_LABEL,
+  AEO_IAS,
   upsertAeoResposta,
   type AeoIa,
   type AeoNarrativa,
@@ -77,6 +80,7 @@ export function RespostaDrawer({
   open,
   onOpenChange,
   onNavigatePrompt,
+  onIaChange,
 }: {
   rodadaId: string;
   ia: AeoIa;
@@ -86,6 +90,8 @@ export function RespostaDrawer({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onNavigatePrompt: (prompt: AeoPrompt) => void;
+  /** Troca a IA do detalhe (mesmo prompt); o formulário remonta limpo por causa do `key`. */
+  onIaChange: (ia: AeoIa) => void;
 }) {
   if (!prompt) return null;
   return (
@@ -105,6 +111,7 @@ export function RespostaDrawer({
           ativos={ativos}
           respostas={respostas}
           onNavigatePrompt={onNavigatePrompt}
+          onIaChange={onIaChange}
           onClose={() => onOpenChange(false)}
         />
       </SheetContent>
@@ -119,6 +126,7 @@ function RespostaDrawerBody({
   ativos,
   respostas,
   onNavigatePrompt,
+  onIaChange,
   onClose,
 }: {
   rodadaId: string;
@@ -127,6 +135,7 @@ function RespostaDrawerBody({
   ativos: AeoPrompt[];
   respostas: AeoResposta[];
   onNavigatePrompt: (prompt: AeoPrompt) => void;
+  onIaChange: (ia: AeoIa) => void;
   onClose: () => void;
 }) {
   const initial = respostaFor(respostas, rodadaId, prompt.id, ia);
@@ -209,9 +218,18 @@ function RespostaDrawerBody({
       </div>
 
       <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
-        <div>
+        <div className="space-y-3">
+          <SegmentedControl
+            aria-label="IA da resposta"
+            size="sm"
+            value={ia}
+            onChange={async (next) => {
+              if (next !== ia && (await confirmNavigateAway())) onIaChange(next);
+            }}
+            options={AEO_IAS.map((i) => ({ value: i, label: i }))}
+          />
           <p className="text-xs font-medium text-muted-foreground">
-            {prompt.idCodigo} · {ia} · Rodada
+            {prompt.idCodigo} · {AEO_CATEGORIA_LABEL[prompt.categoria]} · {ia}
           </p>
           <p className="mt-1 text-sm font-medium text-foreground">{prompt.texto}</p>
         </div>

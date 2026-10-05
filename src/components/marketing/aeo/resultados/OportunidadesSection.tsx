@@ -1,51 +1,66 @@
 import { AlertTriangle, Sparkles, Swords } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { AeoPrompt, AeoResposta } from "@/lib/aeo-store";
-import { oportunidades } from "@/lib/aeo-engine";
+import { kpiPromptsSemPresenca, oportunidades } from "@/lib/aeo-engine";
 
 const ICON = { critico: AlertTriangle, oportunidade: Sparkles, concorrencia: Swords } as const;
-const TONE = {
-  critico: "border-rose-500/30 bg-rose-500/5 text-rose-600 dark:text-rose-400",
-  oportunidade: "border-amber-500/30 bg-amber-500/5 text-amber-600 dark:text-amber-400",
-  concorrencia: "border-sky-500/30 bg-sky-500/5 text-sky-600 dark:text-sky-400",
+const ICON_TONE = {
+  critico: "text-danger",
+  oportunidade: "text-warning",
+  concorrencia: "text-info",
 } as const;
 
+/** Oportunidades da rodada: os insights que o motor calcula (nada inventado) e, no fim, a
+ * ação "ver prompts sem presença". Lista simples — sem um card colorido por insight. */
 export function OportunidadesSection({
   rodadaId,
   prompts,
   respostas,
+  onVerPrompts,
 }: {
   rodadaId: string;
   prompts: AeoPrompt[];
   respostas: AeoResposta[];
+  onVerPrompts: () => void;
 }) {
   const itens = oportunidades(rodadaId, prompts, respostas);
+  const sem = kpiPromptsSemPresenca(respostas, rodadaId).valor;
+
+  if (itens.length === 0 && sem === 0) {
+    return (
+      <p className="text-sm text-text-secondary">Sem oportunidades identificadas nesta rodada.</p>
+    );
+  }
 
   return (
-    <div className="space-y-2">
-      <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-        Oportunidades
-      </h3>
-      {itens.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-border p-4 text-xs text-muted-foreground">
-          Sem oportunidades identificadas nesta rodada.
-        </p>
-      ) : (
-        itens.map((op, i) => {
-          const Icon = ICON[op.tipo];
-          return (
-            <div
-              key={i}
-              className={`flex items-start gap-2.5 rounded-2xl border p-4 ${TONE[op.tipo]}`}
-            >
-              <Icon className="mt-0.5 h-4 w-4 shrink-0" />
-              <div>
-                <p className="text-sm font-medium text-foreground">{op.titulo}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">{op.descricao}</p>
-              </div>
+    <ul className="divide-y divide-border/60">
+      {itens.map((op, i) => {
+        const Icon = ICON[op.tipo];
+        return (
+          <li key={i} className="flex items-start gap-3 py-3">
+            <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${ICON_TONE[op.tipo]}`} aria-hidden="true" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground">{op.titulo}</p>
+              <p className="mt-0.5 text-sm text-text-secondary">{op.descricao}</p>
             </div>
-          );
-        })
+          </li>
+        );
+      })}
+      {sem > 0 && (
+        <li className="flex flex-wrap items-center gap-3 py-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-foreground">
+              {sem} {sem === 1 ? "resposta sem presença" : "respostas sem presença"}
+            </p>
+            <p className="mt-0.5 text-sm text-text-secondary">
+              Combinações de pergunta e IA em que a marca não foi citada.
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={onVerPrompts}>
+            Ver prompts
+          </Button>
+        </li>
       )}
-    </div>
+    </ul>
   );
 }
