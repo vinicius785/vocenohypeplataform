@@ -1,25 +1,25 @@
 {
-  "version": "1.313.0",
+  "version": "1.313.1",
   "releases": [
     {
-      "version": "1.313.0",
-      "summary": "Detalhe da reunião refeito: participantes e presença numa área só, com cards.",
+      "version": "1.313.1",
+      "summary": "Detalhe da reunião mais sóbrio e neutro.",
       "modules": [
         {
           "name": "REUNIÕES",
           "tagline": "Detalhe da reunião",
           "items": [
             {
-              "title": "Participantes e presença juntos",
-              "description": "Cada pessoa aparece uma vez, em um card com avatar, cargo e presença. Clique no card para marcar quem participou; o contador mostra 2 de 4 presentes."
+              "title": "Participantes em tom neutro",
+              "description": "Os cards ficaram sem bordas e fundos verdes. Quem está presente se destaca só por um fundo levemente mais claro e um check discreto."
             },
             {
-              "title": "Convite separado de presença",
-              "description": "Confirmado ou pendente aparece como Convite, em segundo plano, e nunca altera a presença de ninguém."
+              "title": "Convite em cinza",
+              "description": "O convite (confirmado ou pendente) virou informação secundária, em cinza, sem competir com a presença."
             },
             {
-              "title": "Transcrição em destaque",
-              "description": "A transcrição ganhou uma seção própria com prévia do texto, e os detalhes técnicos ficam recolhidos."
+              "title": "Ações e transcrição discretas",
+              "description": "Marcar todos presentes, Abrir e Editar agora são ações neutras, e a transcrição lê como texto editorial."
             }
           ]
         }

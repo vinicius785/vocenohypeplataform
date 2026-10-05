@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FileText, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -51,7 +51,7 @@ export function MeetingTranscriptSection({
             className="block w-full text-left"
             aria-label="Abrir transcrição"
           >
-            <p className="line-clamp-4 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
+            <p className="line-clamp-4 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground/90">
               {text}
             </p>
           </button>
@@ -62,7 +62,7 @@ export function MeetingTranscriptSection({
             </p>
             <div className="flex gap-1">
               <Button variant="ghost" size="sm" onClick={() => openDialog(false)}>
-                <FileText className="h-3.5 w-3.5" /> Abrir
+                Abrir
               </Button>
               {canEdit && (
                 <Button variant="ghost" size="sm" onClick={() => openDialog(true)}>
@@ -76,7 +76,7 @@ export function MeetingTranscriptSection({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm text-text-secondary">Nenhuma transcrição adicionada.</p>
           {canEdit && (
-            <Button variant="outline" size="sm" onClick={() => openDialog(true)}>
+            <Button variant="ghost" size="sm" onClick={() => openDialog(true)}>
               <Plus className="h-3.5 w-3.5" /> Adicionar transcrição
             </Button>
           )}

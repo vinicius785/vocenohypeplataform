@@ -78,8 +78,18 @@ export function MeetingParticipantsSection({
           </p>
         </div>
         {canRecord && canEdit && eligibleIds.length > 0 && (
-          <Button variant="outline" size="sm" onClick={onMarkAll} disabled={allPresent}>
-            <CheckCheck className="h-3.5 w-3.5" />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onMarkAll}
+            disabled={allPresent}
+            className="text-text-secondary"
+          >
+            {allPresent ? (
+              <Check className="h-3.5 w-3.5" />
+            ) : (
+              <CheckCheck className="h-3.5 w-3.5" />
+            )}
             {allPresent ? "Todos presentes" : "Marcar todos presentes"}
           </Button>
         )}
@@ -104,23 +114,27 @@ export function MeetingParticipantsSection({
                 {canRecord && p.eligible ? (
                   <span
                     className={cn(
-                      "inline-flex items-center gap-1.5 font-medium",
-                      present ? "text-success" : "text-text-secondary",
+                      "inline-flex items-center gap-1.5",
+                      present ? "text-foreground" : "text-text-secondary",
                     )}
                   >
-                    {present ? <Check className="h-3.5 w-3.5" /> : <Circle className="h-3 w-3" />}
+                    {present ? (
+                      <Check className="h-3.5 w-3.5 text-success" />
+                    ) : (
+                      <Circle className="h-3 w-3 opacity-60" />
+                    )}
                     {present ? "Presente" : "Não registrado"}
                   </span>
                 ) : (
                   <span />
                 )}
-                <span className="text-text-secondary/80">Convite · {RSVP_LABEL[rsvp]}</span>
+                <span className="text-text-secondary">Convite · {RSVP_LABEL[rsvp]}</span>
               </div>
             </>
           );
           const cls = cn(
-            "block w-full rounded-lg border border-border/60 px-3 py-2.5 text-left transition-colors",
-            present && "border-success/30 bg-success-soft/20",
+            "block w-full rounded-lg border px-3 py-2.5 text-left transition-colors",
+            present ? "border-border bg-muted/40" : "border-border/50 bg-transparent",
           );
           return (
             <li key={p.id}>
