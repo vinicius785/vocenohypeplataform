@@ -105,12 +105,12 @@ export function ArticleSettings({
   const SECTION = "text-xs font-semibold uppercase tracking-widest text-text-secondary";
 
   return (
-    <section aria-labelledby="blog-config" className="space-y-8">
-      <h2 id="blog-config" className="text-lg font-semibold tracking-tight text-foreground">
-        Configurações do artigo
+    <section aria-labelledby="blog-config" className="space-y-6">
+      <h2 id="blog-config" className={SECTION}>
+        Publicação
       </h2>
 
-      <div className="grid grid-cols-1 gap-x-12 gap-y-8 lg:grid-cols-2">
+      <div className="space-y-7">
         <div className="space-y-6">
           <CoverUploadField cover={post.cover} onChange={(cover) => patchImmediate({ cover })} />
 
@@ -182,7 +182,7 @@ export function ArticleSettings({
             )}
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4">
             <div className="space-y-2">
               <label htmlFor="blog-categoria" className={SECTION}>
                 Categoria

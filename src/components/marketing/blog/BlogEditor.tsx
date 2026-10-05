@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, Loader2 } from "lucide-react";
+import { ArrowLeft, Check, Eye, Loader2, SlidersHorizontal } from "lucide-react";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import type { BlogPost } from "@/lib/projetos";
@@ -80,7 +82,7 @@ export function BlogEditor({
   }, [post.id]);
 
   const [draft, setDraft] = useState(post);
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const debounceRef = useRef<number | null>(null);
   const draftRef = useRef(draft);
   draftRef.current = draft;
@@ -89,7 +91,9 @@ export function BlogEditor({
   const [scheduleMode, setScheduleMode] = useState<"now" | "schedule">("now");
   const [scheduleAt, setScheduleAt] = useState("");
   const [previewTab, setPreviewTab] = useState<"site" | "mural" | "portal">("site");
-  const [mode, setMode] = useState<"edit" | "preview">("edit");
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const isMobile = useIsMobile();
   // Autor: "time" (usuário cadastrado) ou "personalizado" (texto livre) — decisão explícita, só
   // o campo do tipo escolhido aparece. Inicial: texto livre só se há nome sem usuário vinculado.
   const [authorMode, setAuthorMode] = useState<"team" | "custom">(() =>
@@ -100,15 +104,22 @@ export function BlogEditor({
     setDraft(post);
     setScheduleMode("now");
     setScheduleAt("");
-    setMode("edit");
+    setPreviewOpen(false);
+    setSettingsOpen(false);
     setAuthorMode(!post.authorId && (post.authorName ?? "").trim() ? "custom" : "team");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [post.id]);
 
   const flush = (next: BlogPost) => {
     pendingRef.current = false;
-    onChange(next);
-    setSaveState("saved");
+    try {
+      onChange(next);
+      setSaveState("saved");
+    } catch {
+      // Mantém a edição pendente: "Tentar de novo" reenvia o mesmo rascunho.
+      pendingRef.current = true;
+      setSaveState("error");
+    }
   };
 
   // Se sair da tela (Voltar, trocar de artigo, fechar o painel) antes do
@@ -186,28 +197,56 @@ export function BlogEditor({
 
   const goPreview = () => {
     setPreviewTab(activePreviewTab);
-    setMode("preview");
+    setPreviewOpen(true);
   };
 
+  // O corpo cresce com o conteúdo (altura inicial confortável, sem retângulo gigante fixo).
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.max(el.scrollHeight, 320)}px`;
+  }, [p.content]);
+
+  const settings = (
+    <ArticleSettings
+      post={p}
+      patchImmediate={patchImmediate}
+      patchDebounced={patchDebounced}
+      portalEnabled={portalEnabled}
+      onPortalEnabledChange={setPortalEnabled}
+      scheduleMode={scheduleMode}
+      onScheduleModeChange={setScheduleMode}
+      scheduleAt={scheduleAt}
+      onScheduleAtChange={setScheduleAt}
+      authorModeState={authorMode}
+      onAuthorModeChange={setAuthorMode}
+      fieldRefs={fieldRefs}
+    />
+  );
+
   return (
-    <div className="space-y-6">
-      {/* Cabeçalho do artigo: contexto à esquerda, ações à direita — Publicar é a principal. */}
-      <div className="sticky top-0 z-20 -mx-4 border-b border-border/60 bg-background/95 px-4 py-3 backdrop-blur md:-mx-8 md:px-8">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+    <div className="space-y-8">
+      {/* Cabeçalho do EDITOR — só o necessário: voltar ao Blog, onde estou, salvar e publicar. */}
+      <div className="sticky top-0 z-20 -mx-4 border-b border-border/60 bg-background/95 px-4 py-2.5 backdrop-blur md:-mx-8 md:px-8">
+        <div className="flex items-center gap-x-3">
           <button
             type="button"
             onClick={handleClose}
-            className="inline-flex items-center gap-1 rounded-md text-xs text-text-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            className="inline-flex shrink-0 items-center gap-1 rounded-md text-sm text-text-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
           >
-            <ArrowLeft className="h-3.5 w-3.5" /> Blog
+            <ArrowLeft className="h-4 w-4" /> Blog
           </button>
-          <span className="min-w-0 max-w-[16rem] truncate text-sm font-medium text-foreground">
+          <span aria-hidden="true" className="h-4 w-px shrink-0 bg-border" />
+          <span className="min-w-0 truncate text-sm font-medium text-foreground">
             {p.title || "Novo artigo"}
           </span>
-          <StatusHeader post={p} />
+          <span className="hidden shrink-0 sm:inline-flex">
+            <StatusHeader post={p} />
+          </span>
           <span
             role="status"
-            className="inline-flex items-center gap-1 text-xs text-text-secondary"
+            className="hidden shrink-0 items-center gap-1 text-xs text-text-secondary md:inline-flex"
           >
             {saveState === "saving" ? (
               <>
@@ -217,29 +256,34 @@ export function BlogEditor({
               <>
                 <Check className="h-3 w-3" /> Salvo
               </>
+            ) : saveState === "error" ? (
+              <span className="text-danger">Não foi possível salvar</span>
             ) : null}
           </span>
 
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            <SegmentedControl
-              aria-label="Modo do artigo"
-              size="sm"
-              value={mode}
-              onChange={(v) => (v === "preview" ? goPreview() : setMode("edit"))}
-              options={[
-                { value: "edit", label: "Editar" },
-                { value: "preview", label: "Pré-visualizar" },
-              ]}
-            />
+          <div className="ml-auto flex shrink-0 items-center gap-1.5">
+            {isMobile && (
+              <Button variant="ghost" size="sm" onClick={() => setSettingsOpen(true)}>
+                <SlidersHorizontal className="h-3.5 w-3.5" /> Configurações
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" onClick={goPreview}>
+              <Eye className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Pré-visualizar</span>
+            </Button>
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={() => {
                 if (debounceRef.current) window.clearTimeout(debounceRef.current);
                 flush(draftRef.current);
               }}
             >
-              {p.status === "rascunho" ? "Salvar rascunho" : "Salvar"}
+              {saveState === "error"
+                ? "Tentar de novo"
+                : p.status === "rascunho"
+                  ? "Salvar rascunho"
+                  : "Salvar"}
             </Button>
             <PublishActions
               post={p}
@@ -256,96 +300,111 @@ export function BlogEditor({
               onSchedule={(iso) => patchImmediate({ status: "agendado", publishDate: iso })}
               onUnpublish={() => patchImmediate({ status: "despublicado" })}
               onFocusField={(key) => {
-                setMode("edit");
-                window.setTimeout(() => focusField(key), 50);
+                if (isMobile) setSettingsOpen(true);
+                window.setTimeout(() => focusField(key), isMobile ? 350 : 0);
               }}
               onRequestSchedule={() => {
-                setMode("edit");
-                window.setTimeout(requestSchedule, 50);
+                if (isMobile) setSettingsOpen(true);
+                window.setTimeout(requestSchedule, isMobile ? 350 : 0);
               }}
             />
           </div>
         </div>
       </div>
 
-      {mode === "edit" ? (
-        <>
-          {/* Editor: o conteúdo é o protagonista — coluna larga, título como campo editorial. */}
-          <div className="mx-auto w-full max-w-4xl space-y-5">
-            <input
-              ref={fieldRefs.title}
-              value={p.title}
-              onChange={(e) => {
-                const title = e.target.value;
-                patchDebounced({ title, slug: p.slug ? p.slug : slugify(title) });
-              }}
-              aria-label="Título do artigo"
-              placeholder="Digite o título do artigo"
-              className="w-full border-0 bg-transparent p-0 text-3xl font-semibold tracking-tight text-foreground outline-none placeholder:text-text-secondary/60 focus:ring-0 md:text-4xl"
+      <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-x-14 gap-y-8 lg:grid-cols-[minmax(0,1fr)_300px]">
+        {/* EDITOR: o artigo é o protagonista — título e resumo editoriais, texto sem moldura de formulário. */}
+        <div className="min-w-0 space-y-5">
+          <input
+            ref={fieldRefs.title}
+            value={p.title}
+            onChange={(e) => {
+              const title = e.target.value;
+              patchDebounced({ title, slug: p.slug ? p.slug : slugify(title) });
+            }}
+            aria-label="Título do artigo"
+            placeholder="Digite o título..."
+            className="w-full border-0 bg-transparent p-0 text-4xl font-semibold leading-tight tracking-tight text-foreground outline-none placeholder:text-text-secondary/50 focus:ring-0 md:text-5xl"
+          />
+          <textarea
+            value={p.excerpt ?? ""}
+            onChange={(e) => patchDebounced({ excerpt: e.target.value })}
+            aria-label="Resumo do artigo"
+            rows={2}
+            placeholder="Uma ou duas frases que apresentam o artigo..."
+            className="w-full resize-none border-0 bg-transparent p-0 text-lg leading-snug text-text-secondary outline-none placeholder:text-text-secondary/50 focus:ring-0"
+          />
+          <div className="pt-2">
+            <BlogToolbar
+              textareaRef={contentRef}
+              value={p.content ?? ""}
+              onChange={(content) => patchDebounced({ content })}
             />
             <textarea
-              value={p.excerpt ?? ""}
-              onChange={(e) => patchDebounced({ excerpt: e.target.value })}
-              aria-label="Resumo do artigo"
-              rows={2}
-              placeholder="Resumo: uma ou duas frases que apresentam o artigo"
-              className="w-full resize-none border-0 border-b border-border/60 bg-transparent px-0 pb-3 text-base text-text-secondary outline-none placeholder:text-text-secondary/60 focus:border-foreground/40 focus:ring-0"
+              ref={contentRef}
+              value={p.content ?? ""}
+              onChange={(e) => patchDebounced({ content: e.target.value })}
+              aria-label="Conteúdo do artigo"
+              placeholder="Escreva o artigo..."
+              className="block w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-base leading-relaxed text-foreground outline-none placeholder:text-text-secondary/50 focus:ring-0"
+              style={{ minHeight: 320 }}
             />
-            <div>
-              <BlogToolbar
-                textareaRef={contentRef}
-                value={p.content ?? ""}
-                onChange={(content) => patchDebounced({ content })}
-              />
-              <textarea
-                ref={contentRef}
-                value={p.content ?? ""}
-                onChange={(e) => patchDebounced({ content: e.target.value })}
-                aria-label="Conteúdo do artigo"
-                placeholder="Escreva o artigo... (markdown básico: # título, **negrito**, *itálico*, - lista)"
-                className="min-h-[28rem] w-full rounded-b-lg rounded-t-none border border-border bg-background px-4 py-3 font-mono text-sm leading-relaxed outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-[34rem]"
-              />
-            </div>
+            <p className="mt-6 text-xs text-text-secondary">
+              Formatação: # título · **negrito** · *itálico* · - lista · &gt; citação
+            </p>
           </div>
-
-          <div className="mx-auto w-full max-w-4xl border-t border-border/60 pt-8">
-            <ArticleSettings
-              post={p}
-              patchImmediate={patchImmediate}
-              patchDebounced={patchDebounced}
-              portalEnabled={portalEnabled}
-              onPortalEnabledChange={setPortalEnabled}
-              scheduleMode={scheduleMode}
-              onScheduleModeChange={setScheduleMode}
-              scheduleAt={scheduleAt}
-              onScheduleAtChange={setScheduleAt}
-              authorModeState={authorMode}
-              onAuthorModeChange={setAuthorMode}
-              fieldRefs={fieldRefs}
-            />
-            <div className="mt-8 flex justify-end">
-              <Button variant="ghost" size="sm" className="text-destructive" onClick={onDelete}>
-                Excluir artigo
-              </Button>
-            </div>
+          <div className="pt-6">
+            <Button variant="ghost" size="sm" className="text-destructive" onClick={onDelete}>
+              Excluir artigo
+            </Button>
           </div>
-        </>
-      ) : (
-        <div className="mx-auto w-full max-w-3xl space-y-4">
-          {destinosDisponiveis.length > 1 && (
-            <SegmentedControl
-              aria-label="Ver como aparece em"
-              size="sm"
-              value={activePreviewTab}
-              onChange={setPreviewTab}
-              options={destinosDisponiveis.map((d) => ({
-                value: d,
-                label: d === "site" ? "Site" : d === "mural" ? "Mural" : "Portal",
-              }))}
-            />
-          )}
-          <ArticlePreview post={p} authorPhoto={authorPhoto} />
         </div>
+
+        {/* CONFIGURAÇÕES: coluna lateral compacta (desktop); no mobile abrem em Sheet. */}
+        {!isMobile && <aside className="self-start lg:sticky lg:top-24">{settings}</aside>}
+      </div>
+
+      <Sheet open={previewOpen} onOpenChange={setPreviewOpen}>
+        <SheetContent className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
+          <div className="space-y-3 border-b border-border/60 px-6 py-4">
+            <SheetTitle>Pré-visualização</SheetTitle>
+            <SheetDescription className="sr-only">Como o artigo será apresentado.</SheetDescription>
+            {destinosDisponiveis.length > 1 && (
+              <SegmentedControl
+                aria-label="Ver como aparece em"
+                size="sm"
+                value={activePreviewTab}
+                onChange={setPreviewTab}
+                options={destinosDisponiveis.map((d) => ({
+                  value: d,
+                  label: d === "site" ? "Site" : d === "mural" ? "Mural" : "Portal",
+                }))}
+              />
+            )}
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-6">
+            {previewOpen && <ArticlePreview post={p} authorPhoto={authorPhoto} />}
+          </div>
+          <div className="flex justify-end border-t border-border/60 px-6 py-3">
+            <Button variant="outline" size="sm" onClick={() => setPreviewOpen(false)}>
+              Voltar para edição
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {isMobile && (
+        <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+          <SheetContent className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
+            <div className="border-b border-border/60 px-5 py-4">
+              <SheetTitle>Configurações do artigo</SheetTitle>
+              <SheetDescription className="sr-only">
+                Capa, autor, categoria, destinos e publicação.
+              </SheetDescription>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">{settings}</div>
+          </SheetContent>
+        </Sheet>
       )}
     </div>
   );

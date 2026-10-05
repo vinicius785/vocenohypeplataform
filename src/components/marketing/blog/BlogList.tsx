@@ -44,12 +44,22 @@ function fmtScheduled(iso: string): string {
 export function BlogPanel({
   project,
   update,
+  editingId: controlledEditingId,
+  onEditingIdChange,
 }: {
   project: Project;
   update: (p: Partial<Project>) => void;
+  /** Controlado pela página do Projeto: ao editar um artigo ela mostra SÓ o editor (modo focado). */
+  editingId?: string | null;
+  onEditingIdChange?: (id: string | null) => void;
 }) {
   const posts = project.blog ?? [];
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [internalEditingId, setInternalEditingId] = useState<string | null>(null);
+  const editingId = controlledEditingId !== undefined ? controlledEditingId : internalEditingId;
+  const setEditingId = (id: string | null) => {
+    setInternalEditingId(id);
+    onEditingIdChange?.(id);
+  };
 
   const setPosts = (next: BlogPost[]) => update({ blog: next });
   const notifyBlog = useServerFn(notifyBlogEvent);

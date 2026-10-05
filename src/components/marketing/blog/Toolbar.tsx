@@ -95,7 +95,7 @@ export function BlogToolbar({
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-0.5 rounded-t-md border border-b-0 border-border bg-muted/30 p-1">
+    <div className="sticky top-14 z-10 -mx-1 mb-3 flex flex-wrap items-center gap-0.5 border-b border-border/60 bg-background/95 px-1 pb-2 pt-1 backdrop-blur">
       {BUTTONS.map(({ icon: Icon, label, action }) => (
         <button
           key={label}

@@ -180,6 +180,8 @@ function renderPanel(
   update: (p: Partial<Project>) => void,
   initialOpenTaskId?: string,
   onInitialOpenTaskHandled?: () => void,
+  blogEditingId?: string | null,
+  onBlogEditingIdChange?: (id: string | null) => void,
 ) {
   const isMarketingProject = project.name.trim().toUpperCase() === "MARKETING";
   if (k === "kanban")
@@ -201,7 +203,15 @@ function renderPanel(
   if (k === "documentos") return <DocsPanel project={project} update={update} />;
   if (k === "calendario_editorial") return <EditorialPanel project={project} update={update} />;
   if (k === "trafego_pago") return <TrafegoPagoPanel project={project} update={update} />;
-  if (k === "blog") return <BlogPanel project={project} update={update} />;
+  if (k === "blog")
+    return (
+      <BlogPanel
+        project={project}
+        update={update}
+        editingId={blogEditingId}
+        onEditingIdChange={onBlogEditingIdChange}
+      />
+    );
   if (k === "aeo_monitor") return <AeoMonitorPanel />;
   if (k === "bugs_sugestoes") return <ProjectBugsPanel project={project} update={update} />;
   if (k === "fluxos_email") return <FluxosEmailPanel />;
@@ -210,6 +220,8 @@ function renderPanel(
 
 function ProjetoPage() {
   const [docsOpen, setDocsOpen] = useState(false);
+  // Artigo do Blog em edição: a página mostra SÓ o editor (modo focado) até voltar para o Blog.
+  const [blogEditingId, setBlogEditingId] = useState<string | null>(null);
   const { id } = Route.useParams();
   const { taskId } = Route.useSearch();
   const navigate = useNavigate();
@@ -346,6 +358,21 @@ function ProjetoPage() {
   // cabeçalho, como em Campanhas e no Comercial.
   const hasDocs = availableSections.includes("documentos");
   const sections = availableSections.filter((k) => k !== "documentos");
+
+  if (blogEditingId && project.blog?.some((b) => b.id === blogEditingId)) {
+    return (
+      <AppShell active="projetos" onSelect={goToSection}>
+        <PageContainer variant="wide" className="space-y-6">
+          <BlogPanel
+            project={project}
+            update={update}
+            editingId={blogEditingId}
+            onEditingIdChange={setBlogEditingId}
+          />
+        </PageContainer>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell active="projetos" onSelect={goToSection}>
@@ -555,7 +582,15 @@ function ProjetoPage() {
                   title={SECTION_TITLE[k]}
                   eager={i === 0 || k === "kanban"}
                 >
-                  {renderPanel(k, project, update, taskId, clearTaskId)}
+                  {renderPanel(
+                    k,
+                    project,
+                    update,
+                    taskId,
+                    clearTaskId,
+                    blogEditingId,
+                    setBlogEditingId,
+                  )}
                 </ProjectSection>
               ))}
             </div>
