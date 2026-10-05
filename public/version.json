@@ -1,29 +1,25 @@
 {
-  "version": "1.330.0",
+  "version": "1.331.0",
   "releases": [
     {
-      "version": "1.330.0",
-      "summary": "Detalhe do influenciador na campanha refeito como painel operacional compacto (V2).",
+      "version": "1.331.0",
+      "summary": "Parte inferior do detalhe do influenciador reorganizada: Dados, Financeiro, Contexto e Atividade.",
       "modules": [
         {
           "name": "CAMPANHAS",
           "tagline": "Detalhe do influenciador",
           "items": [
             {
-              "title": "Uma única próxima ação",
-              "description": "O painel calcula e mostra só a ação mais importante agora (anexar roteiro, tratar ajuste do cliente, definir remuneração, aprovar pagamento…)."
+              "title": "Dados em uma só área",
+              "description": "Contato (telefone e e-mail direto, com Copiar e Abrir) e perfil com os principais indicadores lado a lado; a audiência detalhada abre à parte."
             },
             {
-              "title": "Entregas em linhas e feedback em destaque",
-              "description": "Entregas viram linhas compactas com estado e prazo; o feedback do cliente aparece logo abaixo, com citação, autor e horário."
+              "title": "Financeiro em uma faixa",
+              "description": "Remuneração, pagamento, contrato e dados bancários em quatro indicadores; só as pendências mostram ação, e tudo resolvido termina na faixa."
             },
             {
-              "title": "Contato, financeiro e perfil lado a lado",
-              "description": "Contato sempre visível, financeiro simplificado em linhas com ações inline, e audiência detalhada abrindo à parte."
-            },
-            {
-              "title": "Menos rolagem",
-              "description": "Atividade limitada a 3 eventos e informações raras reunidas em 'Mais informações'; ações destrutivas ficam só no menu ⋯."
+              "title": "Contexto e atividade enxutos",
+              "description": "Motivo, briefing e observações como contexto; atividade com 3 eventos e 'Ver tudo'."
             }
           ]
         }

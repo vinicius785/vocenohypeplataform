@@ -98,11 +98,11 @@ import type { CustomQuestionType } from "@/lib/inscricao-page";
 import { InfluencerContact } from "./InfluencerContact";
 import { ClientFeedbackBlock, EntregasRows, MoreInfo } from "./InfluencerPanels";
 import { clientFeedbacks, nextBestAction, type NextAction } from "@/lib/influencer-next-action";
-import { CockpitTitle, InlineNote, KeyStats, QuietButton, SummaryStrip } from "./InfluencerCockpit";
+import { CockpitTitle, InlineNote, QuietButton } from "./InfluencerCockpit";
 import { AudienceInsights } from "@/components/shared/AudienceInsights";
 import { hasAudienceData } from "@/lib/audience-distribution";
 import { formatActivityWhen } from "@/lib/activity-time";
-import { FinanceRow, FinanceTimeline, FileLine, PaymentStateBadge } from "./InfluencerFinanceiro";
+import { FinanceTimeline, FileLine, PaymentStateBadge } from "./InfluencerFinanceiro";
 import {
   bankFields,
   contratoInfo,
@@ -4205,19 +4205,29 @@ function PerfilAudienciaSection({
   const [dialog, setDialog] = useState<null | "audiencia" | "editar">(null);
   const rede = redes.find((r) => r.id === selId) ?? redes[0];
   const m = rede ? influ.profileMetrics?.porRede?.[rede.id] : undefined;
-  const dash = <span className="text-text-secondary">—</span>;
   const audiencia = hasAudienceData(m);
+  const stats = rede
+    ? [
+        { v: formatCompactSeguidores(rede.seguidores), l: "seguidores" },
+        { v: m?.taxaInteracao != null ? formatPercentBR(m.taxaInteracao) : "", l: "interação" },
+        {
+          v: m?.visualizacoes != null ? formatCompactNumber(m.visualizacoes) : "",
+          l: "views",
+        },
+        {
+          v: m?.taxaAtencaoInicial != null ? formatPercentBR(m.taxaAtencaoInicial) : "",
+          l: "atenção",
+        },
+      ].filter((x) => x.v)
+    : [];
   return (
-    <section aria-label="Perfil e audiência" className="space-y-2.5">
-      <CockpitTitle
-        action={
-          <QuietButton onClick={() => setDialog("editar")}>
-            {redes.length === 0 ? "Adicionar rede" : "Editar"}
-          </QuietButton>
-        }
-      >
-        Perfil e audiência
-      </CockpitTitle>
+    <section aria-label="Perfil e audiência" className="min-w-0 space-y-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-xs font-medium text-text-secondary">Perfil e audiência</h3>
+        <QuietButton onClick={() => setDialog("editar")}>
+          {redes.length === 0 ? "Adicionar rede" : "Editar"}
+        </QuietButton>
+      </div>
 
       {rede ? (
         <>
@@ -4250,27 +4260,20 @@ function PerfilAudienciaSection({
               </div>
             )}
           </div>
-          <KeyStats
-            items={[
-              { label: "Seguidores", value: formatCompactSeguidores(rede.seguidores) || dash },
-              {
-                label: "Interação",
-                value: m?.taxaInteracao != null ? formatPercentBR(m.taxaInteracao) : dash,
-              },
-              {
-                label: "Views",
-                value: m?.visualizacoes != null ? formatCompactNumber(m.visualizacoes) : dash,
-              },
-              {
-                label: "Atenção",
-                value: m?.taxaAtencaoInicial != null ? formatPercentBR(m.taxaAtencaoInicial) : dash,
-              },
-            ]}
-          />
+          {stats.length > 0 && (
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-sm">
+              {stats.map((x) => (
+                <div key={x.l} className="min-w-0 truncate">
+                  <dd className="inline font-medium text-foreground">{x.v}</dd>{" "}
+                  <dt className="inline text-text-secondary">{x.l}</dt>
+                </div>
+              ))}
+            </dl>
+          )}
           <QuietButton onClick={() => setDialog("audiencia")}>Ver audiência →</QuietButton>
         </>
       ) : (
-        <p className="text-sm text-text-secondary">Nenhuma rede cadastrada.</p>
+        <p className="text-sm text-text-secondary">Nenhuma rede cadastrada</p>
       )}
 
       <Dialog open={dialog !== null} onOpenChange={(o) => !o && setDialog(null)}>
@@ -4363,7 +4366,7 @@ function FinanceiroContratoSection({
   const [busy, setBusy] = useState<"contrato" | "comprovante" | null>(null);
   const [fileError, setFileError] = useState("");
   const contratoRef = useRef<HTMLInputElement>(null);
-  const [showBank, setShowBank] = useState(false);
+  const [open, setOpen] = useState<null | "rem" | "pag" | "contrato" | "bank">(null);
   const [showTimeline, setShowTimeline] = useState(false);
   const lastCommand = useRef<number | null>(null);
   useEffect(() => {
@@ -4371,6 +4374,7 @@ function FinanceiroContratoSection({
     lastCommand.current = command.n;
     setRemDraft(influ.pagamento);
     setEditing("rem");
+    setOpen("rem");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [command]);
 
@@ -4433,23 +4437,188 @@ function FinanceiroContratoSection({
   }
 
   const money = (n: number) => formatBRLValue(n);
-  const showPagamento = has("pagamentos");
+  const showRemPag = has("pagamentos");
   const showBanco = has("bancario");
   const showContrato = has("contrato");
-  const payTail =
+
+  type Tone = "ok" | "pending" | "alert" | "info" | "neutral";
+  const TONE_DOT: Record<Tone, string> = {
+    ok: "bg-emerald-500",
+    pending: "bg-amber-500",
+    alert: "bg-rose-500",
+    info: "bg-sky-500",
+    neutral: "bg-muted-foreground/40",
+  };
+  const payTone: Tone =
     state.key === "pago"
-      ? state.paidOn
-        ? `em ${formatIsoDate(state.paidOn)}`
-        : ""
-      : state.due
-        ? `vence ${formatIsoDate(state.due)}`
-        : "";
-  const bankHeadline = temBanco
-    ? [bank.titular, bank.banco].filter((x) => x && x.trim()).join(" · ") || "Cadastrados"
-    : "Não cadastrados";
+      ? "ok"
+      : state.key === "pendente"
+        ? "pending"
+        : state.key === "vencido" || state.key === "recusado"
+          ? "alert"
+          : state.key === "agendado"
+            ? "info"
+            : "neutral";
+  const cells: { key: NonNullable<typeof open>; label: string; value: string; tone: Tone }[] = [];
+  if (showRemPag) {
+    cells.push({
+      key: "rem",
+      label: "Remuneração",
+      value: rem ? (rem.total != null ? money(rem.total) : rem.tipoLabel) : "Pendente",
+      tone: rem ? "ok" : "pending",
+    });
+    cells.push({ key: "pag", label: "Pagamento", value: state.label, tone: payTone });
+  }
+  if (showContrato) {
+    cells.push({
+      key: "contrato",
+      label: "Contrato",
+      value: contrato.present ? "OK" : "Pendente",
+      tone: contrato.present ? "ok" : "pending",
+    });
+  }
+  if (showBanco) {
+    cells.push({
+      key: "bank",
+      label: "Dados bancários",
+      value: temBanco ? "OK" : "Pendente",
+      tone: temBanco ? "ok" : "pending",
+    });
+  }
+
+  const toggle = (k: NonNullable<typeof open>) => {
+    setEditing(null);
+    setOpen((cur) => (cur === k ? null : k));
+  };
+  const startRem = () => {
+    setRemDraft(influ.pagamento);
+    setEditing("rem");
+    setOpen("rem");
+  };
+  const startBank = () => {
+    setBankDraft(bank);
+    setEditing("bank");
+    setOpen("bank");
+  };
+  const solid =
+    "rounded-md bg-foreground px-2.5 py-1 text-xs font-semibold text-background hover:opacity-90";
+  // Ações de cadastro (não são a decisão do momento): contorno discreto, sem preenchimento.
+  const outline =
+    "rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted";
+
+  // Só o que exige ação aparece abaixo da faixa; tudo resolvido = só a faixa.
+  const pending: { key: string; label: string; text: string; actions: ReactNode }[] = [];
+  if (showRemPag && !rem) {
+    pending.push({
+      key: "rem",
+      label: "Remuneração",
+      text: "Não definida",
+      actions: (
+        <button type="button" onClick={startRem} className={outline}>
+          Definir remuneração
+        </button>
+      ),
+    });
+  }
+  if (showRemPag && rem && pag) {
+    if (state.key === "pendente") {
+      pending.push({
+        key: "pag",
+        label: "Pagamento",
+        text: "Aguardando aprovação",
+        actions: (
+          <>
+            <button
+              type="button"
+              onClick={() =>
+                setPagamento(
+                  { ...pag, aprovacao: "aceito", data: pag.data || todayISO() },
+                  "aprovou a solicitação de pagamento",
+                )
+              }
+              className={solid}
+            >
+              Aprovar pagamento
+            </button>
+            <QuietButton
+              onClick={() =>
+                setPagamento(
+                  { ...pag, aprovacao: "recusado" },
+                  "recusou a solicitação de pagamento",
+                )
+              }
+            >
+              Recusar
+            </QuietButton>
+          </>
+        ),
+      });
+    } else if (state.key === "recusado") {
+      pending.push({
+        key: "pag",
+        label: "Pagamento",
+        text: "Solicitação recusada",
+        actions: (
+          <QuietButton
+            onClick={() =>
+              setPagamento({ ...pag, aprovacao: "pendente" }, "reabriu a solicitação de pagamento")
+            }
+          >
+            Reabrir solicitação
+          </QuietButton>
+        ),
+      });
+    } else if ((state.key === "agendado" || state.key === "vencido") && canFinanceiro) {
+      pending.push({
+        key: "pag",
+        label: "Pagamento",
+        text:
+          state.key === "vencido"
+            ? `Vencido${state.due ? ` em ${formatIsoDate(state.due)}` : ""}`
+            : `Aprovado${state.due ? ` · vence ${formatIsoDate(state.due)}` : ""}`,
+        actions: (
+          <button
+            type="button"
+            onClick={() =>
+              void navigate({ to: "/time", search: { section: "financeiro" as const } })
+            }
+            className={solid}
+          >
+            Registrar pagamento →
+          </button>
+        ),
+      });
+    }
+  }
+  if (showBanco && !temBanco) {
+    pending.push({
+      key: "bank",
+      label: "Dados bancários",
+      text: "Não cadastrados",
+      actions: (
+        <button type="button" onClick={startBank} className={outline}>
+          Cadastrar
+        </button>
+      ),
+    });
+  }
+  if (showContrato && !contrato.present) {
+    pending.push({
+      key: "contrato",
+      label: "Contrato",
+      text: "Não cadastrado",
+      actions: (
+        <button type="button" onClick={() => contratoRef.current?.click()} className={outline}>
+          {busy === "contrato" ? "Enviando..." : "Anexar contrato"}
+        </button>
+      ),
+    });
+  }
+
+  if (cells.length === 0) return null;
 
   return (
-    <section aria-label="Financeiro" className="space-y-3">
+    <section aria-label="Financeiro" className="space-y-2">
       <input
         ref={contratoRef}
         type="file"
@@ -4462,273 +4631,226 @@ function FinanceiroContratoSection({
       />
       <CockpitTitle>Financeiro</CockpitTitle>
 
-      {/* Estado em poucos segundos; o detalhe e as ações ficam nas linhas abaixo. */}
-      <SummaryStrip
-        columns2
-        items={[
-          {
-            label: "Remuneração",
-            value: rem ? (rem.total != null ? money(rem.total) : rem.tipoLabel) : "—",
-            emphasis: !!rem,
-          },
-          { label: "Pagamento", value: state.label, emphasis: state.key === "pendente" },
-          { label: "Contrato", value: contrato.present ? "OK" : "Pendente" },
-          { label: "Dados banc.", value: temBanco ? "OK" : "Pendente" },
-        ]}
-      />
+      {/* Estado em uma faixa; cada item abre o detalhe/edição logo abaixo. */}
+      <div className="grid grid-cols-2 gap-y-2 sm:grid-cols-4 sm:divide-x sm:divide-border/60">
+        {cells.map((c) => (
+          <button
+            key={c.key}
+            type="button"
+            aria-expanded={open === c.key}
+            onClick={() => toggle(c.key)}
+            className="min-w-0 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand sm:px-3 sm:first:pl-0"
+          >
+            <span className="block truncate text-[10px] font-medium uppercase tracking-wide text-text-secondary">
+              {c.label}
+            </span>
+            <span
+              className={`mt-0.5 flex items-center gap-1.5 text-base font-semibold ${
+                open === c.key
+                  ? "text-foreground underline underline-offset-4"
+                  : "text-foreground/90"
+              }`}
+            >
+              <span
+                aria-hidden
+                className={`h-1.5 w-1.5 shrink-0 rounded-full ${TONE_DOT[c.tone]}`}
+              />
+              <span className="truncate">{c.value}</span>
+            </span>
+          </button>
+        ))}
+      </div>
 
-      <div className="-mt-0.5">
-        {showPagamento && (
-          <FinanceRow
-            label="Remuneração"
-            actions={
-              editing !== "rem" && (
-                <QuietButton
-                  onClick={() => {
-                    setRemDraft(influ.pagamento);
-                    setEditing("rem");
-                  }}
-                >
-                  {rem ? "Editar" : "Definir"}
-                </QuietButton>
-              )
-            }
-            below={
-              editing === "rem" ? (
-                <div className="space-y-3">
-                  <PagamentoEditor value={remDraft} onChange={setRemDraft} parts="remuneracao" />
-                  <div className="flex justify-end gap-3">
-                    <QuietButton onClick={() => setEditing(null)}>Cancelar</QuietButton>
-                    <button
-                      type="button"
-                      onClick={saveRem}
-                      className="rounded-md bg-foreground px-2.5 py-1 text-xs font-medium text-background hover:opacity-90"
-                    >
-                      Salvar remuneração
-                    </button>
-                  </div>
-                </div>
-              ) : rem && rem.lines.length > 1 ? (
-                <ul className="space-y-0.5 text-xs">
+      {pending.length > 0 && (
+        <ul className="divide-y divide-border/60 border-t border-border/60">
+          {pending.map((x) => (
+            <li
+              key={x.key}
+              className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 py-2 text-sm"
+            >
+              <span className="min-w-0">
+                <span className="text-text-secondary">{x.label}</span>
+                <span className="text-text-secondary"> · </span>
+                <span className="text-foreground">{x.text}</span>
+              </span>
+              <span className="flex shrink-0 items-center gap-3">{x.actions}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* Detalhe do item aberto. */}
+      {open === "rem" && (
+        <div className="space-y-3 rounded-lg bg-muted/25 p-3">
+          {editing === "rem" ? (
+            <>
+              <PagamentoEditor value={remDraft} onChange={setRemDraft} parts="remuneracao" />
+              <div className="flex justify-end gap-3">
+                <QuietButton onClick={() => setEditing(null)}>Cancelar</QuietButton>
+                <button type="button" onClick={saveRem} className={solid}>
+                  Salvar remuneração
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              {rem ? (
+                <ul className="space-y-1 text-sm">
                   {rem.lines.map((l, i) => (
                     <li key={i} className="flex justify-between gap-3">
                       <span className="text-text-secondary">{l.label}</span>
-                      <span className="text-foreground">{l.value}</span>
+                      <span className="font-medium text-foreground">{l.value}</span>
                     </li>
                   ))}
                 </ul>
-              ) : undefined
-            }
-          >
-            {rem ? (
-              <>
-                <span className="font-medium">
-                  {rem.total != null ? money(rem.total) : "Sem valor em caixa"}
-                </span>
-                <span className="text-text-secondary"> · {rem.tipoLabel}</span>
-              </>
-            ) : (
-              <span className="text-text-secondary">Não definida</span>
-            )}
-          </FinanceRow>
-        )}
+              ) : (
+                <p className="text-sm text-text-secondary">Nenhuma remuneração definida.</p>
+              )}
+              <QuietButton onClick={startRem}>{rem ? "Editar remuneração" : "Definir"}</QuietButton>
+            </>
+          )}
+        </div>
+      )}
 
-        {showPagamento && (
-          <FinanceRow
-            label="Pagamento"
-            actions={
-              <>
-                {state.key === "pendente" && pag && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setPagamento(
-                          { ...pag, aprovacao: "aceito", data: pag.data || todayISO() },
-                          "aprovou a solicitação de pagamento",
-                        )
-                      }
-                      className="rounded-md bg-foreground px-2.5 py-1 text-xs font-semibold text-background hover:opacity-90"
-                    >
-                      Aprovar pagamento
-                    </button>
-                    <QuietButton
-                      onClick={() =>
-                        setPagamento(
-                          { ...pag, aprovacao: "recusado" },
-                          "recusou a solicitação de pagamento",
-                        )
-                      }
-                    >
-                      Recusar
-                    </QuietButton>
-                  </>
-                )}
-                {state.key === "recusado" && pag && (
-                  <QuietButton
-                    onClick={() =>
-                      setPagamento(
-                        { ...pag, aprovacao: "pendente" },
-                        "reabriu a solicitação de pagamento",
-                      )
-                    }
-                  >
-                    Reabrir solicitação
-                  </QuietButton>
-                )}
-                {(state.key === "agendado" || state.key === "vencido") && canFinanceiro && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      void navigate({ to: "/time", search: { section: "financeiro" as const } })
-                    }
-                    className="rounded-md bg-foreground px-2.5 py-1 text-xs font-semibold text-background hover:opacity-90"
-                  >
-                    Registrar pagamento →
-                  </button>
-                )}
-              </>
-            }
-            below={
-              pag && state.key !== "nao_iniciado" ? (
-                <div className="space-y-2">
-                  {state.key === "pendente" && (
-                    <p className="text-xs text-text-secondary">
-                      Solicitação de pagamento aguardando aprovação. Ao aprovar, o valor é lançado
-                      como despesa no Financeiro.
-                    </p>
-                  )}
-                  {(state.key === "agendado" || state.key === "vencido") && (
-                    <p className="text-xs text-text-secondary">
-                      Aprovado e lançado no Financeiro. O pagamento é confirmado lá.
-                    </p>
-                  )}
-                  {state.key === "cancelado" && (
-                    <p className="text-xs text-text-secondary">
-                      Lançamento cancelado no Financeiro.
-                    </p>
-                  )}
-                  {state.key !== "recusado" && state.key !== "pago" && (
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                      {dueOpen ? (
-                        <div className="w-44">
-                          <DateField
-                            value={pag.data ?? undefined}
-                            onChange={(v) => {
-                              setPagamento(
-                                { ...pag, data: v },
-                                v
-                                  ? `definiu o vencimento em ${formatIsoDate(v)}`
-                                  : "removeu o vencimento",
-                              );
-                              setDueOpen(false);
-                            }}
-                            className="text-xs"
-                          />
-                        </div>
-                      ) : (
-                        <QuietButton onClick={() => setDueOpen(true)}>
-                          {pag.data ? "Alterar vencimento" : "Definir vencimento"}
-                        </QuietButton>
-                      )}
-                      {pag.aprovacao === "aceito" && (
-                        <QuietButton
-                          onClick={() =>
-                            setPagamento(
-                              { ...pag, aprovacao: "pendente" },
-                              "voltou a solicitação de pagamento para pendente",
-                            )
-                          }
-                        >
-                          Voltar para pendente
-                        </QuietButton>
-                      )}
-                    </div>
-                  )}
-                  {pag.comprovanteUrl ? (
-                    <FileLine
-                      name={pag.comprovanteNome || "Comprovante"}
-                      hint="Comprovante de pagamento"
-                      onOpen={() => openFileUrl(pag.comprovanteUrl!)}
-                      onRemove={() =>
-                        setPagamento(
-                          { ...pag, comprovanteNome: undefined, comprovanteUrl: undefined },
-                          "removeu o comprovante de pagamento",
-                        )
-                      }
-                    />
-                  ) : (
-                    pag.aprovacao === "aceito" && (
-                      <BriefingAnexoUploadButton
-                        onUpload={(nome, url) =>
-                          setPagamento(
-                            { ...pag, comprovanteNome: nome, comprovanteUrl: url },
-                            "anexou o comprovante de pagamento",
-                          )
-                        }
-                      />
-                    )
-                  )}
-                </div>
-              ) : undefined
-            }
-          >
-            {state.key === "nao_iniciado" ? (
-              <span className="text-text-secondary">Defina a remuneração para iniciar</span>
-            ) : (
-              <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
+      {open === "pag" && (
+        <div className="space-y-2.5 rounded-lg bg-muted/25 p-3 text-sm">
+          {!pag || state.key === "nao_iniciado" ? (
+            <p className="text-text-secondary">Defina a remuneração para iniciar o pagamento.</p>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <PaymentStateBadge state={state.key} label={state.label} />
                 <span className="text-text-secondary">
-                  {[state.amount > 0 ? money(state.amount) : "", payTail]
+                  {[
+                    state.amount > 0 ? money(state.amount) : "",
+                    state.key === "pago"
+                      ? state.paidOn
+                        ? `pago em ${formatIsoDate(state.paidOn)}`
+                        : ""
+                      : state.due
+                        ? `vence ${formatIsoDate(state.due)}`
+                        : "sem vencimento",
+                  ]
                     .filter(Boolean)
                     .join(" · ")}
                 </span>
-              </span>
-            )}
-          </FinanceRow>
-        )}
-
-        {showBanco && (
-          <FinanceRow
-            label="Dados banc."
-            actions={
-              editing !== "bank" && (
-                <>
-                  {temBanco && (
-                    <QuietButton onClick={() => setShowBank((v) => !v)}>
-                      {showBank ? "Ocultar" : "Ver"}
+              </div>
+              {pag.aprovacao === "aceito" && state.key !== "pago" && (
+                <p className="text-xs text-text-secondary">
+                  Lançado no Financeiro — o pagamento é confirmado lá.
+                </p>
+              )}
+              {state.key !== "recusado" && state.key !== "pago" && (
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                  {dueOpen ? (
+                    <div className="w-44">
+                      <DateField
+                        value={pag.data ?? undefined}
+                        onChange={(v) => {
+                          setPagamento(
+                            { ...pag, data: v },
+                            v
+                              ? `definiu o vencimento em ${formatIsoDate(v)}`
+                              : "removeu o vencimento",
+                          );
+                          setDueOpen(false);
+                        }}
+                        className="text-xs"
+                      />
+                    </div>
+                  ) : (
+                    <QuietButton onClick={() => setDueOpen(true)}>
+                      {pag.data ? "Alterar vencimento" : "Definir vencimento"}
                     </QuietButton>
                   )}
-                  <QuietButton
-                    onClick={() => {
-                      setBankDraft(bank);
-                      setEditing("bank");
-                    }}
-                  >
-                    {temBanco ? "Editar" : "Cadastrar"}
-                  </QuietButton>
-                </>
-              )
-            }
-            below={
-              editing === "bank" ? (
-                <div className="space-y-3">
-                  <BankFields value={bankDraft} onChange={setBankDraft} compact />
-                  <div className="flex justify-end gap-3">
-                    <QuietButton onClick={() => setEditing(null)}>Cancelar</QuietButton>
-                    <button
-                      type="button"
-                      onClick={saveBank}
-                      className="rounded-md bg-foreground px-2.5 py-1 text-xs font-medium text-background hover:opacity-90"
+                  {pag.aprovacao === "aceito" && (
+                    <QuietButton
+                      onClick={() =>
+                        setPagamento(
+                          { ...pag, aprovacao: "pendente" },
+                          "voltou a solicitação de pagamento para pendente",
+                        )
+                      }
                     >
-                      Salvar dados
-                    </button>
-                  </div>
+                      Voltar para pendente
+                    </QuietButton>
+                  )}
                 </div>
-              ) : temBanco && showBank ? (
+              )}
+              {pag.comprovanteUrl ? (
+                <FileLine
+                  name={pag.comprovanteNome || "Comprovante"}
+                  hint="Comprovante de pagamento"
+                  onOpen={() => openFileUrl(pag.comprovanteUrl!)}
+                  onRemove={() =>
+                    setPagamento(
+                      { ...pag, comprovanteNome: undefined, comprovanteUrl: undefined },
+                      "removeu o comprovante de pagamento",
+                    )
+                  }
+                />
+              ) : (
+                pag.aprovacao === "aceito" && (
+                  <BriefingAnexoUploadButton
+                    onUpload={(nome, url) =>
+                      setPagamento(
+                        { ...pag, comprovanteNome: nome, comprovanteUrl: url },
+                        "anexou o comprovante de pagamento",
+                      )
+                    }
+                  />
+                )
+              )}
+            </>
+          )}
+          {executionItems.length > 0 && (
+            <div className="space-y-2 border-t border-border/60 pt-2">
+              <QuietButton onClick={() => setShowTimeline((v) => !v)}>
+                {showTimeline ? "Ocultar" : "Ver"} atividade financeira ({executionItems.length})
+              </QuietButton>
+              {showTimeline && <FinanceTimeline items={executionItems} />}
+            </div>
+          )}
+        </div>
+      )}
+
+      {open === "contrato" && (
+        <div className="rounded-lg bg-muted/25 p-3">
+          {contrato.present ? (
+            <FileLine
+              name={contrato.name}
+              hint="Contrato anexado"
+              onOpen={() => openFileUrl(influ.contrato!)}
+              onReplace={() => contratoRef.current?.click()}
+              onRemove={() =>
+                commit({ contrato: undefined, contratoNome: undefined }, "removeu o contrato")
+              }
+            />
+          ) : (
+            <p className="text-sm text-text-secondary">Contrato não cadastrado.</p>
+          )}
+          {fileError && <p className="mt-1.5 text-xs text-destructive">{fileError}</p>}
+        </div>
+      )}
+
+      {open === "bank" && (
+        <div className="space-y-3 rounded-lg bg-muted/25 p-3">
+          {editing === "bank" ? (
+            <>
+              <BankFields value={bankDraft} onChange={setBankDraft} compact />
+              <div className="flex justify-end gap-3">
+                <QuietButton onClick={() => setEditing(null)}>Cancelar</QuietButton>
+                <button type="button" onClick={saveBank} className={solid}>
+                  Salvar dados
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              {temBanco ? (
                 <dl className="space-y-1">
                   {bankItems.map((f) => (
-                    <div key={f.label} className="flex justify-between gap-4 text-xs">
+                    <div key={f.label} className="flex justify-between gap-4 text-sm">
                       <dt className="shrink-0 text-text-secondary">{f.label}</dt>
                       <dd className="min-w-0 break-all text-right font-medium text-foreground">
                         {f.value}
@@ -4736,52 +4858,14 @@ function FinanceiroContratoSection({
                     </div>
                   ))}
                 </dl>
-              ) : undefined
-            }
-          >
-            <span className={temBanco ? "block truncate" : "text-text-secondary"}>
-              {bankHeadline}
-            </span>
-          </FinanceRow>
-        )}
-
-        {showContrato && (
-          <FinanceRow
-            label="Contrato"
-            actions={
-              contrato.present ? (
-                <>
-                  <QuietButton onClick={() => openFileUrl(influ.contrato!)}>Abrir</QuietButton>
-                  <QuietButton onClick={() => contratoRef.current?.click()}>Substituir</QuietButton>
-                  <QuietButton
-                    onClick={() =>
-                      commit({ contrato: undefined, contratoNome: undefined }, "removeu o contrato")
-                    }
-                  >
-                    Remover
-                  </QuietButton>
-                </>
               ) : (
-                <QuietButton onClick={() => contratoRef.current?.click()}>
-                  {busy === "contrato" ? "Enviando..." : "Anexar contrato"}
-                </QuietButton>
-              )
-            }
-            below={fileError ? <p className="text-xs text-destructive">{fileError}</p> : undefined}
-          >
-            <span className={contrato.present ? "block truncate" : "text-text-secondary"}>
-              {contrato.present ? contrato.name : "Não cadastrado"}
-            </span>
-          </FinanceRow>
-        )}
-      </div>
-
-      {executionItems.length > 0 && (
-        <div className="space-y-2">
-          <QuietButton onClick={() => setShowTimeline((v) => !v)}>
-            {showTimeline ? "Ocultar" : "Ver"} atividade financeira ({executionItems.length})
-          </QuietButton>
-          {showTimeline && <FinanceTimeline items={executionItems} />}
+                <p className="text-sm text-text-secondary">Nenhum dado bancário cadastrado.</p>
+              )}
+              <QuietButton onClick={startBank}>
+                {temBanco ? "Editar dados" : "Cadastrar dados"}
+              </QuietButton>
+            </>
+          )}
         </div>
       )}
     </section>
@@ -4803,17 +4887,16 @@ function AtividadeRecente({
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, limit);
   return (
-    <section aria-label="Atividade" className="space-y-3">
+    <section aria-label="Atividade" className="space-y-2">
       <CockpitTitle action={<QuietButton onClick={onOpenActivity}>Ver tudo</QuietButton>}>
         Atividade
       </CockpitTitle>
       {recent.length === 0 ? (
-        <p className="text-sm text-text-secondary">Nenhuma atividade registrada ainda.</p>
+        <p className="text-sm text-text-secondary">Nenhuma atividade registrada</p>
       ) : (
-        <ul className="space-y-3 border-l border-border/60 pl-4">
+        <ul className="space-y-2">
           {recent.map((a) => (
             <li key={a.id} className="relative">
-              <span className="absolute -left-[19.5px] top-1.5 h-1.5 w-1.5 rounded-full bg-border" />
               <p className="text-[11px] tabular-nums text-text-secondary">
                 {formatActivityWhen(a.createdAt)}
               </p>
@@ -4888,6 +4971,7 @@ function WorkspaceDetailBody({
   const temMidia = !!influ.midiaKit && influ.midiaKit.length > 0;
 
   const [moreOpen, setMoreOpen] = useState(false);
+  const [checklistOpen, setChecklistOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!openMoreSignal) return;
@@ -4946,19 +5030,25 @@ function WorkspaceDetailBody({
       {/* 3. FEEDBACK DO CLIENTE — só existe quando há feedback. */}
       <ClientFeedbackBlock items={feedbacks} onOpen={onOpenEntrega} />
 
-      {/* 4. CONTATO | FINANCEIRO | PERFIL — duas colunas no desktop, uma no celular (contato →
-       * financeiro → perfil). */}
-      <div className="grid grid-cols-1 gap-x-8 gap-y-5 border-t border-border/60 pt-5 md:grid-cols-2 md:grid-rows-[auto_1fr]">
-        <div className="md:col-start-1">
-          <InfluencerContact
-            stacked
-            telefone={influ.telefone}
-            email={influ.email}
-            onSave={(patch) => onPatch(patch)}
-          />
-        </div>
+      {/* INFORMAÇÕES — uma área só: Dados → Financeiro → Contexto → Atividade, separados por
+       * divisores (sem cards). Ação > operação > contexto > administrativo. */}
+      <div className="divide-y divide-border/60 border-t border-border/60 [&>section]:py-4">
+        {/* 4. DADOS = contato + perfil, uma mesma área. */}
+        <section aria-label="Dados" className="space-y-2.5">
+          <CockpitTitle>Dados</CockpitTitle>
+          <div className="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2 md:divide-x md:divide-border/60 [&>*+*]:md:pl-8">
+            <InfluencerContact
+              telefone={influ.telefone}
+              email={influ.email}
+              onSave={(patch) => onPatch(patch)}
+            />
+            {temRedeConfig && <PerfilAudienciaSection influ={influ} has={has} onPatch={onPatch} />}
+          </div>
+        </section>
+
+        {/* 5. FINANCEIRO — uma unidade: faixa de estado + só as pendências. */}
         {temFinanceiro && (
-          <div ref={financeRef} className="md:col-start-2 md:row-span-2 md:row-start-1">
+          <div ref={financeRef}>
             <FinanceiroContratoSection
               influ={influ}
               has={has}
@@ -4969,23 +5059,10 @@ function WorkspaceDetailBody({
             />
           </div>
         )}
-        {temRedeConfig && (
-          <div className="md:col-start-1">
-            <PerfilAudienciaSection influ={influ} has={has} onPatch={onPatch} />
-          </div>
-        )}
-      </div>
 
-      {/* 5. CHECKLIST | CONTEXTO DA SELEÇÃO */}
-      <div className="grid grid-cols-1 gap-x-8 gap-y-5 border-t border-border/60 pt-5 md:grid-cols-2">
-        <ChecklistSection
-          checklist={influ.checklist ?? []}
-          onChange={onSetChecklist}
-          onApplyToAll={onApplyChecklistToAll}
-          bare
-        />
-        <section aria-label="Contexto da seleção" className="min-w-0 space-y-2">
-          <CockpitTitle>Contexto da seleção</CockpitTitle>
+        {/* 6. CONTEXTO DA CAMPANHA */}
+        <section aria-label="Contexto da campanha" className="space-y-3">
+          <CockpitTitle>Contexto da campanha</CockpitTitle>
           <InlineNote
             key={influ.id}
             label="Por que este influenciador?"
@@ -4993,67 +5070,84 @@ function WorkspaceDetailBody({
             surface={false}
             quote
             value={influ.justificativaTime ?? ""}
-            emptyText="Nenhum motivo registrado."
+            emptyText="Nenhum motivo registrado"
             addLabel="Adicionar motivo"
             placeholder="Ex.: Forte afinidade com o público da campanha, bom histórico de conteúdo e audiência concentrada na região..."
             onSave={(v) => onPatch({ justificativaTime: v || undefined })}
           />
-        </section>
-      </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <InlineNote
-          key={`${influ.id}-briefing`}
-          label="Briefing personalizado"
-          hint="O que este influenciador precisa saber/fazer nesta campanha — aparece no portal do cliente."
-          value={influ.briefingPersonalizado ?? ""}
-          emptyText="Sem briefing."
-          placeholder="Ex: focar no tom descontraído, evitar mencionar concorrentes..."
-          onSave={(v) => onPatch({ briefingPersonalizado: v || undefined })}
-          footer={
-            influ.briefingAnexoUrl ? (
-              <div className="flex items-center gap-2 pt-1 text-xs">
-                <a
-                  href={influ.briefingAnexoUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-2"
-                >
-                  <Paperclip className="h-3 w-3" />
-                  {influ.briefingAnexoNome || "Anexo"}
-                </a>
-                <button
-                  type="button"
-                  onClick={() =>
-                    onPatch({ briefingAnexoNome: undefined, briefingAnexoUrl: undefined })
-                  }
-                  className="text-muted-foreground hover:text-destructive"
-                  aria-label="Remover anexo"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            ) : (
-              <BriefingAnexoUploadButton
-                onUpload={(nome, url) =>
-                  onPatch({ briefingAnexoNome: nome, briefingAnexoUrl: url })
-                }
+          <div className="grid grid-cols-1 gap-x-8 gap-y-3 md:grid-cols-2 md:divide-x md:divide-border/60 [&>*+*]:md:pl-8">
+            <InlineNote
+              key={`${influ.id}-briefing`}
+              label="Briefing"
+              hint="O que este influenciador precisa saber/fazer nesta campanha — aparece no portal do cliente."
+              surface={false}
+              value={influ.briefingPersonalizado ?? ""}
+              emptyText="Sem briefing"
+              placeholder="Ex: focar no tom descontraído, evitar mencionar concorrentes..."
+              onSave={(v) => onPatch({ briefingPersonalizado: v || undefined })}
+              footer={
+                influ.briefingAnexoUrl ? (
+                  <div className="flex items-center gap-2 pt-1 text-xs">
+                    <a
+                      href={influ.briefingAnexoUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex min-w-0 items-center gap-1 font-medium text-foreground underline underline-offset-2"
+                    >
+                      <Paperclip className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{influ.briefingAnexoNome || "Anexo"}</span>
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onPatch({ briefingAnexoNome: undefined, briefingAnexoUrl: undefined })
+                      }
+                      className="text-muted-foreground hover:text-destructive"
+                      aria-label="Remover anexo"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <BriefingAnexoUploadButton
+                    onUpload={(nome, url) =>
+                      onPatch({ briefingAnexoNome: nome, briefingAnexoUrl: url })
+                    }
+                  />
+                )
+              }
+            />
+            <InlineNote
+              key={`${influ.id}-obs`}
+              label="Observações"
+              hint="Informações operacionais — visíveis pro time e pro cliente no portal (o cliente também escreve aqui)."
+              surface={false}
+              value={influ.observacoes ?? ""}
+              emptyText="Sem observações"
+              placeholder="Ex: prefere ser contatado por WhatsApp à tarde..."
+              onSave={(v) => onPatch({ observacoes: v || undefined })}
+            />
+          </div>
+          <div className="space-y-2">
+            <QuietButton onClick={() => setChecklistOpen((v) => !v)}>
+              Checklist
+              {(influ.checklist ?? []).length > 0
+                ? ` (${(influ.checklist ?? []).filter((c) => c.done).length}/${(influ.checklist ?? []).length})`
+                : ""}
+              {checklistOpen ? " ⌃" : " ⌄"}
+            </QuietButton>
+            {checklistOpen && (
+              <ChecklistSection
+                checklist={influ.checklist ?? []}
+                onChange={onSetChecklist}
+                onApplyToAll={onApplyChecklistToAll}
+                bare
               />
-            )
-          }
-        />
-        <InlineNote
-          key={`${influ.id}-obs`}
-          label="Observações compartilhadas"
-          hint="Informações operacionais — visíveis pro time e pro cliente no portal (o cliente também escreve aqui)."
-          value={influ.observacoes ?? ""}
-          emptyText="Sem observações."
-          placeholder="Ex: prefere ser contatado por WhatsApp à tarde..."
-          onSave={(v) => onPatch({ observacoes: v || undefined })}
-        />
-      </div>
+            )}
+          </div>
+        </section>
 
-      {/* 6. ATIVIDADE — secundária: no máximo 3 eventos. */}
-      <div className="border-t border-border/60 pt-5">
+        {/* 7. ATIVIDADE — só uma lista, no máximo 3 eventos. */}
         <AtividadeRecente
           activity={influ.activity ?? []}
           onOpenActivity={onOpenActivity}
@@ -5061,8 +5155,8 @@ function WorkspaceDetailBody({
         />
       </div>
 
-      {/* 7. MAIS INFORMAÇÕES — uma única área para o que se consulta raramente. */}
-      <div ref={moreRef} className="scroll-mt-4 border-t border-border/60 pt-5">
+      {/* Mais informações — o que se consulta raramente. */}
+      <div ref={moreRef} className="scroll-mt-4 border-t border-border/60 pt-4">
         <MoreInfo
           open={moreOpen}
           onToggle={() => setMoreOpen((v) => !v)}

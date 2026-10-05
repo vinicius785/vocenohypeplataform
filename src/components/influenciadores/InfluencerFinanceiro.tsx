@@ -1,31 +1,10 @@
-import type { ReactNode } from "react";
 import { FileText } from "lucide-react";
-import { CockpitTitle, QuietButton } from "./InfluencerCockpit";
+import { QuietButton } from "./InfluencerCockpit";
 import type { PaymentStateKey } from "@/lib/influencer-finance";
 import { cn } from "@/lib/utils";
 
 /** Peças de apresentação do financeiro do influenciador (só layout; as regras estão em
  * `lib/influencer-finance.ts` e os dados continuam nos campos que já existiam). */
-
-/** Sub-seção do financeiro: título pequeno, ação discreta à direita, conteúdo aberto. */
-export function FinanceBlock({
-  title,
-  action,
-  children,
-  className,
-}: {
-  title: string;
-  action?: ReactNode;
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <section aria-label={title} className={cn("space-y-2.5", className)}>
-      <CockpitTitle action={action}>{title}</CockpitTitle>
-      {children}
-    </section>
-  );
-}
 
 const STATE_STYLE: Record<PaymentStateKey, { badge: string; dot: string }> = {
   nao_iniciado: {
@@ -121,34 +100,5 @@ export function FinanceTimeline({
         </li>
       ))}
     </ul>
-  );
-}
-
-/** Linha do financeiro: rótulo à esquerda, valor/estado ao centro, ações discretas à direita. O
- * detalhe (editor, lista) abre logo abaixo, sem mudar de "seção". */
-export function FinanceRow({
-  label,
-  children,
-  actions,
-  below,
-}: {
-  label: string;
-  children: ReactNode;
-  actions?: ReactNode;
-  below?: ReactNode;
-}) {
-  return (
-    <div className="border-t border-border/60 py-2.5">
-      <div className="grid grid-cols-[5.25rem_minmax(0,1fr)] items-baseline gap-x-3">
-        <span className="text-xs text-text-secondary">{label}</span>
-        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
-          <div className="min-w-0 text-sm text-foreground">{children}</div>
-          {actions && (
-            <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1">{actions}</div>
-          )}
-        </div>
-      </div>
-      {below && <div className="mt-2.5">{below}</div>}
-    </div>
   );
 }
