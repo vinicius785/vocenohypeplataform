@@ -101,7 +101,7 @@ import {
   deleteReminder as deleteReminderServerFn,
   type ReminderPriority,
 } from "@/lib/reminders.functions";
-import { rowToReminder, pendingReminders } from "@/lib/reminders";
+import { rowToReminder, pendingReminders, type Reminder } from "@/lib/reminders";
 import { RemindersCard } from "@/components/inicio/RemindersCard";
 import { ReminderFormDialog } from "@/components/inicio/ReminderFormDialog";
 import { RemindersFullView } from "@/components/inicio/RemindersFullView";
@@ -728,6 +728,8 @@ export function InicioDashboard() {
   // Lembretes — React Query + server functions (`reminders.functions.ts`),
   // RLS garante que só os próprios lembretes de quem está logado aparecem
   // aqui, nunca precisa filtrar por usuário no cliente.
+  const [remindersFullViewOpen, setRemindersFullViewOpen] = useState(false);
+  const [editingReminder, setEditingReminder] = useState<Reminder | null>(null);
   const listRemindersFn = useServerFn(listReminders);
   const createReminderFn = useServerFn(createReminderServerFn);
   const updateReminderFn = useServerFn(updateReminderServerFn);
@@ -735,12 +737,19 @@ export function InicioDashboard() {
   const reopenReminderFn = useServerFn(reopenReminderServerFn);
   const deleteReminderFn = useServerFn(deleteReminderServerFn);
   const queryClient = useQueryClient();
+  // A Home lê só os PENDENTES (sem polling: atualiza por mutação/foco). O histórico completo,
+  // com concluídos, só é buscado quando a visão "Ver todos" está aberta.
   const { data: reminderRows = [] } = useQuery({
-    queryKey: ["personal-reminders"],
-    queryFn: () => listRemindersFn(),
-    refetchInterval: 30000,
+    queryKey: ["personal-reminders", "pendentes"],
+    queryFn: () => listRemindersFn({ data: { scope: "pendentes" } }),
   });
   const reminders = useMemo(() => reminderRows.map(rowToReminder), [reminderRows]);
+  const { data: allReminderRows = [] } = useQuery({
+    queryKey: ["personal-reminders", "todos"],
+    queryFn: () => listRemindersFn({ data: { scope: "todos" } }),
+    enabled: remindersFullViewOpen,
+  });
+  const allReminders = useMemo(() => allReminderRows.map(rowToReminder), [allReminderRows]);
   const invalidateReminders = () =>
     queryClient.invalidateQueries({ queryKey: ["personal-reminders"] });
   const createReminderMutation = useMutation({
@@ -775,7 +784,6 @@ export function InicioDashboard() {
     onSuccess: invalidateReminders,
   });
   const [reminderFormOpen, setReminderFormOpen] = useState(false);
-  const [remindersFullViewOpen, setRemindersFullViewOpen] = useState(false);
 
   const openTask = (t: Pick<DashTask, "id" | "projectId" | "campanhaId" | "parentId">) => {
     // O deep-link (`?taskId=`) já resolve subtarefa (procura dentro de
@@ -1200,6 +1208,7 @@ export function InicioDashboard() {
               reminders={pendingReminders(reminders)}
               onCreate={() => setReminderFormOpen(true)}
               onComplete={(id) => completeReminderMutation.mutate(id)}
+              onEdit={setEditingReminder}
               onViewAll={() => setRemindersFullViewOpen(true)}
             />
           )}
@@ -1215,11 +1224,21 @@ export function InicioDashboard() {
           }}
         />
       )}
+      {editingReminder && (
+        <ReminderFormDialog
+          open={!!editingReminder}
+          onOpenChange={(v) => !v && setEditingReminder(null)}
+          initial={editingReminder}
+          onSubmit={async (input) => {
+            await updateReminderMutation.mutateAsync({ ...input, id: editingReminder.id });
+          }}
+        />
+      )}
       {remindersFullViewOpen && (
         <RemindersFullView
           open={remindersFullViewOpen}
           onOpenChange={setRemindersFullViewOpen}
-          reminders={reminders}
+          reminders={allReminders}
           onCreate={() => {
             setRemindersFullViewOpen(false);
             setReminderFormOpen(true);

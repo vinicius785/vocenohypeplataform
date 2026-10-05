@@ -9,11 +9,12 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import type { Reminder } from "@/lib/reminders";
 import type { ReminderPriority } from "@/lib/reminders.functions";
 
-const inputCls =
-  "h-9 w-full rounded-md border border-border bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring";
 const labelCls = "block space-y-1 text-xs font-medium text-text-secondary";
 
 export type ReminderFormInput = {
@@ -23,13 +24,19 @@ export type ReminderFormInput = {
   priority: ReminderPriority;
 };
 
+const pad = (n: number) => String(n).padStart(2, "0");
+// Data/hora locais — o ISO é gravado a partir da hora local digitada, então a edição precisa
+// ler de volta em hora local (em UTC a hora mostrada deslocava ao reabrir).
 function isoToDateInput(iso?: string): string {
   if (!iso) return "";
-  return new Date(iso).toISOString().slice(0, 10);
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 function isoToTimeInput(iso?: string): string {
   if (!iso) return "";
-  return new Date(iso).toISOString().slice(11, 16);
+  const d = new Date(iso);
+  const t = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return t === "00:00" ? "" : t;
 }
 
 /**
@@ -88,11 +95,10 @@ export function ReminderFormDialog({
         <div className="space-y-3 py-1">
           <label className={labelCls}>
             <span>Título *</span>
-            <input
+            <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="O que você precisa lembrar?"
-              className={inputCls}
               maxLength={200}
               autoFocus
             />
@@ -100,52 +106,40 @@ export function ReminderFormDialog({
           <div className="grid grid-cols-2 gap-2">
             <label className={labelCls}>
               <span>Data</span>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className={inputCls}
-              />
+              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </label>
             <label className={labelCls}>
               <span>Horário</span>
-              <input
+              <Input
                 type="time"
                 value={time}
                 onChange={(e) => setTime(e.target.value)}
                 disabled={!date}
-                className={`${inputCls} disabled:opacity-50`}
               />
             </label>
           </div>
           <label className={labelCls}>
             <span>Observação</span>
-            <textarea
+            <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className={`${inputCls} h-16 resize-none py-2`}
+              className="h-16 resize-none"
               maxLength={2000}
             />
           </label>
-          <label className={labelCls}>
-            <span>Prioridade</span>
-            <div className="flex gap-1">
-              {(["normal", "importante"] as ReminderPriority[]).map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setPriority(p)}
-                  className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
-                    priority === p
-                      ? "border-foreground bg-foreground text-background"
-                      : "border-border text-muted-foreground hover:bg-muted"
-                  }`}
-                >
-                  {p === "normal" ? "Normal" : "Importante"}
-                </button>
-              ))}
-            </div>
-          </label>
+          <div className="space-y-1">
+            <span className="block text-xs font-medium text-text-secondary">Prioridade</span>
+            <SegmentedControl
+              aria-label="Prioridade do lembrete"
+              size="sm"
+              value={priority}
+              onChange={setPriority}
+              options={[
+                { value: "normal" as ReminderPriority, label: "Normal" },
+                { value: "importante" as ReminderPriority, label: "Importante" },
+              ]}
+            />
+          </div>
           {error && <p className="text-xs text-danger">{error}</p>}
         </div>
 

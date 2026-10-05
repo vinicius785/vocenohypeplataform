@@ -108,3 +108,56 @@ export function groupReminders(list: Reminder[]): ReminderGroups {
   groups.concluidos.sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? ""));
   return groups;
 }
+
+/* ---------------- Rótulos de data (Home) ---------------- */
+
+/** Lembrete "só com data" é gravado à meia-noite LOCAL (00:00 em Brasília = 03:00Z): sem horário. */
+function hasTimeBrasilia(iso: string): boolean {
+  return (
+    new Date(iso).toLocaleTimeString("pt-BR", {
+      timeZone: BRASILIA_TZ,
+      hour: "2-digit",
+      minute: "2-digit",
+    }) !== "00:00"
+  );
+}
+
+/** "Hoje · 18:00", "Amanhã · 10:00", "07 out." — o horário só quando foi definido. */
+export function fmtDue(iso: string): string {
+  const d = new Date(iso);
+  const hasTime = hasTimeBrasilia(iso);
+  const time = d.toLocaleTimeString("pt-BR", {
+    timeZone: BRASILIA_TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const today = todayIsoInBrasilia();
+  const tomorrow = new Date(`${today}T12:00:00-03:00`);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const key = dateKeyBrasilia(iso);
+  const label =
+    key === today
+      ? "Hoje"
+      : key === tomorrow.toLocaleDateString("en-CA", { timeZone: BRASILIA_TZ })
+        ? "Amanhã"
+        : d
+            .toLocaleDateString("pt-BR", { timeZone: BRASILIA_TZ, day: "2-digit", month: "short" })
+            .replace(" de ", " ");
+  return hasTime ? `${label} · ${time}` : label;
+}
+
+/** "Atrasado · 2h" (venceu hoje, com horário) ou "Atrasado · 03/10". */
+export function fmtOverdue(iso: string, now = new Date()): string {
+  const d = new Date(iso);
+  const hasTime = hasTimeBrasilia(iso);
+  if (hasTime && dateKeyBrasilia(iso) === todayIsoInBrasilia()) {
+    const mins = Math.max(1, Math.round((now.getTime() - d.getTime()) / 60000));
+    return `Atrasado · ${mins < 60 ? `${mins}min` : `${Math.floor(mins / 60)}h`}`;
+  }
+  const short = d.toLocaleDateString("pt-BR", {
+    timeZone: BRASILIA_TZ,
+    day: "2-digit",
+    month: "2-digit",
+  });
+  return `Atrasado · ${short}`;
+}

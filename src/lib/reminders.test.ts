@@ -115,3 +115,20 @@ describe("todayIsoInBrasilia sanity (usado por reminderBucket)", () => {
     expect(todayIsoInBrasilia()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 });
+
+import { fmtDue, fmtOverdue } from "./reminders";
+
+describe("rótulos de data dos lembretes", () => {
+  it("atrasado: horas quando venceu hoje com horário; data quando é de outro dia", () => {
+    const iso = new Date(Date.now() - 2 * 3600_000).toISOString();
+    const hoje = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+    const dia = new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+    if (dia === hoje) expect(fmtOverdue(iso)).toBe("Atrasado · 2h");
+    expect(fmtOverdue("2020-10-03T15:00:00.000Z")).toBe("Atrasado · 03/10");
+  });
+  it("próximos: dia curto e horário só quando definido", () => {
+    // Só data = meia-noite local (03:00Z em Brasília): sem horário.
+    expect(fmtDue("2099-10-07T03:00:00.000Z")).toBe("07 out.");
+    expect(fmtDue("2099-10-07T21:00:00.000Z")).toBe("07 out. · 18:00");
+  });
+});

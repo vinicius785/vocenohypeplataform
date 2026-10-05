@@ -26,16 +26,25 @@ export type ReminderRow = {
   updated_at: string;
 };
 
+/** `pendentes` (padrão da Home): só o que ainda não foi concluído, com teto — a Home nunca
+ * precisa do histórico de concluídos. `todos`: a visão completa ("Ver todos"). */
+const listScopeSchema = z
+  .object({ scope: z.enum(["pendentes", "todos"]).default("todos") })
+  .default({ scope: "todos" });
+
 export const listReminders = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { data, error } = await context.supabase
+  .inputValidator((input: unknown) => listScopeSchema.parse(input))
+  .handler(async ({ context, data }) => {
+    let query = context.supabase
       .from("personal_reminders")
       .select("*")
       .order("due_at", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: true });
+    if (data.scope === "pendentes") query = query.is("completed_at", null).limit(200);
+    const { data: rows, error } = await query;
     if (error) throw new Error(error.message);
-    return data as unknown as ReminderRow[];
+    return rows as unknown as ReminderRow[];
   });
 
 const createReminderSchema = z.object({
