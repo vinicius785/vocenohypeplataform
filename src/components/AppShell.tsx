@@ -77,14 +77,13 @@ import {
   summarizeUnread,
   type ChatMessage,
   markRead,
-  playNotifSound,
-  primeNotifSound,
 } from "@/lib/chat-store";
 
 import { isDemoCampanhaId, useClientes, type Cliente } from "@/lib/clientes-store";
 import { routeForConvoId } from "@/components/chat-v2/chat-v2-utils";
 import { notificationSummary } from "@/lib/voice-messages";
 import { type NotifPrefs, loadNotifPrefs, subscribeNotifPrefs } from "@/lib/notif-prefs";
+import { playSound, primeSounds, setSoundUserResolver } from "@/lib/sound/sound-manager";
 import {
   loadMeetings,
   onMeetingsChange,
@@ -195,6 +194,9 @@ function useHasOverdueDespesas(): boolean {
   );
 }
 
+// Preferências de som são por usuário: o gerenciador pergunta quem está logado.
+setSoundUserResolver(() => getMe().id);
+
 const SEEN_LEADS_KEY = "notif:seenLeadIds";
 function readSeenLeadIds(): Set<string> {
   try {
@@ -250,7 +252,7 @@ function useLeadNotifications() {
         const seen = readSeenLeadIds();
         if (seen.has(row.id)) return; // já visto (outra aba já processou)
         setUnseenCount((n) => n + 1);
-        playNotifSound();
+        playSound("commercial");
       })
       .subscribe();
 
@@ -976,7 +978,7 @@ function useIncomingMessageNotifier() {
   useEffect(() => {
     // Destrava o áudio no primeiro gesto (navegadores bloqueiam antes disso).
     const unlock = () => {
-      primeNotifSound();
+      primeSounds();
       window.removeEventListener("pointerdown", unlock);
       window.removeEventListener("keydown", unlock);
     };
@@ -1013,7 +1015,7 @@ function useIncomingMessageNotifier() {
       const single = all.length === 1;
       const place = convoPlaceLabel(latest.convoId);
 
-      playNotifSound();
+      playSound("chat");
 
       if (isTabVisible()) {
         void import("@/components/notifications/NotificationToast").then(

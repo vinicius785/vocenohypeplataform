@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Bell } from "lucide-react";
+import { Bell, Play } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,6 +13,15 @@ import {
   pushSubscriptionToKeys,
 } from "@/lib/push-notifications";
 import { SettingsCard, SettingsRow, SettingsSectionHeader } from "./settings-shared";
+import { SOUND_HINT, SOUND_KINDS, SOUND_LABEL } from "@/lib/sound/sound-manifest";
+import {
+  loadSoundPrefs,
+  saveSoundPrefs,
+  subscribeSoundPrefs,
+  type SoundPrefs,
+} from "@/lib/sound/sound-prefs";
+import { testSound } from "@/lib/sound/sound-manager";
+import { getMe } from "@/lib/chat-store";
 
 const ITEMS: { key: keyof NotifPrefs; label: string; hint: string; adminOnly?: boolean }[] = [
   {
@@ -72,6 +81,8 @@ export function PreferenciasSection() {
       />
 
       <PushNotificationsCard />
+
+      <SoundsCard />
 
       <SettingsCard
         title="Notificações na plataforma"
@@ -195,6 +206,86 @@ function PushNotificationsCard() {
         </p>
       )}
       {error && <p className="text-xs text-destructive">{error}</p>}
+    </SettingsCard>
+  );
+}
+
+/** Sons da plataforma — complemento das notificações visuais (que continuam sempre existindo).
+ * Preferências por usuário; cada alteração vale na hora. */
+function SoundsCard() {
+  const userId = getMe().id;
+  const [prefs, setPrefs] = useState<SoundPrefs>(() => loadSoundPrefs(userId));
+  useEffect(() => subscribeSoundPrefs(() => setPrefs(loadSoundPrefs(userId))), [userId]);
+
+  const update = (patch: Partial<SoundPrefs>) => {
+    const next = { ...prefs, ...patch };
+    setPrefs(next);
+    saveSoundPrefs(userId, next);
+  };
+
+  return (
+    <SettingsCard
+      title="Sons"
+      description="Um som curto para cada tipo de aviso. O aviso visual continua aparecendo mesmo com o som desligado."
+    >
+      <SettingsRow
+        title="Som da plataforma"
+        description="Desligado, nenhum som de notificação toca."
+        control={
+          <Switch
+            checked={prefs.enabled}
+            onCheckedChange={(v) => update({ enabled: v })}
+            aria-label="Som da plataforma"
+          />
+        }
+      />
+      <SettingsRow
+        title="Volume"
+        control={
+          <div className="flex items-center gap-3">
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={Math.round(prefs.volume * 100)}
+              onChange={(e) => update({ volume: Number(e.target.value) / 100 })}
+              disabled={!prefs.enabled}
+              aria-label="Volume dos sons"
+              className="h-1.5 w-32 cursor-pointer accent-brand disabled:cursor-not-allowed disabled:opacity-50"
+            />
+            <span className="w-9 text-right text-xs tabular-nums text-text-secondary">
+              {Math.round(prefs.volume * 100)}%
+            </span>
+          </div>
+        }
+      />
+      {SOUND_KINDS.map((kind) => (
+        <SettingsRow
+          key={kind}
+          title={SOUND_LABEL[kind]}
+          description={SOUND_HINT[kind]}
+          control={
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void testSound(kind)}
+                disabled={!prefs.enabled}
+                aria-label={`Testar som de ${SOUND_LABEL[kind]}`}
+              >
+                <Play className="h-3 w-3" /> Testar
+              </Button>
+              <Switch
+                checked={prefs[kind]}
+                onCheckedChange={(v) => update({ [kind]: v } as Partial<SoundPrefs>)}
+                disabled={!prefs.enabled}
+                aria-label={`Som de ${SOUND_LABEL[kind]}`}
+              />
+            </div>
+          }
+        />
+      ))}
     </SettingsCard>
   );
 }

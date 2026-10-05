@@ -9,7 +9,8 @@ import {
   declineMeetingFor,
   type Meeting,
 } from "@/lib/reunioes-store";
-import { getMe, playMeetingReminderSound } from "@/lib/chat-store";
+import { getMe } from "@/lib/chat-store";
+import { playSound } from "@/lib/sound/sound-manager";
 import { peopleFor, joinUrlFor } from "@/components/meetings/MeetingLine";
 import { loadTeam, type TeamMember } from "@/components/meetings/team";
 import {
@@ -96,7 +97,7 @@ export function MeetingReminderToast() {
         setQueue((q) =>
           [...q, ...toShow].sort((a, b) => meetingStartTime(a) - meetingStartTime(b)),
         );
-        playMeetingReminderSound();
+        playSound("meeting");
       }
       // Auto-dispensa reuniões antigas demais da fila — não some da tela
       // por causa do dedupe (isso é permanente), só não fica presa lá.
