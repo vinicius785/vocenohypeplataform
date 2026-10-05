@@ -1,25 +1,25 @@
 {
-  "version": "1.327.0",
+  "version": "1.328.0",
   "releases": [
     {
-      "version": "1.327.0",
-      "summary": "Detalhe da entrega: ajustes pedidos pelo cliente agora têm destaque na medida certa.",
+      "version": "1.328.0",
+      "summary": "Detalhe do influenciador na campanha reorganizado como um cockpit operacional.",
       "modules": [
         {
           "name": "CAMPANHAS",
-          "tagline": "Detalhe da entrega",
+          "tagline": "Detalhe do influenciador",
           "items": [
             {
-              "title": "Status e feedback em destaque",
-              "description": "O status vira um badge com leve tom de atenção, e o pedido do cliente fica num bloco discreto logo abaixo, com quem pediu, quando e em qual etapa."
+              "title": "Resumo e próxima ação",
+              "description": "Uma faixa com entregas, publicadas, pendentes e próximo prazo, e uma caixa de Próxima ação que mostra o que a equipe precisa fazer agora."
             },
             {
-              "title": "Próxima ação e trilha",
-              "description": "A ação principal vem logo depois do feedback, com a trilha Ajustes solicitados, Em ajustes e Aguardando aprovação mostrando em que ponto você está."
+              "title": "Entregas em unidades",
+              "description": "Cada entrega vira uma pequena unidade com o estado atual, o prazo e a ação contextual, em duas colunas quando há espaço."
             },
             {
-              "title": "Menos peso no resto",
-              "description": "Prazos recolhidos, histórico em linha do tempo e arquivos com Abrir, Substituir e Remover."
+              "title": "Seções por assunto",
+              "description": "Contexto da seleção, perfil e audiência, contato, financeiro e atividade ficam em blocos próprios, em leitura, com edição só quando você pede."
             }
           ]
         }
