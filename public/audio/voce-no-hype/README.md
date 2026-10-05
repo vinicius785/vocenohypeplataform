@@ -26,3 +26,5 @@ cp <repo>/scripts/sound-branding/generate-sounds.mjs . && bun run generate-sound
 Ajuste fino de volume relativo entre os sons, se necessário, em `src/lib/sound/sound-manifest.ts` (`gain`).
 Para trocar por arquivos produzidos por um estúdio, basta substituir os três MP3 mantendo os nomes
 (44,1 kHz, 96–128 kbps, ≈ −18 LUFS integrado, pico ≤ −1 dBTP).
+
+> Ao trocar qualquer MP3, suba `SOUND_ASSETS_VERSION` em `src/lib/sound/sound-manifest.ts` — a versão vai na URL e evita que o navegador/CDN sirva o arquivo antigo em cache. Quem já estava com a aba aberta precisa recarregar (os sons ficam decodificados na memória da sessão).

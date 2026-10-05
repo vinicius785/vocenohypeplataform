@@ -54,6 +54,6 @@ describe("manifest", () => {
     expect(SOUND_KINDS).toEqual(["chat", "commercial", "meeting"]);
     const srcs = SOUND_KINDS.map((k) => SOUND_MANIFEST[k].src);
     expect(new Set(srcs).size).toBe(3);
-    for (const s of srcs) expect(s).toMatch(/^\/audio\/voce-no-hype\/.+-notification\.mp3$/);
+    for (const s of srcs) expect(s).toMatch(/^\/audio\/voce-no-hype\/.+-notification\.mp3\?v=\w+$/);
   });
 });

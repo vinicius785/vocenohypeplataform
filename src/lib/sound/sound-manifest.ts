@@ -7,6 +7,11 @@
  */
 export type SoundKind = "chat" | "commercial" | "meeting";
 
+/** Versão dos arquivos de áudio: entra na URL (`?v=`) para o navegador/CDN nunca servir uma versão
+ * antiga em cache quando os sons forem refeitos. SUBIR este valor sempre que trocar um MP3. */
+export const SOUND_ASSETS_VERSION = "4";
+const asset = (name: string) => `/audio/voce-no-hype/${name}.mp3?v=${SOUND_ASSETS_VERSION}`;
+
 export const SOUND_KINDS: SoundKind[] = ["chat", "commercial", "meeting"];
 
 export const SOUND_LABEL: Record<SoundKind, string> = {
@@ -34,20 +39,20 @@ export type SoundSpec = {
 
 export const SOUND_MANIFEST: Record<SoundKind, SoundSpec> = {
   chat: {
-    src: "/audio/voce-no-hype/chat-notification.mp3",
+    src: asset("chat-notification"),
     legacy: { kind: "file", src: "/sounds/notification.mp3" },
     gain: 1,
     // Mensagens chegam em rajada: um toque por janela, nunca dez seguidos.
     cooldownMs: 2500,
   },
   commercial: {
-    src: "/audio/voce-no-hype/commercial-notification.mp3",
+    src: asset("commercial-notification"),
     legacy: { kind: "file", src: "/sounds/notification.mp3" },
     gain: 1,
     cooldownMs: 1500,
   },
   meeting: {
-    src: "/audio/voce-no-hype/meeting-notification.mp3",
+    src: asset("meeting-notification"),
     legacy: { kind: "meeting-triad" },
     gain: 1,
     // Lembrete de reunião é pontual e importante: nunca é suprimido.
