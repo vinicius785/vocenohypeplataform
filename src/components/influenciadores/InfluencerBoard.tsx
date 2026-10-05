@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { barWidth } from "@/lib/audience-distribution";
-import { cicloMesLabel, participationMonth } from "@/lib/ciclo-mes";
 import { ensureCampaignCycleId } from "@/lib/campaign-cycles";
 import {
   AlertTriangle,
@@ -95,7 +94,7 @@ import {
   sanitizeHandleForDisplay,
 } from "@/lib/social-profiles";
 import type { CustomQuestionType } from "@/lib/inscricao-page";
-import { InfluencerContact } from "./InfluencerContact";
+import { HeaderContact } from "./InfluencerContact";
 import { ClientFeedbackBlock, EntregasRows, MoreInfo } from "./InfluencerPanels";
 import { clientFeedbacks, nextBestAction, type NextAction } from "@/lib/influencer-next-action";
 import { CockpitTitle, InlineNote, QuietButton } from "./InfluencerCockpit";
@@ -1298,10 +1297,8 @@ export function InfluencerBoard({
 
       {viewing && (
         <InfluencerWorkspaceSheet
-          contextoNome={exportName}
           influ={viewing}
           has={has}
-          showCicloMes={defaultCicloMes !== undefined}
           onOpenChange={(o) => !o && setViewing(null)}
           onRemove={async () => {
             if (await removeInflu(viewing.id)) setViewing(null);
@@ -1602,15 +1599,12 @@ function ChecklistSection({
   checklist,
   onChange,
   onApplyToAll,
-  bare = false,
 }: {
   checklist: ChecklistItem[];
   onChange: (next: ChecklistItem[]) => void;
   onApplyToAll: (checklist: ChecklistItem[]) => void;
-  /** Sem a moldura de card (borda/fundo/padding) — pra viver direto no
-   * fluxo do workspace lateral, que evita card-dentro-de-card. */
-  bare?: boolean;
 }) {
+  const [adding, setAdding] = useState(false);
   const [newText, setNewText] = useState("");
   const { confirm, confirmDialog } = useConfirm();
 
@@ -1632,29 +1626,30 @@ function ChecklistSection({
   const doneCount = checklist.filter((c) => c.done).length;
 
   return (
-    <div
-      className={bare ? "space-y-2" : "space-y-2 rounded-lg border border-border bg-background p-3"}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <p className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-          <CheckCircle2 className="h-3.5 w-3.5" />
-          Checklist
-          {checklist.length > 0 && (
-            <span className="font-normal text-muted-foreground">
-              ({doneCount}/{checklist.length})
-            </span>
-          )}
-        </p>
+    <section aria-label="Checklist" className="space-y-1.5">
+      <CockpitTitle
+        action={
+          adding ? (
+            <QuietButton
+              onClick={() => {
+                addItem();
+                setAdding(false);
+              }}
+            >
+              Concluir
+            </QuietButton>
+          ) : (
+            <QuietButton onClick={() => setAdding(true)}>Adicionar item</QuietButton>
+          )
+        }
+      >
+        Checklist
         {checklist.length > 0 && (
-          <button
-            type="button"
-            onClick={() => void applyToAll()}
-            className="text-[11px] font-medium text-muted-foreground hover:text-foreground"
-          >
-            Aplicar a todos os influenciadores
-          </button>
+          <span className="ml-1.5 font-normal normal-case tracking-normal">
+            · {doneCount}/{checklist.length}
+          </span>
         )}
-      </div>
+      </CockpitTitle>
 
       {checklist.length > 0 && (
         <ul className="space-y-1">
@@ -1675,8 +1670,8 @@ function ChecklistSection({
                     checklist.map((c) => (c.id === item.id ? { ...c, text: e.target.value } : c)),
                   )
                 }
-                className={`min-w-0 flex-1 bg-transparent text-xs outline-none ${
-                  item.done ? "text-muted-foreground line-through" : "text-foreground"
+                className={`min-w-0 flex-1 bg-transparent text-sm outline-none ${
+                  item.done ? "text-text-secondary line-through" : "text-foreground"
                 }`}
               />
               <button
@@ -1692,32 +1687,32 @@ function ChecklistSection({
         </ul>
       )}
 
-      <div
-        className={`flex items-center gap-2 ${checklist.length > 0 ? "border-t border-border pt-2" : ""}`}
-      >
-        <input
-          value={newText}
-          onChange={(e) => setNewText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              addItem();
-            }
-          }}
-          placeholder="Adicionar item..."
-          className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-ring"
-        />
-        <button
-          type="button"
-          onClick={addItem}
-          disabled={!newText.trim()}
-          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-dashed border-border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Plus className="h-3 w-3" /> Adicionar
-        </button>
-      </div>
+      {adding && (
+        <div className="flex items-center gap-3">
+          <input
+            autoFocus
+            value={newText}
+            onChange={(e) => setNewText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addItem();
+              }
+              if (e.key === "Escape") {
+                setNewText("");
+                setAdding(false);
+              }
+            }}
+            placeholder="Novo item..."
+            className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+          />
+          {checklist.length > 0 && (
+            <QuietButton onClick={() => void applyToAll()}>Aplicar a todos</QuietButton>
+          )}
+        </div>
+      )}
       {confirmDialog}
-    </div>
+    </section>
   );
 }
 
@@ -2980,7 +2975,6 @@ type InfluWorkspaceView = "detail" | "entrega" | "activity";
 function InfluencerWorkspaceSheet({
   influ,
   has,
-  showCicloMes,
   onOpenChange,
   onRemove,
   onSetStatus,
@@ -2993,14 +2987,10 @@ function InfluencerWorkspaceSheet({
   onSendToClient,
   nps,
   campanhaId,
-  contextoNome,
 }: {
   campanhaId?: string;
-  /** Nome da campanha/projeto dona do board (linha de contexto do cabeçalho). */
-  contextoNome?: string;
   influ: Influ;
   has: (k: InfluencerFieldKey) => boolean;
-  showCicloMes?: boolean;
   onOpenChange: (open: boolean) => void;
   onRemove: () => void;
   onSetStatus: (status: InfluStatus) => void;
@@ -3147,7 +3137,6 @@ function InfluencerWorkspaceSheet({
           <WorkspaceDetailHeader
             influ={influ}
             has={has}
-            showCicloMes={showCicloMes}
             editingHeader={editingHeader}
             draft={draft}
             setDraft={setDraft}
@@ -3163,7 +3152,6 @@ function InfluencerWorkspaceSheet({
             onOpenActivity={openActivity}
             onRemove={onRemove}
             nps={nps}
-            contextoNome={contextoNome}
             onViewInscricao={() => setMoreSignal((n) => n + 1)}
           />
         )}
@@ -3286,7 +3274,6 @@ function InfluencerWorkspaceSheet({
 function WorkspaceDetailHeader({
   influ,
   has,
-  showCicloMes,
   editingHeader,
   draft,
   setDraft,
@@ -3302,14 +3289,11 @@ function WorkspaceDetailHeader({
   onOpenActivity,
   onRemove,
   nps,
-  contextoNome,
   onViewInscricao,
 }: {
   influ: Influ;
-  contextoNome?: string;
   onViewInscricao: () => void;
   has: (k: InfluencerFieldKey) => boolean;
-  showCicloMes?: boolean;
   nps?: InfluNpsBoardProp;
   editingHeader: boolean;
   draft: { nome: string; nicho: string; telefone: string; email: string };
@@ -3455,16 +3439,7 @@ function WorkspaceDetailHeader({
                     </span>
                   ))}
               </p>
-              {(() => {
-                const mes = showCicloMes ? cicloMesLabel(participationMonth(influ)) : "";
-                const formatos = Array.from(
-                  new Set(influ.entregas.map((e) => e.tipo).filter(Boolean)),
-                ).slice(0, 2);
-                const parts = [contextoNome, mes, formatos.join(" + ")].filter(Boolean);
-                return parts.length > 0 ? (
-                  <p className="mt-0.5 truncate text-xs text-text-secondary">{parts.join(" · ")}</p>
-                ) : null;
-              })()}
+              <HeaderContact telefone={influ.telefone} email={influ.email} onAdd={startEditing} />
             </>
           )}
         </div>
@@ -4221,13 +4196,16 @@ function PerfilAudienciaSection({
       ].filter((x) => x.v)
     : [];
   return (
-    <section aria-label="Perfil e audiência" className="min-w-0 space-y-1.5">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-xs font-medium text-text-secondary">Perfil e audiência</h3>
-        <QuietButton onClick={() => setDialog("editar")}>
-          {redes.length === 0 ? "Adicionar rede" : "Editar"}
-        </QuietButton>
-      </div>
+    <section aria-label="Perfil e audiência" className="min-w-0 space-y-2">
+      <CockpitTitle
+        action={
+          <QuietButton onClick={() => setDialog("editar")}>
+            {redes.length === 0 ? "Adicionar rede" : "Editar"}
+          </QuietButton>
+        }
+      >
+        Perfil e audiência
+      </CockpitTitle>
 
       {rede ? (
         <>
@@ -4504,7 +4482,7 @@ function FinanceiroContratoSection({
     "rounded-md bg-foreground px-2.5 py-1 text-xs font-semibold text-background hover:opacity-90";
   // Ações de cadastro (não são a decisão do momento): contorno discreto, sem preenchimento.
   const outline =
-    "rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted";
+    "text-xs font-medium text-foreground underline underline-offset-4 hover:opacity-80";
 
   // Só o que exige ação aparece abaixo da faixa; tudo resolvido = só a faixa.
   const pending: { key: string; label: string; text: string; actions: ReactNode }[] = [];
@@ -4512,7 +4490,7 @@ function FinanceiroContratoSection({
     pending.push({
       key: "rem",
       label: "Remuneração",
-      text: "Não definida",
+      text: "não definida",
       actions: (
         <button type="button" onClick={startRem} className={outline}>
           Definir remuneração
@@ -4525,7 +4503,7 @@ function FinanceiroContratoSection({
       pending.push({
         key: "pag",
         label: "Pagamento",
-        text: "Aguardando aprovação",
+        text: "aguardando aprovação",
         actions: (
           <>
             <button
@@ -4557,7 +4535,7 @@ function FinanceiroContratoSection({
       pending.push({
         key: "pag",
         label: "Pagamento",
-        text: "Solicitação recusada",
+        text: "solicitação recusada",
         actions: (
           <QuietButton
             onClick={() =>
@@ -4574,8 +4552,8 @@ function FinanceiroContratoSection({
         label: "Pagamento",
         text:
           state.key === "vencido"
-            ? `Vencido${state.due ? ` em ${formatIsoDate(state.due)}` : ""}`
-            : `Aprovado${state.due ? ` · vence ${formatIsoDate(state.due)}` : ""}`,
+            ? `vencido${state.due ? ` em ${formatIsoDate(state.due)}` : ""}`
+            : `aprovado${state.due ? ` · vence ${formatIsoDate(state.due)}` : ""}`,
         actions: (
           <button
             type="button"
@@ -4594,7 +4572,7 @@ function FinanceiroContratoSection({
     pending.push({
       key: "bank",
       label: "Dados bancários",
-      text: "Não cadastrados",
+      text: "não cadastrados",
       actions: (
         <button type="button" onClick={startBank} className={outline}>
           Cadastrar
@@ -4606,7 +4584,7 @@ function FinanceiroContratoSection({
     pending.push({
       key: "contrato",
       label: "Contrato",
-      text: "Não cadastrado",
+      text: "não cadastrado",
       actions: (
         <button type="button" onClick={() => contratoRef.current?.click()} className={outline}>
           {busy === "contrato" ? "Enviando..." : "Anexar contrato"}
@@ -4641,11 +4619,8 @@ function FinanceiroContratoSection({
             onClick={() => toggle(c.key)}
             className="min-w-0 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand sm:px-3 sm:first:pl-0"
           >
-            <span className="block truncate text-[10px] font-medium uppercase tracking-wide text-text-secondary">
-              {c.label}
-            </span>
             <span
-              className={`mt-0.5 flex items-center gap-1.5 text-base font-semibold ${
+              className={`flex items-center gap-1.5 text-base font-semibold ${
                 open === c.key
                   ? "text-foreground underline underline-offset-4"
                   : "text-foreground/90"
@@ -4657,21 +4632,20 @@ function FinanceiroContratoSection({
               />
               <span className="truncate">{c.value}</span>
             </span>
+            <span className="block truncate text-[11px] text-text-secondary">{c.label}</span>
           </button>
         ))}
       </div>
 
       {pending.length > 0 && (
-        <ul className="divide-y divide-border/60 border-t border-border/60">
+        <ul className="space-y-1">
           {pending.map((x) => (
             <li
               key={x.key}
-              className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 py-2 text-sm"
+              className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm"
             >
-              <span className="min-w-0">
-                <span className="text-text-secondary">{x.label}</span>
-                <span className="text-text-secondary"> · </span>
-                <span className="text-foreground">{x.text}</span>
+              <span className="min-w-0 text-foreground">
+                {x.label} <span className="text-text-secondary">{x.text}</span>
               </span>
               <span className="flex shrink-0 items-center gap-3">{x.actions}</span>
             </li>
@@ -4681,7 +4655,7 @@ function FinanceiroContratoSection({
 
       {/* Detalhe do item aberto. */}
       {open === "rem" && (
-        <div className="space-y-3 rounded-lg bg-muted/25 p-3">
+        <div className="space-y-3 border-l-2 border-border pl-3">
           {editing === "rem" ? (
             <>
               <PagamentoEditor value={remDraft} onChange={setRemDraft} parts="remuneracao" />
@@ -4713,7 +4687,7 @@ function FinanceiroContratoSection({
       )}
 
       {open === "pag" && (
-        <div className="space-y-2.5 rounded-lg bg-muted/25 p-3 text-sm">
+        <div className="space-y-2.5 border-l-2 border-border pl-3 text-sm">
           {!pag || state.key === "nao_iniciado" ? (
             <p className="text-text-secondary">Defina a remuneração para iniciar o pagamento.</p>
           ) : (
@@ -4815,7 +4789,7 @@ function FinanceiroContratoSection({
       )}
 
       {open === "contrato" && (
-        <div className="rounded-lg bg-muted/25 p-3">
+        <div className="border-l-2 border-border pl-3">
           {contrato.present ? (
             <FileLine
               name={contrato.name}
@@ -4834,7 +4808,7 @@ function FinanceiroContratoSection({
       )}
 
       {open === "bank" && (
-        <div className="space-y-3 rounded-lg bg-muted/25 p-3">
+        <div className="space-y-3 border-l-2 border-border pl-3">
           {editing === "bank" ? (
             <>
               <BankFields value={bankDraft} onChange={setBankDraft} compact />
@@ -4971,7 +4945,6 @@ function WorkspaceDetailBody({
   const temMidia = !!influ.midiaKit && influ.midiaKit.length > 0;
 
   const [moreOpen, setMoreOpen] = useState(false);
-  const [checklistOpen, setChecklistOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!openMoreSignal) return;
@@ -5005,7 +4978,7 @@ function WorkspaceDetailBody({
   };
 
   return (
-    <div className="space-y-5 px-5 py-4">
+    <div className="space-y-6 px-5 py-4">
       {/* 1. PRÓXIMA AÇÃO — uma só. */}
       <NextActionPanel
         action={action}
@@ -5030,133 +5003,105 @@ function WorkspaceDetailBody({
       {/* 3. FEEDBACK DO CLIENTE — só existe quando há feedback. */}
       <ClientFeedbackBlock items={feedbacks} onOpen={onOpenEntrega} />
 
-      {/* INFORMAÇÕES — uma área só: Dados → Financeiro → Contexto → Atividade, separados por
-       * divisores (sem cards). Ação > operação > contexto > administrativo. */}
-      <div className="divide-y divide-border/60 border-t border-border/60 [&>section]:py-4">
-        {/* 4. DADOS = contato + perfil, uma mesma área. */}
-        <section aria-label="Dados" className="space-y-2.5">
-          <CockpitTitle>Dados</CockpitTitle>
-          <div className="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2 md:divide-x md:divide-border/60 [&>*+*]:md:pl-8">
-            <InfluencerContact
-              telefone={influ.telefone}
-              email={influ.email}
-              onSave={(patch) => onPatch(patch)}
-            />
-            {temRedeConfig && <PerfilAudienciaSection influ={influ} has={has} onPatch={onPatch} />}
-          </div>
-        </section>
+      {/* Daqui para baixo: contexto e administrativo (um único divisor separa da operação). */}
+      <div className="border-t border-border/60" />
 
-        {/* 5. FINANCEIRO — uma unidade: faixa de estado + só as pendências. */}
-        {temFinanceiro && (
-          <div ref={financeRef}>
-            <FinanceiroContratoSection
-              influ={influ}
-              has={has}
-              bank={bank}
-              campanhaId={campanhaId}
-              onPatch={onPatch}
-              command={finCommand}
-            />
-          </div>
-        )}
+      {temRedeConfig && <PerfilAudienciaSection influ={influ} has={has} onPatch={onPatch} />}
 
-        {/* 6. CONTEXTO DA CAMPANHA */}
-        <section aria-label="Contexto da campanha" className="space-y-3">
-          <CockpitTitle>Contexto da campanha</CockpitTitle>
-          <InlineNote
-            key={influ.id}
-            label="Por que este influenciador?"
-            hint="Aparece pro cliente no portal."
-            surface={false}
-            quote
-            value={influ.justificativaTime ?? ""}
-            emptyText="Nenhum motivo registrado"
-            addLabel="Adicionar motivo"
-            placeholder="Ex.: Forte afinidade com o público da campanha, bom histórico de conteúdo e audiência concentrada na região..."
-            onSave={(v) => onPatch({ justificativaTime: v || undefined })}
+      {temFinanceiro && (
+        <div ref={financeRef}>
+          <FinanceiroContratoSection
+            influ={influ}
+            has={has}
+            bank={bank}
+            campanhaId={campanhaId}
+            onPatch={onPatch}
+            command={finCommand}
           />
-          <div className="grid grid-cols-1 gap-x-8 gap-y-3 md:grid-cols-2 md:divide-x md:divide-border/60 [&>*+*]:md:pl-8">
-            <InlineNote
-              key={`${influ.id}-briefing`}
-              label="Briefing"
-              hint="O que este influenciador precisa saber/fazer nesta campanha — aparece no portal do cliente."
-              surface={false}
-              value={influ.briefingPersonalizado ?? ""}
-              emptyText="Sem briefing"
-              placeholder="Ex: focar no tom descontraído, evitar mencionar concorrentes..."
-              onSave={(v) => onPatch({ briefingPersonalizado: v || undefined })}
-              footer={
-                influ.briefingAnexoUrl ? (
-                  <div className="flex items-center gap-2 pt-1 text-xs">
-                    <a
-                      href={influ.briefingAnexoUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex min-w-0 items-center gap-1 font-medium text-foreground underline underline-offset-2"
-                    >
-                      <Paperclip className="h-3 w-3 shrink-0" />
-                      <span className="truncate">{influ.briefingAnexoNome || "Anexo"}</span>
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onPatch({ briefingAnexoNome: undefined, briefingAnexoUrl: undefined })
-                      }
-                      className="text-muted-foreground hover:text-destructive"
-                      aria-label="Remover anexo"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                ) : (
-                  <BriefingAnexoUploadButton
-                    onUpload={(nome, url) =>
-                      onPatch({ briefingAnexoNome: nome, briefingAnexoUrl: url })
-                    }
-                  />
-                )
-              }
-            />
-            <InlineNote
-              key={`${influ.id}-obs`}
-              label="Observações"
-              hint="Informações operacionais — visíveis pro time e pro cliente no portal (o cliente também escreve aqui)."
-              surface={false}
-              value={influ.observacoes ?? ""}
-              emptyText="Sem observações"
-              placeholder="Ex: prefere ser contatado por WhatsApp à tarde..."
-              onSave={(v) => onPatch({ observacoes: v || undefined })}
-            />
-          </div>
-          <div className="space-y-2">
-            <QuietButton onClick={() => setChecklistOpen((v) => !v)}>
-              Checklist
-              {(influ.checklist ?? []).length > 0
-                ? ` (${(influ.checklist ?? []).filter((c) => c.done).length}/${(influ.checklist ?? []).length})`
-                : ""}
-              {checklistOpen ? " ⌃" : " ⌄"}
-            </QuietButton>
-            {checklistOpen && (
-              <ChecklistSection
-                checklist={influ.checklist ?? []}
-                onChange={onSetChecklist}
-                onApplyToAll={onApplyChecklistToAll}
-                bare
-              />
-            )}
-          </div>
-        </section>
+        </div>
+      )}
 
-        {/* 7. ATIVIDADE — só uma lista, no máximo 3 eventos. */}
-        <AtividadeRecente
-          activity={influ.activity ?? []}
-          onOpenActivity={onOpenActivity}
-          limit={3}
+      <section aria-label="Contexto da seleção" className="space-y-3">
+        <CockpitTitle>Contexto da seleção</CockpitTitle>
+        <InlineNote
+          key={influ.id}
+          label="Por que este influenciador?"
+          hint="Aparece pro cliente no portal."
+          surface={false}
+          value={influ.justificativaTime ?? ""}
+          emptyText="Nenhum motivo registrado"
+          addLabel="Adicionar"
+          placeholder="Ex.: Forte afinidade com o público da campanha, bom histórico de conteúdo e audiência concentrada na região..."
+          onSave={(v) => onPatch({ justificativaTime: v || undefined })}
         />
-      </div>
+        <div className="grid grid-cols-1 gap-x-8 gap-y-3 md:grid-cols-2">
+          <InlineNote
+            key={`${influ.id}-briefing`}
+            label="Briefing"
+            hint="O que este influenciador precisa saber/fazer nesta campanha — aparece no portal do cliente."
+            surface={false}
+            value={influ.briefingPersonalizado ?? ""}
+            emptyText="Sem briefing"
+            addLabel="Adicionar"
+            placeholder="Ex: focar no tom descontraído, evitar mencionar concorrentes..."
+            onSave={(v) => onPatch({ briefingPersonalizado: v || undefined })}
+            footer={
+              influ.briefingAnexoUrl ? (
+                <div className="flex items-center gap-2 text-xs">
+                  <a
+                    href={influ.briefingAnexoUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex min-w-0 items-center gap-1 font-medium text-foreground underline underline-offset-2"
+                  >
+                    <Paperclip className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{influ.briefingAnexoNome || "Anexo"}</span>
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onPatch({ briefingAnexoNome: undefined, briefingAnexoUrl: undefined })
+                    }
+                    className="text-muted-foreground hover:text-destructive"
+                    aria-label="Remover anexo"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ) : (
+                <BriefingAnexoUploadButton
+                  quiet
+                  onUpload={(nome, url) =>
+                    onPatch({ briefingAnexoNome: nome, briefingAnexoUrl: url })
+                  }
+                />
+              )
+            }
+          />
+          <InlineNote
+            key={`${influ.id}-obs`}
+            label="Observações"
+            hint="Informações operacionais — visíveis pro time e pro cliente no portal (o cliente também escreve aqui)."
+            surface={false}
+            value={influ.observacoes ?? ""}
+            emptyText="Sem observações"
+            addLabel="Adicionar"
+            placeholder="Ex: prefere ser contatado por WhatsApp à tarde..."
+            onSave={(v) => onPatch({ observacoes: v || undefined })}
+          />
+        </div>
+      </section>
+
+      <ChecklistSection
+        checklist={influ.checklist ?? []}
+        onChange={onSetChecklist}
+        onApplyToAll={onApplyChecklistToAll}
+      />
+
+      <AtividadeRecente activity={influ.activity ?? []} onOpenActivity={onOpenActivity} limit={3} />
 
       {/* Mais informações — o que se consulta raramente. */}
-      <div ref={moreRef} className="scroll-mt-4 border-t border-border/60 pt-4">
+      <div ref={moreRef} className="scroll-mt-4">
         <MoreInfo
           open={moreOpen}
           onToggle={() => setMoreOpen((v) => !v)}
@@ -5654,8 +5599,11 @@ function AutoSaveInput({
  * base64 embutido no jsonb, que falha silenciosamente em arquivos maiores. */
 function BriefingAnexoUploadButton({
   onUpload,
+  quiet = false,
 }: {
   onUpload: (nome: string, url: string) => void;
+  /** Só texto (sem moldura tracejada), para contextos densos. */
+  quiet?: boolean;
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -5666,7 +5614,11 @@ function BriefingAnexoUploadButton({
         type="button"
         onClick={() => ref.current?.click()}
         disabled={uploading}
-        className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground disabled:opacity-50"
+        className={
+          quiet
+            ? "inline-flex items-center gap-1.5 text-xs font-medium text-text-secondary underline-offset-2 hover:text-foreground hover:underline disabled:opacity-50"
+            : "inline-flex items-center gap-1.5 rounded-md border border-dashed border-border px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground disabled:opacity-50"
+        }
       >
         <Paperclip className="h-3 w-3" /> {uploading ? "Enviando..." : "Anexar arquivo"}
       </button>

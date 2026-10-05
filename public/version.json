@@ -1,25 +1,25 @@
 {
-  "version": "1.331.0",
+  "version": "1.332.0",
   "releases": [
     {
-      "version": "1.331.0",
-      "summary": "Parte inferior do detalhe do influenciador reorganizada: Dados, Financeiro, Contexto e Atividade.",
+      "version": "1.332.0",
+      "summary": "Detalhe do influenciador V2.1: contato no cabeçalho e painel com menos blocos e mais hierarquia.",
       "modules": [
         {
           "name": "CAMPANHAS",
           "tagline": "Detalhe do influenciador",
           "items": [
             {
-              "title": "Dados em uma só área",
-              "description": "Contato (telefone e e-mail direto, com Copiar e Abrir) e perfil com os principais indicadores lado a lado; a audiência detalhada abre à parte."
+              "title": "Contato no cabeçalho",
+              "description": "Telefone e e-mail aparecem logo abaixo do nome, com copiar e WhatsApp; sem contato, 'Adicionar contato'."
             },
             {
-              "title": "Financeiro em uma faixa",
-              "description": "Remuneração, pagamento, contrato e dados bancários em quatro indicadores; só as pendências mostram ação, e tudo resolvido termina na faixa."
+              "title": "Ordem por prioridade",
+              "description": "Próxima ação, entregas, feedback, perfil, financeiro, contexto, checklist e atividade, sem cartões nem divisores em excesso."
             },
             {
-              "title": "Contexto e atividade enxutos",
-              "description": "Motivo, briefing e observações como contexto; atividade com 3 eventos e 'Ver tudo'."
+              "title": "Financeiro mais direto",
+              "description": "Valor e estados em uma faixa, com apenas as pendências em frases curtas e a ação ao lado."
             }
           ]
         }

@@ -103,10 +103,10 @@ export function EntregasRows({
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium text-foreground">
                       {entregaNome(e)}
-                      {!e.grupoId && e.quantidade > 1 && (
+                      {!e.grupoId && (
                         <span className="font-normal text-text-secondary">
                           {" "}
-                          · {e.quantidade} unidades
+                          · {e.quantidade} {e.quantidade === 1 ? "unidade" : "unidades"}
                         </span>
                       )}
                     </span>
@@ -115,11 +115,11 @@ export function EntregasRows({
                     </span>
                   </span>
                   {prazo && (
-                    <span className="shrink-0 text-right text-xs text-text-secondary">
-                      {prazo.label}
-                      <span className="block font-medium tabular-nums text-foreground/90">
-                        {shortDate(prazo.data)}
-                      </span>
+                    <span
+                      title={prazo.label}
+                      className="shrink-0 text-xs font-medium tabular-nums text-text-secondary"
+                    >
+                      {shortDate(prazo.data)}
                     </span>
                   )}
                   <ChevronRight className="h-4 w-4 shrink-0 text-text-secondary" aria-hidden />
