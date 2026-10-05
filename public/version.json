@@ -1,25 +1,17 @@
 {
-  "version": "1.309.0",
+  "version": "1.310.0",
   "releases": [
     {
-      "version": "1.309.0",
-      "summary": "Menções do Chat redesenhadas: @ é para pessoas.",
+      "version": "1.310.0",
+      "summary": "O cronômetro começa sozinho quando a tarefa vai para Em andamento.",
       "modules": [
         {
-          "name": "CHAT",
-          "tagline": "Menções",
+          "name": "TAREFAS",
+          "tagline": "Cronômetro",
           "items": [
             {
-              "title": "@ agora menciona só pessoas",
-              "description": "Ao digitar @ em canais aparece uma lista compacta de pessoas da conversa, com foto, nome e cargo, busca destacada e navegação pelo teclado. Em conversas diretas o @ é só texto."
-            },
-            {
-              "title": "Referências a tarefas e projetos com #",
-              "description": "Para citar uma tarefa, projeto, campanha ou cliente, digite # e o nome. Funciona em qualquer conversa e não gera aviso de menção."
-            },
-            {
-              "title": "@Todos funcionando em canais",
-              "description": "A opção “Todos os participantes” passa a avisar de fato cada pessoa da conversa."
+              "title": "Cronômetro automático em “Em andamento”",
+              "description": "Ao colocar uma tarefa em andamento (arrastando, no detalhe, nas subtarefas ou pelo card no Chat), o cronômetro começa a contar para quem fez a mudança. Se você já tem outro cronômetro rodando, a plataforma avisa e oferece trocar."
             }
           ]
         }

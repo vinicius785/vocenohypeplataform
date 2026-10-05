@@ -76,6 +76,13 @@ function durationBetween(startedAt: string, endedAt: string): number {
 
 const UNIQUE_VIOLATION = "23505";
 
+/** Avisa todas as telas (indicador global, painel da tarefa) que o cronômetro mudou, sem esperar o
+ * polling de 20 s. */
+const TIMER_CHANGED_EVENT = "vnh:timer-changed";
+export function emitTimerChanged() {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(TIMER_CHANGED_EVENT));
+}
+
 /** Inicia um cronômetro para a tarefa. Se o usuário já tiver outro
  * rodando (garantido por índice único no banco, não só checagem no
  * cliente — evita corrida entre abas/dispositivos), retorna a entrada
@@ -106,6 +113,7 @@ export async function startTimer(
     }
     return { entry: null, conflict: null, error: error.message };
   }
+  emitTimerChanged();
   return { entry: fromRow(data as unknown as TimeEntryRow), conflict: null, error: null };
 }
 
@@ -124,6 +132,7 @@ export async function stopTimer(
     .select("*")
     .single();
   if (error) return { entry: null, error: error.message };
+  emitTimerChanged();
   return { entry: fromRow(data as unknown as TimeEntryRow), error: null };
 }
 
@@ -215,10 +224,50 @@ export async function listEntriesByTask(
 
 /** Para (silenciosamente) o cronômetro do usuário atual SE ele estiver
  * rodando nesta tarefa específica — chamado quando uma tarefa entra em
- * "Concluído", nunca em outra mudança de status (regra: cronômetro
- * sobrevive a qualquer outra troca de status, só "Concluído" para
- * sozinho). Fire-and-forget: nunca bloqueia a mudança de status
+ * "Concluído" (regra: o cronômetro só PARA sozinho em "Concluído"; e só
+ * COMEÇA sozinho ao entrar em "Em andamento", ver `startTimerOnInProgress`). Fire-and-forget: nunca bloqueia a mudança de status
  * principal por causa disso. */
+/** Quando uma tarefa passa para "Em andamento", o cronômetro começa sozinho para QUEM mudou o
+ * status (o usuário atual). Fire-and-forget: nunca bloqueia a mudança de status.
+ *  - já rodando nesta tarefa → não faz nada;
+ *  - rodando em OUTRA tarefa → não derruba o outro sem perguntar: avisa e oferece "Trocar";
+ *  - falha ao iniciar → aviso discreto (o status já mudou). */
+export async function startTimerOnInProgress(
+  taskId: string,
+  taskOrigin: TaskOrigin,
+  taskTitle?: string,
+): Promise<void> {
+  const me = getMe();
+  if (!isValidUuid(me.id) || !taskId) return;
+  const { toast } = await import("sonner");
+  const offerSwitch = (other: TimeEntry) =>
+    toast("Você já tem um cronômetro rodando em outra tarefa.", {
+      description: taskTitle
+        ? `Troque para começar a contar “${taskTitle}”.`
+        : "Troque para contar esta tarefa.",
+      action: {
+        label: "Trocar",
+        onClick: () => {
+          void (async () => {
+            const stopped = await stopTimer(other.id, other.startedAt);
+            if (stopped.error) return void toast.error(stopped.error);
+            const started = await startTimer(taskId, taskOrigin);
+            if (started.error) toast.error("Não foi possível iniciar o cronômetro.");
+          })();
+        },
+      },
+    });
+  const running = await getRunningEntryForUser(me.id);
+  if (running) {
+    if (running.taskId === taskId && running.taskOrigin === taskOrigin) return;
+    offerSwitch(running);
+    return;
+  }
+  const { conflict, error } = await startTimer(taskId, taskOrigin);
+  if (conflict) offerSwitch(conflict);
+  else if (error) toast.error("Não foi possível iniciar o cronômetro desta tarefa.");
+}
+
 export async function stopIfRunningOnTask(taskId: string, taskOrigin: TaskOrigin): Promise<void> {
   const me = getMe();
   if (!isValidUuid(me.id)) return;
@@ -268,14 +317,17 @@ export function useRunningTimer(): {
         setLoading(false);
       }
     });
-    const interval = window.setInterval(() => {
+    const reload = () => {
       void getRunningEntryForUser(me.id).then((result) => {
         if (!cancelled) setEntry(result);
       });
-    }, RUNNING_TIMER_POLL_MS);
+    };
+    const interval = window.setInterval(reload, RUNNING_TIMER_POLL_MS);
+    window.addEventListener(TIMER_CHANGED_EVENT, reload);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
+      window.removeEventListener(TIMER_CHANGED_EVENT, reload);
     };
   }, [tick]);
 
@@ -304,8 +356,11 @@ export function useTaskTimeEntries(
         setLoading(false);
       }
     });
+    const onChanged = () => setTick((t) => t + 1);
+    window.addEventListener(TIMER_CHANGED_EVENT, onChanged);
     return () => {
       cancelled = true;
+      window.removeEventListener(TIMER_CHANGED_EVENT, onChanged);
     };
   }, [taskId, taskOrigin, tick]);
 

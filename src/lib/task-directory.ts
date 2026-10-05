@@ -191,6 +191,22 @@ export function useTaskDirectory(): TaskDirectoryEntry[] {
  * Não faz nada (retorna `false`) se a tarefa não for encontrada como
  * item de primeiro nível — quem chama decide como avisar o usuário. */
 export function updateTaskDirectoryStatus(entry: TaskDirectoryEntry, newStatus: string): boolean {
+  const ok = applyTaskDirectoryStatus(entry, newStatus);
+  // Mesmo comportamento do board: ao entrar em "Em andamento" o cronômetro começa para quem mudou.
+  if (ok && newStatus === "Em andamento" && entry.status !== "Em andamento") {
+    const origin = entry.campanhaId
+      ? "campanha"
+      : entry.id.startsWith("mkt:")
+        ? "marketing"
+        : "projeto";
+    void import("@/lib/time-entries").then(({ startTimerOnInProgress }) =>
+      startTimerOnInProgress(entry.rawId, origin, entry.label),
+    );
+  }
+  return ok;
+}
+
+function applyTaskDirectoryStatus(entry: TaskDirectoryEntry, newStatus: string): boolean {
   if (entry.campanhaId) {
     const all = getAllCampanhaTarefas();
     const list = all.get(entry.campanhaId);

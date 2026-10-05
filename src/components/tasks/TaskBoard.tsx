@@ -76,7 +76,7 @@ import {
 import { useConfirm } from "@/hooks/use-confirm";
 import { DateField } from "@/components/ui/date-field";
 import { TimeTrackingPanel } from "@/components/tasks/TimeTrackingPanel";
-import { stopIfRunningOnTask } from "@/lib/time-entries";
+import { startTimerOnInProgress, stopIfRunningOnTask } from "@/lib/time-entries";
 import { linkifyText } from "@/lib/linkify";
 import { loadTeamMembers, loadProjetos, ACTIVITY_STATUS_COMPLETED_ACTION } from "@/lib/projetos";
 import { getMe } from "@/lib/chat-store";
@@ -2286,6 +2286,18 @@ export function TaskBoard({
                             if (col.key === "Concluído" && dragOrigin) {
                               void stopIfRunningOnTask(dragged.id.replace(/^mkt:/, ""), dragOrigin);
                             }
+                            // Entrou em "Em andamento": o cronômetro começa para quem moveu.
+                            if (
+                              col.key === "Em andamento" &&
+                              dragged.status !== "Em andamento" &&
+                              dragOrigin
+                            ) {
+                              void startTimerOnInProgress(
+                                dragged.id.replace(/^mkt:/, ""),
+                                dragOrigin,
+                                dragged.title,
+                              );
+                            }
                           }
                         }
                         setDragId(null);
@@ -3249,6 +3261,10 @@ export function TaskDialog({
         // silenciosamente; qualquer outra troca de status nunca toca nele.
         if (status === "Concluído" && origin && timeTrackingTaskId) {
           void stopIfRunningOnTask(timeTrackingTaskId, origin);
+        }
+        // Passou para "Em andamento": o cronômetro começa para quem mudou o status.
+        if (status === "Em andamento" && origin && timeTrackingTaskId) {
+          void startTimerOnInProgress(timeTrackingTaskId, origin, title.trim());
         }
         nextTimerRunning = withTimer.timerRunning ?? false;
         nextTimerStartedAt = withTimer.timerStartedAt;
@@ -4283,6 +4299,17 @@ export function TaskDialog({
                                     void stopIfRunningOnTask(
                                       s.id.replace(/^mkt:/, ""),
                                       timeTrackingOrigin,
+                                    );
+                                  }
+                                  if (
+                                    next === "Em andamento" &&
+                                    s.status !== "Em andamento" &&
+                                    timeTrackingOrigin
+                                  ) {
+                                    void startTimerOnInProgress(
+                                      s.id.replace(/^mkt:/, ""),
+                                      timeTrackingOrigin,
+                                      s.title,
                                     );
                                   }
                                   // Sem isso, concluir/reabrir uma subtarefa por aqui
