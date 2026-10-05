@@ -5,6 +5,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
+  IMPORT_WINDOW_MS_AFTER,
+  IMPORT_WINDOW_MS_BEFORE,
+  decodeSyncToken,
+  encodeSyncToken,
+  importCutoffDate,
+  pruneCutoffDate,
+} from "@/lib/google-sync-window";
+import {
   canonicalRedirectUrl,
   getGoogleOAuthRedirectUri,
   googleOAuthEnvTag,
@@ -634,8 +642,8 @@ function isoToSaoPauloParts(iso: string): { data: string; hora: string } {
 // Janela de tempo consultada em `listGoogleEvents` — compartilhada com o
 // passo de "detectar evento excluído no Google" logo abaixo, pra só
 // cancelar reuniões que de fato caberiam dentro dessa mesma busca.
-const LIST_WINDOW_MS_BEFORE = 2 * 24 * 60 * 60_000;
-const LIST_WINDOW_MS_AFTER = 120 * 24 * 60 * 60_000;
+const LIST_WINDOW_MS_BEFORE = IMPORT_WINDOW_MS_BEFORE;
+const LIST_WINDOW_MS_AFTER = IMPORT_WINDOW_MS_AFTER;
 
 type ListGoogleEventsResult = {
   events: GoogleEvent[];
@@ -720,6 +728,7 @@ export async function runImportGoogleEventsToMeetings() {
     return { imported: 0, updated: 0, connected: false as const };
 
   const rows = await fetchAllReunioes(supabaseAdmin);
+  const importCutoff = importCutoffDate();
 
   type ImportRow = SlimMeeting & {
     googleEventId?: string;
@@ -758,7 +767,7 @@ export async function runImportGoogleEventsToMeetings() {
 
     let { events, nextSyncToken, tokenInvalid } = await listGoogleEvents(
       accessToken,
-      conn.sync_token,
+      decodeSyncToken(conn.sync_token),
     );
     if (tokenInvalid) {
       // Fase C, item 6 do pedido: 410 Gone — o syncToken antigo não serve
@@ -899,6 +908,8 @@ export async function runImportGoogleEventsToMeetings() {
       }
 
       if (cancelled) continue; // nunca vimos esse evento — nada a importar
+      // Fora da janela (além de 45 dias): não importa — entra sozinho quando chegar perto.
+      if (dataStr > importCutoff) continue;
 
       const meeting = {
         id: crypto.randomUUID(),
@@ -955,12 +966,28 @@ export async function runImportGoogleEventsToMeetings() {
     if (nextSyncToken) {
       await supabaseAdmin
         .from("google_calendar_connections")
-        .update({ sync_token: nextSyncToken })
+        .update({ sync_token: encodeSyncToken(nextSyncToken) })
         .eq("user_id", conn.user_id);
     }
   }
 
-  return { imported, updated, cancelled: cancelled_, connected: true as const };
+  // Limpeza: importados do Google MUITO à frente (de quando a janela era de 120 dias) são só
+  // espelhos regeneráveis — apaga para enxugar a tabela. Nunca toca em reunião criada na plataforma.
+  const { count: pruned, error: pruneError } = await supabaseAdmin
+    .from("reunioes")
+    .delete({ count: "exact" })
+    .filter("data->>origem", "eq", "google")
+    .gt("data->>data", pruneCutoffDate());
+  if (pruneError)
+    console.warn("[google-calendar] limpeza de importados distantes falhou", pruneError.message);
+
+  return {
+    imported,
+    updated,
+    cancelled: cancelled_,
+    pruned: pruned ?? 0,
+    connected: true as const,
+  };
 }
 
 export const importGoogleEventsToMeetings = createServerFn({ method: "POST" })

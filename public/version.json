@@ -1,17 +1,17 @@
 {
-  "version": "1.305.0",
+  "version": "1.305.1",
   "releases": [
     {
-      "version": "1.305.0",
-      "summary": "Convites e dados recentes deixam de sumir ao recarregar.",
+      "version": "1.305.1",
+      "summary": "A importação do Google Agenda ficou mais enxuta.",
       "modules": [
         {
-          "name": "PLATAFORMA",
-          "tagline": "Carregamento de dados",
+          "name": "REUNIÕES",
+          "tagline": "Google Agenda",
           "items": [
             {
-              "title": "Convites de reunião não somem mais",
-              "description": "Corrigido o carregamento que ignorava as reuniões mais novas quando havia muitas no sistema: convites recém-enviados agora continuam aparecendo depois de recarregar."
+              "title": "Importação do Google Agenda limitada a 45 dias",
+              "description": "Eventos importados do Google passam a cobrir os próximos 45 dias (antes eram 120), o que deixa a agenda e o sistema mais leves. Eventos mais distantes entram sozinhos quando se aproximam."
             }
           ]
         }
