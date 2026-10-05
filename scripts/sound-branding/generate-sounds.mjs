@@ -178,35 +178,38 @@ function strum(buf, midis, t0, { gap = 0.03, len = 1.2, amp = 0.4 } = {}) {
   midis.forEach((m, i) => nylon(buf, m, t0 + i * gap, { len, amp: amp * (1 - i * 0.04) }));
 }
 
-// ---------------- Os três sons (todos em MPB: violão de nylon, Ré maior) ----------------
+// ---------------- Os três sons (violão de nylon; cada um cita uma obra da MPB) ----------------
 
-// CHAT — o gesto de abertura de "Detalhes" (Roberto Carlos, 1971): o acorde de Lá e logo o A7M,
-// com a nota Sol♯ que "cai" por baixo (Lá → Lá7M, na posição da cifra original). Curtíssimo.
+// CHAT — Tim Maia, "Azul da Cor do Mar" (em Lá): a abertura A7M → Bm7. Curtíssimo.
 function chat() {
   const b = alloc(0.8);
-  strum(b, [45, 57, 61, 64], 0, { gap: 0.012, len: 0.2, amp: 0.5 }); // A
-  strum(b, [45, 56, 61, 64], 0.13, { gap: 0.012, len: 0.3, amp: 0.55 }); // A7M
+  strum(b, [45, 56, 61, 64], 0, { gap: 0.012, len: 0.22, amp: 0.5 }); // A7M
+  strum(b, [47, 57, 62, 66], 0.14, { gap: 0.012, len: 0.3, amp: 0.55 }); // Bm7
   return lowpass(lowpass(b, 3200), 3200);
 }
 
-// COMERCIAL — a volta harmônica de "Beleza Pura" (Caetano, 1979): C – Am – Dm – G7 → C, em Dó maior
-// (tom da cifra original). Quatro "batidas" de violão sincopadas e leves, a última soando por mais tempo.
+// COMERCIAL — Jorge Vercillo, "Monalisa" (em Fá♯ menor): a introdução F#m7 → F#m7(11) → B7(4) → B7,
+// o quarto que "pede" resolução e se resolve no fim.
 function commercial() {
   const b = alloc(1.3);
   const chord = (t, midis, len, amp) => strum(b, midis, t, { gap: 0.014, len, amp });
-  chord(0.0, [48, 64, 69, 72], 0.3, 0.4); // Am (Mi–Lá–Dó)
-  chord(0.17, [50, 65, 69, 74], 0.3, 0.4); // Dm
-  chord(0.34, [43, 65, 71, 74], 0.3, 0.42); // G7
-  chord(0.52, [48, 64, 67, 72, 76], 0.34, 0.45); // C
+  chord(0.0, [42, 54, 57, 61], 0.28, 0.4); // F#m7
+  chord(0.16, [42, 52, 57, 59], 0.28, 0.4); // F#m7(11)
+  chord(0.32, [47, 54, 57, 64], 0.28, 0.42); // B7(4)
+  chord(0.5, [47, 54, 57, 63], 0.38, 0.45); // B7
   return lowpass(lowpass(b, 4200), 4200);
 }
 
-// REUNIÃO — a cadência da bossa: Em7(9) dedilhado e resolvendo em Dmaj7(9), com cauda longa e calma.
+// REUNIÃO — Roberto Carlos, "Detalhes" (em Lá): a introdução A → A7M → A#º, e o caminho Bm7 → E7 → A.
 function meeting() {
-  const b = alloc(2.4);
-  strum(b, [M.E4 - 12, M.B3, M.D4, M.Fs4, M.G4], 0.0, { gap: 0.035, len: 0.5, amp: 0.38 });
-  strum(b, [M.D3, M.A3, M.Cs5 - 12, M.E4, M.Fs4], 0.5, { gap: 0.04, len: 0.85, amp: 0.4 });
-  nylon(b, M.E5, 0.62, { len: 0.65, amp: 0.3 });
+  const b = alloc(1.9);
+  const chord = (t, midis, len, amp) => strum(b, midis, t, { gap: 0.03, len, amp });
+  chord(0.0, [45, 57, 61, 64], 0.4, 0.38); // A
+  chord(0.16, [45, 56, 61, 64], 0.4, 0.38); // A7M
+  chord(0.32, [46, 52, 55, 61], 0.4, 0.38); // A#º
+  chord(0.5, [47, 54, 57, 62], 0.4, 0.4); // Bm7
+  chord(0.68, [40, 47, 50, 56], 0.4, 0.4); // E7
+  chord(0.86, [45, 57, 61, 64, 69], 0.5, 0.42); // A (resolução)
   return lowpass(lowpass(b, 3600), 3600);
 }
 

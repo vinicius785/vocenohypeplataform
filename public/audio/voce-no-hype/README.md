@@ -1,13 +1,13 @@
 # Sound branding — Você no Hype
 
-A família sonora oficial: três sons curtos de **violão de nylon em Ré maior**, com a harmonia da MPB/bossa nova
-(sétima maior e nona). Chat = Lá→A7M de "Detalhes"; Comercial = progressão de "Beleza Pura" (Am–Dm–G7–C, em Dó); Reunião = cadência Em7(9)→Dmaj7(9).
+A família sonora oficial: três sons curtos de **violão de nylon**, cada um citando a harmonia de uma obra da MPB
+(Chat = Tim Maia; Comercial = Jorge Vercillo; Reunião = Roberto Carlos). Só a harmonia é citada, nenhuma gravação é usada.
 
 | Arquivo | Evento | Duração | Desenho |
 | --- | --- | --- | --- |
-| `chat-notification.mp3` | Nova mensagem de Chat | ≈ 0,4 s | Abertura de "Detalhes" (Roberto Carlos, 1971): Lá → Lá7M, violão de nylon, curtíssimo e quase sem cauda |
-| `commercial-notification.mp3` | Notificação Comercial (novo lead) | ≈ 1,0 s | A volta harmônica de "Beleza Pura" (Caetano, 1979): Am → Dm → G7 → C, em Dó maior, quatro batidas leves de violão de nylon |
-| `meeting-notification.mp3` | Lembrete de reunião | ≈ 1,5 s | Cadência da bossa: Em7(9) dedilhado resolvendo em Dmaj7(9), com nota aguda ao final e cauda calma |
+| `chat-notification.mp3` | Nova mensagem de Chat | ≈ 0,5 s | Tim Maia, "Azul da Cor do Mar" (em Lá): abertura A7M → Bm7, violão de nylon, curtíssimo |
+| `commercial-notification.mp3` | Notificação Comercial (novo lead) | ≈ 1,0 s | Jorge Vercillo, "Monalisa" (em Fá♯ menor): introdução F#m7 → F#m7(11) → B7(4) → B7 |
+| `meeting-notification.mp3` | Lembrete de reunião | ≈ 1,5 s | Roberto Carlos, "Detalhes" (em Lá): A → A7M → A#º, depois Bm7 → E7 → A |
 
 Volume percebido equalizado (RMS ativo ≈ −21 dBFS nos três, pico ≤ −6 dBFS, sem clipping), MP3 mono,
 ~11–22 KB cada. Os arquivos foram gerados por síntese, sem samples de terceiros.
