@@ -1,17 +1,17 @@
 {
-  "version": "1.304.1",
+  "version": "1.305.0",
   "releases": [
     {
-      "version": "1.304.1",
-      "summary": "Correção ao mencionar tarefas no Chat.",
+      "version": "1.305.0",
+      "summary": "Convites e dados recentes deixam de sumir ao recarregar.",
       "modules": [
         {
-          "name": "CHAT",
-          "tagline": "Menções",
+          "name": "PLATAFORMA",
+          "tagline": "Carregamento de dados",
           "items": [
             {
-              "title": "Menção de tarefa no Chat estável",
-              "description": "Corrigido o travamento ao buscar uma tarefa com @ no Chat. Tarefas sem título agora aparecem como “Sem título”."
+              "title": "Convites de reunião não somem mais",
+              "description": "Corrigido o carregamento que ignorava as reuniões mais novas quando havia muitas no sistema: convites recém-enviados agora continuam aparecendo depois de recarregar."
             }
           ]
         }

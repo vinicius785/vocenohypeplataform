@@ -137,6 +137,28 @@ export const disconnectGoogleCalendar = createServerFn({ method: "POST" })
 
 type AdminClient = SupabaseClient<Database>;
 
+/** Lê TODAS as linhas de `reunioes` (o Supabase corta em ~1000 por consulta; a tabela tem milhares
+ * de ocorrências importadas do Google). Sem paginar, a sincronização só enxergava as 1000 mais
+ * antigas: não casava/atualizava as demais e podia reimportar ou perder reuniões novas. */
+async function fetchAllReunioes(
+  admin: AdminClient,
+): Promise<{ id: string; data: Database["public"]["Tables"]["reunioes"]["Row"]["data"] }[]> {
+  const PAGE = 1000;
+  const out: { id: string; data: Database["public"]["Tables"]["reunioes"]["Row"]["data"] }[] = [];
+  for (let from = 0; ; ) {
+    const { data, error } = await admin
+      .from("reunioes")
+      .select("id, data")
+      .order("id", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(error.message);
+    if (!data || data.length === 0) break;
+    out.push(...data);
+    from += data.length;
+  }
+  return out;
+}
+
 type GoogleConnectionRow = {
   user_id: string;
   access_token: string;
@@ -450,9 +472,8 @@ export async function runSyncAllMeetingsToGoogle() {
     .select("user_id, access_token, refresh_token, token_expiry");
   if (!connections || connections.length === 0) return { synced: 0, connected: false as const };
 
-  const { data: rows, error } = await supabaseAdmin.from("reunioes").select("data");
-  if (error) throw new Error(error.message);
-  const meetings = (rows ?? []).map((r) => r.data as SlimMeeting);
+  const rows = await fetchAllReunioes(supabaseAdmin);
+  const meetings = rows.map((r) => r.data as SlimMeeting);
 
   const allIds = new Set<string>();
   for (const m of meetings) {
@@ -698,8 +719,7 @@ export async function runImportGoogleEventsToMeetings() {
   if (!connections || connections.length === 0)
     return { imported: 0, updated: 0, connected: false as const };
 
-  const { data: rows, error } = await supabaseAdmin.from("reunioes").select("id, data");
-  if (error) throw new Error(error.message);
+  const rows = await fetchAllReunioes(supabaseAdmin);
 
   type ImportRow = SlimMeeting & {
     googleEventId?: string;

@@ -17,6 +17,30 @@ export type ArrayStoreTable =
   | "aeo_respostas"
   | "aeo_rodadas";
 
+/** O Supabase devolve no máximo ~1000 linhas por consulta (`max_rows`). Sem paginar, tabelas
+ * grandes (hoje `reunioes`, com milhares de ocorrências importadas do Google) carregavam só as
+ * 1000 MAIS ANTIGAS e as mais novas — convites recém-criados — nunca chegavam ao navegador.
+ * Lê página a página até uma página vir vazia (não depende do tamanho do teto do servidor). */
+export const TABLE_PAGE_SIZE = 1000;
+
+export async function loadAllRows<T>(table: ArrayStoreTable): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; ; ) {
+    const { data, error } = await supabase
+      .from(table)
+      .select("data")
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, from + TABLE_PAGE_SIZE - 1);
+    if (error) throw error;
+    const rows = data ?? [];
+    if (rows.length === 0) break;
+    for (const row of rows) out.push(row.data as T);
+    from += rows.length;
+  }
+  return out;
+}
+
 /**
  * Backs a "list of entities" module (clientes, projetos, reunioes, ...) with
  * a real per-row Supabase table instead of a single shared_state row holding
@@ -66,12 +90,7 @@ export function createTableArrayStore<T extends { id: string }>(
   async function init(): Promise<void> {
     if (loaded) return;
     try {
-      const { data, error } = await supabase
-        .from(table)
-        .select("data")
-        .order("created_at", { ascending: true });
-      if (error) throw error;
-      cache = (data ?? []).map((row) => row.data as T);
+      cache = await loadAllRows<T>(table);
     } catch (e) {
       console.warn(`[${table}] initial load failed`, e);
     } finally {

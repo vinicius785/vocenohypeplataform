@@ -11,8 +11,14 @@ const h = vi.hoisted(() => ({
 vi.mock("@/integrations/supabase/client", () => {
   const chain = (table: string, op: string, args: unknown[]) => {
     const filter: unknown[][] = [];
+    let range: [number, number] | null = null;
     const c: Record<string, unknown> = {};
     c.select = () => c;
+    // O carregamento pagina (`.range`): devolve a fatia pedida e, depois do fim, página vazia.
+    c.range = (from: number, to: number) => {
+      range = [from, to];
+      return c;
+    };
     c.eq = (...a: unknown[]) => {
       filter.push(a);
       return c;
@@ -21,7 +27,8 @@ vi.mock("@/integrations/supabase/client", () => {
     c.maybeSingle = () => Promise.resolve({ data: null, error: null });
     c.then = (res: (v: unknown) => unknown, rej: (e: unknown) => unknown) => {
       h.ops.push({ table, op, args, filter });
-      const data = op === "select" ? h.rows.map((d) => ({ data: d })) : [{ id: "x" }];
+      const selected = range ? h.rows.slice(range[0], range[1] + 1) : h.rows;
+      const data = op === "select" ? selected.map((d) => ({ data: d })) : [{ id: "x" }];
       return Promise.resolve({ data, error: null }).then(res, rej);
     };
     return c;

@@ -51,10 +51,24 @@ export function createScopedArrayStore<T extends { id: string }>(
 
   async function fetchAll(): Promise<Map<string, T[]> | null> {
     const columns = [`data`, parentColumn, ...(realColumn ? [realColumn.name] : [])].join(", ");
-    const { data, error } = await supabase.from(table).select(columns);
-    if (error) throw error;
+    // Pagina: o Supabase corta cada consulta em ~1000 linhas, e tabelas grandes (tarefas de
+    // campanha/projeto) perdiam tudo além disso no carregamento e no resync.
+    const PAGE = 1000;
+    const all: Record<string, unknown>[] = [];
+    for (let from = 0; ; ) {
+      const { data, error } = await supabase
+        .from(table)
+        .select(columns)
+        .order("id", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) throw error;
+      const page = (data ?? []) as unknown as Record<string, unknown>[];
+      if (page.length === 0) break;
+      all.push(...page);
+      from += page.length;
+    }
     const next = new Map<string, T[]>();
-    for (const row of (data ?? []) as unknown as Record<string, unknown>[]) {
+    for (const row of all) {
       const parentId = row[parentColumn] as string;
       const arr = next.get(parentId) ?? [];
       arr.push(mergeRealColumn(row));
