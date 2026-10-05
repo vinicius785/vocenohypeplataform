@@ -14,7 +14,7 @@ describe("identidade visual das etapas do Comercial", () => {
   it("todas as 9 etapas têm visual completo", () => {
     for (const s of OPPORTUNITY_STAGES) {
       const v = COMMERCIAL_STAGE_VISUAL[s];
-      expect(v.dot && v.badge && v.text && v.ring && v.bar, s).toBeTruthy();
+      expect(v.dot && v.badge && v.text && v.ring, s).toBeTruthy();
     }
   });
   it("etapas não compartilham a cor do ponto (nenhuma repetida)", () => {

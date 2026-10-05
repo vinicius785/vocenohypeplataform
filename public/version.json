@@ -1,8 +1,8 @@
 {
-  "version": "1.303.0",
+  "version": "1.303.1",
   "releases": [
     {
-      "version": "1.303.0",
+      "version": "1.303.1",
       "summary": "Cada etapa do Pipeline do Comercial ganhou a sua cor.",
       "modules": [
         {
@@ -11,7 +11,7 @@
           "items": [
             {
               "title": "Etapas do Pipeline com cor própria",
-              "description": "Lead recebido, Contato feito, Reuniões, Propostas, Negociação, Ganho e Perdido agora têm cores discretas no ponto, na linha da coluna, nos filtros, no detalhe e no histórico do lead."
+              "description": "Lead recebido, Contato feito, Reuniões, Propostas, Negociação, Ganho e Perdido agora têm cores discretas no ponto da coluna, nos filtros, no detalhe e no histórico do lead."
             }
           ]
         }
