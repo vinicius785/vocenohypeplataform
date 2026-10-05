@@ -11,7 +11,6 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
-  CircleDot,
   Coins,
   Columns3,
   Download,
@@ -49,6 +48,8 @@ import { DateField } from "@/components/ui/date-field";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import {
   DropdownMenu,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
@@ -57,6 +58,18 @@ import { supabase } from "@/integrations/supabase/client";
 import { loadBank, saveBank, type BankInflu } from "@/lib/banco-influs-store";
 import { findExistingBankInfluMatch } from "@/lib/bank-influ-match";
 import { useConfirm } from "@/hooks/use-confirm";
+import {
+  AjusteStatusPill,
+  EntregaFeedbackSection,
+  EntregaProximoPasso,
+} from "@/components/influenciadores/EntregaAjustePanel";
+import {
+  ajusteNextStep,
+  anexoAtualizadoDesde,
+  entregaAjusteView,
+  entregaStatusLabel,
+  historyActionText,
+} from "@/lib/entrega-ajustes";
 import { linkifyText } from "@/lib/linkify";
 import {
   formatSeguidores,
@@ -98,7 +111,6 @@ import {
   APROVACAO_TONE,
   BankInfo,
   ChecklistItem,
-  ClienteVeredito,
   DemographicEntry,
   ENTREGA_ACTION_LOG,
   ENTREGA_ANEXO_CATEGORIAS,
@@ -144,10 +156,8 @@ import {
   INFLU_STATUS_LABEL,
   INFLU_STATUS_TONE,
   INFLU_STATUS_BORDER,
-  ENTREGA_STAGE_LABEL,
   ENTREGA_STAGE_TONE,
   ENTREGA_STAGE_DESCRIPTION,
-  entregaStatusIcon,
   entregaFaseConceitual,
   nextActionForInflu,
   NEXT_ACTOR_LABEL,
@@ -2364,37 +2374,6 @@ function nextPrazoData(entrega: Entrega): { label: string; data: string } | null
   return { label, data };
 }
 
-/** Banner de "Situação atual" — o elemento mais importante do painel.
- * Nunca dá pra escolher um estágio aqui (isso é o motor quem decide);
- * só traduz o `stage` atual numa frase que qualquer pessoa entende sem
- * precisar saber o nome interno do estado. */
-function EntregaSituacaoBanner({
-  stage,
-  reprovacao,
-}: {
-  stage: EntregaStage;
-  reprovacao?: ClienteVeredito;
-}) {
-  const icon = entregaStatusIcon(stage);
-  const Icon = icon === "warning" ? AlertTriangle : icon === "success" ? CheckCircle2 : CircleDot;
-  const tone =
-    icon === "warning"
-      ? "border-orange-500/30 bg-orange-500/10 text-orange-800 dark:text-orange-300"
-      : icon === "success"
-        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300"
-        : "border-border bg-muted/40 text-foreground";
-  return (
-    <div className={`space-y-1 rounded-md border p-3 ${tone}`}>
-      <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide">
-        <Icon className="h-3.5 w-3.5 shrink-0" />
-        {ENTREGA_STAGE_LABEL[stage]}
-      </p>
-      <p className="text-xs opacity-90">{ENTREGA_STAGE_DESCRIPTION[stage]}</p>
-      {reprovacao && <p className="pt-0.5 text-xs font-medium opacity-90">"{reprovacao.motivo}"</p>}
-    </div>
-  );
-}
-
 // Agrupamento em 4 fases (não os 8 estágios internos do motor) só pra
 // dar um "Mover para" rápido e um stepper visual no painel de detalhe —
 // pedido explícito: dá pra colocar a entrega na fase desejada direto,
@@ -2487,12 +2466,18 @@ function EntregaDetailBody({
     )
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-  const reprovacao =
-    stage === "ROTEIRO_AJUSTES"
-      ? entrega.roteiroReprovacao
-      : stage === "CONTEUDO_AJUSTES"
-        ? entrega.conteudoReprovacao
-        : undefined;
+  // Ciclo de ajustes (só apresentação sobre a máquina de estados existente): em qual ponto do ciclo
+  // a entrega está, o feedback do cliente e o passo que o motor já considera válido agora.
+  const ajuste = entregaAjusteView(entrega);
+  const statusLabel = entregaStatusLabel(entrega);
+  const ajusteStep = ajuste ? ajusteNextStep(ajuste, step.action) : null;
+  const { confirm: confirmAction, confirmDialog: entregaConfirmDialog } = useConfirm();
+  const arquivosRef = useRef<HTMLDivElement>(null);
+  // Roteiro/conteúdo ainda não foi atualizado desde o feedback?
+  const semArquivoNovo =
+    !!ajuste &&
+    ajuste.phase === "em_ajustes" &&
+    !anexoAtualizadoDesde(entrega, ajuste.categoria, ajuste.veredito.respondedAt);
 
   // Ação principal contextual — o motor já disse qual é a única válida
   // agora (`step.action`). "Adicionar roteiro"/"conteúdo final" abrem o
@@ -2504,6 +2489,26 @@ function EntregaDetailBody({
       return;
     }
     onRunAction(step.action);
+  };
+  const handleAjusteStep = async () => {
+    if (!ajusteStep) return;
+    if (ajusteStep.kind === "editar") {
+      // Reconhece o ajuste (stage → "Em ajustes") e leva a pessoa até o arquivo a atualizar.
+      onRunAction(ajusteStep.action);
+      window.setTimeout(
+        () => arquivosRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }),
+        150,
+      );
+      return;
+    }
+    if (semArquivoNovo) {
+      const yes = await confirmAction(
+        `Você ainda não anexou uma nova versão do ${ajuste!.etapa === "roteiro" ? "roteiro" : "conteúdo final"} desde o feedback do cliente. Enviar mesmo assim?`,
+        { title: "Enviar sem arquivo novo?", confirmLabel: "Enviar mesmo assim" },
+      );
+      if (!yes) return;
+    }
+    onRunAction(ajusteStep.action);
   };
 
   // Aceita vários arquivos de uma vez (ex: Story de 3 unidades = 3
@@ -2594,15 +2599,63 @@ function EntregaDetailBody({
                   Unidade independente — aprovada separadamente das demais.
                 </p>
               )}
+              <div className="mt-1.5">
+                {ajuste ? (
+                  <AjusteStatusPill phase={ajuste.phase} />
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground">
+                    <span
+                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                        stage === "PUBLICADA" ? "bg-emerald-500" : "bg-muted-foreground/60"
+                      }`}
+                    />
+                    {statusLabel}
+                  </span>
+                )}
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={() => setEditandoCabecalho((v) => !v)}
-              className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-              aria-label="Editar tipo, título e quantidade"
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </button>
+            <div className="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setEditandoCabecalho((v) => !v)}
+                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label="Editar tipo, título e quantidade"
+              >
+                <Pencil className="h-3 w-3" /> Editar
+              </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="Mais ações"
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52">
+                  <DropdownMenuLabel className="text-[11px] font-medium text-text-secondary">
+                    Mover manualmente para
+                  </DropdownMenuLabel>
+                  {ENTREGA_FASE_COLUNAS.map((c) => (
+                    <DropdownMenuItem
+                      key={c}
+                      disabled={c === colunaAtual}
+                      onSelect={() => onSetStage(c)}
+                    >
+                      {ENTREGA_FASE_COLUNA_LABEL[c]}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onSelect={onRemove}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> Remover entrega
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
           {editandoCabecalho && (
             <div className="flex flex-wrap items-center gap-2 rounded-md bg-muted/40 p-2">
@@ -2694,11 +2747,24 @@ function EntregaDetailBody({
               </div>
             ))}
           </div>
-          <EntregaSituacaoBanner stage={stage} reprovacao={reprovacao} />
+          <p className="text-xs text-text-secondary">{ENTREGA_STAGE_DESCRIPTION[stage]}</p>
         </div>
 
-        {/* Próxima ação — um botão só, sem repetir o rótulo por cima. */}
-        {step.action ? (
+        {/* Feedback do cliente (quando existe um ciclo de ajustes) */}
+        {ajuste && <EntregaFeedbackSection view={ajuste} />}
+
+        {/* Próximo passo — UMA ação principal por momento. */}
+        {ajusteStep ? (
+          <EntregaProximoPasso
+            step={ajusteStep}
+            note={
+              semArquivoNovo
+                ? `O ${ajuste!.etapa === "roteiro" ? "roteiro" : "conteúdo final"} ainda não foi atualizado desde o feedback.`
+                : undefined
+            }
+            onRun={() => void handleAjusteStep()}
+          />
+        ) : step.action ? (
           <button
             type="button"
             onClick={handleActionClick}
@@ -2710,39 +2776,15 @@ function EntregaDetailBody({
         ) : (
           stage !== "PUBLICADA" && (
             <p className="text-xs text-muted-foreground">
-              {step.responsavel === "cliente"
-                ? "Aguardando aprovação do cliente."
-                : "Nenhuma ação pendente no momento."}
+              {ajuste?.phase === "reenviado"
+                ? "Reenviado — aguardando a aprovação do cliente."
+                : step.responsavel === "cliente"
+                  ? "Aguardando aprovação do cliente."
+                  : "Nenhuma ação pendente no momento."}
             </p>
           )
         )}
         {uploadError && <p className="text-xs text-destructive">{uploadError}</p>}
-
-        {/* Mover manualmente — mesma liberdade de arrastar num kanban,
-              aqui como botões: dá pra colocar a entrega na fase desejada
-              direto, sem depender de rodar a ação certa. */}
-        <div className="space-y-2">
-          <FieldLabel title="Mover para" hint="Direto, sem passar pela ação." />
-          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-            {ENTREGA_FASE_COLUNAS.map((c) => {
-              const ativo = c === colunaAtual;
-              return (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => onSetStage(c)}
-                  className={`rounded-md border px-1.5 py-1.5 text-center text-[11px] font-medium transition-colors ${
-                    ativo
-                      ? "border-foreground bg-foreground text-background"
-                      : "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground"
-                  }`}
-                >
-                  {ENTREGA_FASE_COLUNA_LABEL[c]}
-                </button>
-              );
-            })}
-          </div>
-        </div>
 
         {/* Prazos — grade compacta (rótulo em cima do input, não ao
               lado), sem indicador de atrasado/no prazo (ver comentário de
@@ -2770,11 +2812,12 @@ function EntregaDetailBody({
         </div>
 
         {/* Arquivos */}
-        <div className="space-y-2">
+        <div ref={arquivosRef} className="space-y-2">
           <FieldLabel title="Arquivos" />
           <EntregaAnexosEditor
             anexos={entrega.anexos ?? []}
             onChange={(anexos) => onChange({ anexos })}
+            ajusteCategoria={ajuste && ajuste.phase !== "reenviado" ? ajuste.categoria : undefined}
           />
         </div>
 
@@ -2796,53 +2839,32 @@ function EntregaDetailBody({
           </div>
         )}
 
-        {/* Histórico */}
-        <div className="space-y-2 border-t border-border pt-4">
-          <FieldLabel title="Histórico" />
+        {/* Histórico — menor peso; o texto do feedback fica só em "Feedback do cliente". */}
+        <div className="space-y-2 border-t border-border/60 pt-4">
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
+            Histórico
+          </h3>
           {historico.length === 0 ? (
-            <p className="text-[11px] text-muted-foreground">Nenhum evento registrado ainda.</p>
+            <p className="text-[11px] text-text-secondary">Nenhum evento registrado ainda.</p>
           ) : (
-            <div className="space-y-2">
+            <ul className="space-y-1.5">
               {historico.map((a) => (
-                <div key={a.id} className="text-xs leading-relaxed">
-                  <span className="font-medium text-foreground">{a.author}</span>{" "}
-                  <span className="text-muted-foreground">{a.action}</span>
-                  <div className="text-[11px] text-text-secondary">
+                <li key={a.id} className="text-xs leading-relaxed text-text-secondary">
+                  <span className="text-foreground">{a.author}</span> {historyActionText(a.action)}
+                  <span className="ml-1.5 text-[11px] tabular-nums">
                     {new Date(a.createdAt).toLocaleString("pt-BR", {
                       day: "2-digit",
                       month: "2-digit",
                       hour: "2-digit",
                       minute: "2-digit",
                     })}
-                  </div>
-                </div>
+                  </span>
+                </li>
               ))}
-            </div>
+            </ul>
           )}
         </div>
-
-        {/* Ações secundárias — remoção só atrás de menu, nunca exposta
-              como botão permanente (rodada de reestruturação). */}
-        <div className="flex justify-end border-t border-border pt-4">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-              >
-                <MoreVertical className="h-3.5 w-3.5" /> Mais ações
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                onSelect={onRemove}
-                className="text-destructive focus:text-destructive"
-              >
-                <Trash2 className="h-3.5 w-3.5" /> Remover entrega
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        {entregaConfirmDialog}
       </div>
     </>
   );
@@ -5631,9 +5653,12 @@ function AnexoThumb({ nome, url }: { nome: string; url: string }) {
 function EntregaAnexosEditor({
   anexos,
   onChange,
+  ajusteCategoria,
 }: {
   anexos: EntregaAnexo[];
   onChange: (next: EntregaAnexo[]) => void;
+  /** Categoria afetada pelo ajuste pedido pelo cliente: ganha uma dica e "Enviar nova versão". */
+  ajusteCategoria?: EntregaAnexoCategoria;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const pendingCategoria = useRef<EntregaAnexoCategoria>("Roteiro");
@@ -5728,56 +5753,73 @@ function EntregaAnexosEditor({
 
       {error && <p className="text-[11px] text-destructive">{error}</p>}
 
-      {anexos.length > 0 ? (
+      {anexos.length > 0 || ajusteCategoria ? (
         <div className="space-y-2.5">
-          {ENTREGA_ANEXO_CATEGORIAS.filter((c) => anexos.some((a) => a.categoria === c)).map(
-            (c) => (
-              <div key={c} className="space-y-1">
-                <p className="text-[11px] font-medium text-muted-foreground">{c}</p>
-                <ul className="space-y-1.5">
-                  {anexos
-                    .filter((a) => a.categoria === c)
-                    .map((a) => {
-                      const totalNaCategoria = anexos.filter(
-                        (x) => x.categoria === a.categoria,
-                      ).length;
-                      return (
-                        <li
-                          key={a.id}
-                          className="flex items-center gap-2.5 rounded-md border border-border bg-background p-1.5"
-                        >
-                          <AnexoThumb nome={a.nome} url={a.url} />
-                          <div className="min-w-0 flex-1">
-                            <a
-                              href={a.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              download={a.nome}
-                              className="block truncate text-xs font-medium text-foreground underline-offset-2 hover:underline"
-                            >
-                              {a.nome}
-                            </a>
-                            {totalNaCategoria > 1 && (
-                              <span className="mt-0.5 inline-block rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
-                                v{a.versao ?? 1}
-                              </span>
-                            )}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => onChange(anexos.filter((x) => x.id !== a.id))}
-                            className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
-                            aria-label="Remover anexo"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </li>
-                      );
-                    })}
-                </ul>
+          {ENTREGA_ANEXO_CATEGORIAS.filter(
+            (c) => anexos.some((a) => a.categoria === c) || c === ajusteCategoria,
+          ).map((c) => (
+            <div key={c} className="space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] font-medium text-muted-foreground">
+                  {c}
+                  {c === ajusteCategoria && (
+                    <span className="font-normal"> · relacionado ao ajuste pedido</span>
+                  )}
+                </p>
+                {c === ajusteCategoria && (
+                  <button
+                    type="button"
+                    disabled={uploading !== null}
+                    onClick={() => pick(c)}
+                    className="text-[11px] font-medium text-foreground underline-offset-2 hover:underline disabled:opacity-60"
+                  >
+                    Enviar nova versão
+                  </button>
+                )}
               </div>
-            ),
-          )}
+              <ul className="space-y-1.5">
+                {anexos
+                  .filter((a) => a.categoria === c)
+                  .map((a) => {
+                    const totalNaCategoria = anexos.filter(
+                      (x) => x.categoria === a.categoria,
+                    ).length;
+                    return (
+                      <li
+                        key={a.id}
+                        className="flex items-center gap-2.5 rounded-md border border-border bg-background p-1.5"
+                      >
+                        <AnexoThumb nome={a.nome} url={a.url} />
+                        <div className="min-w-0 flex-1">
+                          <a
+                            href={a.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            download={a.nome}
+                            className="block truncate text-xs font-medium text-foreground underline-offset-2 hover:underline"
+                          >
+                            {a.nome}
+                          </a>
+                          {totalNaCategoria > 1 && (
+                            <span className="mt-0.5 inline-block rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                              v{a.versao ?? 1}
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onChange(anexos.filter((x) => x.id !== a.id))}
+                          className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+                          aria-label="Remover anexo"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </li>
+                    );
+                  })}
+              </ul>
+            </div>
+          ))}
         </div>
       ) : (
         <p className="text-[11px] text-text-secondary">Nenhum anexo ainda.</p>

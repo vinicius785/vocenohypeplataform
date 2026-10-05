@@ -1,25 +1,25 @@
 {
-  "version": "1.325.0",
+  "version": "1.326.0",
   "releases": [
     {
-      "version": "1.325.0",
-      "summary": "Detalhe da reunião refeito como ficha: estado, presença em três estados e resultado.",
+      "version": "1.326.0",
+      "summary": "Detalhe da entrega com ajustes pedidos pelo cliente agora mostra o que fazer.",
       "modules": [
         {
-          "name": "REUNIÕES",
-          "tagline": "Detalhe da reunião",
+          "name": "CAMPANHAS",
+          "tagline": "Detalhe da entrega",
           "items": [
             {
-              "title": "Estado da reunião claro",
-              "description": "Agendada, Em andamento, Realizada ou Cancelada, separado da resposta ao convite e da presença de cada pessoa."
+              "title": "Feedback do cliente à vista",
+              "description": "Quando o cliente pede ajustes, o detalhe mostra quem pediu, quando, em qual etapa e um resumo do que foi dito, com o texto completo a um clique."
             },
             {
-              "title": "Presença direta no card",
-              "description": "Marque Presente ou Não participou no próprio card, sem abrir nada, ou use Todos presentes. Quem já foi registrado não volta para Não registrada."
+              "title": "Um próximo passo claro",
+              "description": "Editar roteiro, depois Enviar novamente para aprovação. O status acompanha o ciclo: Ajustes solicitados, Em ajustes e Reenviado para aprovação."
             },
             {
-              "title": "Resultado e novas ações",
-              "description": "Registre o resumo e os próximos passos da reunião. O menu agora tem Duplicar e Cancelar reunião, e o rodapé de Editar e Excluir saiu."
+              "title": "Telas mais limpas",
+              "description": "Mover manualmente e Remover entrega foram para o menu de três pontos, e o histórico ficou mais leve."
             }
           ]
         }

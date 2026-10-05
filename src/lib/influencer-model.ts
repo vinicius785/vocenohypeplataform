@@ -529,6 +529,9 @@ export type EntregaAnexo = {
    * anexos antigos (pré-versionamento); tratado como v1 na exibição. */
   versao?: number;
   criadoEm?: string;
+  /** Instante exato (ISO) do envio — `criadoEm` guarda só o dia. Aditivo: anexo antigo não tem. Usado
+   * para saber se o arquivo é posterior a um feedback do cliente no mesmo dia. */
+  criadoEmTs?: string;
 };
 
 /** Acrescenta um ou mais anexos novos na categoria certa, calculando a
@@ -550,6 +553,7 @@ export function addAnexosComVersao(
     .reduce((max, a) => Math.max(max, a.versao ?? 1), 0);
   const versao = maxVersaoAtual + 1;
   const criadoEm = todayISO();
+  const criadoEmTs = new Date().toISOString();
   return [
     ...anexos,
     ...novos.map((n) => ({
@@ -559,6 +563,7 @@ export function addAnexosComVersao(
       url: n.url,
       versao,
       criadoEm,
+      criadoEmTs,
     })),
   ];
 }
