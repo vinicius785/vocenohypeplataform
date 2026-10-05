@@ -101,10 +101,11 @@ function ScoreOperacionalForm() {
       />
 
       <SettingsCard
+        layout="split"
         title="Pontuação por tarefas"
-        description="Entrega (50 pts), Previsibilidade (35 pts) e Compromissos (15 pts) usam regras de classificação fixas — não são mais configuráveis por peso."
+        description="Entrega (50 pts), Previsibilidade (35 pts) e Compromissos (15 pts) usam regras fixas — só o XP abaixo é configurável."
       >
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid max-w-xl grid-cols-1 gap-4 sm:grid-cols-2">
           <Field
             label="XP tarefa no prazo"
             value={draft.xpTaskOnTime}
@@ -128,8 +129,12 @@ function ScoreOperacionalForm() {
         </div>
       </SettingsCard>
 
-      <SettingsCard title="Pontuação por reuniões">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <SettingsCard
+        layout="split"
+        title="Pontuação por reuniões"
+        description="XP por presença e por falta em reuniões."
+      >
+        <div className="grid max-w-xl grid-cols-1 gap-4 sm:grid-cols-2">
           <Field
             label="XP reunião realizada"
             value={draft.xpMeetingAttended}
@@ -147,8 +152,9 @@ function ScoreOperacionalForm() {
       </SettingsCard>
 
       <SettingsCard
+        layout="split"
         title="Regras de prazo"
-        description='Uma tarefa com prazo hoje só vira "atrasada" depois desse horário — antes disso, ainda conta como dentro do prazo mesmo que o dia já tenha virado.'
+        description='Uma tarefa com prazo hoje só vira "atrasada" depois deste horário.'
       >
         <label className="block max-w-xs space-y-1">
           <span className="text-xs font-medium text-foreground">Horário limite do expediente</span>

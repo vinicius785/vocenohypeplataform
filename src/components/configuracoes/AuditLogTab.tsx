@@ -19,6 +19,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { listAuditLog } from "@/lib/audit-log.functions";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { SettingsSectionHeader } from "./settings-shared";
 
 /**
@@ -56,6 +63,28 @@ function formatDateTime(value: string): string {
   }
 }
 
+/** Resumo curto do payload para a coluna "Detalhes" — o JSON completo abre no painel lateral. */
+function summarizeDetails(value: unknown): string {
+  if (value === null || value === undefined) return "—";
+  if (typeof value !== "object") return String(value);
+  const entries = Object.entries(value as Record<string, unknown>).filter(
+    ([, v]) => v !== null && v !== undefined && v !== "",
+  );
+  if (entries.length === 0) return "—";
+  return entries
+    .map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : String(v)}`)
+    .join(" · ");
+}
+
+function prettyJson(value: unknown): string {
+  if (value === null || value === undefined) return "—";
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
 type Row = {
   id: string;
   actor_user_id: string;
@@ -71,7 +100,7 @@ type Row = {
 const PAGE_SIZE = 25;
 
 export function AuditLogTab({ isAdmin }: { isAdmin: boolean }) {
-  if (!isAdmin) return <LockedSection title="Log de auditoria" />;
+  if (!isAdmin) return <LockedSection title="Auditoria" />;
   return <AuditLogContent />;
 }
 
@@ -83,6 +112,7 @@ function AuditLogContent() {
   const [actionFilter, setActionFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Row | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -118,8 +148,9 @@ function AuditLogContent() {
     <div className="space-y-6">
       <SettingsSectionHeader
         icon={<ShieldCheck className="h-4 w-4" />}
-        title="Log de auditoria"
-        description="Histórico de eventos sensíveis: login/logout, troca de ambiente, e gestão de acessos ao portal do cliente. Visível apenas para administradores."
+        title="Auditoria"
+        description="Histórico de eventos sensíveis: login, troca de ambiente e gestão de acessos ao portal do cliente."
+        adminOnly
       />
 
       <div className="flex items-center justify-between gap-3">
@@ -130,7 +161,7 @@ function AuditLogContent() {
             setPage(0);
           }}
         >
-          <SelectTrigger className="w-[260px]">
+          <SelectTrigger className="h-9 w-[240px]" aria-label="Filtrar por ação">
             <SelectValue placeholder="Todas as ações" />
           </SelectTrigger>
           <SelectContent>
@@ -142,7 +173,9 @@ function AuditLogContent() {
             ))}
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground">{total} registro(s)</p>
+        <p className="text-xs text-muted-foreground">
+          {total} {total === 1 ? "registro" : "registros"}
+        </p>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
@@ -174,7 +207,20 @@ function AuditLogContent() {
             )}
             {!loading &&
               rows.map((row) => (
-                <TableRow key={row.id}>
+                <TableRow
+                  key={row.id}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`Ver detalhes: ${actionLabel(row.action)}`}
+                  onClick={() => setSelected(row)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setSelected(row);
+                    }
+                  }}
+                  className="cursor-pointer focus-visible:bg-muted/60 focus-visible:outline-none"
+                >
                   <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                     {formatDateTime(row.created_at)}
                   </TableCell>
@@ -182,8 +228,8 @@ function AuditLogContent() {
                   <TableCell className="text-sm text-muted-foreground">
                     {row.actorEmail ?? row.actor_user_id}
                   </TableCell>
-                  <TableCell className="max-w-[320px] truncate text-xs text-muted-foreground">
-                    {row.new_value ? JSON.stringify(row.new_value) : "—"}
+                  <TableCell className="max-w-[360px] truncate text-xs text-muted-foreground">
+                    {summarizeDetails(row.new_value)}
                   </TableCell>
                 </TableRow>
               ))}
@@ -214,6 +260,58 @@ function AuditLogContent() {
           </Button>
         </div>
       </div>
+
+      <Sheet open={!!selected} onOpenChange={(v) => !v && setSelected(null)}>
+        <SheetContent className="w-full overflow-y-auto sm:max-w-md">
+          {selected && (
+            <>
+              <SheetHeader>
+                <SheetTitle>{actionLabel(selected.action)}</SheetTitle>
+                <SheetDescription>{formatDateTime(selected.created_at)}</SheetDescription>
+              </SheetHeader>
+              <dl className="mt-6 space-y-4 text-sm">
+                <DetailItem label="Autor" value={selected.actorEmail ?? selected.actor_user_id} />
+                {selected.target_user_id && (
+                  <DetailItem label="Usuário afetado" value={selected.target_user_id} mono />
+                )}
+                {selected.organization_id && (
+                  <DetailItem label="Organização" value={selected.organization_id} mono />
+                )}
+                <JsonBlock label="Antes" value={selected.previous_value} />
+                <JsonBlock label="Depois" value={selected.new_value} />
+              </dl>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
+    </div>
+  );
+}
+
+function DetailItem({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div>
+      <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </dt>
+      <dd className={mono ? "mt-0.5 break-all font-mono text-xs" : "mt-0.5 break-words"}>
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+function JsonBlock({ label, value }: { label: string; value: unknown }) {
+  return (
+    <div>
+      <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </dt>
+      <dd>
+        <pre className="mt-1 max-h-60 overflow-auto rounded-lg bg-muted p-3 text-xs">
+          {prettyJson(value)}
+        </pre>
+      </dd>
     </div>
   );
 }

@@ -155,7 +155,11 @@ export function MfaEnrollCard({ isAdmin }: { isAdmin: boolean }) {
   };
 
   return (
-    <SettingsCard title="Autenticação em duas etapas">
+    <SettingsCard
+      layout="split"
+      title="Autenticação em duas etapas"
+      description="Acesso: um código do app autenticador, além da senha, protege o login da sua conta."
+    >
       {confirmDialog}
       <p className="text-xs text-muted-foreground">
         Adicione uma segunda etapa (código de 6 dígitos de um app autenticador) ao entrar na

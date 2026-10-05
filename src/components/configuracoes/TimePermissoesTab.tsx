@@ -146,32 +146,36 @@ export function TimePermissoesTab({ isAdmin = false }: { isAdmin?: boolean }) {
       {confirmDialog}
       <SettingsSectionHeader
         icon={<Users className="h-4 w-4" />}
-        title="Time e permissões"
-        description="Clique em um membro para configurar o que ele pode acessar na plataforma."
+        title="Equipe e permissões"
+        description="Quem tem acesso ao workspace e o que cada pessoa pode fazer. Clique em um membro para editar."
       />
 
-      <SettingsCard>
-        <div className="relative mb-3 w-64 max-w-full">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar membro"
-            className="h-9 w-full pl-8 text-xs"
-          />
-        </div>
-
+      <SettingsCard
+        title={`${members.length} ${members.length === 1 ? "membro" : "membros"}`}
+        action={
+          <div className="relative w-56 max-w-full">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar membro"
+              aria-label="Buscar membro"
+              className="h-8 w-full pl-8 text-xs"
+            />
+          </div>
+        }
+      >
         {error && <p className="mb-2 text-xs text-destructive">{error}</p>}
         {loading && <p className="text-xs text-muted-foreground">Carregando...</p>}
 
-        <div className="divide-y divide-border">
+        <div className="divide-y divide-border/60">
           {!loading && filtered.length === 0 && (
             <p className="py-6 text-center text-xs text-muted-foreground">
               Nenhum membro encontrado.
             </p>
           )}
           {filtered.map((m) => (
-            <div key={m.id} className="flex w-full items-center gap-3 py-3">
+            <div key={m.id} className="flex w-full items-center gap-3 py-2.5">
               <button
                 type="button"
                 onClick={() => setEditing(m)}

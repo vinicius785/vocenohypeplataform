@@ -1,3 +1,4 @@
+import { cn } from "@/lib/utils";
 import { useEffect, useRef, useState } from "react";
 import { Building2, ImageIcon, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,12 +10,7 @@ import {
   canEditWorkspace,
   type Workspace,
 } from "@/lib/workspace-store";
-import {
-  SettingsCard,
-  SettingsSectionHeader,
-  SettingsSaveBar,
-  DangerZone,
-} from "./settings-shared";
+import { SettingsCard, SettingsSectionHeader, SettingsSaveBar } from "./settings-shared";
 
 const inputCls =
   "w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring";
@@ -87,7 +83,11 @@ function GeralForm() {
         description="Aparece no menu lateral e nas telas compartilhadas com o time."
       />
 
-      <SettingsCard>
+      <SettingsCard
+        layout="split"
+        title="Logo"
+        description="Ícone do workspace no menu lateral. Se não houver, usamos o ícone padrão."
+      >
         <div className="flex items-center gap-4">
           <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl border border-border bg-muted">
             {ws.logo ? (
@@ -115,33 +115,34 @@ function GeralForm() {
               <Upload className="h-3.5 w-3.5" />
               {ws.logo ? "Trocar logo" : "Anexar logo"}
             </Button>
+            {ws.logo && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setWs({ ...ws, logo: "" })}
+                className="text-destructive hover:text-destructive"
+              >
+                Remover logo
+              </Button>
+            )}
           </div>
         </div>
-
-        <label className="mt-5 block space-y-1.5">
-          <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            Nome do workspace
-          </span>
-          <input
-            value={ws.nome}
-            onChange={(e) => setWs({ ...ws, nome: e.target.value })}
-            className={inputCls}
-            placeholder="Ex.: Você no Hype"
-          />
-          <span className="block text-[11px] text-muted-foreground">
-            Aparece no menu lateral e nas telas compartilhadas com o time.
-          </span>
-        </label>
       </SettingsCard>
 
-      {ws.logo && (
-        <DangerZone
-          title="Remover logo"
-          description="O workspace volta a exibir só o ícone padrão."
-          actionLabel="Remover logo"
-          onAction={() => setWs({ ...ws, logo: "" })}
+      <SettingsCard
+        layout="split"
+        title="Nome do workspace"
+        description="Aparece no menu lateral e nas telas compartilhadas com o time."
+      >
+        <input
+          value={ws.nome}
+          onChange={(e) => setWs({ ...ws, nome: e.target.value })}
+          className={cn(inputCls, "max-w-md")}
+          placeholder="Ex.: Você no Hype"
+          aria-label="Nome do workspace"
         />
-      )}
+      </SettingsCard>
 
       <SettingsSaveBar
         mode="manual"

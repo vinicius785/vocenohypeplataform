@@ -253,7 +253,11 @@ function VaultTotpEnroll() {
   if (!status) return null;
 
   return (
-    <SettingsCard title="Autenticador (Google Authenticator)">
+    <SettingsCard
+      layout="split"
+      title="Autenticador do cofre"
+      description="Google Authenticator: gera o código de 6 dígitos usado para liberar acesso temporário ao cofre."
+    >
       {confirmDialog}
       {status.enrolled && !secret ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -412,7 +416,7 @@ function SenhasCard() {
   }
 
   return (
-    <SettingsCard title="Cofre de senhas">
+    <SettingsCard>
       <div className="space-y-4">
         {getVaultExpiry() !== null && <VaultExpiryBanner expiresAt={getVaultExpiry()!} />}
         <div className="flex flex-wrap items-center gap-2">
@@ -460,19 +464,31 @@ function SenhasCard() {
             title={items.length === 0 ? "Nenhuma senha cadastrada" : "Nenhum resultado"}
           />
         ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {filtered.map((s) => (
-              <SenhaCard
-                key={s.id}
-                s={s}
-                plainSenha={decrypted[s.id] ?? (s.encrypted ? "…" : s.senha)}
-                onEdit={() => {
-                  setEditing(s);
-                  setOpen(true);
-                }}
-                onDelete={() => remove(s.id)}
-              />
-            ))}
+          <div className="rounded-xl border border-border/60">
+            <div
+              className="hidden gap-4 border-b border-border/60 bg-muted/50 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid md:grid-cols-[minmax(0,1.3fr)_minmax(0,0.8fr)_minmax(0,1.3fr)_minmax(0,1.5fr)_88px]"
+              aria-hidden="true"
+            >
+              <span>Serviço</span>
+              <span>Tipo</span>
+              <span>Usuário</span>
+              <span>Senha</span>
+              <span className="text-right">Ações</span>
+            </div>
+            <ul className="divide-y divide-border/60">
+              {filtered.map((s) => (
+                <SenhaCard
+                  key={s.id}
+                  s={s}
+                  plainSenha={decrypted[s.id] ?? (s.encrypted ? "…" : s.senha)}
+                  onEdit={() => {
+                    setEditing(s);
+                    setOpen(true);
+                  }}
+                  onDelete={() => remove(s.id)}
+                />
+              ))}
+            </ul>
           </div>
         )}
       </div>
@@ -511,54 +527,15 @@ function SenhaCard({
     setTimeout(() => setCopiedField(null), 1200);
   };
   return (
-    <div className="group rounded-lg border border-border bg-background p-4">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium">{s.nome}</p>
-          {s.categoria && (
-            <p className="truncate text-[11px] text-muted-foreground">{s.categoria}</p>
-          )}
-        </div>
-        <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-          <IconButton label="Editar" onClick={onEdit}>
-            <Pencil className="h-3.5 w-3.5" />
-          </IconButton>
-          <IconButton label="Remover" onClick={onDelete}>
-            <X className="h-3.5 w-3.5" />
-          </IconButton>
-        </div>
-      </div>
-      <dl className="mt-3 space-y-1.5 text-xs">
-        {s.usuario && (
-          <div className="flex items-center justify-between gap-2">
-            <span className="truncate text-muted-foreground">{s.usuario}</span>
-            <IconButton
-              label={copiedField === "usuario" ? "Copiado!" : "Copiar usuário"}
-              onClick={() => copy(s.usuario, "usuario")}
-            >
-              <Copy className="h-3 w-3" />
-            </IconButton>
-          </div>
-        )}
-        <div className="flex items-center justify-between gap-2">
-          <span className="truncate font-mono text-muted-foreground">
-            {show ? plainSenha : "•".repeat(Math.min(12, plainSenha.length || 8))}
-          </span>
-          <div className="flex items-center gap-1">
-            <IconButton
-              label={show ? "Ocultar senha" : "Mostrar senha"}
-              onClick={() => setShow((v) => !v)}
-            >
-              {show ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-            </IconButton>
-            <IconButton
-              label={copiedField === "senha" ? "Copiado!" : "Copiar senha"}
-              onClick={() => copy(plainSenha, "senha")}
-            >
-              <Copy className="h-3 w-3" />
-            </IconButton>
-          </div>
-        </div>
+    <li className="grid grid-cols-1 gap-x-4 gap-y-1.5 px-4 py-3 text-sm md:grid-cols-[minmax(0,1.3fr)_minmax(0,0.8fr)_minmax(0,1.3fr)_minmax(0,1.5fr)_88px] md:items-center">
+      <div className="min-w-0">
+        <button
+          type="button"
+          onClick={onEdit}
+          className="block max-w-full truncate text-left font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+        >
+          {s.nome}
+        </button>
         {s.url && (
           <a
             href={s.url}
@@ -570,8 +547,45 @@ function SenhaCard({
             {s.url}
           </a>
         )}
-      </dl>
-    </div>
+      </div>
+      <p className="truncate text-xs text-muted-foreground">{s.categoria || "—"}</p>
+      <div className="flex min-w-0 items-center gap-1">
+        <span className="truncate text-xs text-muted-foreground">{s.usuario || "—"}</span>
+        {s.usuario && (
+          <IconButton
+            label={copiedField === "usuario" ? "Copiado!" : "Copiar usuário"}
+            onClick={() => copy(s.usuario, "usuario")}
+          >
+            <Copy className="h-3 w-3" />
+          </IconButton>
+        )}
+      </div>
+      <div className="flex min-w-0 items-center gap-1">
+        <span className="truncate font-mono text-xs text-muted-foreground">
+          {show ? plainSenha : "•".repeat(Math.min(12, plainSenha.length || 8))}
+        </span>
+        <IconButton
+          label={show ? "Ocultar senha" : "Mostrar senha"}
+          onClick={() => setShow((v) => !v)}
+        >
+          {show ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+        </IconButton>
+        <IconButton
+          label={copiedField === "senha" ? "Copiado!" : "Copiar senha"}
+          onClick={() => copy(plainSenha, "senha")}
+        >
+          <Copy className="h-3 w-3" />
+        </IconButton>
+      </div>
+      <div className="flex items-center gap-1 md:justify-end">
+        <IconButton label="Editar" onClick={onEdit}>
+          <Pencil className="h-3.5 w-3.5" />
+        </IconButton>
+        <IconButton label="Remover" onClick={onDelete}>
+          <X className="h-3.5 w-3.5" />
+        </IconButton>
+      </div>
+    </li>
   );
 }
 
@@ -751,7 +765,7 @@ function SenhasEsquecidasCard({ isAdmin }: { isAdmin: boolean }) {
 
   if (!isAdmin) {
     return (
-      <SettingsCard title="Solicitações de recuperação">
+      <SettingsCard layout="split" title="Recuperação de senha">
         <p className="text-xs text-muted-foreground">
           Apenas administradores podem ver pedidos de "esqueci minha senha".
         </p>
@@ -761,8 +775,9 @@ function SenhasEsquecidasCard({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <SettingsCard
-      title="Solicitações de recuperação"
-      description="Redefina a senha pela linha do membro em Time → Performance do Time (ícone de chave) e marque como resolvido aqui."
+      layout="split"
+      title="Recuperação de senha"
+      description="Pedidos de “esqueci minha senha”. Redefina a senha pela linha do membro em Time → Performance do Time (ícone de chave) e marque como resolvido aqui."
     >
       {error && <p className="mb-2 text-xs text-destructive">{error}</p>}
       {loading ? (

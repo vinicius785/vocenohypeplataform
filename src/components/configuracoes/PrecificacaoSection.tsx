@@ -112,29 +112,24 @@ function PrecificacaoForm() {
   return (
     <div className="space-y-6">
       {historyOpen && <PricingHistoryDialog onClose={() => setHistoryOpen(false)} />}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <SettingsSectionHeader
-          icon={<DollarSign className="h-4 w-4" />}
-          title="Custos e precificação"
-          description="Parâmetros usados pelo Simulador de Proposta (Comercial)."
-        />
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setHistoryOpen(true)}
-          className="shrink-0"
-        >
-          <History className="h-3.5 w-3.5" />
-          Ver histórico
-        </Button>
-      </div>
+      <SettingsSectionHeader
+        icon={<DollarSign className="h-4 w-4" />}
+        title="Custos e precificação"
+        description="Parâmetros usados pelo Simulador de Proposta (Comercial)."
+        actions={
+          <Button type="button" variant="outline" size="sm" onClick={() => setHistoryOpen(true)}>
+            <History className="h-3.5 w-3.5" />
+            Ver histórico
+          </Button>
+        }
+      />
 
       <SettingsCard
+        layout="split"
         title="Percentuais da agência"
-        description="Usados pelo Simulador de Proposta pra calcular o preço final a partir do custo dos influenciadores: Preço final = Custo total ÷ (1 − soma dos percentuais)."
+        description="Preço final = Custo total ÷ (1 − soma dos percentuais)."
       >
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid max-w-xl grid-cols-2 gap-3">
           {(
             [
               ["imposto", "Imposto"],
@@ -179,18 +174,21 @@ function PrecificacaoForm() {
       </SettingsCard>
 
       <SettingsCard
-        title="Custo médio por Tier × Formato"
-        description="Valores praticados com os influenciadores, em R$. Deixe em branco quando não fizer sentido pro tier (ex.: Live geralmente não é orçado à parte)."
+        title="Custo médio por tier e formato"
+        description="Valores praticados com os influenciadores, em R$. Deixe em branco quando não fizer sentido para o tier (ex.: Live geralmente não é orçado à parte)."
       >
-        <div className="max-h-[420px] overflow-auto rounded-lg border border-border/60">
+        <div className="max-h-[480px] overflow-auto rounded-xl border border-border/60">
           <table className="w-full min-w-[720px] border-collapse text-xs">
-            <thead className="sticky top-0 z-10 bg-card">
+            <thead className="sticky top-0 z-10 bg-muted">
               <tr>
-                <th className="sticky left-0 z-20 bg-card px-3 py-2 text-left font-medium text-muted-foreground">
+                <th className="sticky left-0 z-20 bg-muted px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                   Tier
                 </th>
                 {FORMATOS.map((f) => (
-                  <th key={f.id} className="px-3 py-2 text-left font-medium text-muted-foreground">
+                  <th
+                    key={f.id}
+                    className="px-2 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+                  >
                     {f.label}
                   </th>
                 ))}
@@ -198,8 +196,8 @@ function PrecificacaoForm() {
             </thead>
             <tbody>
               {TIERS.map((t) => (
-                <tr key={t.id} className="border-t border-border/60">
-                  <td className="sticky left-0 z-10 whitespace-nowrap bg-card px-3 py-1.5 font-medium text-foreground">
+                <tr key={t.id} className="border-t border-border/60 hover:bg-muted/40">
+                  <td className="sticky left-0 z-10 whitespace-nowrap bg-background px-4 py-1.5 text-sm font-semibold text-foreground">
                     {t.label}
                   </td>
                   {FORMATOS.map((f) => (
@@ -214,7 +212,7 @@ function PrecificacaoForm() {
                           value={settings.custos[t.id]?.[f.id] ?? ""}
                           onChange={(e) => setCusto(t.id, f.id, e.target.value)}
                           placeholder="Sem custo"
-                          className="h-8 w-28 rounded-md border border-border bg-background py-1 pl-7 pr-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+                          className="h-8 w-28 rounded-md border border-border bg-background py-1 pl-7 pr-2 text-right text-xs tabular-nums outline-none focus:ring-2 focus:ring-ring"
                         />
                       </div>
                     </td>

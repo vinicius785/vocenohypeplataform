@@ -47,32 +47,36 @@ function DadosBackupContent() {
       <SettingsSectionHeader
         icon={<Download className="h-4 w-4" />}
         title="Dados e backup"
-        description="Exportação manual dos dados deste workspace armazenados neste navegador."
+        description="Exportação manual dos dados do workspace guardados neste navegador."
         adminOnly
+        actions={
+          <Button type="button" onClick={handleExport} disabled={exporting}>
+            <Download className="h-3.5 w-3.5" />
+            {exporting ? "Gerando..." : "Exportar dados (.json)"}
+          </Button>
+        }
       />
 
-      <SettingsCard
-        title="O que será exportado"
-        description="Um arquivo JSON com os dados deste workspace armazenados neste navegador: clientes, projetos, comercial, financeiro, senhas (criptografadas), entre outros — útil como backup manual, já que parte da plataforma depende de localStorage sincronizado."
-      >
-        <SettingsRow title="Formato" description="Arquivo .json, baixado direto pelo navegador." />
-        <SettingsRow
-          title="Quem pode executar"
-          description="Somente administradores. Cada exportação fica registrada no histórico de auditoria."
-        />
-        <SettingsRow
-          title="Exportar dados"
-          description="Gera e baixa o arquivo agora."
-          control={
-            <Button type="button" onClick={handleExport} disabled={exporting}>
-              <Download className="h-3.5 w-3.5" />
-              {exporting ? "Gerando..." : "Exportar dados (.json)"}
-            </Button>
-          }
-        />
+      <div role="status" aria-live="polite" className="min-h-4">
         {done && (
           <p className="text-xs text-emerald-600 dark:text-emerald-400">Exportação concluída.</p>
         )}
+      </div>
+
+      <SettingsCard
+        layout="split"
+        title="Sobre a exportação"
+        description="Útil como backup manual, já que parte da plataforma depende de dados sincronizados no navegador."
+      >
+        <SettingsRow
+          title="O que será exportado"
+          description="Clientes, projetos, comercial, financeiro e senhas (criptografadas), entre outros."
+        />
+        <SettingsRow title="Formato" description="Arquivo .json, baixado direto pelo navegador." />
+        <SettingsRow
+          title="Quem pode executar"
+          description="Somente administradores. Cada exportação fica registrada na Auditoria."
+        />
       </SettingsCard>
     </div>
   );

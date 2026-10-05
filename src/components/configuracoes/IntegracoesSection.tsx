@@ -49,21 +49,26 @@ function IntegracoesCategoria({
   children: React.ReactNode;
 }) {
   return (
-    <section className="space-y-4">
+    <section className="space-y-4 border-t border-border/60 pt-6 first:border-t-0 first:pt-0">
       <div className="flex items-start gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-foreground/5 text-foreground">
+        <div
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"
+          aria-hidden="true"
+        >
           {icon}
         </div>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+            <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {title}
+            </h2>
             {badge && (
-              <Badge variant="secondary" className="text-[11px] uppercase tracking-wide">
-                {badge}
+              <Badge variant="secondary" className="text-[11px]">
+                {badge === "Administradores" ? "Somente administradores" : badge}
               </Badge>
             )}
           </div>
-          <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+          <p className="mt-0.5 max-w-prose text-xs text-muted-foreground">{description}</p>
         </div>
       </div>
       {children}
@@ -88,7 +93,7 @@ export function IntegracoesSection() {
   }, []);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <SettingsSectionHeader
         icon={<Webhook className="h-4 w-4" />}
         title="Integrações"
@@ -107,7 +112,7 @@ export function IntegracoesSection() {
 
       <IntegracoesCategoria
         icon={<Zap className="h-5 w-5" />}
-        title="Automações e webhooks"
+        title="Automação"
         description="Troca de dados com ferramentas externas (Make, Zapier, Typeform, Slack...)."
         badge="Administradores"
       >
