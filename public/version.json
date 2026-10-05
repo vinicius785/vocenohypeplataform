@@ -1,25 +1,21 @@
 {
-  "version": "1.313.1",
+  "version": "1.313.2",
   "releases": [
     {
-      "version": "1.313.1",
-      "summary": "Detalhe da reunião mais sóbrio e neutro.",
+      "version": "1.313.2",
+      "summary": "A roda do mouse volta a rolar as listas dentro de janelas.",
       "modules": [
         {
-          "name": "REUNIÕES",
-          "tagline": "Detalhe da reunião",
+          "name": "PROJETOS",
+          "tagline": "Seletores nas janelas",
           "items": [
             {
-              "title": "Participantes em tom neutro",
-              "description": "Os cards ficaram sem bordas e fundos verdes. Quem está presente se destaca só por um fundo levemente mais claro e um check discreto."
+              "title": "Rolagem no seletor de status",
+              "description": "Na tarefa aberta, a lista de status agora rola com a roda do mouse até o fim."
             },
             {
-              "title": "Convite em cinza",
-              "description": "O convite (confirmado ou pendente) virou informação secundária, em cinza, sem competir com a presença."
-            },
-            {
-              "title": "Ações e transcrição discretas",
-              "description": "Marcar todos presentes, Abrir e Editar agora são ações neutras, e a transcrição lê como texto editorial."
+              "title": "Vale para outros seletores",
+              "description": "A mesma correção vale para qualquer lista aberta dentro de uma janela, como responsável, prioridade e etiquetas."
             }
           ]
         }
