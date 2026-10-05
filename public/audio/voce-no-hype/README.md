@@ -1,11 +1,11 @@
 # Sound branding — Você no Hype
 
 A família sonora oficial: três sons curtos de **violão de nylon em Ré maior**, com a harmonia da MPB/bossa nova
-(sétima maior e nona). Chat = duas notas (Fá♯→Dó♯); Comercial = progressão de "Beleza Pura" (Am–Dm–G7–C, em Dó); Reunião = cadência Em7(9)→Dmaj7(9).
+(sétima maior e nona). Chat = Lá→A7M de "Detalhes"; Comercial = progressão de "Beleza Pura" (Am–Dm–G7–C, em Dó); Reunião = cadência Em7(9)→Dmaj7(9).
 
 | Arquivo | Evento | Duração | Desenho |
 | --- | --- | --- | --- |
-| `chat-notification.mp3` | Nova mensagem de Chat | ≈ 0,45 s | Curtíssimo: Fá♯4 → Dó♯5 (a sétima maior do Dmaj7), violão de nylon, quase sem cauda |
+| `chat-notification.mp3` | Nova mensagem de Chat | ≈ 0,4 s | Abertura de "Detalhes" (Roberto Carlos, 1971): Lá → Lá7M, violão de nylon, curtíssimo e quase sem cauda |
 | `commercial-notification.mp3` | Notificação Comercial (novo lead) | ≈ 1,0 s | A volta harmônica de "Beleza Pura" (Caetano, 1979): Am → Dm → G7 → C, em Dó maior, quatro batidas leves de violão de nylon |
 | `meeting-notification.mp3` | Lembrete de reunião | ≈ 1,5 s | Cadência da bossa: Em7(9) dedilhado resolvendo em Dmaj7(9), com nota aguda ao final e cauda calma |
 

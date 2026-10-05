@@ -180,11 +180,12 @@ function strum(buf, midis, t0, { gap = 0.03, len = 1.2, amp = 0.4 } = {}) {
 
 // ---------------- Os três sons (todos em MPB: violão de nylon, Ré maior) ----------------
 
-// CHAT — curtíssimo: Fá♯4 → Dó♯5 (a sétima maior do Dmaj7, "cor" clássica da bossa).
+// CHAT — o gesto de abertura de "Detalhes" (Roberto Carlos, 1971): o acorde de Lá e logo o A7M,
+// com a nota Sol♯ que "cai" por baixo (Lá → Lá7M, na posição da cifra original). Curtíssimo.
 function chat() {
-  const b = alloc(0.7);
-  nylon(b, M.Fs4, 0, { len: 0.25, amp: 0.55 });
-  nylon(b, M.Cs5, 0.1, { len: 0.38, amp: 0.55 });
+  const b = alloc(0.8);
+  strum(b, [45, 57, 61, 64], 0, { gap: 0.012, len: 0.2, amp: 0.5 }); // A
+  strum(b, [45, 56, 61, 64], 0.13, { gap: 0.012, len: 0.3, amp: 0.55 }); // A7M
   return lowpass(lowpass(b, 3200), 3200);
 }
 
