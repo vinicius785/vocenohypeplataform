@@ -1,31 +1,29 @@
 import { useMemo } from "react";
-import { groupByCliente, revenueConcentration, fmtBRL } from "@/lib/financeiro-entries";
-import { ChartCard, ChartEmptyState } from "./financeiro-charts-shared";
-import type { AdvancedFilters, useFinanceiroFilteredEntries } from "./useFinanceiroFilteredEntries";
-
-type Filtered = ReturnType<typeof useFinanceiroFilteredEntries>;
+import { groupByCliente, revenueConcentration, fmtBRL, type Entry } from "@/lib/financeiro-entries";
+import { ChartCard } from "./financeiro-charts-shared";
+import type { AdvancedFilters } from "./useFinanceiroFilteredEntries";
 
 /** Ranking compacto — texto + barra proporcional fina, nunca um gráfico
  * grande só pra mostrar um cliente com 100%. */
 export function ReceitaPorClienteChart({
-  filtered,
+  entries,
   onApplyFilter,
 }: {
-  filtered: Filtered;
+  entries: Entry[];
   onApplyFilter: (patch: Partial<AdvancedFilters>) => void;
 }) {
-  const byCliente = useMemo(() => groupByCliente(filtered.visible), [filtered.visible]);
+  const byCliente = useMemo(() => groupByCliente(entries), [entries]);
   const rows = useMemo(() => {
     const total = byCliente.reduce((s, c) => s + c.total, 0);
     return byCliente.map((c) => ({ ...c, pct: total > 0 ? (c.total / total) * 100 : 0 }));
   }, [byCliente]);
   const concentration = useMemo(() => revenueConcentration(byCliente), [byCliente]);
 
+  // Sem receita vinculada a cliente não há o que ranquear: o pai mostra uma linha compacta.
+  if (rows.length === 0) return null;
   return (
     <ChartCard title="Receita por cliente">
-      {rows.length === 0 ? (
-        <ChartEmptyState message="Nenhuma receita vinculada a clientes neste período." />
-      ) : (
+      {
         <>
           <ul className="space-y-2">
             {rows.map((r) => (
@@ -56,7 +54,7 @@ export function ReceitaPorClienteChart({
             </p>
           )}
         </>
-      )}
+      }
     </ChartCard>
   );
 }

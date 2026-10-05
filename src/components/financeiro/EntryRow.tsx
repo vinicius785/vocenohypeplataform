@@ -1,14 +1,23 @@
 import {
   TrendingUp,
   TrendingDown,
-  Link2,
   FileText,
   Check,
   AlertCircle,
   Pencil,
   Trash2,
   PhoneCall,
+  MoreHorizontal,
+  Link2,
+  Eye,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   type Entry,
   diasDeAtraso,
@@ -26,6 +35,7 @@ export function EntryRow({
   onEdit,
   onDelete,
   onRegistrarCobranca,
+  onLink,
 }: {
   e: Entry;
   onView: () => void;
@@ -35,10 +45,14 @@ export function EntryRow({
   /** Só passado nas linhas de "A receber" — cobrança não se aplica a
    * despesas. */
   onRegistrarCobranca?: () => void;
+  /** Abre a edição já focada no vínculo (cliente/campanha). Padrão: `onEdit`. */
+  onLink?: () => void;
 }) {
   const isTerminal = e.status === "recebido" || e.status === "pago" || e.status === "cancelado";
   const atraso = e.status === "vencido" ? diasDeAtraso(e.vencimento) : 0;
   const partial = isPartiallyPaid(e);
+  // Mesmo critério de "sem vínculo" do Resumo: manual em aberto sem cliente, ou com cliente sem campanha.
+  const unlinked = e.editable && !isTerminal && (!e.clienteId || !e.campanhaId);
   return (
     // Div, não <li> — em toda chamada este componente já é envolvido por
     // um <li> do pai (ver MovimentacoesTab.tsx/PendingKindTab.tsx), pra
@@ -79,60 +93,58 @@ export function EntryRow({
         >
           {e.description}
         </p>
-        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-          <span>Vencimento {formatIsoDate(e.vencimento)}</span>
-          <span>·</span>
-          <span className="rounded bg-muted px-1.5 py-0.5">{e.category}</span>
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+          <span>Vence {formatIsoDate(e.vencimento)}</span>
+          {e.category && <span>· {e.category}</span>}
           {(e.clienteNome || e.campanhaNome) && (
-            <span className="inline-flex items-center gap-1 rounded bg-muted/60 px-1.5 py-0.5">
-              <Link2 className="h-3 w-3" />
-              {[e.clienteNome, e.campanhaNome].filter(Boolean).join(" · ")}
+            <span className="inline-flex min-w-0 items-center gap-1">
+              ·<Link2 className="h-3 w-3 shrink-0" aria-hidden="true" />
+              <span className="truncate">
+                {[e.clienteNome, e.campanhaNome].filter(Boolean).join(" · ")}
+              </span>
             </span>
           )}
           {e.invoice && (
-            <span className="inline-flex items-center gap-1 rounded bg-muted/60 px-1.5 py-0.5">
-              <FileText className="h-3 w-3" />
+            <span className="inline-flex items-center gap-1">
+              · <FileText className="h-3 w-3" aria-hidden="true" />
               NF
             </span>
           )}
+          {e.source !== "manual" && <span>· automático</span>}
           <span
-            className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 ${statusTone(e.status)}`}
+            className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] ${statusTone(e.status)}`}
           >
             {e.status === "vencido" && <AlertCircle className="h-3 w-3" />}
             {isTerminal && e.status !== "cancelado" && <Check className="h-3 w-3" />}
             {STATUS_LABEL[e.status]}
             {e.payment?.pagamento && ` ${formatIsoDate(e.payment.pagamento)}`}
           </span>
-          {atraso > 0 && (
-            <span className="rounded bg-danger-soft px-1.5 py-0.5 text-danger">
-              {atraso}d de atraso
-            </span>
-          )}
+          {atraso > 0 && <span className="font-medium text-danger">{atraso}d de atraso</span>}
           {partial && (
-            <span className="rounded bg-warning-soft px-1.5 py-0.5 text-warning">
+            <span className="font-medium text-warning">
               Parcial · saldo {fmtBRL(remainingBalance(e))}
-            </span>
-          )}
-          {e.source !== "manual" && (
-            <span className="rounded bg-muted/60 px-1.5 py-0.5 text-[11px] uppercase tracking-wide">
-              auto
             </span>
           )}
         </div>
       </div>
-      {/* Grupo à direita — anda junto pra uma 2ª linha em telas estreitas
-       * (nunca um botão isolado sobrepondo o texto do meio). */}
+      {/* Valor + UMA ação principal + menu. Em telas estreitas o grupo desce junto (nunca sobrepõe o texto). */}
       <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-        {onRegistrarCobranca && !isTerminal && (
+        <span
+          className={`shrink-0 whitespace-nowrap text-sm font-medium tabular-nums ${
+            e.kind === "receita" ? "text-success" : "text-danger"
+          }`}
+        >
+          {e.kind === "receita" ? "+" : "-"} {fmtBRL(e.amount)}
+        </span>
+        {unlinked && (
           <button
             onClick={(ev) => {
               ev.stopPropagation();
-              onRegistrarCobranca();
+              (onLink ?? onEdit)();
             }}
-            className="shrink-0 cursor-pointer whitespace-nowrap rounded-md border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:border-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-            title="Registrar cobrança"
+            className="shrink-0 cursor-pointer whitespace-nowrap rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:border-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
           >
-            <PhoneCall className="h-3.5 w-3.5" />
+            Vincular
           </button>
         )}
         {!isTerminal && (
@@ -141,46 +153,46 @@ export function EntryRow({
               ev.stopPropagation();
               onMarkPaid();
             }}
-            className="shrink-0 cursor-pointer whitespace-nowrap rounded-md border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:border-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            className="shrink-0 cursor-pointer whitespace-nowrap rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
           >
-            {e.kind === "receita" ? "Marcar recebido" : "Marcar pago"}
+            {e.kind === "receita" ? "Marcar como recebido" : "Marcar como pago"}
           </button>
         )}
-
-        <span
-          className={`shrink-0 whitespace-nowrap text-sm font-medium tabular-nums ${
-            e.kind === "receita" ? "text-success" : "text-danger"
-          }`}
-        >
-          {e.kind === "receita" ? "+" : "-"} {fmtBRL(e.amount)}
-        </span>
-        {e.editable && (
-          // Sempre visível no mobile (sem hover) — só fica oculto até o
-          // hover/foco a partir de `md:` (desktop), onde há espaço e o
-          // gesto de mouse existe.
-          <div className="flex items-center gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
             <button
-              onClick={(ev) => {
-                ev.stopPropagation();
-                onEdit();
-              }}
-              aria-label="Editar"
-              className="cursor-pointer rounded p-1 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              onClick={(ev) => ev.stopPropagation()}
+              aria-label={`Mais ações de ${e.description}`}
+              className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
             >
-              <Pencil className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+              <MoreHorizontal className="h-4 w-4" />
             </button>
-            <button
-              onClick={(ev) => {
-                ev.stopPropagation();
-                onDelete();
-              }}
-              aria-label="Remover"
-              className="cursor-pointer rounded p-1 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-            >
-              <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-            </button>
-          </div>
-        )}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" onClick={(ev) => ev.stopPropagation()}>
+            <DropdownMenuItem onSelect={onView}>
+              <Eye className="h-3.5 w-3.5" /> Ver detalhes
+            </DropdownMenuItem>
+            {onRegistrarCobranca && !isTerminal && (
+              <DropdownMenuItem onSelect={onRegistrarCobranca}>
+                <PhoneCall className="h-3.5 w-3.5" /> Registrar cobrança
+              </DropdownMenuItem>
+            )}
+            {e.editable && (
+              <>
+                <DropdownMenuItem onSelect={onEdit}>
+                  <Pencil className="h-3.5 w-3.5" /> Editar
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={onDelete}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Excluir
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );

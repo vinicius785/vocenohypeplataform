@@ -120,11 +120,9 @@ export function FinanceiroSection() {
           title="Financeiro"
           description="Posição atual, lançamentos e análises financeiras."
           actionsSlot={
-            topTab !== "analises" ? (
-              <Button variant="primary" size="comfortable" onClick={() => setNewOpen(true)}>
-                <Plus className="h-4 w-4" /> Novo lançamento
-              </Button>
-            ) : undefined
+            <Button variant="primary" size="comfortable" onClick={() => setNewOpen(true)}>
+              <Plus className="h-4 w-4" /> Novo lançamento
+            </Button>
           }
         />
 
@@ -138,9 +136,10 @@ export function FinanceiroSection() {
               options={FINANCEIRO_TABS.map((t) => ({ value: t.key, label: t.label }))}
             />
           </div>
-          {/* O período vale pro Resumo, pra lista de Lançamentos e pra visão "Por
-           * campanha"; Análises → Geral olha todo o histórico, então não o mostra. */}
-          {topTab !== "lancamentos" && (topTab !== "analises" || analiseView === "campanhas") && (
+          {/* Período = contexto GLOBAL, uma única vez, separado dos filtros. Vale para o
+           * Resumo, para Lançamentos e para "Por campanha"; Análises → Geral olha todo o
+           * histórico, então não o mostra. */}
+          {(topTab !== "analises" || analiseView === "campanhas") && (
             <PeriodPicker filtered={filtered} />
           )}
         </div>

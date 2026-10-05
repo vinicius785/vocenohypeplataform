@@ -115,6 +115,8 @@ export type AdvancedFilters = {
   possuiComprovante?: boolean;
   formaPagamento?: string;
   origem?: Source;
+  /** Qualidade de cadastro (lançamentos manuais em aberto) — alimenta "Vincular" do Resumo. */
+  vinculo?: "sem_cliente" | "sem_categoria" | "sem_campanha";
 };
 
 export const DEFAULT_FILTERS: AdvancedFilters = { tipo: "todos", status: [], query: "" };
@@ -143,6 +145,13 @@ export function matchesFilters(e: Entry, f: AdvancedFilters): boolean {
   if (f.valorMax != null && e.amount > f.valorMax) return false;
   if (f.formaPagamento && e.formaPagamento !== f.formaPagamento) return false;
   if (f.origem && e.source !== f.origem) return false;
+  if (f.vinculo) {
+    const aberto = e.status === "a_receber" || e.status === "a_pagar" || e.status === "vencido";
+    if (!e.editable || !aberto) return false;
+    if (f.vinculo === "sem_cliente" && e.clienteId) return false;
+    if (f.vinculo === "sem_categoria" && e.category) return false;
+    if (f.vinculo === "sem_campanha" && !(e.clienteId && !e.campanhaId)) return false;
+  }
   if (f.possuiNotaFiscal != null) {
     const hasNf = (e.anexos ?? []).some((a) => a.categoria === "Nota fiscal") || !!e.invoice;
     if (hasNf !== f.possuiNotaFiscal) return false;

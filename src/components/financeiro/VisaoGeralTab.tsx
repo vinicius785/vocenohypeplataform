@@ -8,11 +8,13 @@ import {
 import {
   computeSaldoAtual,
   computeSaldoProjetado,
+  hasCashFlowData,
   projectionHorizonTo,
   type ProjectionHorizon,
 } from "@/lib/financeiro-entries";
 import { useSaldoInicial } from "@/lib/financeiro-saldo-inicial-store";
 import { PosicaoResumo } from "./PosicaoFinanceira";
+import { ProjecaoCaixa } from "./ProjecaoCaixa";
 import { RequerAtencaoList } from "./RequerAtencaoList";
 import { SaldoInicialDialog } from "./SaldoInicialDialog";
 import { FluxoCaixaChart } from "./FluxoCaixaChart";
@@ -21,8 +23,9 @@ import { AReceberAPagarPreview } from "./AReceberAPagarPreview";
 type Filtered = ReturnType<typeof useFinanceiroFilteredEntries>;
 
 /** Resumo — "como estamos?" numa leitura só, de cima pra baixo:
- * posição (saldo, entradas, saídas, resultado, projetado) → o que pede
- * atenção (só aparece se houver) → fluxo de caixa → a receber / a pagar.
+ * posição (saldo, entradas, saídas, resultado) → o que pede atenção (só
+ * aparece se houver) → a receber / a pagar → projeção de caixa → fluxo de
+ * caixa (só com movimento suficiente).
  * O período é o contexto global da página (vive em `FinanceiroSection`),
  * não um controle próprio deste bloco. */
 export function VisaoGeralTab({
@@ -78,8 +81,6 @@ export function VisaoGeralTab({
         previousVisible={previousVisible}
         range={range}
         saldoInicial={saldoInicial}
-        horizon={horizon}
-        onHorizonChange={setHorizon}
         onConfigureSaldo={() => setConfiguringSaldo(true)}
       />
 
@@ -89,13 +90,21 @@ export function VisaoGeralTab({
         onApplyFilter={applyAlertAndGo}
       />
 
-      <FluxoCaixaChart filtered={filtered} />
-
       <AReceberAPagarPreview
         all={all}
         onVerAReceber={onNavigateToAReceber}
         onVerAPagar={onNavigateToAPagar}
       />
+
+      <ProjecaoCaixa
+        all={all}
+        saldoInicial={saldoInicial}
+        horizon={horizon}
+        onHorizonChange={setHorizon}
+        onConfigureSaldo={() => setConfiguringSaldo(true)}
+      />
+
+      {hasCashFlowData(all) && <FluxoCaixaChart filtered={filtered} />}
 
       {configuringSaldo && (
         <SaldoInicialDialog

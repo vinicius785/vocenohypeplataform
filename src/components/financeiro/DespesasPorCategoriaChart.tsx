@@ -1,30 +1,27 @@
 import { useMemo } from "react";
-import { groupByCategoria, fmtBRL } from "@/lib/financeiro-entries";
-import { ChartCard, ChartEmptyState } from "./financeiro-charts-shared";
-import type { AdvancedFilters, useFinanceiroFilteredEntries } from "./useFinanceiroFilteredEntries";
-
-type Filtered = ReturnType<typeof useFinanceiroFilteredEntries>;
+import { groupByCategoria, fmtBRL, type Entry } from "@/lib/financeiro-entries";
+import { ChartCard } from "./financeiro-charts-shared";
+import type { AdvancedFilters } from "./useFinanceiroFilteredEntries";
 
 /** Ranking compacto — texto + barra proporcional fina, nunca um gráfico
  * grande só pra mostrar uma categoria com 100%. */
 export function DespesasPorCategoriaChart({
-  filtered,
+  entries,
   onApplyFilter,
 }: {
-  filtered: Filtered;
+  entries: Entry[];
   onApplyFilter: (patch: Partial<AdvancedFilters>) => void;
 }) {
   const rows = useMemo(() => {
-    const grouped = groupByCategoria(filtered.visible, "despesa");
+    const grouped = groupByCategoria(entries, "despesa");
     const total = grouped.reduce((s, g) => s + g.total, 0);
     return grouped.map((g) => ({ ...g, pct: total > 0 ? (g.total / total) * 100 : 0 }));
-  }, [filtered.visible]);
+  }, [entries]);
 
+  if (rows.length === 0) return null;
   return (
     <ChartCard title="Despesas por categoria">
-      {rows.length === 0 ? (
-        <ChartEmptyState message="Nenhuma despesa neste período." />
-      ) : (
+      {
         <ul className="space-y-2">
           {rows.map((r) => (
             <li key={r.categoria}>
@@ -47,7 +44,7 @@ export function DespesasPorCategoriaChart({
             </li>
           ))}
         </ul>
-      )}
+      }
     </ChartCard>
   );
 }

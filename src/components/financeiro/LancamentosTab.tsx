@@ -1,6 +1,4 @@
 import { useEffect, useMemo } from "react";
-import { Upload } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { LANCAMENTOS_SEGMENTS, type LancamentosSegment } from "@/lib/section-nav";
 import { DUE_BUCKET_LABEL, fmtBRL, groupByDueBucket } from "@/lib/financeiro-entries";
@@ -58,9 +56,6 @@ export function LancamentosTab({
             options={LANCAMENTOS_SEGMENTS.map((s) => ({ value: s.key, label: s.label }))}
           />
         </div>
-        <Button variant="outline" size="sm" onClick={() => onImportOpenChange(true)}>
-          <Upload className="h-3.5 w-3.5" /> Importar
-        </Button>
       </div>
 
       {buckets && (

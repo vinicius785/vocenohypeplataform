@@ -1,5 +1,11 @@
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, Download, Inbox } from "lucide-react";
+import { ChevronDown, ChevronRight, Download, Inbox, MoreHorizontal, Upload } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useClientes } from "@/lib/clientes-store";
 import {
   type Entry,
@@ -211,9 +217,21 @@ export function MovimentacoesTab({
               Excluir {editableSelected.length} selecionado{editableSelected.length > 1 ? "s" : ""}
             </Button>
           )}
-          <Button variant="outline" size="sm" onClick={() => exportCsv(visible)}>
-            <Download className="h-3 w-3" /> Exportar CSV
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" aria-label="Importar e exportar">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => onImportOpenChange(true)}>
+                <Upload className="h-3.5 w-3.5" /> Importar lançamentos
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => exportCsv(visible)}>
+                <Download className="h-3.5 w-3.5" /> Exportar CSV
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 

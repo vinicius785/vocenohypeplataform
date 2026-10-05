@@ -1110,6 +1110,39 @@ export function computeSaldoProjetado(
   return saldoAtual + receitasAbertas - despesasAbertas;
 }
 
+/** Entradas e saídas PREVISTAS até o horizonte (em aberto — a receber/a pagar/vencidas, pelo saldo
+ * restante): as duas parcelas que separam `computeSaldoAtual` de `computeSaldoProjetado`. */
+export function projectionBreakdown(
+  all: Entry[],
+  horizonTo: string,
+): { entradas: number; saidas: number } {
+  let entradas = 0;
+  let saidas = 0;
+  for (const e of all) {
+    if (e.status !== "a_receber" && e.status !== "a_pagar" && e.status !== "vencido") continue;
+    if (e.vencimento > horizonTo) continue;
+    const valor = remainingBalance(e);
+    if (e.kind === "receita") entradas += valor;
+    else saidas += valor;
+  }
+  return { entradas, saidas };
+}
+
+/** O fluxo de caixa só vale a pena quando há movimento suficiente em volta de hoje (±30 dias):
+ * liquidado nesse intervalo ou em aberto vencendo nele. Poucos pontos viram um gráfico vazio. */
+export function hasCashFlowData(all: Entry[], today = todayISO(), minEntries = 3): boolean {
+  const from = isoAddDays(today, -30);
+  const to = isoAddDays(today, 30);
+  let n = 0;
+  for (const e of all) {
+    if (e.status === "cancelado") continue;
+    const realized = e.status === "recebido" || e.status === "pago";
+    const date = realized ? (e.payment?.pagamento ?? e.vencimento) : e.vencimento;
+    if (date >= from && date <= to && ++n >= minEntries) return true;
+  }
+  return false;
+}
+
 export type ProjectionHorizon = "fim_do_mes" | "30dias" | "90dias";
 export const PROJECTION_HORIZON_OPTIONS: { value: ProjectionHorizon; label: string }[] = [
   { value: "fim_do_mes", label: "Até o fim do mês" },

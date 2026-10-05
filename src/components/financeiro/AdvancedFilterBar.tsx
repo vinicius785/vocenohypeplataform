@@ -3,7 +3,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FilterChips, FilterSearch } from "@/components/shared/FilterToolbar";
-import { PeriodPicker } from "./PeriodPicker";
 import { useClientes } from "@/lib/clientes-store";
 import {
   type EntryStatus,
@@ -120,6 +119,17 @@ export function AdvancedFilterBar({ filtered }: { filtered: Filtered }) {
       key: "forma",
       label: filters.formaPagamento,
       onRemove: () => setF({ formaPagamento: undefined }),
+    });
+  if (filters.vinculo)
+    chips.push({
+      key: "vinculo",
+      label:
+        filters.vinculo === "sem_cliente"
+          ? "Sem cliente"
+          : filters.vinculo === "sem_campanha"
+            ? "Sem campanha"
+            : "Sem categoria",
+      onRemove: () => setF({ vinculo: undefined }),
     });
   if (filters.origem)
     chips.push({
@@ -321,9 +331,6 @@ export function AdvancedFilterBar({ filtered }: { filtered: Filtered }) {
             </div>
           </PopoverContent>
         </Popover>
-
-        {/* Contexto (não é filtro): vale para a lista e para os KPIs; não gera chip. */}
-        <PeriodPicker filtered={filtered} />
       </div>
 
       <FilterChips

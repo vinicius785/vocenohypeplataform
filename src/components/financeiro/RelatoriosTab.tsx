@@ -5,22 +5,23 @@ import {
   fmtBRL,
   fmtMonth,
   groupByAging,
+  groupByCategoria,
+  groupByCliente,
   groupByDueBucket,
   prazoMedioLiquidacao,
-  valoresSemVinculo,
 } from "@/lib/financeiro-entries";
-import { ChartCard, ChartEmptyState } from "./financeiro-charts-shared";
+import { ChartCard } from "./financeiro-charts-shared";
 import { ReceitaPorClienteChart } from "./ReceitaPorClienteChart";
 import { DespesasPorCategoriaChart } from "./DespesasPorCategoriaChart";
 import type { AdvancedFilters, useFinanceiroFilteredEntries } from "./useFinanceiroFilteredEntries";
 
 type Filtered = ReturnType<typeof useFinanceiroFilteredEntries>;
 
-/** Relatórios — cada bloco responde diretamente uma pergunta financeira,
- * usando só os dados/funções que já existem no domínio (nenhuma métrica
- * fictícia). Olha o histórico inteiro (`all`), não o período selecionado
- * no topo — um relatório de evolução mensal não faz sentido recortado
- * pelo período de "hoje" ou "esta semana". */
+/** Análises (Geral) — só aparece o que tem dado. Cada análise com informação vira um bloco do
+ * tamanho do que mostra; as sem dado não ocupam card: ficam numa lista curta ao final ("Sem dados
+ * no momento"), uma linha cada. Olha o histórico inteiro (`all`), nunca o período da página — por
+ * isso as classificações (cliente, categoria) usam `all`, não `visible`. Nenhuma métrica nova:
+ * mesmas funções puras do domínio de sempre. */
 export function RelatoriosTab({
   filtered,
   onApplyFilter,
@@ -35,35 +36,64 @@ export function RelatoriosTab({
     return cashFlowSeries(liquidados, "month").slice(-6);
   }, [all]);
 
-  const aReceberAberto = useMemo(
+  const receitas = useMemo(
     () => all.filter((e) => e.kind === "receita" && e.status !== "cancelado"),
     [all],
   );
-  const bucketsReceber = useMemo(() => groupByDueBucket(aReceberAberto), [aReceberAberto]);
+  const bucketsReceber = useMemo(() => groupByDueBucket(receitas), [receitas]);
   const totalAberto = Object.values(bucketsReceber).reduce((s, b) => s + b.total, 0);
-  const inadimplenciaPct =
-    totalAberto > 0 ? (bucketsReceber.vencido.total / totalAberto) * 100 : null;
-
-  const agingReceber = useMemo(() => groupByAging(aReceberAberto), [aReceberAberto]);
-  const semVinculo = useMemo(() => valoresSemVinculo(all), [all]);
+  const vencido = bucketsReceber.vencido;
+  const agingReceber = useMemo(() => groupByAging(receitas), [receitas]);
+  const agingRows = (Object.keys(agingReceber) as (keyof typeof agingReceber)[]).filter(
+    (k) => agingReceber[k].count > 0,
+  );
 
   const prazoRecebimento = useMemo(() => prazoMedioLiquidacao(all, "receita"), [all]);
   const prazoPagamento = useMemo(() => prazoMedioLiquidacao(all, "despesa"), [all]);
 
+  const temReceitaPorCliente = useMemo(() => groupByCliente(all).length > 0, [all]);
+  const temDespesaPorCategoria = useMemo(() => groupByCategoria(all, "despesa").length > 0, [all]);
+
+  const temEvolucao = evolucaoMensal.length > 0;
+  const temInadimplencia = vencido.count > 0;
+  const temPrazo = prazoRecebimento != null || prazoPagamento != null;
+
+  const semDados: { titulo: string; motivo: string }[] = [];
+  if (!temEvolucao)
+    semDados.push({
+      titulo: "Evolução mensal",
+      motivo: "aparece quando houver lançamentos liquidados.",
+    });
+  if (!temReceitaPorCliente)
+    semDados.push({
+      titulo: "Receita por cliente",
+      motivo: "nenhuma receita vinculada a cliente ainda.",
+    });
+  if (!temDespesaPorCategoria)
+    semDados.push({ titulo: "Despesas por categoria", motivo: "nenhuma despesa ainda." });
+  if (!temInadimplencia)
+    semDados.push({
+      titulo: "Inadimplência e aging",
+      motivo: totalAberto > 0 ? "nenhum recebível vencido." : "nenhum valor em aberto a receber.",
+    });
+  if (!temPrazo)
+    semDados.push({
+      titulo: "Prazo médio de liquidação",
+      motivo: "aparece depois do primeiro lançamento liquidado.",
+    });
+
   return (
     <div className="space-y-6">
-      <ChartCard title="Evolução mensal — receitas, despesas e resultado (realizado)">
-        {evolucaoMensal.length === 0 ? (
-          <ChartEmptyState message="Nenhum lançamento liquidado ainda para compor a evolução mensal." />
-        ) : (
+      {temEvolucao && (
+        <ChartCard title="Evolução mensal" description="Receitas, despesas e resultado realizados.">
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-                  <th className="py-1.5 pr-3 font-medium">Mês</th>
-                  <th className="py-1.5 pr-3 text-right font-medium">Receitas</th>
-                  <th className="py-1.5 pr-3 text-right font-medium">Despesas</th>
-                  <th className="py-1.5 text-right font-medium">Resultado</th>
+                <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-text-secondary">
+                  <th className="py-2 pr-3 font-medium">Mês</th>
+                  <th className="py-2 pr-3 text-right font-medium">Receitas</th>
+                  <th className="py-2 pr-3 text-right font-medium">Despesas</th>
+                  <th className="py-2 text-right font-medium">Resultado</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
@@ -71,17 +101,17 @@ export function RelatoriosTab({
                   const resultado = p.receitaRealizada - p.despesaRealizada;
                   return (
                     <tr key={p.bucket}>
-                      <td className="py-1.5 pr-3 font-medium text-foreground">
+                      <td className="py-2 pr-3 font-medium text-foreground">
                         {fmtMonth(p.bucket)}
                       </td>
-                      <td className="py-1.5 pr-3 text-right tabular-nums text-success">
+                      <td className="py-2 pr-3 text-right tabular-nums text-success">
                         {fmtBRL(p.receitaRealizada)}
                       </td>
-                      <td className="py-1.5 pr-3 text-right tabular-nums text-danger">
+                      <td className="py-2 pr-3 text-right tabular-nums text-danger">
                         {fmtBRL(p.despesaRealizada)}
                       </td>
                       <td
-                        className={`py-1.5 text-right font-medium tabular-nums ${resultado >= 0 ? "text-success" : "text-danger"}`}
+                        className={`py-2 text-right font-medium tabular-nums ${resultado >= 0 ? "text-success" : "text-danger"}`}
                       >
                         {fmtBRL(resultado)}
                       </td>
@@ -91,92 +121,101 @@ export function RelatoriosTab({
               </tbody>
             </table>
           </div>
-        )}
-      </ChartCard>
+        </ChartCard>
+      )}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      {(temReceitaPorCliente || temDespesaPorCategoria) && (
+        <div
+          className={`grid grid-cols-1 gap-6 ${
+            temReceitaPorCliente && temDespesaPorCategoria ? "lg:grid-cols-2" : ""
+          }`}
+        >
+          <ReceitaPorClienteChart entries={all} onApplyFilter={onApplyFilter} />
+          <DespesasPorCategoriaChart entries={all} onApplyFilter={onApplyFilter} />
+        </div>
+      )}
+
+      {temInadimplencia && (
         <ChartCard title="Inadimplência">
-          {inadimplenciaPct == null ? (
-            <ChartEmptyState message="Nenhum valor em aberto — nada a receber para calcular inadimplência." />
-          ) : (
-            <>
-              <p className="text-2xl font-semibold tabular-nums text-foreground">
-                {inadimplenciaPct.toFixed(1)}%
-              </p>
-              <p className="text-[11px] text-muted-foreground">
-                {fmtBRL(bucketsReceber.vencido.total)} vencidos de {fmtBRL(totalAberto)} em aberto
-                (toda a carteira de receitas)
-              </p>
-            </>
-          )}
-        </ChartCard>
-
-        <ChartCard title="Prazo médio de liquidação">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-2xl font-semibold tabular-nums text-foreground">
-                {prazoRecebimento == null ? "—" : `${prazoRecebimento}d`}
-              </p>
-              <p className="text-[11px] text-muted-foreground">
-                Recebimento (vencimento → liquidação)
-              </p>
-            </div>
-            <div>
-              <p className="text-2xl font-semibold tabular-nums text-foreground">
-                {prazoPagamento == null ? "—" : `${prazoPagamento}d`}
-              </p>
-              <p className="text-[11px] text-muted-foreground">
-                Pagamento (vencimento → liquidação)
-              </p>
-            </div>
+          <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
+            <p className="text-2xl font-semibold tabular-nums text-danger">
+              {fmtBRL(vencido.total)}
+            </p>
+            <p className="text-sm text-text-secondary">
+              {vencido.count} recebível{vencido.count > 1 ? "is" : ""} vencido
+              {vencido.count > 1 ? "s" : ""}
+              {totalAberto > 0 &&
+                ` · ${((vencido.total / totalAberto) * 100).toFixed(0)}% do que há em aberto`}
+            </p>
           </div>
+          <table className="mt-4 w-full text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-text-secondary">
+                <th className="py-2 pr-3 font-medium">Atraso</th>
+                <th className="py-2 pr-3 text-right font-medium">Valor</th>
+                <th className="py-2 text-right font-medium">Lançamentos</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/60">
+              {agingRows.map((k) => (
+                <tr key={k}>
+                  <td className="py-2 pr-3 text-foreground">{AGING_BUCKET_LABEL[k]}</td>
+                  <td className="py-2 pr-3 text-right tabular-nums text-foreground">
+                    {fmtBRL(agingReceber[k].total)}
+                  </td>
+                  <td className="py-2 text-right tabular-nums text-text-secondary">
+                    {agingReceber[k].count}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </ChartCard>
-      </div>
+      )}
 
-      <ChartCard title="Aging de recebíveis vencidos">
-        {Object.values(agingReceber).every((b) => b.count === 0) ? (
-          <ChartEmptyState message="Nenhum recebível vencido." />
-        ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-            {(Object.keys(agingReceber) as (keyof typeof agingReceber)[]).map((k) => (
-              <div key={k} className="rounded-lg border border-border p-2.5">
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                  {AGING_BUCKET_LABEL[k]}
-                </p>
-                <p className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">
-                  {fmtBRL(agingReceber[k].total)}
-                </p>
-                <p className="text-[11px] text-muted-foreground">{agingReceber[k].count} lanç.</p>
+      {temPrazo && (
+        <ChartCard
+          title="Prazo médio de liquidação"
+          description="Dias entre o vencimento e a liquidação, só sobre lançamentos já liquidados."
+        >
+          <dl className="grid grid-cols-2 gap-6">
+            {prazoRecebimento != null && (
+              <div>
+                <dt className="text-xs text-text-secondary">Recebimento</dt>
+                <dd className="mt-0.5 text-2xl font-semibold tabular-nums text-foreground">
+                  {prazoRecebimento}d
+                </dd>
               </div>
-            ))}
-          </div>
-        )}
-      </ChartCard>
+            )}
+            {prazoPagamento != null && (
+              <div>
+                <dt className="text-xs text-text-secondary">Pagamento</dt>
+                <dd className="mt-0.5 text-2xl font-semibold tabular-nums text-foreground">
+                  {prazoPagamento}d
+                </dd>
+              </div>
+            )}
+          </dl>
+        </ChartCard>
+      )}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <ReceitaPorClienteChart filtered={filtered} onApplyFilter={onApplyFilter} />
-        <DespesasPorCategoriaChart filtered={filtered} onApplyFilter={onApplyFilter} />
-      </div>
-
-      <ChartCard title="Valores sem vínculo">
-        {semVinculo.count === 0 ? (
-          <ChartEmptyState message="Todo lançamento em aberto está vinculado a cliente e campanha." />
-        ) : (
-          <button
-            type="button"
-            onClick={() => onApplyFilter({ tipo: "todos" })}
-            className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-warning-border bg-warning-soft px-3 py-2 text-left text-xs hover:bg-warning-soft/70"
+      {semDados.length > 0 && (
+        <section aria-labelledby="fin-sem-dados">
+          <h2
+            id="fin-sem-dados"
+            className="text-xs font-semibold uppercase tracking-wide text-text-secondary"
           >
-            <span className="text-foreground">
-              {semVinculo.count} lançamento{semVinculo.count > 1 ? "s" : ""} em aberto sem cliente
-              ou sem campanha vinculada
-            </span>
-            <span className="font-medium tabular-nums text-foreground">
-              {fmtBRL(semVinculo.total)}
-            </span>
-          </button>
-        )}
-      </ChartCard>
+            Sem dados no momento
+          </h2>
+          <ul className="mt-2 space-y-1 text-sm text-text-secondary">
+            {semDados.map((d) => (
+              <li key={d.titulo}>
+                <span className="font-medium text-foreground">{d.titulo}</span> — {d.motivo}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }

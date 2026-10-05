@@ -1,17 +1,12 @@
 import {
   computeSaldoAtual,
-  computeSaldoProjetado,
-  projectionHorizonTo,
   resultadoRealizado,
   fmtBRL,
-  PROJECTION_HORIZON_OPTIONS,
   type Entry,
-  type ProjectionHorizon,
 } from "@/lib/financeiro-entries";
 import type { DateRange } from "@/components/financeiro/useFinanceiroFilteredEntries";
 import type { SaldoInicialConfig } from "@/lib/financeiro-saldo-inicial-store";
 import { KpiCell, KpiStrip } from "@/components/shared/Kpi";
-import { NativeSelect } from "@/components/ui/native-select";
 
 function pctDelta(current: number, previous: number): number | null {
   if (previous === 0) return null;
@@ -37,7 +32,7 @@ function Delta({ delta, goodWhenUp = true }: { delta: number | null; goodWhenUp?
 }
 
 /** Posição financeira — "como estamos?" numa faixa de KPIs só (componente
- * `KpiStrip`): saldo atual, entradas, saídas, resultado e projetado, todos com
+ * `KpiStrip`): saldo atual, entradas, saídas e resultado, todos com
  * o mesmo tratamento. O saldo é um número do Resumo, não um cabeçalho. Mesmas
  * funções puras de sempre (`computeSaldoAtual`/`computeSaldoProjetado`/
  * `resultadoRealizado`). */
@@ -47,8 +42,6 @@ export function PosicaoResumo({
   previousVisible,
   range,
   saldoInicial,
-  horizon,
-  onHorizonChange,
   onConfigureSaldo,
 }: {
   all: Entry[];
@@ -56,12 +49,9 @@ export function PosicaoResumo({
   previousVisible: Entry[];
   range: DateRange;
   saldoInicial: SaldoInicialConfig;
-  horizon: ProjectionHorizon;
-  onHorizonChange: (h: ProjectionHorizon) => void;
   onConfigureSaldo: () => void;
 }) {
   const saldoAtual = computeSaldoAtual(saldoInicial, all);
-  const saldoProjetado = computeSaldoProjetado(saldoAtual, all, projectionHorizonTo(horizon));
   const atual = resultadoRealizado(visible, range);
   const anterior = resultadoRealizado(previousVisible, range);
 
@@ -92,25 +82,6 @@ export function PosicaoResumo({
       <KpiCell
         label="Resultado"
         value={`${atual.resultado >= 0 ? "+" : ""}${fmtBRL(atual.resultado)}`}
-      />
-      <KpiCell
-        label="Projetado"
-        labelExtra={
-          <NativeSelect
-            value={horizon}
-            onChange={(e) => onHorizonChange(e.target.value as ProjectionHorizon)}
-            aria-label="Horizonte da projeção"
-            size="sm"
-          >
-            {PROJECTION_HORIZON_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </NativeSelect>
-        }
-        value={saldoProjetado == null ? "—" : fmtBRL(saldoProjetado)}
-        complement={saldoProjetado == null ? "Depende do saldo atual" : undefined}
       />
     </KpiStrip>
   );

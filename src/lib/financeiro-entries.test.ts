@@ -20,7 +20,13 @@ import {
   dedupeImportEntries,
   prazoMedioLiquidacao,
   buildEntries,
+  projectionBreakdown,
+  hasCashFlowData,
 } from "./financeiro-entries";
+import {
+  DEFAULT_FILTERS,
+  matchesFilters,
+} from "@/components/financeiro/useFinanceiroFilteredEntries";
 import { clienteStatus } from "@/components/clientes/cliente-ui";
 import type { Cliente } from "./clientes-store";
 import type { Campaign } from "@/components/VincularCampanhaDialog";
@@ -468,5 +474,63 @@ describe("buildEntries — filtro por status de campanha/cliente", () => {
     ];
     const entries = buildEntries(clientes, [], {}, {});
     expect(entries.some((e) => e.campanhaId === "c7")).toBe(false);
+  });
+});
+
+describe("projectionBreakdown", () => {
+  const all = [
+    makeEntry({ kind: "receita", status: "a_receber", vencimento: "2026-06-20", amount: 500 }),
+    makeEntry({ kind: "despesa", status: "a_pagar", vencimento: "2026-06-25", amount: 200 }),
+    makeEntry({ kind: "despesa", status: "vencido", vencimento: "2026-06-01", amount: 100 }),
+    makeEntry({ kind: "receita", status: "a_receber", vencimento: "2026-09-01", amount: 9999 }),
+    makeEntry({ kind: "receita", status: "recebido", vencimento: "2026-06-05", amount: 300 }),
+    makeEntry({ kind: "despesa", status: "cancelado", vencimento: "2026-06-06", amount: 50 }),
+  ];
+  it("soma só o que está em aberto e vence até o horizonte (vencidos entram)", () => {
+    expect(projectionBreakdown(all, "2026-06-30")).toEqual({ entradas: 500, saidas: 300 });
+  });
+  it("fecha com computeSaldoProjetado: saldo atual + entradas − saídas", () => {
+    const b = projectionBreakdown(all, "2026-06-30");
+    expect(computeSaldoProjetado(1000, all, "2026-06-30")).toBe(1000 + b.entradas - b.saidas);
+  });
+});
+
+describe("hasCashFlowData", () => {
+  const today = "2026-06-15";
+  it("poucas movimentações em volta de hoje: não vale o gráfico", () => {
+    expect(hasCashFlowData([makeEntry({ vencimento: "2026-06-20" })], today)).toBe(false);
+  });
+  it("3+ em ±30 dias (liquidado ou em aberto): vale", () => {
+    const e = (v: string) => makeEntry({ vencimento: v });
+    expect(hasCashFlowData([e("2026-06-10"), e("2026-06-20"), e("2026-07-01")], today)).toBe(true);
+  });
+  it("fora da janela ou cancelado não conta", () => {
+    const old = makeEntry({ vencimento: "2025-01-01" });
+    const canc = makeEntry({ vencimento: "2026-06-16", status: "cancelado" });
+    expect(hasCashFlowData([old, old, old, canc, canc], today)).toBe(false);
+  });
+});
+
+describe("filtro de vínculo (Precisa de atenção → Vincular)", () => {
+  const f = (vinculo: "sem_cliente" | "sem_categoria" | "sem_campanha") => ({
+    ...DEFAULT_FILTERS,
+    vinculo,
+  });
+  it("sem_cliente: só manuais em aberto sem cliente", () => {
+    expect(matchesFilters(makeEntry({}), f("sem_cliente"))).toBe(true);
+    expect(matchesFilters(makeEntry({ clienteId: "c1" }), f("sem_cliente"))).toBe(false);
+    expect(matchesFilters(makeEntry({ status: "recebido" }), f("sem_cliente"))).toBe(false);
+    expect(matchesFilters(makeEntry({ editable: false }), f("sem_cliente"))).toBe(false);
+  });
+  it("sem_campanha: tem cliente mas não campanha", () => {
+    expect(matchesFilters(makeEntry({ clienteId: "c1" }), f("sem_campanha"))).toBe(true);
+    expect(
+      matchesFilters(makeEntry({ clienteId: "c1", campanhaId: "k1" }), f("sem_campanha")),
+    ).toBe(false);
+    expect(matchesFilters(makeEntry({}), f("sem_campanha"))).toBe(false);
+  });
+  it("sem_categoria", () => {
+    expect(matchesFilters(makeEntry({ category: "" }), f("sem_categoria"))).toBe(true);
+    expect(matchesFilters(makeEntry({ category: "Outros" }), f("sem_categoria"))).toBe(false);
   });
 });
