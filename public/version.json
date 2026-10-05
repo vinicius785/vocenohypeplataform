@@ -1,25 +1,25 @@
 {
-  "version": "1.317.0",
+  "version": "1.318.0",
   "releases": [
     {
-      "version": "1.317.0",
-      "summary": "Campos numéricos da inscrição mostram o número exato enquanto você digita.",
+      "version": "1.318.0",
+      "summary": "Telefone e e-mail do influenciador agora ficam visíveis sem precisar editar.",
       "modules": [
         {
-          "name": "INSCRIÇÃO",
-          "tagline": "Página pública de inscrição",
+          "name": "CAMPANHAS",
+          "tagline": "Detalhe do influenciador",
           "items": [
             {
-              "title": "Milhar em tempo real",
-              "description": "Em Seguidores, digitar 211111 mostra 2, 21, 211, 2.111, 21.111 e 211.111 a cada tecla, sem abreviar."
+              "title": "Bloco Contato",
+              "description": "No topo do detalhe do influenciador, telefone e e-mail aparecem direto, sem entrar em Editar."
             },
             {
-              "title": "Edição sem atrapalho",
-              "description": "O cursor fica no lugar certo ao editar no meio do número, e colar um número limpa tudo que não é dígito."
+              "title": "Copiar e abrir",
+              "description": "Cada dado tem Copiar, o telefone abre o WhatsApp e o e-mail abre o envio de mensagem."
             },
             {
-              "title": "Valor salvo sem formatação",
-              "description": "A inscrição guarda o número puro (211111). A pontuação é só visual."
+              "title": "Só o que existe",
+              "description": "Dados ausentes não geram linha vazia. Sem nenhum contato, aparece uma frase curta."
             }
           ]
         }

@@ -77,6 +77,7 @@ import {
   sanitizeHandleForDisplay,
 } from "@/lib/social-profiles";
 import type { CustomQuestionType } from "@/lib/inscricao-page";
+import { InfluencerContact } from "./InfluencerContact";
 import { describeInscricaoSnapshot } from "@/lib/inscricao-snapshot";
 
 /* ============================================================
@@ -4257,6 +4258,8 @@ function WorkspaceDetailBody({
 
   return (
     <div className="space-y-6 px-5 py-5">
+      <InfluencerContact telefone={influ.telefone} email={influ.email} />
+
       {/* Resumo operacional — não repete Status (já visível no cabeçalho);
        * a 4ª célula é o prazo mais próximo, informação nova. */}
       <div className="flex overflow-hidden rounded-lg border border-border">
