@@ -1,6 +1,14 @@
 import { useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Plus, Newspaper, ImageIcon, Calendar, MoreVertical, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Plus,
+  Newspaper,
+  ImageIcon,
+  Calendar,
+  MoreVertical,
+  Trash2,
+} from "lucide-react";
 import type { BlogPost, BlogStatus, Project } from "@/lib/projetos";
 import { notifyBlogEvent } from "@/lib/marketing.functions";
 import {
@@ -46,12 +54,15 @@ export function BlogPanel({
   update,
   editingId: controlledEditingId,
   onEditingIdChange,
+  onBack,
 }: {
   project: Project;
   update: (p: Partial<Project>) => void;
   /** Controlado pela página do Projeto: ao editar um artigo ela mostra SÓ o editor (modo focado). */
   editingId?: string | null;
   onEditingIdChange?: (id: string | null) => void;
+  /** Quando o Blog é aberto por "Recursos", a listagem ganha o título e o caminho de volta ao projeto. */
+  onBack?: () => void;
 }) {
   const posts = project.blog ?? [];
   const [internalEditingId, setInternalEditingId] = useState<string | null>(null);
@@ -203,6 +214,18 @@ export function BlogPanel({
 
   return (
     <div className="space-y-4">
+      {onBack && (
+        <div className="space-y-3">
+          <button
+            type="button"
+            onClick={onBack}
+            className="inline-flex items-center gap-1 rounded-md text-xs text-text-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> {project.name}
+          </button>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Blog</h1>
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-text-secondary">
           {posts.length} {posts.length === 1 ? "artigo" : "artigos"}

@@ -28,6 +28,7 @@ import {
   ArrowLeft,
   ChevronDown,
   FolderOpen,
+  Newspaper,
   type LucideIcon,
 } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
@@ -222,6 +223,8 @@ function ProjetoPage() {
   const [docsOpen, setDocsOpen] = useState(false);
   // Artigo do Blog em edição: a página mostra SÓ o editor (modo focado) até voltar para o Blog.
   const [blogEditingId, setBlogEditingId] = useState<string | null>(null);
+  // Blog aberto por "Recursos": a página mostra só o Blog (lista e editor), não a página corrida.
+  const [blogOpen, setBlogOpen] = useState(false);
   const { id } = Route.useParams();
   const { taskId } = Route.useSearch();
   const navigate = useNavigate();
@@ -354,12 +357,13 @@ function ProjetoPage() {
   const availableSections = FEATURES.map((f) => f.key).filter((k) =>
     featuresWithHypeApp.includes(k),
   );
-  // Documentos (links e arquivos) não é mais uma seção empilhada: abre pelo menu "Recursos" do
-  // cabeçalho, como em Campanhas e no Comercial.
+  // Documentos e Blog não são mais seções empilhadas: abrem pelo menu "Recursos" do cabeçalho,
+  // como em Campanhas e no Comercial.
   const hasDocs = availableSections.includes("documentos");
-  const sections = availableSections.filter((k) => k !== "documentos");
+  const hasBlog = availableSections.includes("blog");
+  const sections = availableSections.filter((k) => k !== "documentos" && k !== "blog");
 
-  if (blogEditingId && project.blog?.some((b) => b.id === blogEditingId)) {
+  if (blogOpen || (blogEditingId && project.blog?.some((b) => b.id === blogEditingId))) {
     return (
       <AppShell active="projetos" onSelect={goToSection}>
         <PageContainer variant="wide" className="space-y-6">
@@ -368,6 +372,10 @@ function ProjetoPage() {
             update={update}
             editingId={blogEditingId}
             onEditingIdChange={setBlogEditingId}
+            onBack={() => {
+              setBlogEditingId(null);
+              setBlogOpen(false);
+            }}
           />
         </PageContainer>
       </AppShell>
@@ -431,7 +439,7 @@ function ProjetoPage() {
             </div>
 
             <div className="flex shrink-0 items-center gap-1.5 self-start">
-              {hasDocs && (
+              {(hasDocs || hasBlog) && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="sm" aria-haspopup="menu">
@@ -440,15 +448,28 @@ function ProjetoPage() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-60">
-                    <DropdownMenuItem onSelect={() => setDocsOpen(true)}>
-                      <FolderOpen className="h-3.5 w-3.5 text-text-secondary" />
-                      <span className="min-w-0 flex-1 truncate">Documentos</span>
-                      {project.docs.length > 0 && (
-                        <span className="text-xs tabular-nums text-text-secondary">
-                          {project.docs.length}
-                        </span>
-                      )}
-                    </DropdownMenuItem>
+                    {hasDocs && (
+                      <DropdownMenuItem onSelect={() => setDocsOpen(true)}>
+                        <FolderOpen className="h-3.5 w-3.5 text-text-secondary" />
+                        <span className="min-w-0 flex-1 truncate">Documentos</span>
+                        {project.docs.length > 0 && (
+                          <span className="text-xs tabular-nums text-text-secondary">
+                            {project.docs.length}
+                          </span>
+                        )}
+                      </DropdownMenuItem>
+                    )}
+                    {hasBlog && (
+                      <DropdownMenuItem onSelect={() => setBlogOpen(true)}>
+                        <Newspaper className="h-3.5 w-3.5 text-text-secondary" />
+                        <span className="min-w-0 flex-1 truncate">Blog</span>
+                        {(project.blog?.length ?? 0) > 0 && (
+                          <span className="text-xs tabular-nums text-text-secondary">
+                            {project.blog?.length}
+                          </span>
+                        )}
+                      </DropdownMenuItem>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
