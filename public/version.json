@@ -1,25 +1,25 @@
 {
-  "version": "1.311.0",
+  "version": "1.312.0",
   "releases": [
     {
-      "version": "1.311.0",
-      "summary": "Detalhe da reunião redesenhado: presença de todos com um clique e transcrição em destaque.",
+      "version": "1.312.0",
+      "summary": "A barra de progresso da inscrição agora mostra o andamento real do preenchimento.",
       "modules": [
         {
-          "name": "REUNIÕES",
-          "tagline": "Detalhe da reunião",
+          "name": "INSCRIÇÃO",
+          "tagline": "Página pública de inscrição",
           "items": [
             {
-              "title": "Marcar todos presentes",
-              "description": "Na reunião, um botão registra a presença de todos os participantes de uma vez, com resumo (2 de 2 presentes) e correção individual em um menu compacto. A presença é separada da resposta ao convite e vale só para aquela data."
+              "title": "Progresso real das etapas",
+              "description": "A barra mostra quantas das etapas foram concluídas de verdade (N de 4 concluídas e o percentual), sem depender de rolagem ou foco."
             },
             {
-              "title": "Transcrição em destaque",
-              "description": "A transcrição ganhou uma seção própria: adicionar, ver tamanho e abrir em uma janela grande, sem precisar passar pelo registro de presença."
+              "title": "Mostra o que falta",
+              "description": "A barra lista o que ainda falta (Faltam: Redes sociais e Materiais) e, com tudo pronto, avisa que dá para enviar."
             },
             {
-              "title": "Detalhe mais claro",
-              "description": "Cabeçalho com data, horário e duração, botão Entrar na reunião no topo, participantes com cargo e resposta, e os detalhes técnicos recolhidos."
+              "title": "Revisar leva ao primeiro pendente",
+              "description": "O botão Revisar inscrição leva ao primeiro item obrigatório pendente; campos opcionais vazios não bloqueiam o envio."
             }
           ]
         }

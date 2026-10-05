@@ -11,9 +11,9 @@ import { resolveLocalizacao, toItems, UF_NAMES } from "@/lib/campanha-localidade
 import { normalizeSocialInput, isDuplicateProfile } from "@/lib/social-profiles";
 import { fetchWorkspace } from "@/lib/workspace-store";
 import {
-  inscricaoSteps,
+  inscricaoProgress,
+  progressCopy,
   validateAnexoFile,
-  validateInscricao,
   type InscricaoRules,
 } from "@/lib/inscricao-validation";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -133,12 +133,15 @@ function InscricaoPage() {
     temAnexo: !!anexo,
     respostas,
   };
-  const errors = useMemo(
-    () => (rules ? validateInscricao(values, rules) : {}),
+  // Andamento, validação, "Faltam" e liberação do envio saem TODOS de `inscricaoProgress`
+  // (mesma `validateInscricao` por baixo) — nunca da seção visível nem do scroll.
+  const progress = useMemo(
+    () => (rules ? inscricaoProgress(values, rules) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [nome, telefone, email, nicho, redes, mensagem, anexo, respostas, data],
   );
-  const steps = rules ? inscricaoSteps(values, rules) : [];
+  const errors = progress?.errors ?? {};
+  const steps = progress?.steps ?? [];
   const stepOf = (id: string) => steps.findIndex((s) => s.id === id) + 1;
   const doneOf = (id: string) => steps.find((s) => s.id === id)?.done ?? false;
   const shown = (key: string) => (attempted || touched[key] ? errors[key] : undefined);
@@ -208,7 +211,8 @@ function InscricaoPage() {
   const { clienteNome, page } = data;
 
   const goFirstError = () => {
-    const first = Object.keys(errors)[0];
+    // Ordem VISUAL das etapas (não a ordem em que a validação lista os erros).
+    const first = progress?.firstRequiredKey;
     if (!first) return;
     const el = document.getElementById(`field-${first}`);
     el?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -217,7 +221,7 @@ function InscricaoPage() {
 
   const review = () => {
     setAttempted(true);
-    if (Object.keys(errors).length > 0) {
+    if (progress?.hasRequiredPending) {
       goFirstError();
       return;
     }
@@ -297,8 +301,8 @@ function InscricaoPage() {
 
   const encerrada = page.status === "ENCERRADA";
   const showBar = !done && !encerrada;
-  const missing = steps.filter((s) => !s.done);
-  const pct = steps.length ? Math.round(((steps.length - missing.length) / steps.length) * 100) : 0;
+  const pct = progress?.percent ?? 0;
+  const copy = progress ? progressCopy(progress) : null;
   const sobre = page.sobre;
   const loc = resolveLocalizacao(sobre);
   const hasLocal = loc.states.length > 0 || loc.localidades.length > 0 || loc.headline.length > 0;
@@ -705,18 +709,20 @@ function InscricaoPage() {
                       n={stepOf("redes")}
                       title={`Redes sociais${page.fields.redes.required ? "" : " (opcional)"}`}
                       description="Escolha onde você publica e informe seu usuário ou link."
-                      done={doneOf("redes") && validRedes.length > 0}
+                      done={doneOf("redes")}
                     >
-                      <SocialPicker
-                        redes={redes}
-                        error={shown("redes")}
-                        dupError={redesDupError}
-                        onAdd={addRede}
-                        onUpdate={updateRede}
-                        onCommit={commitRede}
-                        onRemove={removeRede}
-                        onPrimary={setPrimaryRede}
-                      />
+                      <div id="field-redes" className="scroll-mt-24">
+                        <SocialPicker
+                          redes={redes}
+                          error={shown("redes")}
+                          dupError={redesDupError}
+                          onAdd={addRede}
+                          onUpdate={updateRede}
+                          onCommit={commitRede}
+                          onRemove={removeRede}
+                          onPrimary={setPrimaryRede}
+                        />
+                      </div>
                     </FormStep>
                   )}
 
@@ -728,13 +734,14 @@ function InscricaoPage() {
                       done={doneOf("proposta")}
                     >
                       {page.customQuestions.map((q) => (
-                        <CustomQuestionField
-                          key={q.id}
-                          question={q}
-                          value={respostas[q.id]}
-                          error={shown(`q:${q.id}`)}
-                          onChange={(v) => setRespostas((prev) => ({ ...prev, [q.id]: v }))}
-                        />
+                        <div key={q.id} id={`field-q:${q.id}`} className="scroll-mt-24">
+                          <CustomQuestionField
+                            question={q}
+                            value={respostas[q.id]}
+                            error={shown(`q:${q.id}`)}
+                            onChange={(v) => setRespostas((prev) => ({ ...prev, [q.id]: v }))}
+                          />
+                        </div>
                       ))}
                       {page.fields.mensagem.visible && (
                         <Field
@@ -765,19 +772,21 @@ function InscricaoPage() {
                       n={stepOf("materiais")}
                       title="Materiais"
                       description="Seu mídia kit ajuda a equipe a conhecer melhor o seu trabalho."
-                      done={doneOf("materiais") && !!anexo}
+                      done={doneOf("materiais")}
                     >
-                      <UploadField
-                        anexo={anexo}
-                        uploading={uploading}
-                        required={page.fields.midiaKit.required}
-                        error={anexoError ?? shown("anexo")}
-                        onFile={(f) => void uploadAnexo(f)}
-                        onRemove={() => {
-                          setAnexo(null);
-                          setAnexoError(null);
-                        }}
-                      />
+                      <div id="field-anexo" className="scroll-mt-24">
+                        <UploadField
+                          anexo={anexo}
+                          uploading={uploading}
+                          required={page.fields.midiaKit.required}
+                          error={anexoError ?? shown("anexo")}
+                          onFile={(f) => void uploadAnexo(f)}
+                          onRemove={() => {
+                            setAnexo(null);
+                            setAnexoError(null);
+                          }}
+                        />
+                      </div>
                     </FormStep>
                   )}
                   <button type="submit" className="sr-only">
@@ -813,20 +822,29 @@ function InscricaoPage() {
           </div>
           <div className="mx-auto flex w-full max-w-5xl items-center gap-4 px-6 py-2.5 lg:px-8">
             <div className="min-w-0 flex-1 leading-tight">
-              <p className="truncate text-sm font-medium text-foreground">
-                {reviewing
-                  ? "Revise e envie"
-                  : missing.length === 0
-                    ? "Tudo pronto para revisar"
-                    : `${steps.length - missing.length} de ${steps.length} etapas`}
-              </p>
-              <p className="truncate text-xs text-text-secondary">
-                {reviewing
-                  ? "Depois do envio não é possível editar."
-                  : missing.length === 0
-                    ? "Confira e envie sua inscrição."
-                    : `${missing.length === 1 ? "Falta" : "Faltam"}: ${missing.map((s) => s.label).join(", ")}`}
-              </p>
+              {reviewing || !copy ? (
+                <>
+                  <p className="truncate text-sm font-medium text-foreground">Revise e envie</p>
+                  <p className="truncate text-xs text-text-secondary">
+                    Depois do envio não é possível editar.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
+                    Seu progresso
+                  </p>
+                  <p className="truncate text-sm font-medium tabular-nums text-foreground">
+                    {copy.headline} · {copy.percentText}
+                    {copy.readyText && (
+                      <span className="font-normal text-text-secondary"> · {copy.readyText}</span>
+                    )}
+                  </p>
+                  {copy.missingText && (
+                    <p className="truncate text-xs text-text-secondary">{copy.missingText}</p>
+                  )}
+                </>
+              )}
             </div>
             {reviewing ? (
               <div className="flex shrink-0 items-center gap-2">
@@ -842,7 +860,7 @@ function InscricaoPage() {
                   variant="primary"
                   size="comfortable"
                   onClick={() => void submit()}
-                  disabled={submitting || uploading}
+                  disabled={submitting || uploading || !!progress?.hasRequiredPending}
                 >
                   {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
                   {submitting ? "Enviando..." : "Enviar inscrição"}
@@ -856,7 +874,7 @@ function InscricaoPage() {
                 onClick={review}
                 disabled={uploading}
               >
-                Revisar inscrição
+                {progress?.hasRequiredPending ? "Revisar inscrição" : "Revisar e enviar"}
               </Button>
             )}
           </div>
