@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ArrowLeft, ChevronLeft, ChevronRight, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,8 @@ import {
   buildMonthCells,
   currentMonthKey,
   dayHeading,
+  directoryTaskId,
+  draftFromItem,
   duplicateDraft,
   filterItems,
   groupByDay,
@@ -30,13 +32,18 @@ import {
   overdueDays,
   overdueLabel,
   type EditorialDraft,
+  type EditorialFile,
   type EditorialFilters,
   type EditorialItem,
   type MonthKey,
   channelFormatLabel,
+  taskFromContent,
 } from "@/lib/marketing-editorial";
 import { editorialErrorMessage } from "@/lib/marketing-editorial-store";
 import { formatDateToIso } from "@/lib/utils";
+import { insertStandaloneWithId, type MktStandalone } from "@/lib/marketing-tasks";
+import { removeEditorialFile, uploadEditorialFile } from "@/lib/marketing-editorial-files";
+import { useMentionNavigation } from "@/components/chat-v2/use-mention-navigation";
 import { cn } from "@/lib/utils";
 import { useEditorialRange } from "./use-editorial";
 import { EditorialChip, EditorialStatusBadge, MemberInline } from "./EditorialParts";
@@ -66,6 +73,9 @@ export function EditorialCalendarPage({
   const [busy, setBusy] = useState(false);
   const members = useTeamMembers();
   const { confirm, confirmDialog } = useConfirm();
+  const { openTask } = useMentionNavigation();
+  const [uploading, setUploading] = useState<Record<string, string[]>>({});
+  const [captionSaving, setCaptionSaving] = useState(false);
 
   const { from, to } = useMemo(() => monthFetchRange(month), [month]);
   const { items, loading, error, total, reload, create, update, remove } = useEditorialRange(
@@ -74,6 +84,8 @@ export function EditorialCalendarPage({
     to,
   );
 
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
   const visible = useMemo(
     () => filterItems(items, filters, (id) => members.find((m) => m.id === id)?.name),
     [items, filters, members],
@@ -103,13 +115,111 @@ export function EditorialCalendarPage({
     }
   };
 
-  const submitForm = async (state: EditorialFormState, draft: EditorialDraft) => {
+  /** Cria a tarefa avulsa do Marketing (a mesma do Kanban) a partir do conteúdo. O id já foi gravado no
+   * conteúdo; se a gravação da tarefa falhar, o vínculo é desfeito e o usuário é avisado. */
+  const makeTask = (taskRaw: string, draft: EditorialDraft, itemId: string) => {
+    const name = members.find((m) => m.id === draft.responsavelId)?.name;
+    const t = taskFromContent(draft, name);
+    const task: MktStandalone = {
+      id: taskRaw,
+      title: t.title,
+      status: "Aberto",
+      assignees: t.assignees.length > 0 ? t.assignees : undefined,
+      dueDate: t.dueDate,
+      note: t.note,
+      noteText: t.note,
+      createdAt: new Date().toISOString(),
+    };
+    insertStandaloneWithId(task, () => {
+      toast.error("A tarefa não foi salva. Use “Criar tarefa” no detalhe do conteúdo.");
+      void update(itemId, { tarefaId: null }).catch(() => {});
+    });
+  };
+
+  const submitForm = async (
+    state: EditorialFormState,
+    draft: EditorialDraft,
+    withTask: boolean,
+  ) => {
+    if (state.mode === "edit" && state.id) {
+      const id = state.id;
+      const ok = await run(() => update(id, draft), "Conteúdo atualizado.");
+      if (ok) {
+        setForm(null);
+        setDetailId(id);
+      }
+      return;
+    }
     const ok = await run(
-      () => (state.mode === "edit" && state.id ? update(state.id, draft) : create(draft)),
-      state.mode === "edit" ? "Conteúdo atualizado." : "Conteúdo criado.",
+      async () => {
+        const taskRaw = withTask ? crypto.randomUUID() : null;
+        const created = await create({
+          ...draft,
+          tarefaId: taskRaw ? directoryTaskId(taskRaw) : null,
+        });
+        if (taskRaw) makeTask(taskRaw, draft, created.id);
+      },
+      withTask ? "Conteúdo e tarefa criados." : "Conteúdo criado.",
     );
     if (ok) setForm(null);
   };
+
+  const createTaskFor = (it: EditorialItem) =>
+    void run(async () => {
+      const taskRaw = crypto.randomUUID();
+      await update(it.id, { tarefaId: directoryTaskId(taskRaw) });
+      makeTask(taskRaw, draftFromItem(it), it.id);
+    }, "Tarefa criada.");
+
+  const saveCaption = async (it: EditorialItem, text: string | null) =>
+    run(async () => {
+      setCaptionSaving(true);
+      try {
+        await update(it.id, { legenda: text });
+      } finally {
+        setCaptionSaving(false);
+      }
+    }, "Legenda salva.");
+
+  const addFiles = async (it: EditorialItem, files: File[]) => {
+    const uploaded: EditorialFile[] = [];
+    for (const f of files) {
+      setUploading((u) => ({ ...u, [it.id]: [...(u[it.id] ?? []), f.name] }));
+      try {
+        uploaded.push(await uploadEditorialFile(projectId, it.id, f));
+      } catch {
+        toast.error(`Não foi possível enviar “${f.name}”.`);
+      } finally {
+        setUploading((u) => ({ ...u, [it.id]: (u[it.id] ?? []).filter((n) => n !== f.name) }));
+      }
+    }
+    if (uploaded.length === 0) return;
+    const latest = itemsRef.current.find((x) => x.id === it.id) ?? it;
+    const ok = await run(() => update(it.id, { arquivos: [...latest.arquivos, ...uploaded] }));
+    if (ok) toast.success(uploaded.length === 1 ? "Arquivo anexado." : "Arquivos anexados.");
+    else void Promise.all(uploaded.map((f) => removeEditorialFile(f.path).catch(() => {})));
+  };
+
+  const removeFile = async (it: EditorialItem, file: EditorialFile) => {
+    const yes = await confirm(`“${file.name}” será removido deste conteúdo.`, {
+      title: "Remover arquivo?",
+      confirmLabel: "Remover",
+      destructive: true,
+    });
+    if (!yes) return;
+    const latest = itemsRef.current.find((x) => x.id === it.id) ?? it;
+    const ok = await run(
+      () => update(it.id, { arquivos: latest.arquivos.filter((a) => a.id !== file.id) }),
+      "Arquivo removido.",
+    );
+    if (ok) void removeEditorialFile(file.path).catch(() => {});
+  };
+
+  const openLinkedTask = (taskId: string) => {
+    onBack();
+    openTask(taskId);
+  };
+
   const deleteItem = async (it: EditorialItem) => {
     const yes = await confirm(`“${it.titulo}” será removido do calendário.`, {
       title: "Excluir conteúdo?",
@@ -117,7 +227,10 @@ export function EditorialCalendarPage({
       destructive: true,
     });
     if (!yes) return;
-    if (await run(() => remove(it.id), "Conteúdo excluído.")) setDetailId(null);
+    if (await run(() => remove(it.id), "Conteúdo excluído.")) {
+      setDetailId(null);
+      void Promise.all(it.arquivos.map((f) => removeEditorialFile(f.path).catch(() => {})));
+    }
   };
   const publish = (it: EditorialItem) =>
     void run(() => update(it.id, { status: "publicado" }), "Marcado como publicado.");
@@ -429,11 +542,12 @@ export function EditorialCalendarPage({
         members={members}
         today={today}
         busy={busy}
+        captionSaving={captionSaving}
+        uploading={detail ? (uploading[detail.id] ?? []) : []}
         onClose={() => setDetailId(null)}
         onEdit={(it) => {
           setDetailId(null);
-          const { id: _id, projetoId: _p, ...draft } = it;
-          setForm({ mode: "edit", id: it.id, draft });
+          setForm({ mode: "edit", id: it.id, draft: draftFromItem(it) });
         }}
         onDuplicate={(it) => {
           setDetailId(null);
@@ -441,13 +555,18 @@ export function EditorialCalendarPage({
         }}
         onDelete={(it) => void deleteItem(it)}
         onPublish={publish}
+        onSaveCaption={saveCaption}
+        onAddFiles={(it, files) => void addFiles(it, files)}
+        onRemoveFile={(it, f) => void removeFile(it, f)}
+        onCreateTask={createTaskFor}
+        onOpenTask={openLinkedTask}
       />
       <EditorialFormSheet
         state={form}
         members={members}
         saving={busy}
         onClose={() => setForm(null)}
-        onSubmit={(s, d) => void submitForm(s, d)}
+        onSubmit={(s, d, withTask) => void submitForm(s, d, withTask)}
       />
       {confirmDialog}
     </div>

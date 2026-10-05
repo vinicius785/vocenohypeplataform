@@ -1,25 +1,25 @@
 {
-  "version": "1.322.0",
+  "version": "1.323.0",
   "releases": [
     {
-      "version": "1.322.0",
-      "summary": "Novo Calendário Editorial, exclusivo do projeto Marketing.",
+      "version": "1.323.0",
+      "summary": "Calendário Editorial refinado: criar conteúdo com tarefa, legenda e arquivos.",
       "modules": [
         {
           "name": "PROJETOS",
-          "tagline": "Marketing",
+          "tagline": "Marketing · Calendário Editorial",
           "items": [
             {
-              "title": "Calendário Editorial",
-              "description": "No projeto Marketing, em Recursos, planeje os conteúdos por dia com canal, formato, status, responsável e tarefa relacionada."
+              "title": "Criar conteúdo + tarefa",
+              "description": "Ao criar um conteúdo você escolhe entre só o conteúdo ou o conteúdo com uma tarefa de produção já criada, herdando título, data e responsável."
             },
             {
-              "title": "Mensal e lista",
-              "description": "Veja o mês em grade ou em lista, filtre por status, canal e responsável, e acompanhe o que está atrasado."
+              "title": "Detalhe para trabalhar",
+              "description": "O detalhe agora tem briefing, legenda com contador por canal, arquivos (imagem, vídeo, PDF) e a tarefa do conteúdo, com ações no topo."
             },
             {
-              "title": "Rápido de usar",
-              "description": "Crie, edite, duplique, exclua e marque como publicado sem sair da página. No celular, a agenda aparece por dia."
+              "title": "Formulário mais claro",
+              "description": "O formulário foi reorganizado em Detalhes, Publicação e Contexto, e Excluir ficou discreto no menu de três pontos."
             }
           ]
         }

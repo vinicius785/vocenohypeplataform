@@ -16,6 +16,13 @@ import {
   validateDraft,
   EMPTY_FILTERS,
   type EditorialItem,
+  captionLimit,
+  directoryTaskId,
+  draftFromItem,
+  fileKind,
+  formatFileSize,
+  rawTaskId,
+  taskFromContent,
 } from "./marketing-editorial";
 
 const it_ = (o: Partial<EditorialItem>): EditorialItem => ({
@@ -30,6 +37,8 @@ const it_ = (o: Partial<EditorialItem>): EditorialItem => ({
   responsavelId: null,
   descricao: null,
   tarefaId: "t1",
+  legenda: null,
+  arquivos: [],
   ...o,
 });
 
@@ -132,5 +141,55 @@ describe("formato por canal e rascunhos", () => {
   });
   it("cabeçalho do dia", () => {
     expect(dayHeading("2026-10-05")).toBe("SEG • 05 OUT");
+  });
+});
+
+describe("tarefa a partir do conteúdo", () => {
+  it("herda título, data, responsável e briefing", () => {
+    expect(
+      taskFromContent(
+        { titulo: " Reels — Lançamento ", data: "2026-10-09", descricao: " Briefing " },
+        "Vinícius",
+      ),
+    ).toEqual({
+      title: "Produzir Reels — Lançamento",
+      dueDate: "2026-10-09",
+      assignees: ["Vinícius"],
+      note: "Briefing",
+    });
+  });
+  it("sem responsável e sem briefing", () => {
+    const t = taskFromContent({ titulo: "X", data: "2026-10-09", descricao: null });
+    expect(t.assignees).toEqual([]);
+    expect(t.note).toBeUndefined();
+  });
+  it("ids do diretório", () => {
+    expect(directoryTaskId("abc")).toBe("mkt:abc");
+    expect(rawTaskId("mkt:abc")).toBe("abc");
+    expect(rawTaskId("xyz")).toBeNull();
+  });
+  it("rascunho do item não carrega legenda nem arquivos", () => {
+    const d = draftFromItem(
+      it_({ legenda: "oi", arquivos: [{ id: "1", name: "a", path: "p", size: 1, type: "x" }] }),
+    );
+    expect(d).not.toHaveProperty("legenda");
+    expect(d).not.toHaveProperty("arquivos");
+  });
+});
+
+describe("legenda e arquivos", () => {
+  it("limite só onde é conhecido", () => {
+    expect(captionLimit("x")).toBe(280);
+    expect(captionLimit("instagram")).toBe(2200);
+    expect(captionLimit("blog")).toBeNull();
+    expect(captionLimit("facebook")).toBeNull();
+  });
+  it("tipo e tamanho do arquivo", () => {
+    expect(fileKind({ name: "a.MP4", type: "" })).toBe("video");
+    expect(fileKind({ name: "a.png", type: "image/png" })).toBe("imagem");
+    expect(fileKind({ name: "briefing.pdf", type: "" })).toBe("pdf");
+    expect(fileKind({ name: "a.zip", type: "application/zip" })).toBe("outro");
+    expect(formatFileSize(500)).toBe("500 B");
+    expect(formatFileSize(2.1 * 1024 * 1024)).toBe("2,1 MB");
   });
 });

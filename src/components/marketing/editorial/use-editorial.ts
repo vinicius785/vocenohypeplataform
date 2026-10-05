@@ -7,7 +7,7 @@ import {
   fetchEditorialRange,
   updateEditorial,
 } from "@/lib/marketing-editorial-store";
-import type { EditorialDraft, EditorialItem } from "@/lib/marketing-editorial";
+import type { EditorialDraft, EditorialItem, EditorialPatch } from "@/lib/marketing-editorial";
 
 /** Conteúdos do período visível. Busca ao abrir e ao trocar de mês; depois de cada ação atualiza a
  * lista local (sem polling). */
@@ -50,7 +50,7 @@ export function useEditorialRange(projetoId: string, from: string, to: string) {
     setTotal((t) => (t ?? 0) + 1);
     return it;
   };
-  const update = async (id: string, patch: Partial<EditorialDraft>) => {
+  const update = async (id: string, patch: EditorialPatch) => {
     const it = await updateEditorial(id, patch);
     setItems((prev) => {
       const without = prev.filter((x) => x.id !== id);

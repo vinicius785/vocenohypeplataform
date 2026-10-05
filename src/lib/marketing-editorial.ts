@@ -104,6 +104,16 @@ export function coerceFormat(channel: EditorialChannel, format: EditorialFormat)
   return list.includes(format) ? format : list[0];
 }
 
+/** Arquivo anexado a um conteúdo (guardado no bucket privado `marketing-conteudos`). */
+export type EditorialFile = {
+  id: string;
+  name: string;
+  /** Caminho no Storage — o link de acesso é gerado na hora de abrir/mostrar. */
+  path: string;
+  size: number;
+  type: string;
+};
+
 export type EditorialItem = {
   id: string;
   projetoId: string;
@@ -119,9 +129,17 @@ export type EditorialItem = {
   descricao: string | null;
   /** Id da tarefa no diretório de tarefas (referência, nunca cópia). */
   tarefaId: string | null;
+  /** Texto da publicação (editado no detalhe). */
+  legenda: string | null;
+  arquivos: EditorialFile[];
 };
 
-export type EditorialDraft = Omit<EditorialItem, "id" | "projetoId">;
+/** O que o formulário de criar/editar controla. Legenda e arquivos são editados no detalhe. */
+export type EditorialDraft = Omit<EditorialItem, "id" | "projetoId" | "legenda" | "arquivos">;
+export type EditorialPatch = Partial<EditorialDraft> & {
+  legenda?: string | null;
+  arquivos?: EditorialFile[];
+};
 
 export function channelFormatLabel(it: Pick<EditorialItem, "canal" | "formato">): string {
   return `${EDITORIAL_CHANNEL_LABEL[it.canal]} · ${EDITORIAL_FORMAT_LABEL[it.formato]}`;
@@ -316,6 +334,19 @@ export function newDraft(dateIso: string): EditorialDraft {
     tarefaId: null,
   };
 }
+export function draftFromItem(it: EditorialItem): EditorialDraft {
+  return {
+    titulo: it.titulo,
+    data: it.data,
+    hora: it.hora,
+    canal: it.canal,
+    formato: it.formato,
+    status: it.status,
+    responsavelId: it.responsavelId,
+    descricao: it.descricao,
+    tarefaId: it.tarefaId,
+  };
+}
 /** Duplicar: mesmos dados, volta para "Planejado" e sem a tarefa (a tarefa é do original). */
 export function duplicateDraft(item: EditorialItem): EditorialDraft {
   return {
@@ -335,4 +366,62 @@ export function validateDraft(d: EditorialDraft): string | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d.data)) return "Informe a data.";
   if (d.hora && !/^\d{2}:\d{2}$/.test(d.hora)) return "Horário inválido.";
   return null;
+}
+
+/* ---------------- Legenda ---------------- */
+
+/** Limite de caracteres da legenda por canal (só onde existe um limite conhecido). */
+const CAPTION_LIMIT: Partial<Record<EditorialChannel, number>> = {
+  instagram: 2200,
+  tiktok: 2200,
+  x: 280,
+  linkedin: 3000,
+  youtube: 5000,
+};
+export function captionLimit(channel: EditorialChannel): number | null {
+  return CAPTION_LIMIT[channel] ?? null;
+}
+
+/* ---------------- Arquivos ---------------- */
+
+export type FileKind = "imagem" | "video" | "pdf" | "outro";
+export function fileKind(f: Pick<EditorialFile, "name" | "type">): FileKind {
+  if (f.type.startsWith("image/") || /\.(png|jpe?g|gif|webp|svg)$/i.test(f.name)) return "imagem";
+  if (f.type.startsWith("video/") || /\.(mp4|mov|webm|m4v|avi)$/i.test(f.name)) return "video";
+  if (f.type === "application/pdf" || /\.pdf$/i.test(f.name)) return "pdf";
+  return "outro";
+}
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${Math.round(kb)} KB`;
+  const mb = kb / 1024;
+  if (mb < 1024) return `${mb.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} MB`;
+  return `${(mb / 1024).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} GB`;
+}
+
+/* ---------------- Tarefa a partir do conteúdo ---------------- */
+
+export const EDITORIAL_TASK_PREFIX = "mkt:";
+/** Id no diretório de tarefas de uma tarefa avulsa do Marketing. */
+export function directoryTaskId(rawTaskId: string): string {
+  return `${EDITORIAL_TASK_PREFIX}${rawTaskId}`;
+}
+export function rawTaskId(directoryId: string): string | null {
+  return directoryId.startsWith(EDITORIAL_TASK_PREFIX)
+    ? directoryId.slice(EDITORIAL_TASK_PREFIX.length)
+    : null;
+}
+
+/** Dados iniciais da tarefa "Produzir …": herda título, data, responsável e briefing do conteúdo. */
+export function taskFromContent(
+  c: Pick<EditorialDraft, "titulo" | "data" | "descricao">,
+  responsavelName?: string,
+): { title: string; dueDate: string; assignees: string[]; note?: string } {
+  return {
+    title: `Produzir ${c.titulo.trim()}`,
+    dueDate: c.data,
+    assignees: responsavelName ? [responsavelName] : [],
+    note: c.descricao?.trim() || undefined,
+  };
 }

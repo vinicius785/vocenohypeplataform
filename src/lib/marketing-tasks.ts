@@ -185,6 +185,10 @@ export function removeStandalone(id: string) {
  * mover uma tarefa PRA cá tem que manter o mesmo id de origem, senão
  * dependências (`task_dependencies`, guardadas só pelo id cru da
  * tarefa) e qualquer link cruzado apontando pra ela quebrariam. */
-export function insertStandaloneWithId(item: MktStandalone) {
-  standaloneStore.set((prev) => [...prev, item]);
+export function insertStandaloneWithId(item: MktStandalone, onError?: (err: Error) => void) {
+  // Id já existente = no-op (nova tentativa nunca duplica a tarefa).
+  standaloneStore.set(
+    (prev) => (prev.some((x) => x.id === item.id) ? prev : [...prev, item]),
+    onError,
+  );
 }

@@ -2680,6 +2680,7 @@ export type Database = {
       };
       marketing_conteudos: {
         Row: {
+          arquivos: Json;
           canal: string;
           created_at: string;
           criado_por: string | null;
@@ -2688,6 +2689,7 @@ export type Database = {
           formato: string;
           hora: string | null;
           id: string;
+          legenda: string | null;
           projeto_id: string;
           responsavel_id: string | null;
           status: string;
@@ -2696,6 +2698,7 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
+          arquivos?: Json;
           canal: string;
           created_at?: string;
           criado_por?: string | null;
@@ -2704,6 +2707,7 @@ export type Database = {
           formato: string;
           hora?: string | null;
           id?: string;
+          legenda?: string | null;
           projeto_id: string;
           responsavel_id?: string | null;
           status?: string;
@@ -2712,6 +2716,7 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          arquivos?: Json;
           canal?: string;
           created_at?: string;
           criado_por?: string | null;
@@ -2720,6 +2725,7 @@ export type Database = {
           formato?: string;
           hora?: string | null;
           id?: string;
+          legenda?: string | null;
           projeto_id?: string;
           responsavel_id?: string | null;
           status?: string;

@@ -4,7 +4,9 @@ import type {
   EditorialChannel,
   EditorialDraft,
   EditorialFormat,
+  EditorialFile,
   EditorialItem,
+  EditorialPatch,
   EditorialStatus,
 } from "@/lib/marketing-editorial";
 
@@ -25,10 +27,12 @@ function fromRow(r: Row): EditorialItem {
     responsavelId: r.responsavel_id,
     descricao: r.descricao,
     tarefaId: r.tarefa_id,
+    legenda: r.legenda,
+    arquivos: Array.isArray(r.arquivos) ? (r.arquivos as unknown as EditorialFile[]) : [],
   };
 }
 
-function toColumns(d: Partial<EditorialDraft>) {
+function toColumns(d: EditorialPatch) {
   const out: Record<string, unknown> = {};
   if (d.titulo !== undefined) out.titulo = d.titulo.trim();
   if (d.data !== undefined) out.data = d.data;
@@ -39,6 +43,8 @@ function toColumns(d: Partial<EditorialDraft>) {
   if (d.responsavelId !== undefined) out.responsavel_id = d.responsavelId || null;
   if (d.descricao !== undefined) out.descricao = d.descricao?.trim() || null;
   if (d.tarefaId !== undefined) out.tarefa_id = d.tarefaId || null;
+  if (d.legenda !== undefined) out.legenda = d.legenda?.trim() ? d.legenda : null;
+  if (d.arquivos !== undefined) out.arquivos = d.arquivos;
   return out;
 }
 
@@ -82,10 +88,7 @@ export async function createEditorial(
   return fromRow(data);
 }
 
-export async function updateEditorial(
-  id: string,
-  patch: Partial<EditorialDraft>,
-): Promise<EditorialItem> {
+export async function updateEditorial(id: string, patch: EditorialPatch): Promise<EditorialItem> {
   const { data, error } = await supabase
     .from("marketing_conteudos")
     .update(toColumns(patch) as never)
