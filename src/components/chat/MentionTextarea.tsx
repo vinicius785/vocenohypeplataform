@@ -52,7 +52,7 @@ export function useMentions(
     const t: MentionOption[] = tasks.map((x) => ({
       kind: "task",
       id: x.id,
-      label: x.label,
+      label: x.label?.trim() || "Tarefa sem título",
       hint: x.project ? `Projeto: ${x.project}` : undefined,
       campanhaId: x.campanhaId,
       projectId: x.projectId,
@@ -74,7 +74,11 @@ export function useMentions(
           })),
         ]
       : [];
-    const all = [...u, ...t, ...projects, ...campaigns, ...clients];
+    // Opção sem rótulo (projeto/campanha/cliente com nome vazio) quebraria a busca e inseriria
+    // "@undefined" na mensagem: nunca entra na lista.
+    const all = [...u, ...t, ...projects, ...campaigns, ...clients].filter(
+      (o) => typeof o.label === "string" && o.label.trim() !== "",
+    );
     if (!context) return all;
     return all.map((o) => ({ ...o, boost: contextBoost(o, context) }));
   }, [members, tasks, projects, campaigns, clients, allowUserMentions, context]);

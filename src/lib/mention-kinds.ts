@@ -84,8 +84,10 @@ export type MentionContext = {
   contextAssigneeIds?: string[];
 };
 
-export function normalizeForSearch(s: string): string {
-  return s
+/** Tolerante a rótulo ausente (tarefa/projeto antigo sem título): vira texto vazio em vez de
+ * derrubar o menu de @menção inteiro. */
+export function normalizeForSearch(s: string | null | undefined): string {
+  return String(s ?? "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
@@ -99,7 +101,7 @@ function escapeRegExp(s: string): string {
  * label (ex. "prod" bate em "Playbook-Produtos"), 1 = substring solto em
  * qualquer posição, 0 = não bate. Tolerante a acento/case (compara sempre
  * normalizado). */
-export function matchScore(label: string, query: string): number {
+export function matchScore(label: string | null | undefined, query: string): number {
   const q = normalizeForSearch(query.trim());
   if (!q) return 0;
   const l = normalizeForSearch(label);

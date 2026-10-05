@@ -1,17 +1,17 @@
 {
-  "version": "1.304.0",
+  "version": "1.304.1",
   "releases": [
     {
-      "version": "1.304.0",
-      "summary": "O tempo de resposta aparece desde a primeira resposta.",
+      "version": "1.304.1",
+      "summary": "Correção ao mencionar tarefas no Chat.",
       "modules": [
         {
-          "name": "TIME",
-          "tagline": "Comunicação",
+          "name": "CHAT",
+          "tagline": "Menções",
           "items": [
             {
-              "title": "Tempo de resposta sem amostra mínima",
-              "description": "A média e a mediana agora aparecem a partir da primeira resposta do período, em horário útil, na lista do Time e no perfil de cada pessoa."
+              "title": "Menção de tarefa no Chat estável",
+              "description": "Corrigido o travamento ao buscar uma tarefa com @ no Chat. Tarefas sem título agora aparecem como “Sem título”."
             }
           ]
         }

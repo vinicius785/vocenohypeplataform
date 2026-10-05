@@ -51,6 +51,11 @@ export type TaskDirectoryEntry = {
   subtasksTotal?: number;
 };
 
+/** Tarefa/subtarefa sem título (dado antigo ou importado) nunca vira rótulo `undefined` — isso
+ * derrubava o @menção do Chat ao buscar. */
+const NO_TITLE = "Sem título";
+const titleOf = (title: string | null | undefined) => title?.trim() || NO_TITLE;
+
 function subtaskProgress(
   subtasks: { status: string }[] | undefined,
 ): { subtasksDone: number; subtasksTotal: number } | Record<string, never> {
@@ -86,7 +91,7 @@ export function useTaskDirectory(): TaskDirectoryEntry[] {
         {
           id: t.id,
           rawId: t.id,
-          label: t.title,
+          label: titleOf(t.title),
           project: p.name,
           projectId: p.id,
           status: t.status,
@@ -102,7 +107,7 @@ export function useTaskDirectory(): TaskDirectoryEntry[] {
         ...(t.subtasks ?? []).map((s) => ({
           id: s.id,
           rawId: s.id,
-          label: `${s.title} (${t.title})`,
+          label: `${titleOf(s.title)} (${titleOf(t.title)})`,
           project: p.name,
           projectId: p.id,
           status: s.status,
@@ -118,7 +123,7 @@ export function useTaskDirectory(): TaskDirectoryEntry[] {
         campanhaTasks.push({
           id: t.id,
           rawId: t.id,
-          label: t.title,
+          label: titleOf(t.title),
           project: campanhaNameMap.get(campanhaId),
           projectId: "",
           campanhaId,
@@ -133,7 +138,7 @@ export function useTaskDirectory(): TaskDirectoryEntry[] {
           campanhaTasks.push({
             id: s.id,
             rawId: s.id,
-            label: `${s.title} (${t.title})`,
+            label: `${titleOf(s.title)} (${titleOf(t.title)})`,
             project: campanhaNameMap.get(campanhaId),
             projectId: "",
             campanhaId,
@@ -150,7 +155,7 @@ export function useTaskDirectory(): TaskDirectoryEntry[] {
           {
             id: `mkt:${s.id}`,
             rawId: s.id,
-            label: s.title,
+            label: titleOf(s.title),
             project: "Marketing",
             projectId: marketingProjectId!,
             status: s.status,
@@ -161,7 +166,7 @@ export function useTaskDirectory(): TaskDirectoryEntry[] {
           ...(s.subtasks ?? []).map((sub) => ({
             id: sub.id,
             rawId: sub.id,
-            label: `${sub.title} (${s.title})`,
+            label: `${titleOf(sub.title)} (${titleOf(s.title)})`,
             project: "Marketing",
             projectId: marketingProjectId!,
             status: sub.status,
