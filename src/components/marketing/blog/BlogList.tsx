@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Plus, Search, Newspaper, ImageIcon, Calendar, MoreVertical, Trash2 } from "lucide-react";
+import { Plus, Newspaper, ImageIcon, Calendar, MoreVertical, Trash2 } from "lucide-react";
 import type { BlogPost, BlogStatus, Project } from "@/lib/projetos";
 import { notifyBlogEvent } from "@/lib/marketing.functions";
 import {
@@ -12,10 +12,29 @@ import {
 import { useConfirm } from "@/hooks/use-confirm";
 import { BlogEditor } from "./BlogEditor";
 import { destinoLabel, statusInfo, STATUS } from "./types";
-import { NativeSelect } from "@/components/ui/native-select";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/shared/EmptyState";
+import {
+  FilterChips,
+  FilterGroup,
+  FilterPill,
+  FilterPopover,
+  FilterRow,
+  FilterSearch,
+  FilterToolbar,
+  SortMenu,
+} from "@/components/shared/FilterToolbar";
 
 type DestinoFilter = "todos" | "site" | "mural" | "portal";
 type SortKey = "recentes" | "titulo";
+
+const DESTINO_LABEL: Record<DestinoFilter, string> = {
+  todos: "Todos",
+  site: "Site",
+  mural: "Mural interno",
+  portal: "Portal do cliente",
+};
+const SORT_LABEL: Record<SortKey, string> = { recentes: "Mais recentes", titulo: "Título (A–Z)" };
 
 function fmtScheduled(iso: string): string {
   const d = new Date(iso);
@@ -131,6 +150,31 @@ export function BlogPanel({
     return list;
   }, [posts, query, statusFilter, destinoFilter, sort]);
 
+  const blogChips = [
+    ...(statusFilter !== "todos"
+      ? [
+          {
+            id: "status",
+            label: statusInfo(statusFilter).label,
+            onRemove: () => setStatusFilter("todos"),
+          },
+        ]
+      : []),
+    ...(destinoFilter !== "todos"
+      ? [
+          {
+            id: "destino",
+            label: DESTINO_LABEL[destinoFilter],
+            onRemove: () => setDestinoFilter("todos"),
+          },
+        ]
+      : []),
+  ];
+  const clearBlogFilters = () => {
+    setStatusFilter("todos");
+    setDestinoFilter("todos");
+  };
+
   const removeWithConfirm = async (p: BlogPost) => {
     if (!(await confirm(`Excluir "${p.title}"? Isso não pode ser desfeito.`))) return;
     remove(p.id);
@@ -150,69 +194,65 @@ export function BlogPanel({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-text-secondary">
           {posts.length} {posts.length === 1 ? "artigo" : "artigos"}
         </p>
-        <button
-          onClick={create}
-          className="inline-flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-brand-foreground hover:bg-brand-hover"
-        >
+        <Button variant="primary" size="sm" onClick={create}>
           <Plus className="h-3.5 w-3.5" /> Novo artigo
-        </button>
+        </Button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar artigo"
-            className="h-8 w-full rounded-md border border-border bg-background pl-8 pr-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-brand sm:w-48"
-          />
-        </div>
-        <NativeSelect
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as BlogStatus | "todos")}
-          aria-label="Filtrar por status"
-        >
-          <option value="todos">Todos os status</option>
-          {STATUS.map((s) => (
-            <option key={s.key} value={s.key}>
-              {s.label}
-            </option>
-          ))}
-        </NativeSelect>
-        <NativeSelect
-          value={destinoFilter}
-          onChange={(e) => setDestinoFilter(e.target.value as DestinoFilter)}
-          aria-label="Filtrar por destino"
-        >
-          <option value="todos">Todos os destinos</option>
-          <option value="site">Site</option>
-          <option value="mural">Mural interno</option>
-          <option value="portal">Portal do cliente</option>
-        </NativeSelect>
-        <NativeSelect
-          value={sort}
-          onChange={(e) => setSort(e.target.value as SortKey)}
-          aria-label="Ordenar artigos"
-          className="ml-auto"
-        >
-          <option value="recentes">Mais recentes</option>
-          <option value="titulo">Título (A–Z)</option>
-        </NativeSelect>
-      </div>
+      <FilterToolbar>
+        <FilterRow>
+          <FilterSearch value={query} onChange={setQuery} placeholder="Buscar artigo" />
+          <FilterPopover
+            title="Filtrar artigos"
+            activeCount={blogChips.length}
+            onClear={clearBlogFilters}
+          >
+            <FilterGroup label="Status">
+              <FilterPill
+                active={statusFilter === "todos"}
+                onClick={() => setStatusFilter("todos")}
+              >
+                Todos
+              </FilterPill>
+              {STATUS.map((s) => (
+                <FilterPill
+                  key={s.key}
+                  active={statusFilter === s.key}
+                  onClick={() => setStatusFilter(s.key)}
+                >
+                  {s.label}
+                </FilterPill>
+              ))}
+            </FilterGroup>
+            <FilterGroup label="Destino">
+              {(Object.keys(DESTINO_LABEL) as DestinoFilter[]).map((d) => (
+                <FilterPill
+                  key={d}
+                  active={destinoFilter === d}
+                  onClick={() => setDestinoFilter(d)}
+                >
+                  {DESTINO_LABEL[d]}
+                </FilterPill>
+              ))}
+            </FilterGroup>
+          </FilterPopover>
+          <SortMenu value={sort} options={SORT_LABEL} onChange={setSort} />
+        </FilterRow>
+        <FilterChips chips={blogChips} onClear={clearBlogFilters} />
+      </FilterToolbar>
 
       {posts.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border bg-background p-10 text-center">
-          <Newspaper className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
-          <p className="text-xs text-muted-foreground">Nenhum artigo ainda.</p>
-        </div>
+        <EmptyState
+          compact
+          icon={<Newspaper className="h-5 w-5" />}
+          title="Nenhum artigo ainda."
+          primaryAction={{ label: "Novo artigo", onClick: create }}
+        />
       ) : visiblePosts.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border bg-background p-10 text-center">
-          <p className="text-xs text-muted-foreground">Nenhum resultado para esta busca/filtro.</p>
-        </div>
+        <EmptyState compact title="Nenhum resultado para esta busca ou filtro." />
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
           {visiblePosts.map((p) => {

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { AeoPrompt, AeoResposta, AeoRodada } from "@/lib/aeo-store";
-import { inputCls, fmtDate } from "../aeo-ui-utils";
+import { fmtDate } from "../aeo-ui-utils";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { KpiCards } from "./KpiCards";
 import { VisibilidadePorIa } from "./VisibilidadePorIa";
 import { VisibilidadePorCategoria } from "./VisibilidadePorCategoria";
@@ -31,9 +32,7 @@ export function ResultadosTab({
 
   if (ordenadas.length === 0) {
     return (
-      <p className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-        Nenhuma rodada registrada ainda — crie uma no Monitor.
-      </p>
+      <EmptyState compact title="Nenhuma rodada registrada ainda — crie uma em Monitoramento." />
     );
   }
 
@@ -41,11 +40,12 @@ export function ResultadosTab({
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
-          <label className="text-xs text-muted-foreground">Rodada</label>
+          <span className="text-sm text-text-secondary">Rodada</span>
           <NativeSelect
             value={rodadaAtualId}
             onChange={(e) => setRodadaId(e.target.value)}
-            className={inputCls}
+            aria-label="Rodada"
+            size="sm"
           >
             {ordenadas.map((r) => (
               <option key={r.id} value={r.id}>
@@ -55,11 +55,12 @@ export function ResultadosTab({
           </NativeSelect>
         </div>
         <div className="flex items-center gap-2">
-          <label className="text-xs text-muted-foreground">Comparar com</label>
+          <span className="text-sm text-text-secondary">Comparar com</span>
           <NativeSelect
             value={comparacaoAtualId}
             onChange={(e) => setComparacaoId(e.target.value)}
-            className={inputCls}
+            aria-label="Comparar com a rodada"
+            size="sm"
           >
             <option value="">Nenhuma</option>
             {ordenadas

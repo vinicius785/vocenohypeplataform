@@ -1,3 +1,4 @@
+import { KANBAN_COLUMN_LIMIT } from "@/lib/kanban-limit";
 import { useEffect, useMemo, useState } from "react";
 import { SectionHeader } from "./SectionHeader";
 import { TaskBoard, type Task as BoardTask, type TaskStatus } from "./tasks/TaskBoard";
@@ -140,6 +141,7 @@ export function MarketingSection({
         scope={{ kind: "marketing" }}
         breadcrumb="Marketing"
         title={embedded ? "" : "Tarefas do Marketing"}
+        columnLimit={KANBAN_COLUMN_LIMIT}
         initialOpenTaskId={initialOpenTaskId}
         onInitialOpenTaskHandled={onInitialOpenTaskHandled}
       />

@@ -22,11 +22,12 @@ import {
   Paperclip,
   Pencil,
   Trash2,
-  Search,
   Pause,
   Play,
   Archive,
   ArrowLeft,
+  ChevronDown,
+  FolderOpen,
   type LucideIcon,
 } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
@@ -92,6 +93,18 @@ import {
 } from "@/lib/projeto-scoped-store";
 import { formatIsoDate } from "@/lib/utils";
 import { NativeSelect } from "@/components/ui/native-select";
+import { EmptyState as SharedEmptyState } from "@/components/shared/EmptyState";
+import {
+  FilterChips,
+  FilterGroup,
+  FilterPill,
+  FilterPopover,
+  FilterRow,
+  FilterSearch,
+  FilterToolbar,
+} from "@/components/shared/FilterToolbar";
+import { CampaignToolShell } from "@/components/campanhas/tools/CampaignToolShell";
+import { KANBAN_COLUMN_LIMIT } from "@/lib/kanban-limit";
 
 export const Route = createFileRoute("/_authenticated/projeto/$id")({
   component: ProjetoPage,
@@ -101,19 +114,8 @@ export const Route = createFileRoute("/_authenticated/projeto/$id")({
   head: ({ params }) => ({ meta: [{ title: `Projeto · ${params.id.slice(0, 6)}` }] }),
 });
 
-/** Rótulos curtos da navegação por âncora e títulos de seção — Projeto é UMA
- * página; cada área é uma seção dela (nada de abas trocando o conteúdo). */
-const SECTION_NAV_LABEL: Record<FeatureKey, string> = {
-  kanban: "Tarefas",
-  influenciadores: "Influenciadores",
-  documentos: "Arquivos",
-  calendario_editorial: "Calendário",
-  trafego_pago: "Tráfego",
-  blog: "Blog",
-  aeo_monitor: "AEO",
-  bugs_sugestoes: "Bugs",
-  fluxos_email: "E-mails",
-};
+/** Títulos de seção — Projeto é UMA página corrida: cada área é uma seção dela, uma abaixo da
+ * outra, sem seletor de abas nem navegação por âncora. */
 const SECTION_TITLE: Record<FeatureKey, string> = {
   kanban: "Tarefas",
   influenciadores: "Influenciadores",
@@ -163,67 +165,12 @@ function ProjectSection({
   children: ReactNode;
 }) {
   return (
-    <section id={id} className="scroll-mt-14 border-t border-border/60 pt-8">
-      <p role="heading" aria-level={2} className={`${TYPOGRAPHY.sectionTitle} mb-5`}>
+    <section id={id} className="scroll-mt-14">
+      <p role="heading" aria-level={2} className={`${TYPOGRAPHY.sectionTitle} mb-4`}>
         {title}
       </p>
       {eager ? children : <LazyMount>{children}</LazyMount>}
     </section>
-  );
-}
-
-/** Navegação por âncora (scroll suave) — fixa no topo enquanto se rola, com
- * a seção visível destacada. Não troca a página nem esconde nenhuma área. */
-function ProjectSectionNav({ items }: { items: { id: string; label: string }[] }) {
-  const [active, setActive] = useState(items[0]?.id ?? "");
-  useEffect(() => {
-    if (typeof IntersectionObserver === "undefined") return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
-        if (visible) setActive(visible.target.id);
-      },
-      { rootMargin: "-20% 0px -65% 0px" },
-    );
-    for (const it of items) {
-      const el = document.getElementById(it.id);
-      if (el) io.observe(el);
-    }
-    return () => io.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items.map((i) => i.id).join("|")]);
-
-  if (items.length < 3) return null;
-  return (
-    <nav
-      aria-label="Seções do projeto"
-      className="sticky top-0 z-20 -mx-4 overflow-x-auto border-b border-border/60 bg-background/90 px-4 backdrop-blur [scrollbar-width:none] md:-mx-8 md:px-8 [&::-webkit-scrollbar]:hidden"
-    >
-      <ul className="flex gap-5">
-        {items.map((it) => (
-          <li key={it.id} className="shrink-0">
-            <button
-              type="button"
-              aria-current={active === it.id ? "true" : undefined}
-              onClick={() =>
-                document
-                  .getElementById(it.id)
-                  ?.scrollIntoView({ behavior: "smooth", block: "start" })
-              }
-              className={`border-b-2 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
-                active === it.id
-                  ? "border-foreground text-foreground"
-                  : "border-transparent text-text-secondary hover:text-foreground"
-              }`}
-            >
-              {it.label}
-            </button>
-          </li>
-        ))}
-      </ul>
-    </nav>
   );
 }
 
@@ -262,6 +209,7 @@ function renderPanel(
 }
 
 function ProjetoPage() {
+  const [docsOpen, setDocsOpen] = useState(false);
   const { id } = Route.useParams();
   const { taskId } = Route.useSearch();
   const navigate = useNavigate();
@@ -394,6 +342,10 @@ function ProjetoPage() {
   const availableSections = FEATURES.map((f) => f.key).filter((k) =>
     featuresWithHypeApp.includes(k),
   );
+  // Documentos (links e arquivos) não é mais uma seção empilhada: abre pelo menu "Recursos" do
+  // cabeçalho, como em Campanhas e no Comercial.
+  const hasDocs = availableSections.includes("documentos");
+  const sections = availableSections.filter((k) => k !== "documentos");
 
   return (
     <AppShell active="projetos" onSelect={goToSection}>
@@ -451,7 +403,28 @@ function ProjetoPage() {
               </div>
             </div>
 
-            <div className="flex shrink-0 items-center gap-2 self-start">
+            <div className="flex shrink-0 items-center gap-1.5 self-start">
+              {hasDocs && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" aria-haspopup="menu">
+                      Recursos
+                      <ChevronDown className="h-3 w-3 text-text-secondary" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-60">
+                    <DropdownMenuItem onSelect={() => setDocsOpen(true)}>
+                      <FolderOpen className="h-3.5 w-3.5 text-text-secondary" />
+                      <span className="min-w-0 flex-1 truncate">Documentos</span>
+                      {project.docs.length > 0 && (
+                        <span className="text-xs tabular-nums text-text-secondary">
+                          {project.docs.length}
+                        </span>
+                      )}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
               {canEdit && (
                 <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
                   <Pencil className="h-3.5 w-3.5" /> Editar
@@ -553,23 +526,29 @@ function ProjetoPage() {
         )}
         {confirmDialog}
 
+        {hasDocs && (
+          <CampaignToolShell
+            open={docsOpen}
+            onOpenChange={setDocsOpen}
+            size="medium"
+            campanhaNome={project.name}
+            backTo="o projeto"
+            icon={FolderOpen}
+            title="Documentos"
+            description="Links e materiais de referência do projeto"
+          >
+            <DocsPanel project={project} update={update} />
+          </CampaignToolShell>
+        )}
+
         {availableSections.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             Nenhuma funcionalidade habilitada para este projeto.
           </p>
         ) : (
           <>
-            <ProjectSectionNav
-              items={[
-                { id: "resumo", label: "Resumo" },
-                ...availableSections.map((k) => ({
-                  id: `secao-${k}`,
-                  label: SECTION_NAV_LABEL[k],
-                })),
-              ]}
-            />
-            <div className="space-y-12">
-              {availableSections.map((k, i) => (
+            <div className="space-y-14">
+              {sections.map((k, i) => (
                 <ProjectSection
                   key={k}
                   id={`secao-${k}`}
@@ -608,6 +587,7 @@ function KanbanPanel({
       scope={{ kind: "projeto", id: project.id }}
       title=""
       breadcrumb="Projetos"
+      columnLimit={KANBAN_COLUMN_LIMIT}
       initialOpenTaskId={initialOpenTaskId}
       onInitialOpenTaskHandled={onInitialOpenTaskHandled}
     />
@@ -956,34 +936,45 @@ function DocsPanel({
     })
     .sort((a, b) => Number(!!b.isPinned) - Number(!!a.isPinned));
 
+  const docChips =
+    categoryFilter === "todas"
+      ? []
+      : [
+          {
+            id: "categoria",
+            label: DOC_CATEGORY_LABEL[categoryFilter],
+            onRemove: () => setCategoryFilter("todas"),
+          },
+        ];
+
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-text-secondary">
-          {project.docs.length} {project.docs.length === 1 ? "item" : "itens"}
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar"
-              className="h-8 w-36 rounded-md border border-border bg-background pl-8 pr-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-brand sm:w-44"
-            />
-          </div>
-          <NativeSelect
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value as DocCategory | "todas")}
-            aria-label="Filtrar por categoria"
+    <div className="space-y-4">
+      <FilterToolbar>
+        <FilterRow>
+          <FilterSearch value={query} onChange={setQuery} placeholder="Buscar por nome ou link" />
+          <FilterPopover
+            title="Filtrar documentos"
+            activeCount={docChips.length}
+            onClear={() => setCategoryFilter("todas")}
           >
-            <option value="todas">Todas as categorias</option>
-            {(Object.keys(DOC_CATEGORY_LABEL) as DocCategory[]).map((c) => (
-              <option key={c} value={c}>
-                {DOC_CATEGORY_LABEL[c]}
-              </option>
-            ))}
-          </NativeSelect>
+            <FilterGroup label="Categoria">
+              <FilterPill
+                active={categoryFilter === "todas"}
+                onClick={() => setCategoryFilter("todas")}
+              >
+                Todas
+              </FilterPill>
+              {(Object.keys(DOC_CATEGORY_LABEL) as DocCategory[]).map((c) => (
+                <FilterPill
+                  key={c}
+                  active={categoryFilter === c}
+                  onClick={() => setCategoryFilter(c)}
+                >
+                  {DOC_CATEGORY_LABEL[c]}
+                </FilterPill>
+              ))}
+            </FilterGroup>
+          </FilterPopover>
           <Popover
             open={addOpen}
             onOpenChange={(o) => {
@@ -992,7 +983,7 @@ function DocsPanel({
             }}
           >
             <PopoverTrigger asChild>
-              <Button variant="primary" size="sm">
+              <Button variant="primary" size="sm" className="sm:ml-auto">
                 <Plus className="h-3.5 w-3.5" /> Adicionar
               </Button>
             </PopoverTrigger>
@@ -1035,24 +1026,20 @@ function DocsPanel({
               )}
             </PopoverContent>
           </Popover>
-        </div>
-      </div>
+        </FilterRow>
+        <FilterChips chips={docChips} onClear={() => setCategoryFilter("todas")} />
+      </FilterToolbar>
 
       {project.docs.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border p-6 text-center">
-          <p className="text-xs text-muted-foreground">
-            Nenhum material adicionado ainda. Adicione links importantes deste projeto.
-          </p>
-          <button
-            type="button"
-            onClick={() => setAddOpen(true)}
-            className="mt-2 text-xs font-medium text-text-brand hover:underline"
-          >
-            Adicionar primeiro material
-          </button>
-        </div>
+        <SharedEmptyState
+          compact
+          icon={<FolderOpen className="h-5 w-5" />}
+          title="Nenhum material adicionado ainda."
+          description="Adicione links importantes deste projeto."
+          primaryAction={{ label: "Adicionar link", onClick: () => setAddOpen(true) }}
+        />
       ) : sortedDocs.length === 0 ? (
-        <p className="text-xs text-muted-foreground">Nenhum resultado para esta busca/filtro.</p>
+        <SharedEmptyState compact title="Nenhum resultado para esta busca ou filtro." />
       ) : (
         <div className="divide-y divide-border rounded-md border border-border bg-background">
           {sortedDocs.map((d) => (

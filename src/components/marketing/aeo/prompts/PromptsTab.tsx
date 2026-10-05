@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Plus, Search } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   AEO_CATEGORIAS,
@@ -11,9 +11,16 @@ import {
   type AeoIdioma,
   type AeoPrompt,
 } from "@/lib/aeo-store";
-import { inputCls } from "../aeo-ui-utils";
 import { PromptFormDialog } from "./PromptFormDialog";
-import { NativeSelect } from "@/components/ui/native-select";
+import {
+  FilterChips,
+  FilterGroup,
+  FilterPill,
+  FilterPopover,
+  FilterRow,
+  FilterSearch,
+  FilterToolbar,
+} from "@/components/shared/FilterToolbar";
 
 type StatusFiltro = "todos" | "ativo" | "inativo";
 
@@ -38,6 +45,29 @@ export function PromptsTab({ prompts }: { prompts: AeoPrompt[] }) {
       .filter((p) => statusFiltro === "todos" || (statusFiltro === "ativo") === p.ativo)
       .sort((a, b) => a.idCodigo.localeCompare(b.idCodigo));
   }, [prompts, busca, categoriaFiltro, idiomaFiltro, statusFiltro]);
+
+  const chips = [
+    ...(categoriaFiltro
+      ? [{ id: "cat", label: categoriaFiltro, onRemove: () => setCategoriaFiltro("") }]
+      : []),
+    ...(idiomaFiltro
+      ? [{ id: "idi", label: idiomaFiltro, onRemove: () => setIdiomaFiltro("") }]
+      : []),
+    ...(statusFiltro !== "todos"
+      ? [
+          {
+            id: "st",
+            label: statusFiltro === "ativo" ? "Ativo" : "Inativo",
+            onRemove: () => setStatusFiltro("todos"),
+          },
+        ]
+      : []),
+  ];
+  const limpar = () => {
+    setCategoriaFiltro("");
+    setIdiomaFiltro("");
+    setStatusFiltro("todos");
+  };
 
   const handleSave = (patch: {
     idCodigo?: string;
@@ -77,62 +107,56 @@ export function PromptsTab({ prompts }: { prompts: AeoPrompt[] }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              placeholder="Buscar prompt..."
-              className={`${inputCls} w-52 pl-7`}
-            />
-          </div>
-          <NativeSelect
-            value={categoriaFiltro}
-            onChange={(e) => setCategoriaFiltro(e.target.value as AeoCategoria | "")}
-            className={inputCls}
+      <FilterToolbar>
+        <FilterRow>
+          <FilterSearch value={busca} onChange={setBusca} placeholder="Buscar prompt" />
+          <FilterPopover title="Filtrar prompts" activeCount={chips.length} onClear={limpar}>
+            <FilterGroup label="Categoria">
+              <FilterPill active={!categoriaFiltro} onClick={() => setCategoriaFiltro("")}>
+                Todas
+              </FilterPill>
+              {AEO_CATEGORIAS.map((c) => (
+                <FilterPill
+                  key={c}
+                  active={categoriaFiltro === c}
+                  onClick={() => setCategoriaFiltro(c)}
+                >
+                  {c} — {AEO_CATEGORIA_LABEL[c]}
+                </FilterPill>
+              ))}
+            </FilterGroup>
+            <FilterGroup label="Idioma">
+              <FilterPill active={!idiomaFiltro} onClick={() => setIdiomaFiltro("")}>
+                Todos
+              </FilterPill>
+              {AEO_IDIOMAS.map((i) => (
+                <FilterPill key={i} active={idiomaFiltro === i} onClick={() => setIdiomaFiltro(i)}>
+                  {i}
+                </FilterPill>
+              ))}
+            </FilterGroup>
+            <FilterGroup label="Status">
+              {(["todos", "ativo", "inativo"] as const).map((v) => (
+                <FilterPill key={v} active={statusFiltro === v} onClick={() => setStatusFiltro(v)}>
+                  {v === "todos" ? "Todos" : v === "ativo" ? "Ativo" : "Inativo"}
+                </FilterPill>
+              ))}
+            </FilterGroup>
+          </FilterPopover>
+          <Button
+            size="sm"
+            variant="primary"
+            className="sm:ml-auto"
+            onClick={() => {
+              setEditando(null);
+              setDialogOpen(true);
+            }}
           >
-            <option value="">Todas categorias</option>
-            {AEO_CATEGORIAS.map((c) => (
-              <option key={c} value={c}>
-                {c} — {AEO_CATEGORIA_LABEL[c]}
-              </option>
-            ))}
-          </NativeSelect>
-          <NativeSelect
-            value={idiomaFiltro}
-            onChange={(e) => setIdiomaFiltro(e.target.value as AeoIdioma | "")}
-            className={inputCls}
-          >
-            <option value="">Todos idiomas</option>
-            {AEO_IDIOMAS.map((i) => (
-              <option key={i} value={i}>
-                {i}
-              </option>
-            ))}
-          </NativeSelect>
-          <NativeSelect
-            value={statusFiltro}
-            onChange={(e) => setStatusFiltro(e.target.value as StatusFiltro)}
-            className={inputCls}
-          >
-            <option value="todos">Todos status</option>
-            <option value="ativo">Ativo</option>
-            <option value="inativo">Inativo</option>
-          </NativeSelect>
-        </div>
-        <Button
-          size="sm"
-          variant="primary"
-          onClick={() => {
-            setEditando(null);
-            setDialogOpen(true);
-          }}
-        >
-          <Plus className="h-3.5 w-3.5" /> Novo prompt
-        </Button>
-      </div>
+            <Plus className="h-3.5 w-3.5" /> Novo prompt
+          </Button>
+        </FilterRow>
+        <FilterChips chips={chips} onClear={limpar} />
+      </FilterToolbar>
 
       <div className="overflow-x-auto rounded-2xl border border-border">
         <table className="w-full min-w-[720px] text-xs">

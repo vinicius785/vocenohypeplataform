@@ -9,7 +9,8 @@ import {
 } from "@/lib/aeo-store";
 import { computeRodadaProgresso } from "@/lib/aeo-engine";
 import { Button } from "@/components/ui/button";
-import { inputCls, fmtDate } from "../aeo-ui-utils";
+import { fmtDate } from "../aeo-ui-utils";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { RodadaProgressoCard } from "./RodadaProgressoCard";
 import { NovaRodadaDialog } from "./NovaRodadaDialog";
 import { IaTabs } from "./IaTabs";
@@ -45,14 +46,11 @@ export function MonitorTab({
   if (ordenadas.length === 0) {
     return (
       <div className="space-y-4">
-        <div className="flex justify-end">
-          <Button size="sm" variant="primary" onClick={() => setNovaRodadaOpen(true)}>
-            <Plus className="h-3.5 w-3.5" /> Nova rodada
-          </Button>
-        </div>
-        <p className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-          Nenhuma rodada criada ainda.
-        </p>
+        <EmptyState
+          compact
+          title="Nenhuma rodada criada ainda."
+          primaryAction={{ label: "Nova rodada", onClick: () => setNovaRodadaOpen(true) }}
+        />
         <NovaRodadaDialog
           open={novaRodadaOpen}
           onOpenChange={setNovaRodadaOpen}
@@ -66,11 +64,12 @@ export function MonitorTab({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <label className="text-xs text-muted-foreground">Rodada</label>
+          <span className="text-sm text-text-secondary">Rodada</span>
           <NativeSelect
             value={rodadaAtualId}
             onChange={(e) => setRodadaId(e.target.value)}
-            className={inputCls}
+            aria-label="Rodada"
+            size="sm"
           >
             {ordenadas.map((r) => (
               <option key={r.id} value={r.id}>

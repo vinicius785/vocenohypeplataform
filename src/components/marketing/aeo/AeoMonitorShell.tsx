@@ -32,7 +32,7 @@ function Part({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className="border-t border-border/60 pt-4">
+    <Collapsible open={open} onOpenChange={setOpen}>
       <CollapsibleTrigger asChild>
         <button
           type="button"
@@ -62,7 +62,7 @@ export function AeoMonitorShell() {
   useEffect(() => onAeoRespostasChange(() => setRespostas(loadAeoRespostas())), []);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-8">
       <Part title="Monitoramento" hint="Rodada atual e respostas por IA.">
         <MonitorTab rodadas={rodadas} prompts={prompts} respostas={respostas} />
       </Part>
