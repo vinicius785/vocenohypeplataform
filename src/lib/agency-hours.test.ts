@@ -5,22 +5,30 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AGENCY_HOURS } from "./agency-hours";
 
 /**
- * Testa a função REAL do banco (`business_seconds_between`) rodando o SQL da migration num
- * Postgres em memória (PGlite) — não uma cópia em TypeScript. America/Sao_Paulo é -03:00 o ano
- * todo (sem horário de verão desde 2019), por isso os instantes abaixo usam `-03:00`.
+ * Testa as funções REAIS do banco (`business_seconds_between`/`is_agency_business_day`) rodando as
+ * migrations num Postgres em memória (PGlite) — não uma cópia em TypeScript. Só o que é do
+ * Supabase (papéis, `auth.uid()`, `is_admin`, `is_internal_team_member`) é stub. America/Sao_Paulo
+ * é -03:00 o ano todo (sem horário de verão desde 2019), por isso os instantes usam `-03:00`.
  */
-const MIGRATION = path.resolve(
-  __dirname,
-  "../../supabase/migrations/20261005100000_business_seconds_between.sql",
-);
-const sql = readFileSync(MIGRATION, "utf8");
+const MIGRATIONS_DIR = path.resolve(__dirname, "../../supabase/migrations");
+const FIRST = "20261005100000_business_seconds_between.sql";
+const SECOND = "20261005110000_business_hours_weekends_holidays.sql";
+const sql = readFileSync(path.join(MIGRATIONS_DIR, FIRST), "utf8");
+const sqlWeekends = readFileSync(path.join(MIGRATIONS_DIR, SECOND), "utf8");
 
 let db: PGlite;
 
 beforeAll(async () => {
   db = new PGlite();
-  // Só a definição da função (os GRANT/REVOKE dependem de papéis do Supabase).
-  await db.exec(sql.slice(0, sql.indexOf("revoke all")));
+  await db.exec(`
+    create role anon; create role authenticated;
+    create schema auth;
+    create function auth.uid() returns uuid language sql as $$ select null::uuid $$;
+    create function public.is_admin(_user_id uuid) returns boolean language sql as $$ select false $$;
+    create function public.is_internal_team_member(_user_id uuid) returns boolean language sql as $$ select false $$;
+  `);
+  await db.exec(sql);
+  await db.exec(sqlWeekends);
 });
 afterAll(async () => {
   await db.close();
@@ -90,9 +98,77 @@ describe("business_seconds_between — horário útil 09:00–19:00 (America/Sao
     expect(await secs("2026-10-05T10:00:00-03:00", null)).toBe(0);
   });
 
-  it("fins de semana HOJE contam como dias úteis (a regra é só a janela diária)", async () => {
-    // sex 18:30 → seg 09:30 = 0,5h + sáb 10h + dom 10h + 0,5h
-    expect(await secs("2026-10-02T18:30:00-03:00", "2026-10-05T09:30:00-03:00")).toBe(21 * H);
+  it("fim de semana não conta: sex 18:30 → seg 09:30 = 1h", async () => {
+    expect(await secs("2026-10-02T18:30:00-03:00", "2026-10-05T09:30:00-03:00")).toBe(1 * H);
+  });
+
+  it("começar ou terminar num sábado/domingo", async () => {
+    // sábado 10:00 → segunda 10:00: só 09:00–10:00 de segunda
+    expect(await secs("2026-10-03T10:00:00-03:00", "2026-10-05T10:00:00-03:00")).toBe(1 * H);
+    // sexta 18:00 → domingo 15:00: só 18:00–19:00 de sexta
+    expect(await secs("2026-10-02T18:00:00-03:00", "2026-10-04T15:00:00-03:00")).toBe(1 * H);
+    // sábado → domingo = 0
+    expect(await secs("2026-10-03T10:00:00-03:00", "2026-10-04T18:00:00-03:00")).toBe(0);
+  });
+
+  it("feriado não conta (segunda 12/10/2026, Nossa Senhora Aparecida)", async () => {
+    // sex 18:30 → terça 09:30 = 0,5h (sex) + 0,5h (ter); sáb, dom e feriado = 0
+    expect(await secs("2026-10-09T18:30:00-03:00", "2026-10-13T09:30:00-03:00")).toBe(1 * H);
+    // dentro do próprio feriado
+    expect(await secs("2026-10-12T10:00:00-03:00", "2026-10-12T15:00:00-03:00")).toBe(0);
+  });
+
+  it("feriado móvel (Sexta-feira Santa 03/04/2026) e feriado numa sexta (20/11/2026)", async () => {
+    expect(await secs("2026-04-02T18:30:00-03:00", "2026-04-06T09:30:00-03:00")).toBe(1 * H);
+    expect(await secs("2026-11-19T18:30:00-03:00", "2026-11-23T09:30:00-03:00")).toBe(1 * H);
+  });
+
+  it("vários dias com fim de semana e feriado no meio", async () => {
+    // qua 07/10 10:00 → seg 19/10 10:00: 9h (qua) + 10h (qui) + 10h (sex) + 0 (seg 12, feriado)
+    // + 40h (ter–sex) + 1h (seg 19)
+    expect(await secs("2026-10-07T10:00:00-03:00", "2026-10-19T10:00:00-03:00")).toBe(70 * H);
+  });
+
+  it("is_agency_business_day", async () => {
+    const q = async (d: string) =>
+      (await db.query<{ v: boolean }>("select public.is_agency_business_day($1::date) as v", [d]))
+        .rows[0].v;
+    expect(await q("2026-10-05")).toBe(true); // segunda
+    expect(await q("2026-10-03")).toBe(false); // sábado
+    expect(await q("2026-10-04")).toBe(false); // domingo
+    expect(await q("2026-10-12")).toBe(false); // feriado
+  });
+
+  it("a conta por fórmula bate com a conta dia a dia (intervalos variados)", async () => {
+    // Referência ingênua: soma, dia a dia, a sobreposição com 09–19 só nos dias úteis.
+    const naive = async (a: string, b: string) =>
+      (
+        await db.query<{ v: number }>(
+          `select coalesce(sum(
+             case when public.is_agency_business_day(d::date) then
+               greatest(0, extract(epoch from
+                 least($2::timestamptz at time zone 'America/Sao_Paulo', d + time '19:00')
+                 - greatest($1::timestamptz at time zone 'America/Sao_Paulo', d + time '09:00')))
+             else 0 end), 0) as v
+           from generate_series(
+             ($1::timestamptz at time zone 'America/Sao_Paulo')::date,
+             ($2::timestamptz at time zone 'America/Sao_Paulo')::date, interval '1 day') d`,
+          [a, b],
+        )
+      ).rows[0].v;
+    let seed = 7;
+    const rnd = (n: number) => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed % n;
+    };
+    const base = Date.parse("2026-01-01T00:00:00-03:00");
+    for (let i = 0; i < 60; i++) {
+      const start = base + rnd(300 * 24 * 60) * 60_000;
+      const end = start + rnd(40 * 24 * 60) * 60_000;
+      const a = new Date(start).toISOString();
+      const b = new Date(end).toISOString();
+      expect(await secs(a, b), `${a} → ${b}`).toBe(Number(await naive(a, b)));
+    }
   });
 });
 

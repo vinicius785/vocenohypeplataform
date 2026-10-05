@@ -125,9 +125,9 @@ export function ProfileCommunication({
         <p>
           Esta é uma métrica agregada. O conteúdo, participantes e conversas utilizados no cálculo
           não são exibidos. O tempo é calculado com base nos eventos registrados pela plataforma, só
-          dentro do horário útil da agência ({AGENCY_HOURS_LABEL}); fora dele o relógio não avança.
-          Mensagens seguidas da mesma pessoa contam como uma única demanda; mensagens do sistema e
-          do bot ficam fora. Não faz parte do Score.
+          dentro do horário útil da agência ({AGENCY_HOURS_LABEL}), de segunda a sexta e sem
+          feriados; fora dele o relógio não avança. Mensagens seguidas da mesma pessoa contam como
+          uma única demanda; mensagens do sistema e do bot ficam fora. Não faz parte do Score.
         </p>
       </div>
     </div>

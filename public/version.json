@@ -1,9 +1,9 @@
 {
-  "version": "1.300.0",
+  "version": "1.301.0",
   "releases": [
     {
-      "version": "1.300.0",
-      "summary": "O tempo de resposta passa a contar só o horário de funcionamento da agência.",
+      "version": "1.301.0",
+      "summary": "O tempo de resposta passa a contar só o horário útil da agência.",
       "modules": [
         {
           "name": "TIME",
@@ -11,7 +11,7 @@
           "items": [
             {
               "title": "Tempo de resposta em horário útil",
-              "description": "Das 19:00 às 09:00 (horário de Brasília) o relógio não avança: uma mensagem às 18:30 respondida às 09:30 do dia seguinte conta 1 hora, não 15."
+              "description": "Conta só de segunda a sexta, das 09:00 às 19:00 (horário de Brasília), sem feriados. Fora disso o relógio não avança: uma mensagem na sexta às 18:30 respondida na segunda às 09:30 conta 1 hora."
             }
           ]
         }
