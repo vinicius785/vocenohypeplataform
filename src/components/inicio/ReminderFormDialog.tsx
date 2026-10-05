@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { Loader2 } from "lucide-react";
 import {
   Dialog,
@@ -9,13 +9,15 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { DateField } from "@/components/ui/date-field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import { todayIsoInBrasilia } from "@/lib/timezone";
 import type { Reminder } from "@/lib/reminders";
 import type { ReminderPriority } from "@/lib/reminders.functions";
 
-const labelCls = "block space-y-1 text-xs font-medium text-text-secondary";
+const labelCls = "block text-sm font-medium text-foreground";
 
 export type ReminderFormInput = {
   title: string;
@@ -38,12 +40,43 @@ function isoToTimeInput(iso?: string): string {
   const t = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
   return t === "00:00" ? "" : t;
 }
+/** Amanhã a partir de um dia `YYYY-MM-DD` (sem passar por UTC). */
+function addOneDay(day: string): string {
+  const [y, m, d] = day.split("-").map(Number);
+  const next = new Date(y, m - 1, d + 1);
+  return `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}`;
+}
+
+/** Atalho de data: um chip que preenche o MESMO campo de data (clicar de novo limpa). */
+function DateChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={`h-9 rounded-md border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
+        active
+          ? "border-foreground bg-foreground text-background"
+          : "border-border text-text-secondary hover:bg-muted hover:text-foreground"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
 
 /**
- * Formulário compacto de "Criar lembrete" (ou editar, quando `initial` é
- * passado) — sempre em modal/popover, nunca um campo permanente dentro do
- * card (pedido explícito). Data e hora são campos separados e opcionais;
- * combinados em um único ISO só na hora de enviar.
+ * "Criar lembrete" (ou editar, com `initial`) — criação rápida: o quê → quando → contexto →
+ * prioridade. Sempre em modal (nunca um campo permanente no card). Data e hora são opcionais e
+ * combinadas em um único ISO só na hora de enviar. Enter envia, Esc fecha, o foco começa no título.
  */
 export function ReminderFormDialog({
   open,
@@ -63,11 +96,20 @@ export function ReminderFormDialog({
   const [priority, setPriority] = useState<ReminderPriority>(initial?.priority ?? "normal");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [titleError, setTitleError] = useState("");
+  const titleRef = useRef<HTMLInputElement>(null);
 
-  const canSave = title.trim().length > 0 && !saving;
+  const today = todayIsoInBrasilia();
+  const tomorrow = addOneDay(today);
 
-  const handleSave = async () => {
-    if (!canSave) return;
+  const handleSave = async (e?: FormEvent) => {
+    e?.preventDefault();
+    if (saving) return;
+    if (!title.trim()) {
+      setTitleError("Digite o que você precisa lembrar.");
+      titleRef.current?.focus();
+      return;
+    }
     setSaving(true);
     setError("");
     try {
@@ -77,8 +119,8 @@ export function ReminderFormDialog({
       }
       await onSubmit({ title: title.trim(), notes: notes.trim() || undefined, dueAt, priority });
       onOpenChange(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Não foi possível salvar o lembrete.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível salvar o lembrete.");
     } finally {
       setSaving(false);
     }
@@ -86,72 +128,144 @@ export function ReminderFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent mobileFullScreen className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>{initial ? "Editar lembrete" : "Criar lembrete"}</DialogTitle>
-          <DialogDescription>Um lembrete pessoal — só você vê.</DialogDescription>
-        </DialogHeader>
+      <DialogContent mobileFullScreen className="max-w-md">
+        <form onSubmit={(e) => void handleSave(e)} className="space-y-6">
+          <DialogHeader>
+            <DialogTitle>{initial ? "Editar lembrete" : "Criar lembrete"}</DialogTitle>
+            <DialogDescription>Um lembrete pessoal — só você vê.</DialogDescription>
+          </DialogHeader>
 
-        <div className="space-y-3 py-1">
-          <label className={labelCls}>
-            <span>Título *</span>
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="O que você precisa lembrar?"
-              maxLength={200}
-              autoFocus
-            />
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            <label className={labelCls}>
-              <span>Data</span>
-              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            </label>
-            <label className={labelCls}>
-              <span>Horário</span>
+          <div className="space-y-5">
+            <div className="space-y-1.5">
+              <label htmlFor="lembrete-titulo" className={labelCls}>
+                O que você precisa lembrar?
+              </label>
               <Input
-                type="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                disabled={!date}
+                id="lembrete-titulo"
+                ref={titleRef}
+                value={title}
+                onChange={(e) => {
+                  setTitle(e.target.value);
+                  if (titleError) setTitleError("");
+                }}
+                placeholder="Ex.: enviar a proposta para o cliente"
+                maxLength={200}
+                autoFocus
+                aria-invalid={!!titleError}
+                aria-describedby={titleError ? "lembrete-titulo-erro" : undefined}
+                className={`h-10 ${titleError ? "border-destructive focus-visible:ring-destructive" : ""}`}
               />
-            </label>
-          </div>
-          <label className={labelCls}>
-            <span>Observação</span>
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className="h-16 resize-none"
-              maxLength={2000}
-            />
-          </label>
-          <div className="space-y-1">
-            <span className="block text-xs font-medium text-text-secondary">Prioridade</span>
-            <SegmentedControl
-              aria-label="Prioridade do lembrete"
-              size="sm"
-              value={priority}
-              onChange={setPriority}
-              options={[
-                { value: "normal" as ReminderPriority, label: "Normal" },
-                { value: "importante" as ReminderPriority, label: "Importante" },
-              ]}
-            />
-          </div>
-          {error && <p className="text-xs text-danger">{error}</p>}
-        </div>
+              {titleError && (
+                <p id="lembrete-titulo-erro" role="alert" className="text-xs text-danger">
+                  {titleError}
+                </p>
+              )}
+            </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-            Cancelar
-          </Button>
-          <Button onClick={() => void handleSave()} disabled={!canSave}>
-            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            {initial ? "Salvar alterações" : "Criar lembrete"}
-          </Button>
-        </DialogFooter>
+            <div className="space-y-1.5">
+              <span className={labelCls}>Quando?</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <DateChip
+                  active={date === today}
+                  onClick={() => setDate(date === today ? "" : today)}
+                >
+                  Hoje
+                </DateChip>
+                <DateChip
+                  active={date === tomorrow}
+                  onClick={() => setDate(date === tomorrow ? "" : tomorrow)}
+                >
+                  Amanhã
+                </DateChip>
+                <div className="min-w-[10rem] flex-1 sm:flex-none">
+                  <DateField
+                    value={date || undefined}
+                    onChange={(v) => setDate(v ?? "")}
+                    placeholder="Escolher data"
+                    ariaLabel="Escolher data"
+                    contentClassName="z-[70]"
+                    className="h-9 py-0"
+                  />
+                </div>
+              </div>
+              {date && (
+                <div className="flex items-center gap-2 pt-1">
+                  <label htmlFor="lembrete-hora" className="text-sm text-text-secondary">
+                    Horário <span className="text-text-secondary/70">(opcional)</span>
+                  </label>
+                  <Input
+                    id="lembrete-hora"
+                    type="time"
+                    value={time}
+                    onChange={(e) => setTime(e.target.value)}
+                    className="h-9 w-32"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <label htmlFor="lembrete-obs" className={labelCls}>
+                Observação
+              </label>
+              <Textarea
+                id="lembrete-obs"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                onInput={(e) => {
+                  const el = e.currentTarget;
+                  el.style.height = "auto";
+                  el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+                }}
+                rows={2}
+                placeholder="Algum contexto que você queira lembrar junto."
+                className="min-h-[3.5rem] resize-none"
+                maxLength={2000}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <span className={labelCls}>Prioridade</span>
+              <SegmentedControl
+                aria-label="Prioridade do lembrete"
+                size="sm"
+                value={priority}
+                onChange={setPriority}
+                options={[
+                  { value: "normal" as ReminderPriority, label: "Normal" },
+                  { value: "importante" as ReminderPriority, label: "Importante" },
+                ]}
+              />
+            </div>
+
+            {error && (
+              <p role="alert" className="text-sm text-danger">
+                {error}
+              </p>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => onOpenChange(false)}
+              disabled={saving}
+            >
+              Cancelar
+            </Button>
+            <Button type="submit" variant="primary" disabled={saving}>
+              {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              {saving
+                ? initial
+                  ? "Salvando..."
+                  : "Criando..."
+                : initial
+                  ? "Salvar alterações"
+                  : "Criar lembrete"}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );
