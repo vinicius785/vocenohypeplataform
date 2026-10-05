@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Dialog,
@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { WeekdayBucket } from "@/lib/score";
+import type { Insight } from "@/lib/insights-engine";
 import type { DashTask, DashTaskFlat } from "@/lib/task-aggregation";
 import type { Member } from "@/components/TimeSection";
 import { avatarAccent, initialsOf } from "./member-ui";
@@ -133,10 +134,13 @@ function DeliveryTasksDialog({
 
 function MemberRow({
   row,
+  insights,
   onOpenTasks,
   onOpenMember,
 }: {
   row: DeliveryMemberRow;
+  /** Insights de ATENÇÃO deste membro (os mesmos de "Insights do Time"). */
+  insights: Insight[];
   onOpenTasks: () => void;
   onOpenMember: () => void;
 }) {
@@ -146,6 +150,8 @@ function MemberRow({
     (best, d) => (d.count > 0 && (!best || d.count > best.count) ? d : best),
     null,
   );
+  const maxCount = Math.max(1, ...row.byWeekday.map((d) => d.count));
+  const dailyAvg = row.byWeekday.length > 0 ? row.thisWeek / row.byWeekday.length : null;
 
   return (
     <div className="border-t border-border first:border-t-0">
@@ -153,14 +159,13 @@ function MemberRow({
         <button
           type="button"
           onClick={() => setExpanded((e) => !e)}
-          aria-label={expanded ? "Recolher" : "Expandir"}
-          className="shrink-0 cursor-pointer text-text-secondary hover:text-foreground"
+          aria-label={expanded ? `Recolher ${member.name}` : `Expandir ${member.name}`}
+          aria-expanded={expanded}
+          className="-ml-1.5 flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-text-secondary hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
         >
-          {expanded ? (
-            <ChevronDown className="h-3.5 w-3.5" />
-          ) : (
-            <ChevronRight className="h-3.5 w-3.5" />
-          )}
+          <ChevronRight
+            className={`h-4 w-4 transition-transform duration-200 motion-reduce:transition-none ${expanded ? "rotate-90" : ""}`}
+          />
         </button>
 
         <button
@@ -204,48 +209,89 @@ function MemberRow({
         </span>
       </div>
 
-      {expanded && (
-        <div className="space-y-2 border-t border-border/60 bg-muted/20 px-4 py-3 text-xs">
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-3">
+      {/* Expansão inline, compacta: SÓ o que a linha não mostra — distribuição da semana, ritmo
+       * (média diária e melhor dia) e, se existir, atenção. As médias ficam na linha. */}
+      <div
+        className={`grid transition-[grid-template-rows] duration-200 motion-reduce:transition-none ${expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
+        aria-hidden={!expanded}
+        inert={!expanded}
+      >
+        <div className="overflow-hidden">
+          <div
+            className={`grid gap-x-10 gap-y-4 border-t border-border/60 bg-muted/20 px-4 py-3 ${
+              insights.length > 0 ? "md:grid-cols-[1.6fr_1fr_1.3fr]" : "md:grid-cols-[1.6fr_1fr]"
+            }`}
+          >
             <div>
-              <p className="text-text-secondary">Esta semana</p>
-              <p className="font-semibold tabular-nums text-foreground">{row.thisWeek}</p>
-            </div>
-            <div>
-              <p className="text-text-secondary">Média mensal</p>
-              <p className="font-semibold tabular-nums text-foreground">
-                {fmtAvg(row.monthlyAvg)} / semana
+              <p className="text-[11px] font-medium uppercase tracking-wide text-text-secondary">
+                Distribuição da semana
               </p>
+              <ul className="mt-2 grid grid-cols-5 gap-2">
+                {row.byWeekday.map((d) => (
+                  <li key={d.label}>
+                    <span className="block text-[11px] uppercase text-text-secondary">
+                      {d.label.slice(0, 3)}
+                    </span>
+                    <span
+                      className={`block text-base font-semibold tabular-nums leading-tight ${d.count === 0 ? "text-text-secondary/60" : "text-foreground"}`}
+                    >
+                      {d.count}
+                    </span>
+                    <span className="mt-1 block h-1 w-full overflow-hidden rounded-full bg-muted">
+                      <span
+                        className="block h-full rounded-full bg-foreground/45"
+                        style={{
+                          width: `${d.count > 0 ? Math.max(10, (d.count / maxCount) * 100) : 0}%`,
+                        }}
+                      />
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </div>
+
             <div>
-              <p className="text-text-secondary">Média trimestral</p>
-              <p className="font-semibold tabular-nums text-foreground">
-                {fmtAvg(row.quarterlyAvg)} / semana
+              <p className="text-[11px] font-medium uppercase tracking-wide text-text-secondary">
+                Resumo da semana
               </p>
+              <dl className="mt-2 space-y-1 text-sm">
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-text-secondary">Média diária</dt>
+                  <dd className="font-semibold tabular-nums text-foreground">{fmtAvg(dailyAvg)}</dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-text-secondary">Melhor dia</dt>
+                  <dd className="font-semibold text-foreground">
+                    {bestDay ? `${bestDay.label.toLowerCase()} · ${bestDay.count}` : "—"}
+                  </dd>
+                </div>
+              </dl>
             </div>
-            <div>
-              <p className="text-text-secondary">Média anual</p>
-              <p className="font-semibold tabular-nums text-foreground">
-                {fmtAvg(row.yearlyAvg)} / semana
-              </p>
-            </div>
-            <div>
-              <p className="text-text-secondary">Melhor dia</p>
-              <p className="font-semibold text-foreground">{bestDay ? bestDay.label : "—"}</p>
-            </div>
-          </div>
-          <div>
-            <p className="mb-1 text-text-secondary">Distribuição da semana</p>
-            <div className="flex flex-wrap gap-x-3 gap-y-1">
-              {row.byWeekday.map((d) => (
-                <span key={d.label} className="tabular-nums text-foreground">
-                  {d.label.slice(0, 3).toUpperCase()} {d.count}
-                </span>
-              ))}
-            </div>
+
+            {insights.length > 0 && (
+              <div>
+                <p className="text-[11px] font-medium uppercase tracking-wide text-warning-soft-foreground">
+                  Atenção
+                </p>
+                <ul className="mt-2 space-y-1.5">
+                  {insights.slice(0, 2).map((i) => (
+                    <li key={`${i.ruleId}:${i.memberId}`} className="text-xs text-foreground">
+                      {i.text}
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  onClick={onOpenMember}
+                  className="mt-1.5 cursor-pointer text-[11px] font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                >
+                  Ver {member.name.split(" ")[0]} →
+                </button>
+              </div>
+            )}
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -302,6 +348,7 @@ export function TeamDeliveriesWeek({
    * `null` quando a semana anterior não teve nenhuma entrega nos mesmos
    * dias (sem base pra calcular %). */
   weeklyTrendPct,
+  insights = [],
   onOpenTask,
   onOpenMember,
 }: {
@@ -310,6 +357,8 @@ export function TeamDeliveriesWeek({
   tasksByDay: Map<number, DashTaskFlat[]>;
   memberRows: DeliveryMemberRow[];
   weeklyTrendPct: number | null;
+  /** Insights do time (`generateInsights`); a expansão de cada membro mostra os de ATENÇÃO dele. */
+  insights?: Insight[];
   onOpenTask: (t: DashTask) => void;
   onOpenMember: (m: Member, opts?: { showComposition?: boolean }) => void;
 }) {
@@ -508,6 +557,9 @@ export function TeamDeliveriesWeek({
               <MemberRow
                 key={row.member.id}
                 row={row}
+                insights={insights.filter(
+                  (i) => i.memberId === row.member.id && i.nature === "atencao",
+                )}
                 onOpenTasks={() => setOpenMemberTasks(row)}
                 onOpenMember={() => onOpenMember(row.member)}
               />
