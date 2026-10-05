@@ -8,6 +8,7 @@ import { PLATAFORMAS, platformDef, groupByPlatform } from "@/lib/social-profiles
 import { ANEXO_ACEITOS } from "@/lib/inscricao-validation";
 import type { CustomQuestion } from "@/lib/inscricao-page";
 import { INPUT, inputClass } from "./input-class";
+import { NumberInput } from "./NumberInput";
 
 export type RedeForm = {
   id: string;
@@ -217,12 +218,11 @@ export function SocialPicker({
                     <label htmlFor={`seg-${r.id}`} className="text-xs text-text-secondary">
                       Seguidores
                     </label>
-                    <Input
+                    <NumberInput
                       id={`seg-${r.id}`}
-                      inputMode="numeric"
-                      placeholder="Ex.: 25 mil"
+                      placeholder="Ex.: 25.000"
                       value={r.seguidores}
-                      onChange={(e) => onUpdate(r.id, { seguidores: e.target.value })}
+                      onValueChange={(v) => onUpdate(r.id, { seguidores: v })}
                       className={`mt-1 ${INPUT}`}
                     />
                   </div>
@@ -413,12 +413,10 @@ export function CustomQuestionField({
     return (
       <Field {...common}>
         {(a) => (
-          <Input
+          <NumberInput
             {...a}
-            type="number"
-            inputMode="numeric"
             value={(value as string) ?? ""}
-            onChange={(e) => onChange(e.target.value)}
+            onValueChange={onChange}
             className={inputClass(!!error)}
           />
         )}

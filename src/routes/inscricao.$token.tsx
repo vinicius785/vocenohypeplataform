@@ -7,6 +7,7 @@ import {
   submitInscricaoCampanha,
 } from "@/lib/inscricao-campanha.functions";
 import { NICHOS } from "@/lib/influencer-model";
+import { formatSeguidores } from "@/lib/format";
 import { resolveLocalizacao, toItems, UF_NAMES } from "@/lib/campanha-localidades";
 import { normalizeSocialInput, isDuplicateProfile } from "@/lib/social-profiles";
 import { fetchWorkspace } from "@/lib/workspace-store";
@@ -567,7 +568,7 @@ function InscricaoPage() {
                         validRedes.map((r) => (
                           <p key={r.id}>
                             <span className="font-medium">{r.plataforma}</span> · {r.handle}
-                            {r.seguidores ? ` · ${r.seguidores} seguidores` : ""}
+                            {r.seguidores ? ` · ${formatSeguidores(r.seguidores)} seguidores` : ""}
                           </p>
                         ))
                       )}

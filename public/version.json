@@ -1,25 +1,25 @@
 {
-  "version": "1.316.0",
+  "version": "1.317.0",
   "releases": [
     {
-      "version": "1.316.0",
-      "summary": "A inscrição original agora é lida em formato humano.",
+      "version": "1.317.0",
+      "summary": "Campos numéricos da inscrição mostram o número exato enquanto você digita.",
       "modules": [
         {
-          "name": "CAMPANHAS",
-          "tagline": "Detalhe do influenciador",
+          "name": "INSCRIÇÃO",
+          "tagline": "Página pública de inscrição",
           "items": [
             {
-              "title": "Inscrição original legível",
-              "description": "Ver inscrição original agora mostra contato, redes, respostas e mensagem de forma organizada, em vez de um bloco de código."
+              "title": "Milhar em tempo real",
+              "description": "Em Seguidores, digitar 211111 mostra 2, 21, 211, 2.111, 21.111 e 211.111 a cada tecla, sem abreviar."
             },
             {
-              "title": "Status na candidatura",
-              "description": "A seção Dados da inscrição mostra também o status atual do influenciador, junto da data e da origem."
+              "title": "Edição sem atrapalho",
+              "description": "O cursor fica no lugar certo ao editar no meio do número, e colar um número limpa tudo que não é dígito."
             },
             {
-              "title": "Dados técnicos recolhidos",
-              "description": "O registro bruto continua disponível, mas fica escondido em Dados técnicos, só para diagnóstico."
+              "title": "Valor salvo sem formatação",
+              "description": "A inscrição guarda o número puro (211111). A pontuação é só visual."
             }
           ]
         }
