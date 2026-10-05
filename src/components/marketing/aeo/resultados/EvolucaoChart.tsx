@@ -63,7 +63,20 @@ export function EvolucaoChart({
                 domain={[0, 100]}
                 unit="%"
               />
-              <Tooltip />
+              <Tooltip
+                cursor={{ stroke: "var(--border)" }}
+                content={({ active, payload, label }) =>
+                  active && payload?.length ? (
+                    <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-md">
+                      <p className="text-text-secondary">Rodada {label}</p>
+                      <p className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">
+                        {payload[0].value}%{" "}
+                        <span className="font-normal text-text-secondary">de visibilidade</span>
+                      </p>
+                    </div>
+                  ) : null
+                }
+              />
               <Line
                 type="monotone"
                 dataKey="pct"
@@ -71,6 +84,7 @@ export function EvolucaoChart({
                 stroke="var(--chart-1)"
                 strokeWidth={2}
                 dot={{ r: 3 }}
+                activeDot={{ r: 5 }}
               />
             </LineChart>
           </ResponsiveContainer>
