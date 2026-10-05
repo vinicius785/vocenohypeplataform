@@ -15,7 +15,7 @@ const SR = 44100;
 const OUT = process.argv[2];
 
 // Notas (Hz) — tudo em Lá maior; A5 é a "assinatura" que reaparece nos três sons.
-const N = { A4: 440.0, E5: 659.25, A5: 880.0, Cs6: 1108.73, E6: 1318.51, A6: 1760.0 };
+const N = { A4: 440.0, Cs5: 554.37, E5: 659.25, A5: 880.0, Cs6: 1108.73, E6: 1318.51, A6: 1760.0 };
 
 const alloc = (secs) => new Float64Array(Math.ceil(secs * SR));
 
@@ -93,9 +93,9 @@ function fade(buf, ms = 45) {
 }
 
 /** Corta o silêncio do fim, aplica o fade e devolve o buffer final. */
-function trim(buf) {
+function trim(buf, floor = 0.0008) {
   let end = buf.length;
-  while (end > 0 && Math.abs(buf[end - 1]) < 0.0008) end--;
+  while (end > 0 && Math.abs(buf[end - 1]) < floor) end--;
   const out = buf.slice(0, Math.min(buf.length, end + Math.floor(0.02 * SR)));
   fade(out);
   return out;
@@ -131,12 +131,12 @@ function normalize(b, targetRmsDb = -21, peakCeilDb = -1.2) {
 
 // ---------------- Os três sons ----------------
 
-// CHAT — leve: duas notas (E5 → A5, quarta ascendente), curtas, brilho baixo.
+// CHAT — muito curto e grave-médio: duas notas (Lá4 → Mi5, quinta ascendente), sem brilho.
 function chat() {
-  const b = alloc(1.1);
-  note(b, N.E5, 0.0, { len: 0.3, amp: 0.5, bright: 0.7, ring: 0.8 });
-  note(b, N.A5, 0.13, { len: 0.52, amp: 0.55, bright: 0.8, ring: 0.9 });
-  return b;
+  const b = alloc(0.7);
+  note(b, N.A4, 0.0, { len: 0.16, amp: 0.55, bright: 0.45, ring: 0.7 });
+  note(b, N.E5, 0.085, { len: 0.3, amp: 0.6, bright: 0.5, ring: 0.8 });
+  return lowpass(lowpass(b, 2800), 2800);
 }
 
 /** Moeda: transiente curto de ruído + parciais metálicos inarmônicos (tilintar de moeda). */
@@ -164,16 +164,34 @@ function coin(buf, freq, t0, { len = 0.22, amp = 0.4 } = {}) {
   }
 }
 
-/** Sino de campainha: parciais de sino (1, 2.4, 3.9) com decaimento longo — "ding-dong". */
-function bell(buf, freq, t0, { len = 0.9, amp = 0.5 } = {}) {
+/** Corpo grave sob a moeda: seno curto em 220 Hz — dá peso (e tira o "tilintar" de brinquedo). */
+function thud(buf, t0, { len = 0.09, amp = 0.5 } = {}) {
   const start = Math.floor(t0 * SR);
   const n = Math.floor(len * SR);
-  const parts = [
-    [1, 1.0, 1.0],
-    [2.4, 0.4, 0.55],
-    [3.9, 0.22, 0.35],
-    [5.8, 0.1, 0.22],
-  ];
+  for (let i = 0; i < n && start + i < buf.length; i++) {
+    const t = i / SR;
+    buf[start + i] +=
+      Math.sin(2 * Math.PI * 220 * t) * Math.exp(-t / 0.03) * Math.min(1, t / 0.002) * amp;
+  }
+}
+
+/** Sino de campainha: parciais de sino (1, 2.4, 3.9) com decaimento longo — "ding-dong". */
+function bell(buf, freq, t0, { len = 0.9, amp = 0.5, warm = false } = {}) {
+  const start = Math.floor(t0 * SR);
+  const n = Math.floor(len * SR);
+  // `warm`: registro grave e poucos harmônicos agudos — campainha encorpada, sem brilho estridente.
+  const parts = warm
+    ? [
+        [1, 1.0, 1.0],
+        [2.0, 0.32, 0.7],
+        [2.9, 0.1, 0.4],
+      ]
+    : [
+        [1, 1.0, 1.0],
+        [2.4, 0.4, 0.55],
+        [3.9, 0.22, 0.35],
+        [5.8, 0.1, 0.22],
+      ];
   for (let i = 0; i < n && start + i < buf.length; i++) {
     const t = i / SR;
     const attack = Math.min(1, t / 0.002);
@@ -185,23 +203,37 @@ function bell(buf, freq, t0, { len = 0.9, amp = 0.5 } = {}) {
   }
 }
 
-// COMERCIAL — dinheiro: duas moedinhas tilintando e um brilho ascendente fechando em Lá (A6).
+// COMERCIAL — dinheiro, sóbrio e firme: duas moedas pesadas sobre um corpo grave, fechando em
+// duas notas médias (Lá4 → Mi5). Sem arpejo brilhante.
 function commercial() {
-  const b = alloc(1.3);
-  coin(b, 2637, 0.0, { len: 0.2, amp: 0.45 });
-  coin(b, 3136, 0.085, { len: 0.22, amp: 0.5 });
-  note(b, N.A5, 0.17, { len: 0.34, amp: 0.4, bright: 1.1, ring: 0.8 });
-  note(b, N.E6, 0.25, { len: 0.34, amp: 0.34, bright: 1.1, ring: 0.8 });
-  note(b, N.A6, 0.33, { len: 0.5, amp: 0.3, bright: 0.9, ring: 0.9 });
-  return b;
+  const b = alloc(1.2);
+  thud(b, 0.0, { len: 0.09, amp: 0.34 });
+  coin(b, 1568, 0.0, { len: 0.2, amp: 0.5 });
+  coin(b, 1976, 0.08, { len: 0.22, amp: 0.55 });
+  note(b, N.A4, 0.17, { len: 0.34, amp: 0.55, bright: 0.55, ring: 0.8 });
+  note(b, N.E5, 0.27, { len: 0.46, amp: 0.6, bright: 0.6, ring: 0.9 });
+  return lowpass(lowpass(b, 6500), 6500);
 }
 
 // REUNIÃO — carteiro na campainha: "ding-dong" (Dó♯ → Lá), com a nota final longa e clara.
 function meeting() {
   const b = alloc(2.0);
-  bell(b, N.Cs6, 0.0, { len: 0.7, amp: 0.46 });
-  bell(b, N.A5, 0.34, { len: 0.95, amp: 0.6 });
-  return b;
+  // Uma oitava abaixo do desenho anterior (Dó♯5 → Lá4) e filtrada: grave, quente, sem agudo estridente.
+  bell(b, N.Cs5, 0.0, { len: 0.7, amp: 0.5, warm: true });
+  bell(b, N.A4, 0.36, { len: 1.0, amp: 0.66, warm: true });
+  return lowpass(lowpass(b, 2600), 2600);
+}
+
+/** Passa-baixa de um polo (aplicado duas vezes = ~12 dB/oit): tira o brilho agudo. */
+function lowpass(x, fc) {
+  const a = Math.exp((-2 * Math.PI * fc) / SR);
+  const y = new Float64Array(x.length);
+  let prev = 0;
+  for (let i = 0; i < x.length; i++) {
+    prev = (1 - a) * x[i] + a * prev;
+    y[i] = prev;
+  }
+  return y;
 }
 
 function encodeMp3(samples) {
@@ -227,8 +259,10 @@ const defs = {
 };
 for (const [name, fn] of Object.entries(defs)) {
   let b = fn();
-  b = reverb(b, name.startsWith("meeting") ? 0.18 : 0.13);
-  b = trim(b);
+  // Chat: quase sem cauda (reverb mínimo e corte mais cedo) — é o som mais repetido.
+  const isChat = name.startsWith("chat");
+  b = reverb(b, name.startsWith("meeting") ? 0.18 : isChat ? 0.04 : 0.13);
+  b = trim(b, isChat ? 0.01 : 0.0008);
   normalize(b);
   let peak = 0;
   for (const v of b) peak = Math.max(peak, Math.abs(v));
