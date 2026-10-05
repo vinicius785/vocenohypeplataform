@@ -1,25 +1,17 @@
 {
-  "version": "1.324.0",
+  "version": "1.324.1",
   "releases": [
     {
-      "version": "1.324.0",
-      "summary": "Meu trabalho no Início agora permite agir nas tarefas sem abri-las.",
+      "version": "1.324.1",
+      "summary": "Correção ao salvar alterações em influenciadores aprovados.",
       "modules": [
         {
-          "name": "INÍCIO",
-          "tagline": "Meu trabalho",
+          "name": "CAMPANHAS",
+          "tagline": "Influenciadores",
           "items": [
             {
-              "title": "Mude o status pela Home",
-              "description": "Clique na bolinha de status da tarefa e escolha o novo status, com as mesmas regras do Kanban: conclusão, pontuação e recorrência."
-            },
-            {
-              "title": "Cronômetro na linha",
-              "description": "Tarefas em andamento mostram o tempo correndo, com botões para iniciar e parar, sempre sincronizado com o resto da plataforma."
-            },
-            {
-              "title": "Mais contexto",
-              "description": "Cada linha mostra cliente e projeto, prioridade e prazo (Hoje, Atrasada · 2d), com o título em destaque."
+              "title": "Erro ao subir roteiro corrigido",
+              "description": "Salvar qualquer alteração em um influenciador aprovado (como anexar um roteiro) voltou a funcionar, depois de aplicar a atualização do banco desta versão."
             }
           ]
         }
