@@ -1,17 +1,17 @@
 {
-  "version": "1.302.0",
+  "version": "1.303.0",
   "releases": [
     {
-      "version": "1.302.0",
-      "summary": "A lista de Clientes mostra só quem está em operação.",
+      "version": "1.303.0",
+      "summary": "Cada etapa do Pipeline do Comercial ganhou a sua cor.",
       "modules": [
         {
-          "name": "CLIENTES",
-          "tagline": "Lista mais limpa",
+          "name": "COMERCIAL",
+          "tagline": "Pipeline mais fácil de ler",
           "items": [
             {
-              "title": "Clientes encerrados e arquivados fora da lista",
-              "description": "A lista mostra só clientes em captação e ativos. Encerrados e Arquivados continuam acessíveis pelo filtro de Status."
+              "title": "Etapas do Pipeline com cor própria",
+              "description": "Lead recebido, Contato feito, Reuniões, Propostas, Negociação, Ganho e Perdido agora têm cores discretas no ponto, na linha da coluna, nos filtros, no detalhe e no histórico do lead."
             }
           ]
         }

@@ -10,6 +10,7 @@ import { NativeSelect } from "@/components/ui/native-select";
 import {
   OPPORTUNITY_STAGES,
   OPPORTUNITY_STAGE_LABEL,
+  OPPORTUNITY_STAGE_COLOR,
   type OpportunityStage,
 } from "@/lib/comercial-engine";
 import {
@@ -131,7 +132,13 @@ export function FilterPanel({
             active={filters.stages.includes(s)}
             onClick={() => onChange({ ...filters, stages: toggleIn(filters.stages, s) })}
           >
-            {OPPORTUNITY_STAGE_LABEL[s]}
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                aria-hidden="true"
+                className={`h-1.5 w-1.5 shrink-0 rounded-full ${OPPORTUNITY_STAGE_COLOR[s]}`}
+              />
+              {OPPORTUNITY_STAGE_LABEL[s]}
+            </span>
           </FilterPill>
         ))}
       </FilterGroup>
@@ -216,6 +223,7 @@ export function LeadFiltersSummary({
     ...filters.stages.map((s) => ({
       id: `stage-${s}`,
       label: `Etapa: ${OPPORTUNITY_STAGE_LABEL[s]}`,
+      dotClass: OPPORTUNITY_STAGE_COLOR[s],
       onRemove: () => onChange({ ...filters, stages: filters.stages.filter((x) => x !== s) }),
     })),
     ...filters.activity.map((a) => ({

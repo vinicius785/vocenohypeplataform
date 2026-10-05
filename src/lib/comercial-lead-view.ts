@@ -17,7 +17,12 @@ import {
   type CommercialInteractionRow,
   type InteractionType,
 } from "@/lib/commercial-interactions.functions";
-import { deriveOpportunityNextStep, NO_CONTACT_ALERT_DAYS } from "@/lib/comercial-engine";
+import {
+  deriveOpportunityNextStep,
+  legacyStage,
+  NO_CONTACT_ALERT_DAYS,
+  type OpportunityStage,
+} from "@/lib/comercial-engine";
 import { BRASILIA_TZ, addDaysIso, todayIsoInBrasilia } from "@/lib/timezone";
 
 // ---------------------------------------------------------------------------
@@ -200,6 +205,8 @@ export type TimelineItem = {
   author?: string;
   outcome?: string;
   nextAction?: { description: string; at: number };
+  /** Etapa de destino de um evento de etapa (mudança, ganho, perdido) — alimenta a marca colorida. */
+  toStage?: OpportunityStage;
 };
 
 const EVENT_TITLE: Record<OpportunityHistoryKind, string> = {
@@ -212,6 +219,17 @@ const EVENT_TITLE: Record<OpportunityHistoryKind, string> = {
   won: "Ganho",
   lost: "Perdido",
 };
+
+/** Etapa de destino de um evento do funil, quando houver (mudança de etapa, ganho, perdido). */
+function timelineToStage(
+  kind: OpportunityHistoryKind,
+  h: LeadHistoryEntry,
+): OpportunityStage | undefined {
+  if (kind === "won") return "GANHO";
+  if (kind === "lost") return "PERDIDO";
+  if (kind === "stage_change" && h.toStage) return legacyStage(h.toStage);
+  return undefined;
+}
 
 /** Qual tipo de evento do funil uma entrada de `lead.history` representa.
  * Entradas novas trazem `kind`; as antigas só têm `type` — `stage` e
@@ -263,6 +281,7 @@ export function buildCommercialTimeline(input: {
       kind,
       title: EVENT_TITLE[kind],
       text: h.text,
+      toStage: timelineToStage(kind, h),
     });
   }
 

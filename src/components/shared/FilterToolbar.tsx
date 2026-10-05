@@ -45,7 +45,13 @@ export function FilterSearch({
   );
 }
 
-export type FilterChip = { id: string; label: string; onRemove: () => void };
+export type FilterChip = {
+  id: string;
+  label: string;
+  onRemove: () => void;
+  /** Classe de cor (bg-*) de um marcador antes do rótulo — ex.: cor do status. O texto continua. */
+  dotClass?: string;
+};
 
 /** Filtros ativos: cada um removível, mais "Limpar filtros". Neutros — cor
  * é reservada pra estado, não pra "tem filtro ligado". */
@@ -58,6 +64,12 @@ export function FilterChips({ chips, onClear }: { chips: FilterChip[]; onClear: 
           key={chip.id}
           className="inline-flex items-center gap-1 rounded-full bg-muted py-1 pl-2.5 pr-1.5 text-xs font-medium text-foreground"
         >
+          {chip.dotClass && (
+            <span
+              aria-hidden="true"
+              className={cn("h-1.5 w-1.5 shrink-0 rounded-full", chip.dotClass)}
+            />
+          )}
           {chip.label}
           <button
             type="button"

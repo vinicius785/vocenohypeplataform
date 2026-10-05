@@ -1,3 +1,4 @@
+import { COMMERCIAL_STAGE_VISUAL } from "@/lib/comercial-stage-config";
 import { useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import type { Lead } from "@/lib/comercial";
@@ -107,6 +108,10 @@ export function PipelineBoard({
                  * ao scroll da PÁGINA inteira (que passaria por cima de
                  * outro conteúdo ao rolar). A rolagem vertical única e
                  * real agora é a da página; o board só rola no eixo X. */}
+                <div
+                  aria-hidden="true"
+                  className={`mx-4 h-0.5 rounded-b-full ${COMMERCIAL_STAGE_VISUAL[stage].bar}`}
+                />
                 <div className="rounded-t-[20px] bg-muted/40 px-4 py-3 dark:bg-white/[0.03]">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex min-w-0 items-center gap-2">

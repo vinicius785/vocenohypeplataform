@@ -25,6 +25,8 @@ import {
   type TimelineKind,
 } from "@/lib/comercial-lead-view";
 import { linkifyText } from "@/lib/linkify";
+import { OPPORTUNITY_STAGE_LABEL } from "@/lib/comercial-engine";
+import { stageVisual } from "@/lib/comercial-stage-config";
 
 const KIND_ICON: Record<TimelineKind, ComponentType<{ className?: string }>> = {
   whatsapp: MessageCircle,
@@ -65,7 +67,20 @@ export function TimelineList({
               <Icon className="h-3 w-3" />
             </span>
             <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-              <p className="font-medium text-foreground">{item.title}</p>
+              <p className="flex flex-wrap items-center gap-x-2 gap-y-1 font-medium text-foreground">
+                {item.title}
+                {item.toStage && (
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${stageVisual(item.toStage).badge}`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`h-1.5 w-1.5 rounded-full ${stageVisual(item.toStage).dot}`}
+                    />
+                    {OPPORTUNITY_STAGE_LABEL[item.toStage]}
+                  </span>
+                )}
+              </p>
               <p className="text-[11px] tabular-nums text-text-secondary">
                 {formatTimelineWhen(item.at)}
               </p>

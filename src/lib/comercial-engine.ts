@@ -1,5 +1,6 @@
 import type { Lead, OpportunityHistoryKind, PropostaSnapshot } from "@/lib/comercial";
 import { formatBRL } from "@/lib/comercial";
+import { COMMERCIAL_STAGE_VISUAL, type StageVisual } from "@/lib/comercial-stage-config";
 
 /**
  * Motor de próxima ação do Comercial — mesmo princípio já validado em
@@ -55,50 +56,19 @@ export const OPPORTUNITY_STAGE_LABEL: Record<OpportunityStage, string> = {
   PERDIDO: "Perdido",
 };
 
-/** Cor de etapa (decisão P4): etapas são NEUTRAS — quem diferencia uma etapa
- * da outra é a posição (número) e o rótulo, não uma cor por etapa. Só `GANHO`
- * tem cor semântica (positivo). `PERDIDO` é neutro (o motivo está em texto);
- * vermelho segue reservado a risco/parada (`isOpportunityStale`). */
-const NEUTRAL_TONE = "bg-muted text-text-secondary";
-const NEUTRAL_DOT = "bg-muted-foreground/50";
-const NEUTRAL_RING = "ring-foreground/30";
+/** Aliases derivados de `COMMERCIAL_STAGE_VISUAL` (fonte única em `comercial-stage-config.ts`).
+ * A decisão antiga de etapas neutras (P4) foi revertida a pedido: cada etapa tem a sua cor, usada
+ * só em marcas pequenas (ponto, título, badge, anel de arrastar). */
+const pick = (k: keyof StageVisual) =>
+  Object.fromEntries(OPPORTUNITY_STAGES.map((s) => [s, COMMERCIAL_STAGE_VISUAL[s][k]])) as Record<
+    OpportunityStage,
+    string
+  >;
 
-export const OPPORTUNITY_STAGE_TONE: Record<OpportunityStage, string> = {
-  LEAD_RECEBIDO: NEUTRAL_TONE,
-  CONTATO_FEITO: NEUTRAL_TONE,
-  REUNIAO_AGENDADA: NEUTRAL_TONE,
-  REUNIAO_REALIZADA: NEUTRAL_TONE,
-  PROPOSTA_PREPARO: NEUTRAL_TONE,
-  PROPOSTA_ENVIADA: NEUTRAL_TONE,
-  NEGOCIACAO: NEUTRAL_TONE,
-  GANHO: "bg-success-soft text-success-soft-foreground",
-  PERDIDO: NEUTRAL_TONE,
-};
-
-export const OPPORTUNITY_STAGE_COLOR: Record<OpportunityStage, string> = {
-  LEAD_RECEBIDO: NEUTRAL_DOT,
-  CONTATO_FEITO: NEUTRAL_DOT,
-  REUNIAO_AGENDADA: NEUTRAL_DOT,
-  REUNIAO_REALIZADA: NEUTRAL_DOT,
-  PROPOSTA_PREPARO: NEUTRAL_DOT,
-  PROPOSTA_ENVIADA: NEUTRAL_DOT,
-  NEGOCIACAO: NEUTRAL_DOT,
-  GANHO: "bg-success",
-  PERDIDO: NEUTRAL_DOT,
-};
-
-/** Borda/anel do destino de drag-and-drop — neutro (verde só em `GANHO`). */
-export const OPPORTUNITY_STAGE_RING: Record<OpportunityStage, string> = {
-  LEAD_RECEBIDO: NEUTRAL_RING,
-  CONTATO_FEITO: NEUTRAL_RING,
-  REUNIAO_AGENDADA: NEUTRAL_RING,
-  REUNIAO_REALIZADA: NEUTRAL_RING,
-  PROPOSTA_PREPARO: NEUTRAL_RING,
-  PROPOSTA_ENVIADA: NEUTRAL_RING,
-  NEGOCIACAO: NEUTRAL_RING,
-  GANHO: "ring-success",
-  PERDIDO: NEUTRAL_RING,
-};
+export const OPPORTUNITY_STAGE_TONE: Record<OpportunityStage, string> = pick("badge");
+export const OPPORTUNITY_STAGE_COLOR: Record<OpportunityStage, string> = pick("dot");
+/** Borda/anel do destino de drag-and-drop. */
+export const OPPORTUNITY_STAGE_RING: Record<OpportunityStage, string> = pick("ring");
 
 /**
  * Traduz o valor gravado no banco (novo OU um dos 6 valores antigos de

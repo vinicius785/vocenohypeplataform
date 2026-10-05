@@ -20,7 +20,11 @@ import { useMyAccess, hasPermission } from "@/lib/permissions";
 import { useConfirm } from "@/hooks/use-confirm";
 import { listLeads, upsertLead } from "@/lib/comercial.functions";
 import type { Lead } from "@/lib/comercial";
-import { OPPORTUNITY_STAGE_LABEL, legacyStage } from "@/lib/comercial-engine";
+import {
+  OPPORTUNITY_STAGE_LABEL,
+  OPPORTUNITY_STAGE_TONE,
+  legacyStage,
+} from "@/lib/comercial-engine";
 import {
   CLIENTE_STATUS_LABEL,
   defaultClienteStatusForOrigin,
@@ -475,7 +479,11 @@ export function ClienteFormSheet({
                           <span className="text-sm font-semibold text-foreground">
                             {crmLead.company || crmLead.name}
                           </span>
-                          <Badge variant="secondary" size="sm">
+                          <Badge
+                            variant="secondary"
+                            size="sm"
+                            className={OPPORTUNITY_STAGE_TONE[legacyStage(crmLead.stage)]}
+                          >
                             {OPPORTUNITY_STAGE_LABEL[legacyStage(crmLead.stage)]}
                           </Badge>
                         </div>
