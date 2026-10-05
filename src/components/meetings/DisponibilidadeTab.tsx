@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, Trash2, Pencil, MoreHorizontal, Ban, AlertTriangle } from "lucide-react";
+import { Check, Trash2, Pencil, MoreHorizontal, Ban, AlertTriangle, Plus } from "lucide-react";
+import { SettingsCard } from "@/components/configuracoes/settings-shared";
 import { Button } from "@/components/ui/button";
 import { DateField } from "@/components/ui/date-field";
 import { TimeField } from "@/components/ui/time-field";
@@ -173,75 +174,75 @@ export function DisponibilidadeTab({
     .sort((a, b) => (a.data ?? "").localeCompare(b.data ?? ""));
   const recorrentes = bloqueios.filter((b) => b.escopo === "semanal");
 
-  return (
-    <div className="mt-6 max-w-2xl">
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <h2 className="text-sm font-semibold">Disponibilidade</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Defina quando podem marcar reuniões com você.
-          </p>
-        </div>
-        <span
-          className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-opacity duration-300 ${
-            justSaved
-              ? "bg-emerald-500/10 text-emerald-700 opacity-100 dark:text-emerald-400"
-              : "opacity-0"
-          }`}
-        >
-          <Check className="h-3 w-3" /> Salvo
-        </span>
-      </div>
+  const savedChip = (
+    <span
+      aria-live="polite"
+      className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-opacity duration-300 ${
+        justSaved
+          ? "bg-emerald-500/10 text-emerald-700 opacity-100 dark:text-emerald-400"
+          : "opacity-0"
+      }`}
+    >
+      <Check className="h-3 w-3" /> Salvo
+    </span>
+  );
 
+  return (
+    <div className="space-y-6">
       {/* Horário padrão */}
-      <div className="mt-5 border-t border-border/60 pt-4">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-sm font-semibold text-foreground">Horário padrão</p>
-          <button
-            type="button"
-            onClick={() => setEditingSchedule(true)}
-            className="text-xs font-medium text-muted-foreground hover:text-foreground"
-          >
-            Editar
-          </button>
-        </div>
-        <div className="mt-2 space-y-1">
+      <SettingsCard
+        layout="split"
+        title="Horário padrão"
+        description="Dias e horário em que reuniões podem ser marcadas com você."
+        action={
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => setEditingSchedule(true)}>
+              <Pencil className="h-3.5 w-3.5" /> Editar
+            </Button>
+            {savedChip}
+          </div>
+        }
+      >
+        <ul className="max-w-md divide-y divide-border/60">
           {scheduleGroups.map((g, i) => (
-            <div key={i} className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">{g.label}</span>
-              <span className={g.active ? "text-foreground" : "text-text-secondary"}>
+            <li key={i} className="flex items-center justify-between py-2.5 text-sm">
+              <span className="font-medium text-foreground">{g.label}</span>
+              <span
+                className={`tabular-nums ${g.active ? "text-foreground" : "text-text-secondary"}`}
+              >
                 {g.active ? `${avail.inicio} – ${avail.fim}` : "Indisponível"}
               </span>
-            </div>
+            </li>
           ))}
-        </div>
-      </div>
+        </ul>
+      </SettingsCard>
 
       {/* Exceções */}
-      <div className="mt-5 border-t border-border/60 pt-4">
-        <p className="text-sm font-semibold text-foreground">Exceções</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          Bloqueios pontuais ou recorrentes fora do seu horário padrão.
-        </p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" onClick={() => setBlockDraft(draftFrom("data"))}>
-            + Bloquear período
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => setBlockDraft(draftFrom("semanal"))}>
-            Bloqueio recorrente
-          </Button>
-        </div>
-
+      <SettingsCard
+        layout="split"
+        title="Exceções"
+        description="Bloqueios pontuais ou recorrentes fora do seu horário padrão."
+        action={
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => setBlockDraft(draftFrom("data"))}>
+              <Plus className="h-3.5 w-3.5" /> Bloquear período
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setBlockDraft(draftFrom("semanal"))}>
+              <Plus className="h-3.5 w-3.5" /> Bloqueio recorrente
+            </Button>
+          </div>
+        }
+      >
         {bloqueios.length === 0 ? (
-          <p className="mt-4 text-sm text-text-secondary">
-            Nenhum bloqueio programado. Sua agenda seguirá normalmente o horário padrão.
+          <p className="text-sm text-text-secondary">
+            Nenhuma exceção programada. Sua agenda segue o horário padrão.
           </p>
         ) : (
-          <div className="mt-4 space-y-5">
+          <div className="space-y-5">
             {proximos.length > 0 && (
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Próximas
+                  Próximas exceções
                 </p>
                 <ul className="mt-1.5 divide-y divide-border/60">
                   {proximos.map((b) => (
@@ -274,7 +275,7 @@ export function DisponibilidadeTab({
             )}
           </div>
         )}
-      </div>
+      </SettingsCard>
 
       {/* Editar horário padrão */}
       <Dialog open={editingSchedule} onOpenChange={setEditingSchedule}>

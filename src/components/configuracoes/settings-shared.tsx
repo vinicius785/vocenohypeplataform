@@ -14,30 +14,75 @@ import { SURFACE } from "@/lib/design-tokens";
  * "card com borda"/"linha com switch"/"barra de salvar" do zero.
  */
 
+/**
+ * Seção de Configurações — NÃO é mais um card: sem superfície, sem borda lateral, só um divisor
+ * discreto no topo (nenhum "card dentro de card"). `layout="split"` (formulários e listas de
+ * opções) coloca título/descrição à esquerda e o conteúdo à direita, usando a largura disponível;
+ * `layout="stacked"` (padrão — tabelas, listas largas) põe o conteúdo abaixo do título.
+ * `action` fica à direita do título (botão principal da seção). `surface` devolve a superfície
+ * elevada, só para o raro bloco que realmente precisa se destacar.
+ */
 export function SettingsCard({
   title,
   description,
   children,
   footer,
   className,
+  action,
+  layout = "stacked",
+  surface = false,
 }: {
   title?: string;
   description?: string;
   children: ReactNode;
   footer?: ReactNode;
   className?: string;
+  action?: ReactNode;
+  layout?: "split" | "stacked";
+  surface?: boolean;
 }) {
-  return (
-    <div className={cn("rounded-2xl p-5", SURFACE.raised, className)}>
-      {(title || description) && (
-        <div className="mb-4 space-y-1">
-          {title && <h3 className="text-sm font-semibold text-foreground">{title}</h3>}
-          {description && <p className="text-xs text-muted-foreground">{description}</p>}
-        </div>
-      )}
+  const hasHeader = !!(title || description || action);
+  const heading = hasHeader ? (
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0 space-y-1">
+        {title && <h3 className="text-sm font-semibold text-foreground">{title}</h3>}
+        {description && (
+          <p className="max-w-prose text-xs leading-relaxed text-muted-foreground">{description}</p>
+        )}
+      </div>
+      {action && layout === "stacked" && <div className="shrink-0">{action}</div>}
+    </div>
+  ) : null;
+  const body = (
+    <>
       <div className="space-y-1">{children}</div>
       {footer && <div className="mt-4 border-t border-border/60 pt-4">{footer}</div>}
-    </div>
+    </>
+  );
+  return (
+    <section
+      className={cn(
+        surface
+          ? cn("rounded-2xl p-5", SURFACE.raised)
+          : "border-t border-border/60 pt-6 first:border-t-0 first:pt-0",
+        className,
+      )}
+    >
+      {layout === "split" && hasHeader ? (
+        <div className="grid gap-x-10 gap-y-4 md:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
+          <div className="space-y-3">
+            {heading}
+            {action && <div>{action}</div>}
+          </div>
+          <div className="min-w-0">{body}</div>
+        </div>
+      ) : (
+        <>
+          {heading && <div className="mb-4">{heading}</div>}
+          {body}
+        </>
+      )}
+    </section>
   );
 }
 
@@ -96,14 +141,17 @@ export function SettingsSectionHeader({
   title,
   description,
   adminOnly,
+  actions,
 }: {
   icon: ReactNode;
   title: string;
   description?: string;
   adminOnly?: boolean;
+  /** Ações contextuais da página (botão principal), à direita do título. */
+  actions?: ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-2 pb-1">
+    <div className="flex flex-wrap items-start justify-between gap-3 pb-2">
       <div className="flex items-start gap-3">
         <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-subtle text-text-brand">
           {icon}
@@ -113,10 +161,11 @@ export function SettingsSectionHeader({
           {description && <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>}
         </div>
       </div>
-      {adminOnly && (
-        <Badge variant="secondary" className="shrink-0">
-          Somente administradores
-        </Badge>
+      {(adminOnly || actions) && (
+        <div className="flex shrink-0 items-center gap-2">
+          {adminOnly && <Badge variant="secondary">Somente administradores</Badge>}
+          {actions}
+        </div>
       )}
     </div>
   );

@@ -39,7 +39,7 @@ export function ConfiguracoesLayout({
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   return (
-    <PageContainer className="max-w-[1160px]">
+    <PageContainer>
       <SectionHeader
         title="Configurações"
         subtitle="Gerencie sua conta e as preferências do workspace."
@@ -86,7 +86,7 @@ export function ConfiguracoesLayout({
           <div className="min-w-0 space-y-6">{children}</div>
         </div>
       ) : (
-        <div className="mt-6 grid grid-cols-[220px_1fr] gap-8 md:grid-cols-[180px_1fr] lg:grid-cols-[220px_1fr]">
+        <div className="mt-6 grid grid-cols-[200px_minmax(0,1fr)] gap-10 lg:grid-cols-[220px_minmax(0,1fr)]">
           <SettingsNav
             groups={groups}
             activeKey={activeKey}

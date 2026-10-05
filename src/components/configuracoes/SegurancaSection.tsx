@@ -66,12 +66,27 @@ export function SegurancaSection({ canConfig, isAdmin }: { canConfig: boolean; i
       <SettingsSectionHeader
         icon={<Lock className="h-4 w-4" />}
         title="Segurança"
-        description="Autenticação em dois fatores, cofre de senhas e pedidos de recuperação."
+        description="Acesso à sua conta, autenticador do cofre e pedidos de recuperação de senha."
       />
       <MfaEnrollCard isAdmin={isAdmin} />
       <VaultTotpEnroll />
-      <SenhasCard />
       <SenhasEsquecidasCard isAdmin={isAdmin} />
+    </div>
+  );
+}
+
+/** Cofre de senhas — mesma lógica de antes (criptografia, desbloqueio, acesso temporário), agora
+ * em página própria dentro do grupo Segurança. */
+export function CofreSection({ canConfig }: { canConfig: boolean }) {
+  if (!canConfig) return <LockedSection title="Cofre de senhas" />;
+  return (
+    <div className="space-y-6">
+      <SettingsSectionHeader
+        icon={<KeyRound className="h-4 w-4" />}
+        title="Cofre de senhas"
+        description="Credenciais de ferramentas e redes sociais, criptografadas com a chave do cofre."
+      />
+      <SenhasCard />
     </div>
   );
 }

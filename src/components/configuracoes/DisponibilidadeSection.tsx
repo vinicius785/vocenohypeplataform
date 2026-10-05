@@ -9,7 +9,7 @@ import {
   onDisponibilidadesChange,
   defaultAvailability,
 } from "@/lib/reunioes-store";
-import { SettingsCard, SettingsSectionHeader } from "./settings-shared";
+import { SettingsSectionHeader } from "./settings-shared";
 
 /**
  * Wrapper de apresentação só — `DisponibilidadeTab` (compartilhado com
@@ -32,15 +32,13 @@ export function DisponibilidadeSection() {
       <SettingsSectionHeader
         icon={<Clock className="h-4 w-4" />}
         title="Disponibilidade"
-        description="Seu horário semanal de reuniões e bloqueios pontuais."
+        description="Quando as pessoas podem marcar reuniões com você."
       />
-      <SettingsCard>
-        <DisponibilidadeTab
-          avail={myAvail}
-          meetings={meetings}
-          onChange={(next) => saveMyDisponibilidade(next)}
-        />
-      </SettingsCard>
+      <DisponibilidadeTab
+        avail={myAvail}
+        meetings={meetings}
+        onChange={(next) => saveMyDisponibilidade(next)}
+      />
     </div>
   );
 }

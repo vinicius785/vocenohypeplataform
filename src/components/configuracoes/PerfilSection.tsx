@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { User, Mic, Camera, Trash2 } from "lucide-react";
+import { User, Camera, Trash2 } from "lucide-react";
 import { DateField } from "@/components/ui/date-field";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -155,10 +155,14 @@ export function PerfilSection({
       <SettingsSectionHeader
         icon={<User className="h-4 w-4" />}
         title="Perfil"
-        description="Nome, foto e contato exibidos pro resto do time."
+        description="Nome, foto, contato e dispositivos de áudio e vídeo."
       />
 
-      <SettingsCard>
+      <SettingsCard
+        layout="split"
+        title="Foto"
+        description="Aparece no chat, nas tarefas e nas reuniões."
+      >
         <div className="flex items-center gap-4">
           <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full border border-border bg-muted">
             {p.foto ? (
@@ -203,8 +207,14 @@ export function PerfilSection({
             <p className="text-[11px] text-muted-foreground">PNG ou JPG, até 3MB.</p>
           </div>
         </div>
+      </SettingsCard>
 
-        <div className="mt-5 grid grid-cols-1 gap-4">
+      <SettingsCard
+        layout="split"
+        title="Dados pessoais"
+        description="Nome e contato exibidos para o resto do time."
+      >
+        <div className="grid max-w-xl grid-cols-1 gap-4">
           <label className="space-y-1">
             <span className="text-xs font-medium">Nome completo</span>
             <input
@@ -248,11 +258,6 @@ export function PerfilSection({
         {error && <p className="mt-3 text-xs text-destructive">{error}</p>}
       </SettingsCard>
 
-      <SettingsSectionHeader
-        icon={<Mic className="h-4 w-4" />}
-        title="Áudio e vídeo"
-        description="Microfone, câmera e saída de áudio usados nas chamadas da plataforma."
-      />
       <AVCard />
 
       <SettingsSaveBar
@@ -343,6 +348,9 @@ function AVCard() {
 
   return (
     <SettingsCard
+      layout="split"
+      title="Áudio e vídeo"
+      description="Microfone, câmera e saída de áudio usados nas chamadas da plataforma."
       footer={
         <div className="flex flex-wrap items-center gap-3">
           <Button type="button" variant="outline" size="sm" onClick={() => void load()}>
@@ -361,7 +369,7 @@ function AVCard() {
           áudio.
         </p>
       )}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid max-w-xl grid-cols-1 gap-4 sm:grid-cols-2">
         <Select
           label="Microfone (entrada de áudio)"
           value={prefs.audioIn}

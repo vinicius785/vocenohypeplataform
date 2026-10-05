@@ -85,8 +85,9 @@ export function PreferenciasSection() {
       <SoundsCard />
 
       <SettingsCard
+        layout="split"
         title="Notificações na plataforma"
-        description="Alterações salvas automaticamente."
+        description="O que aparece no sino de notificações. Alterações salvas automaticamente."
       >
         {visibleItems.map((item) => (
           <SettingsRow
@@ -168,6 +169,7 @@ function PushNotificationsCard() {
 
   return (
     <SettingsCard
+      layout="split"
       title="Notificações do navegador"
       description="Aviso mesmo com o app fechado (mensagens diretas e menções no chat)."
     >
@@ -225,6 +227,7 @@ function SoundsCard() {
 
   return (
     <SettingsCard
+      layout="split"
       title="Sons"
       description="Um som curto para cada tipo de aviso. O aviso visual continua aparecendo mesmo com o som desligado."
     >

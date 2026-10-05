@@ -14,6 +14,7 @@ import {
   Download,
   Sliders,
   ShieldCheck,
+  KeyRound,
 } from "lucide-react";
 import { getMe, setStatus as setPresenceStatus, type MemberStatus } from "@/lib/chat-store";
 import { useMyAccess, hasPermission } from "@/lib/permissions";
@@ -32,7 +33,7 @@ import { GeralSection } from "@/components/configuracoes/GeralSection";
 import { IntegracoesSection } from "@/components/configuracoes/IntegracoesSection";
 import { PrecificacaoSection } from "@/components/configuracoes/PrecificacaoSection";
 import { TimePermissoesTab } from "@/components/configuracoes/TimePermissoesTab";
-import { SegurancaSection } from "@/components/configuracoes/SegurancaSection";
+import { SegurancaSection, CofreSection } from "@/components/configuracoes/SegurancaSection";
 import { DadosBackupSection } from "@/components/configuracoes/DadosBackupSection";
 import { ScoreOperacionalSection } from "@/components/configuracoes/ScoreOperacionalSection";
 import { AuditLogTab } from "@/components/configuracoes/AuditLogTab";
@@ -78,7 +79,7 @@ function buildGroups(
 ): ConfigNavGroup[] {
   return [
     {
-      label: "Minha conta",
+      label: "Conta",
       items: [
         { key: "perfil" as ConfigTab, label: "Perfil", icon: User },
         { key: "preferencias" as ConfigTab, label: "Preferências", icon: Bell },
@@ -105,31 +106,55 @@ function buildGroups(
           icon: Webhook,
           keywords: ["webhook", "google agenda"],
         },
+        ...(canSeeTimePermissoes
+          ? [
+              {
+                key: "time_permissoes" as ConfigTab,
+                label: "Equipe e permissões",
+                icon: Users,
+                keywords: ["time", "membros", "acesso"],
+              },
+            ]
+          : []),
+      ],
+    },
+    {
+      label: "Segurança",
+      items: [
+        ...(canConfig
+          ? [
+              {
+                key: "seguranca" as ConfigTab,
+                label: "Segurança",
+                icon: Lock,
+                keywords: ["2fa", "autenticação", "recuperação"],
+              },
+              {
+                key: "cofre" as ConfigTab,
+                label: "Cofre de senhas",
+                icon: KeyRound,
+                keywords: ["senhas", "credenciais"],
+              },
+            ]
+          : []),
+        ...(isAdmin
+          ? [
+              { key: "log_auditoria" as ConfigTab, label: "Auditoria", icon: ShieldCheck },
+              { key: "dados_backup" as ConfigTab, label: "Dados e backup", icon: Download },
+            ]
+          : []),
+      ],
+    },
+    {
+      label: "Administração",
+      items: [
         ...(canConfig
           ? [{ key: "precificacao" as ConfigTab, label: "Custos e precificação", icon: DollarSign }]
           : []),
-        ...(canSeeTimePermissoes
-          ? [{ key: "time_permissoes" as ConfigTab, label: "Time e permissões", icon: Users }]
+        ...(isAdmin
+          ? [{ key: "score_operacional" as ConfigTab, label: "Score operacional", icon: Sliders }]
           : []),
       ],
-    },
-    {
-      label: "Segurança e dados",
-      items: [
-        ...(canConfig ? [{ key: "seguranca" as ConfigTab, label: "Segurança", icon: Lock }] : []),
-        ...(isAdmin
-          ? [{ key: "dados_backup" as ConfigTab, label: "Dados e backup", icon: Download }]
-          : []),
-        ...(isAdmin
-          ? [{ key: "log_auditoria" as ConfigTab, label: "Log de auditoria", icon: ShieldCheck }]
-          : []),
-      ],
-    },
-    {
-      label: "Automação e administração",
-      items: isAdmin
-        ? [{ key: "score_operacional" as ConfigTab, label: "Score operacional", icon: Sliders }]
-        : [],
     },
   ].filter((g) => g.items.length > 0);
 }
@@ -179,6 +204,7 @@ export function ConfiguracoesSection() {
       {tab === "precificacao" && <PrecificacaoSection canConfig={canConfig} />}
       {tab === "time_permissoes" && canSeeTimePermissoes && <TimePermissoesTab isAdmin={isAdmin} />}
       {tab === "seguranca" && <SegurancaSection canConfig={canConfig} isAdmin={isAdmin} />}
+      {tab === "cofre" && <CofreSection canConfig={canConfig} />}
       {tab === "dados_backup" && <DadosBackupSection isAdmin={isAdmin} />}
       {tab === "log_auditoria" && <AuditLogTab isAdmin={isAdmin} />}
       {tab === "score_operacional" && <ScoreOperacionalSection isAdmin={isAdmin} />}
