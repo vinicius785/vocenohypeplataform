@@ -72,7 +72,11 @@ async function loadBuffer(src: string): Promise<AudioBuffer | null> {
   return p;
 }
 
-function playBuffer(buf: AudioBuffer, gain: number, volume: number) {
+/** MP3 gerado sem tag de gapless: o decodificador acrescenta ~25 ms de silêncio inicial. Pulamos esse trecho
+ * nos assets oficiais para o som começar imediatamente. */
+const OFFICIAL_START_OFFSET_S = 0.026;
+
+function playBuffer(buf: AudioBuffer, gain: number, volume: number, offset = 0) {
   const c = ctx;
   if (!c || !master) return;
   const g = c.createGain();
@@ -81,7 +85,7 @@ function playBuffer(buf: AudioBuffer, gain: number, volume: number) {
   const node = c.createBufferSource();
   node.buffer = buf;
   node.connect(g).connect(master);
-  node.start();
+  node.start(0, offset);
 }
 
 /** Lembrete de reunião ANTES da identidade sonora: tríade ascendente (comportamento anterior). */
@@ -107,7 +111,7 @@ function playLegacyMeetingTriad(volume: number) {
 async function resolveAndPlay(kind: SoundKind, volume: number) {
   const spec = SOUND_MANIFEST[kind];
   const official = await loadBuffer(spec.src);
-  if (official) return playBuffer(official, spec.gain, volume);
+  if (official) return playBuffer(official, spec.gain, volume, OFFICIAL_START_OFFSET_S);
   if (spec.legacy.kind === "file") {
     const legacy = await loadBuffer(spec.legacy.src);
     if (legacy) playBuffer(legacy, spec.gain, volume);

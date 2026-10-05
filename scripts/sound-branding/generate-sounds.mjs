@@ -1,0 +1,195 @@
+// Gerador da família sonora Você no Hype — síntese aditiva (sinos/pluck suaves) + reverb curto,
+// normalizada por RMS e com limitador. Saída: MP3 mono 44,1 kHz / 128 kbps.
+import { writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+import { readFileSync } from "node:fs";
+import vm from "node:vm";
+// lame.all.js é um script global (não um módulo): avalia e pega o `lamejs` resultante.
+vm.runInThisContext(
+  readFileSync(require.resolve("lamejs/lame.all.js"), "utf8") + "\n;globalThis.lamejs = lamejs;",
+);
+const lamejs = globalThis.lamejs;
+
+const SR = 44100;
+const OUT = process.argv[2];
+
+// Notas (Hz) — tudo em Lá maior; A5 é a "assinatura" que reaparece nos três sons.
+const N = { A4: 440.0, E5: 659.25, A5: 880.0, Cs6: 1108.73, E6: 1318.51, A6: 1760.0 };
+
+const alloc = (secs) => new Float64Array(Math.ceil(secs * SR));
+
+/** Uma nota de sino/pluck: parciais com decaimento próprio, ataque de 3 ms, leve chorus. */
+function note(buf, freq, t0, { len = 0.5, amp = 0.5, bright = 1, attack = 0.003, ring = 1 } = {}) {
+  const partials = [
+    [1, 1.0, 1.0],
+    [2, 0.32 * bright, 0.62],
+    [3.01, 0.16 * bright, 0.42],
+    [4.15, 0.08 * bright, 0.3],
+  ];
+  const detunes = [1, 1.0016];
+  const start = Math.floor(t0 * SR);
+  const n = Math.floor(len * SR);
+  for (let i = 0; i < n && start + i < buf.length; i++) {
+    const t = i / SR;
+    const env = t < attack ? t / attack : 1;
+    let s = 0;
+    for (const [mult, a, decayScale] of partials) {
+      const tau = (len / 4.2) * decayScale * ring;
+      const d = Math.exp(-t / tau);
+      for (const dt of detunes) s += Math.sin(2 * Math.PI * freq * mult * dt * t) * a * d * 0.5;
+    }
+    buf[start + i] += s * env * amp;
+  }
+}
+
+/** Entrada suave (swell) para a assinatura da Reunião: dupla de sines com ataque lento. */
+function swell(buf, freq, t0, { len = 0.5, amp = 0.2, attack = 0.12 } = {}) {
+  const start = Math.floor(t0 * SR);
+  const n = Math.floor(len * SR);
+  for (let i = 0; i < n && start + i < buf.length; i++) {
+    const t = i / SR;
+    const env = Math.min(1, t / attack) * Math.exp(-Math.max(0, t - attack) / (len / 3.2));
+    buf[start + i] += Math.sin(2 * Math.PI * freq * t) * env * amp;
+    buf[start + i] += Math.sin(2 * Math.PI * freq * 2 * t) * env * amp * 0.18;
+  }
+}
+
+/** Reverb curto estilo Schroeder (4 combs + 2 allpass) — dá "ar" sem alongar o som. */
+function reverb(x, wet = 0.14) {
+  const combs = [0.0297, 0.0371, 0.0411, 0.0437].map((d) => ({ d: Math.floor(d * SR), g: 0.72 }));
+  const out = new Float64Array(x.length);
+  for (const c of combs) {
+    const line = new Float64Array(c.d);
+    let p = 0;
+    for (let i = 0; i < x.length; i++) {
+      const y = x[i] + line[p] * c.g;
+      line[p] = y;
+      p = (p + 1) % c.d;
+      out[i] += line[p === 0 ? c.d - 1 : p - 1] * 0.25;
+    }
+  }
+  // allpass x2
+  for (const dly of [0.005, 0.0017]) {
+    const d = Math.floor(dly * SR);
+    const line = new Float64Array(d);
+    let p = 0;
+    for (let i = 0; i < out.length; i++) {
+      const buffered = line[p];
+      const inp = out[i] + buffered * 0.5;
+      line[p] = inp;
+      out[i] = buffered - inp * 0.5;
+      p = (p + 1) % d;
+    }
+  }
+  const mix = new Float64Array(x.length);
+  for (let i = 0; i < x.length; i++) mix[i] = x[i] * (1 - wet * 0.5) + out[i] * wet;
+  return mix;
+}
+
+function fade(buf, ms = 45) {
+  const n = Math.floor((ms / 1000) * SR);
+  for (let i = 0; i < n; i++) buf[buf.length - 1 - i] *= i / n;
+}
+
+/** Corta o silêncio do fim, aplica o fade e devolve o buffer final. */
+function trim(buf) {
+  let end = buf.length;
+  while (end > 0 && Math.abs(buf[end - 1]) < 0.0008) end--;
+  const out = buf.slice(0, Math.min(buf.length, end + Math.floor(0.02 * SR)));
+  fade(out);
+  return out;
+}
+
+/** RMS (dBFS) só sobre o trecho "ativo" (acima de −45 dBFS) — proxy de volume percebido. */
+function activeRmsDb(b) {
+  let sum = 0,
+    n = 0;
+  for (const v of b)
+    if (Math.abs(v) > 0.0056) {
+      sum += v * v;
+      n++;
+    }
+  return 10 * Math.log10(sum / Math.max(1, n));
+}
+
+function normalize(b, targetRmsDb = -21, peakCeilDb = -1.2) {
+  const gain = 10 ** ((targetRmsDb - activeRmsDb(b)) / 20);
+  let peak = 0;
+  for (let i = 0; i < b.length; i++) {
+    b[i] *= gain;
+    peak = Math.max(peak, Math.abs(b[i]));
+  }
+  const ceil = 10 ** (peakCeilDb / 20);
+  if (peak > ceil) {
+    // limitador suave (tanh) em vez de corte seco
+    const k = ceil / Math.tanh(peak / ceil);
+    for (let i = 0; i < b.length; i++) b[i] = Math.tanh(b[i] / ceil) * k;
+  }
+  return b;
+}
+
+// ---------------- Os três sons ----------------
+
+// CHAT — leve: duas notas (E5 → A5, quarta ascendente), curtas, brilho baixo.
+function chat() {
+  const b = alloc(1.1);
+  note(b, N.E5, 0.0, { len: 0.3, amp: 0.5, bright: 0.7, ring: 0.8 });
+  note(b, N.A5, 0.13, { len: 0.52, amp: 0.55, bright: 0.8, ring: 0.9 });
+  return b;
+}
+
+// COMERCIAL — ascendente e mais marcante: E5 → A5 → C#6 (arpejo de Lá maior), final aberto.
+function commercial() {
+  const b = alloc(1.5);
+  note(b, N.E5, 0.0, { len: 0.28, amp: 0.46, bright: 0.9, ring: 0.8 });
+  note(b, N.A5, 0.115, { len: 0.34, amp: 0.5, bright: 1.0, ring: 0.9 });
+  note(b, N.Cs6, 0.23, { len: 0.6, amp: 0.56, bright: 1.15, ring: 1.0 });
+  return b;
+}
+
+// REUNIÃO — assinatura completa: entrada suave (A4+E5) e nota final clara (A5 + oitava A6).
+function meeting() {
+  const b = alloc(2.0);
+  swell(b, N.A4, 0.0, { len: 0.55, amp: 0.2, attack: 0.14 });
+  swell(b, N.E5, 0.0, { len: 0.55, amp: 0.17, attack: 0.14 });
+  note(b, N.E5, 0.2, { len: 0.34, amp: 0.4, bright: 0.85, ring: 0.9 });
+  note(b, N.A5, 0.42, { len: 0.86, amp: 0.58, bright: 1.0, ring: 1.1 });
+  note(b, N.A6, 0.42, { len: 0.5, amp: 0.1, bright: 0.5, ring: 0.8 });
+  return b;
+}
+
+function encodeMp3(samples) {
+  const enc = new lamejs.Mp3Encoder(1, SR, 128);
+  const pcm = new Int16Array(samples.length);
+  for (let i = 0; i < samples.length; i++)
+    pcm[i] = Math.max(-32768, Math.min(32767, Math.round(samples[i] * 32767)));
+  const chunks = [];
+  const block = 1152;
+  for (let i = 0; i < pcm.length; i += block) {
+    const out = enc.encodeBuffer(pcm.subarray(i, i + block));
+    if (out.length) chunks.push(Buffer.from(out));
+  }
+  const end = enc.flush();
+  if (end.length) chunks.push(Buffer.from(end));
+  return Buffer.concat(chunks);
+}
+
+const defs = {
+  "chat-notification": chat,
+  "commercial-notification": commercial,
+  "meeting-notification": meeting,
+};
+for (const [name, fn] of Object.entries(defs)) {
+  let b = fn();
+  b = reverb(b, name.startsWith("meeting") ? 0.18 : 0.13);
+  b = trim(b);
+  normalize(b);
+  let peak = 0;
+  for (const v of b) peak = Math.max(peak, Math.abs(v));
+  const mp3 = encodeMp3(b);
+  writeFileSync(`${OUT}/${name}.mp3`, mp3);
+  console.log(
+    `${name}.mp3  ${(b.length / SR).toFixed(2)} s  RMS ${activeRmsDb(b).toFixed(1)} dBFS  pico ${(20 * Math.log10(peak)).toFixed(1)} dBFS  ${(mp3.length / 1024).toFixed(1)} KB`,
+  );
+}
