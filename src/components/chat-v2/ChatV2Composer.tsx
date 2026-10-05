@@ -111,7 +111,7 @@ function useV2MentionSources(convoId: string) {
     return [...t, ...projects, ...campaigns, ...clientOptions].filter(
       (o) => typeof o.label === "string" && o.label.trim() !== "",
     );
-  }, [tasks, clientes]);
+  }, [tasks, clientes, meId]);
 
   return { people, references, recentUserIds, mentionsEnabled };
 }
