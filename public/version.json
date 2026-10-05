@@ -1,17 +1,17 @@
 {
-  "version": "1.301.0",
+  "version": "1.302.0",
   "releases": [
     {
-      "version": "1.301.0",
-      "summary": "O tempo de resposta passa a contar só o horário útil da agência.",
+      "version": "1.302.0",
+      "summary": "A lista de Clientes mostra só quem está em operação.",
       "modules": [
         {
-          "name": "TIME",
-          "tagline": "Comunicação",
+          "name": "CLIENTES",
+          "tagline": "Lista mais limpa",
           "items": [
             {
-              "title": "Tempo de resposta em horário útil",
-              "description": "Conta só de segunda a sexta, das 09:00 às 19:00 (horário de Brasília), sem feriados. Fora disso o relógio não avança: uma mensagem na sexta às 18:30 respondida na segunda às 09:30 conta 1 hora."
+              "title": "Clientes encerrados e arquivados fora da lista",
+              "description": "A lista mostra só clientes em captação e ativos. Encerrados e Arquivados continuam acessíveis pelo filtro de Status."
             }
           ]
         }

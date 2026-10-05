@@ -188,9 +188,9 @@ export function mailtoLink(email: string): string | null {
 
 export type ClienteSortKey = "nome" | "recente" | "antigo" | "campanhas";
 
-/** Filtro de status de cliente (Fase 4). `"operacao"` é o default e
- * significa "tudo menos arquivados" (Negociando + Ativo + Encerrado) —
- * arquivados nunca aparecem sem um filtro explícito `"archived"`. */
+/** Filtro de status de cliente. `"operacao"` é o default e mostra só quem está em operação:
+ * Captação + Ativos. Encerrados e Arquivados nunca aparecem sem um filtro explícito
+ * (`"closed"` / `"archived"`). */
 export type ClienteStatusFilter = "operacao" | ClienteStatus;
 
 export const CLIENTE_STATUS_FILTER_LABEL: Record<ClienteStatusFilter, string> = {
@@ -203,7 +203,7 @@ export const CLIENTE_STATUS_FILTER_LABEL: Record<ClienteStatusFilter, string> = 
 
 export function matchesClienteStatusFilter(c: Cliente, f: ClienteStatusFilter): boolean {
   const s = clienteStatus(c);
-  return f === "operacao" ? s !== "archived" : s === f;
+  return f === "operacao" ? s === "capture" || s === "active" : s === f;
 }
 
 /** Contagem por filtro de status — alimenta os indicadores clicáveis. */
@@ -220,7 +220,7 @@ export function countClientesByStatusFilter(
   for (const c of clientes) {
     const s = clienteStatus(c);
     out[s] += 1;
-    if (s !== "archived") out.operacao += 1;
+    if (s === "capture" || s === "active") out.operacao += 1;
   }
   return out;
 }

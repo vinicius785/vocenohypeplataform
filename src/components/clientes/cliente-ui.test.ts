@@ -191,13 +191,15 @@ describe("Fase 4 — filtro por status", () => {
     mk("x", "archived"),
   ];
 
-  it("default 'operacao' exclui arquivados", () => {
+  it("default 'operacao' mostra só captação e ativos (sem encerrados nem arquivados)", () => {
     expect(DEFAULT_CLIENTE_FILTERS.status).toBe("operacao");
     const ids = filterClientes(list, "", DEFAULT_CLIENTE_FILTERS).map((c) => c.id);
-    expect(ids).toEqual(["n", "a", "legacy", "c"]);
+    expect(ids).toEqual(["n", "a", "legacy"]);
   });
 
-  it("arquivados só com filtro explícito", () => {
+  it("encerrados e arquivados só com filtro explícito", () => {
+    const closed = filterClientes(list, "", { ...DEFAULT_CLIENTE_FILTERS, status: "closed" });
+    expect(closed.map((c) => c.id)).toEqual(["c"]);
     const ids = filterClientes(list, "", { ...DEFAULT_CLIENTE_FILTERS, status: "archived" });
     expect(ids.map((c) => c.id)).toEqual(["x"]);
     expect(matchesClienteStatusFilter(list[2], "active")).toBe(true);
@@ -205,7 +207,7 @@ describe("Fase 4 — filtro por status", () => {
 
   it("contagens por status", () => {
     expect(countClientesByStatusFilter(list)).toEqual({
-      operacao: 4,
+      operacao: 3,
       capture: 1,
       active: 2,
       closed: 1,

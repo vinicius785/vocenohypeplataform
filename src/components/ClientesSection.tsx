@@ -221,13 +221,12 @@ export function ClientesSection() {
   );
 
   const totalClientes = clientes.length;
-  // Indicadores de campanha consideram só o que está "em operação" (sem
-  // arquivados), coerente com a listagem padrão.
+  // Indicadores de campanha consideram só o que está "em operação" (Captação + Ativos, sem
+  // Encerrados/Arquivados), coerente com a listagem padrão.
   const operacaoClientes = clientes.filter((c) => matchesClienteStatusFilter(c, "operacao"));
   const semCampanha = operacaoClientes.filter((c) => (c.campanhas?.length ?? 0) === 0).length;
-  // Fase 4: indicadores de status clicáveis. "Em operação" (default) =
-  // Negociando + Ativos + Encerrados; Arquivados só aparecem quando o
-  // indicador "Arquivados" é escolhido explicitamente.
+  // Indicadores de status clicáveis. "Em operação" (default) = Captação + Ativos; Encerrados e
+  // Arquivados só aparecem quando escolhidos no filtro de status.
   const statusCounts = countClientesByStatusFilter(clientes);
   const setStatusFilter = (s: ClienteStatusFilter) =>
     setFilters((f) => ({ ...f, status: f.status === s && s !== "operacao" ? "operacao" : s }));
