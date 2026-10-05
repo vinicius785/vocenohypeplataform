@@ -1,29 +1,29 @@
 {
-  "version": "1.329.0",
+  "version": "1.330.0",
   "releases": [
     {
-      "version": "1.329.0",
-      "summary": "Financeiro do influenciador reorganizado em Remuneração, Pagamento, Dados para pagamento, Contrato e Atividade.",
+      "version": "1.330.0",
+      "summary": "Detalhe do influenciador na campanha refeito como painel operacional compacto (V2).",
       "modules": [
         {
           "name": "CAMPANHAS",
-          "tagline": "Financeiro do influenciador",
+          "tagline": "Detalhe do influenciador",
           "items": [
             {
-              "title": "Remuneração separada do pagamento",
-              "description": "Quanto foi combinado fica em um bloco; o estado do pagamento (pendente, agendado, pago, recusado) em outro, com valor e vencimento."
+              "title": "Uma única próxima ação",
+              "description": "O painel calcula e mostra só a ação mais importante agora (anexar roteiro, tratar ajuste do cliente, definir remuneração, aprovar pagamento…)."
             },
             {
-              "title": "Solicitação de pagamento",
-              "description": "Aceitar/Recusar agora se chama Aprovar pagamento/Recusar e explica que a aprovação lança a despesa no Financeiro, onde o pagamento é registrado."
+              "title": "Entregas em linhas e feedback em destaque",
+              "description": "Entregas viram linhas compactas com estado e prazo; o feedback do cliente aparece logo abaixo, com citação, autor e horário."
             },
             {
-              "title": "Dados bancários e contrato",
-              "description": "Dados para pagamento em modo leitura com Editar/Cadastrar, e contrato com nome do arquivo, Abrir, Substituir e Remover."
+              "title": "Contato, financeiro e perfil lado a lado",
+              "description": "Contato sempre visível, financeiro simplificado em linhas com ações inline, e audiência detalhada abrindo à parte."
             },
             {
-              "title": "Atividade financeira",
-              "description": "Linha do tempo compacta com os eventos financeiros do influenciador."
+              "title": "Menos rolagem",
+              "description": "Atividade limitada a 3 eventos e informações raras reunidas em 'Mais informações'; ações destrutivas ficam só no menu ⋯."
             }
           ]
         }

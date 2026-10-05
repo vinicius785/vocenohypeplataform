@@ -24,9 +24,12 @@ export function InfluencerContact({
   telefone,
   email,
   onSave,
+  stacked = false,
 }: {
   telefone?: string;
   email?: string;
+  /** Uma coluna (para viver numa coluna estreita do painel). */
+  stacked?: boolean;
   onSave?: (patch: { telefone?: string; email?: string }) => void;
 }) {
   const phone = telefone?.trim();
@@ -63,7 +66,7 @@ export function InfluencerContact({
       </div>
       {editing ? (
         <div className="space-y-2">
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div className={`grid grid-cols-1 gap-2 ${stacked ? "" : "sm:grid-cols-2"}`}>
             <input
               value={dPhone}
               onChange={(e) => setDPhone(formatPhoneBR(e.target.value))}
@@ -95,7 +98,7 @@ export function InfluencerContact({
       ) : !phone && !mail ? (
         <p className="text-sm text-text-secondary">Nenhum contato cadastrado.</p>
       ) : (
-        <ul className="grid grid-cols-1 gap-x-8 gap-y-1.5 sm:grid-cols-2">
+        <ul className={`grid grid-cols-1 gap-x-8 gap-y-2 ${stacked ? "" : "sm:grid-cols-2"}`}>
           {phone && (
             <li className="min-w-0">
               <div className="flex min-w-0 items-start gap-2">

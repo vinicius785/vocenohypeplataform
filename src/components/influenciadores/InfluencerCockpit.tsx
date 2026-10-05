@@ -50,18 +50,23 @@ export function QuietButton({
 export function SummaryStrip({
   items,
   wrapOnMobile,
+  columns2,
 }: {
   items: { label: string; value: string; emphasis?: boolean }[];
   /** 2×2 no celular (quando os valores são textos longos demais para 4 colunas). */
   wrapOnMobile?: boolean;
+  /** Sempre 2×2 (para viver numa coluna estreita). */
+  columns2?: boolean;
 }) {
   return (
     <div
       className={cn(
         "grid divide-border/60 rounded-lg bg-muted/25 py-2.5",
-        wrapOnMobile
-          ? "grid-cols-2 gap-y-3 sm:grid-cols-4 sm:divide-x [&>*:nth-child(even)]:border-l [&>*:nth-child(even)]:border-border/60 sm:[&>*:nth-child(even)]:border-l-0"
-          : "grid-cols-4 divide-x",
+        columns2
+          ? "grid-cols-2 gap-y-3 [&>*:nth-child(even)]:border-l [&>*:nth-child(even)]:border-border/60"
+          : wrapOnMobile
+            ? "grid-cols-2 gap-y-3 sm:grid-cols-4 sm:divide-x [&>*:nth-child(even)]:border-l [&>*:nth-child(even)]:border-border/60 sm:[&>*:nth-child(even)]:border-l-0"
+            : "grid-cols-4 divide-x",
       )}
     >
       {items.map((s) => (

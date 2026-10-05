@@ -123,3 +123,32 @@ export function FinanceTimeline({
     </ul>
   );
 }
+
+/** Linha do financeiro: rótulo à esquerda, valor/estado ao centro, ações discretas à direita. O
+ * detalhe (editor, lista) abre logo abaixo, sem mudar de "seção". */
+export function FinanceRow({
+  label,
+  children,
+  actions,
+  below,
+}: {
+  label: string;
+  children: ReactNode;
+  actions?: ReactNode;
+  below?: ReactNode;
+}) {
+  return (
+    <div className="border-t border-border/60 py-2.5">
+      <div className="grid grid-cols-[5.25rem_minmax(0,1fr)] items-baseline gap-x-3">
+        <span className="text-xs text-text-secondary">{label}</span>
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+          <div className="min-w-0 text-sm text-foreground">{children}</div>
+          {actions && (
+            <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1">{actions}</div>
+          )}
+        </div>
+      </div>
+      {below && <div className="mt-2.5">{below}</div>}
+    </div>
+  );
+}
