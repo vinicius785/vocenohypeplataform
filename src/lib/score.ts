@@ -5,6 +5,7 @@ import {
   ACTIVITY_STATUS_COMPLETED_ACTION,
 } from "./projetos";
 import type { Meeting } from "./reunioes-store";
+import { attendanceState } from "./meeting-attendance";
 import type { ChatMember } from "./chat-store";
 import { todayISO } from "./financeiro-entries";
 import { parseIsoDateLocal } from "./utils";
@@ -280,7 +281,10 @@ export function computeMemberScores(
       if (!member) continue;
       if (!inRange(mt.data, range)) continue;
       const stat = ensure(member);
-      if (mt.attendedBy?.includes(pid)) {
+      // Presença em 3 estados: "não registrada" não pontua nem penaliza (só quem foi marcado).
+      const st = attendanceState(mt, pid);
+      if (st === "unknown") continue;
+      if (st === "present") {
         stat.meetingsAttended += 1;
         add(stat, "meeting_attended");
       } else {

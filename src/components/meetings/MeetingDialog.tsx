@@ -80,6 +80,7 @@ function durationLabel(startHHMM: string, endHHMM: string): string {
 export function MeetingDialog({
   open,
   initial,
+  prefill,
   seriesSize = 0,
   defaultDate,
   defaultHora,
@@ -95,6 +96,9 @@ export function MeetingDialog({
 }: {
   open: boolean;
   initial?: Meeting;
+  /** "Duplicar": dados de uma reunião para começar uma NOVA já preenchida (título, horário, duração,
+   * convidados, local e pauta). Não é edição — data, resposta, presença e Google ficam de fora. */
+  prefill?: Meeting;
   /** Quantas reuniões (incluindo esta) compartilham `initial?.seriesId` —
    * 0/1 quando não é série. O pai calcula, porque só ele tem a lista
    * completa de reuniões. */
@@ -146,20 +150,20 @@ export function MeetingDialog({
   useEffect(() => {
     if (!open) return;
     setTeam(loadTeam());
-    setTitulo(initial?.titulo ?? "");
+    const src = initial ?? prefill;
+    setTitulo(src?.titulo ?? "");
     setData(initial?.data ?? defaultDate);
-    const start = initial?.hora ?? defaultHora ?? nextRoundTime();
+    const start = initial?.hora ?? prefill?.hora ?? defaultHora ?? nextRoundTime();
     setHoraInicio(start);
-    setHoraFim(initial ? addMinutes(start, initial.duracao) : addMinutes(start, 30));
-    const ids =
-      initial?.participanteIds ?? (initial?.participanteId ? [initial.participanteId] : []);
+    setHoraFim(src ? addMinutes(start, src.duracao) : addMinutes(start, 30));
+    const ids = src?.participanteIds ?? (src?.participanteId ? [src.participanteId] : []);
     setParticipanteIds(ids);
-    setConvidadosExternos(initial?.convidadosExternos ?? []);
+    setConvidadosExternos(src?.convidadosExternos ?? []);
     setAddingGuest(false);
     setGuestNome("");
     setGuestEmail("");
-    setLocal(initial?.local ?? "");
-    setNotas(initial?.notas ?? "");
+    setLocal(src?.local ?? "");
+    setNotas(src?.notas ?? "");
     setStatus(initial?.status ?? "Confirmada");
     setPickerOpen(false);
     setRepeat("none");
@@ -167,7 +171,7 @@ export function MeetingDialog({
     setWeekDays([]);
     setDailyWeekdaysOnly(true);
     setShowAdvanced(false);
-  }, [open, initial, defaultDate, defaultHora]);
+  }, [open, initial, prefill, defaultDate, defaultHora]);
 
   const toggleWeekDay = (day: number) => {
     setWeekDays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));

@@ -43,6 +43,14 @@ export type Meeting = {
   rescheduleProposal?: RescheduleProposal;
   attendedBy?: string[]; // ids de quem efetivamente participou (marcado depois do horário)
   attendanceRecorded?: boolean; // true assim que o criador confirma a presença
+  /** Ids de quem foi marcado EXPLICITAMENTE como "Não participou" (presença em 3 estados:
+   * presente = `attendedBy`; não participou = aqui; não registrada = nenhum dos dois). Ausente em
+   * reunião antiga: nela, `attendanceRecorded` sem estar em `attendedBy` continua significando
+   * "não participou" (ver `attendanceState`). */
+  notAttendedBy?: string[];
+  /** Resultado da reunião (editado pelo criador): o que foi decidido e o que acontece depois. */
+  resumo?: string;
+  proximosPassos?: string[];
   transcricao?: string; // transcrição da reunião, colada/editada pelo criador (seção própria no detalhe)
   /** Quando a transcrição foi adicionada/editada pela última vez (ISO) — aditivo; reuniões antigas
    * com transcrição simplesmente não têm a data. */

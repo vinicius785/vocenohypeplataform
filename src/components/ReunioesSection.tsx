@@ -75,7 +75,11 @@ export function ReunioesSection() {
   // porque o diálogo de nova reunião precisa enxergar quando qualquer
   // participante selecionado está indisponível, não só quem está logado.
   const [disponibilidades, setDisponibilidades] = useState(() => loadDisponibilidades());
-  const [dialog, setDialog] = useState<{ mode: "new" | "edit"; data?: Meeting } | null>(null);
+  const [dialog, setDialog] = useState<{
+    mode: "new" | "edit";
+    data?: Meeting;
+    prefill?: Meeting;
+  } | null>(null);
   const [newMeetingDate, setNewMeetingDate] = useState<string>(() => toISODate(new Date()));
   const [newMeetingHora, setNewMeetingHora] = useState<string | undefined>(undefined);
   const openNewMeeting = (dateIso?: string, hora?: string) => {
@@ -406,6 +410,7 @@ export function ReunioesSection() {
         <MeetingDialog
           open={!!dialog}
           initial={dialog?.data}
+          prefill={dialog?.prefill}
           seriesSize={
             dialog?.data?.seriesId
               ? meetings.filter((m) => m.seriesId === dialog.data!.seriesId).length
@@ -440,6 +445,10 @@ export function ReunioesSection() {
                   rescheduleProposal: _rescheduleProposal,
                   attendedBy: _attendedBy,
                   attendanceRecorded: _attendanceRecorded,
+                  notAttendedBy: _notAttendedBy,
+                  resumo: _resumo,
+                  proximosPassos: _proximosPassos,
+                  transcricaoAtualizadaEm: _transcricaoAtualizadaEm,
                   transcricao: _transcricao,
                   criadorId: _criadorId,
                   seriesId: _seriesId,
@@ -468,6 +477,13 @@ export function ReunioesSection() {
           onEdit={(m) => {
             setSummary(null);
             setDialog({ mode: "edit", data: m });
+            setSyncFeedback(null);
+          }}
+          onDuplicate={(m) => {
+            setSummary(null);
+            setNewMeetingDate(toISODate(new Date()));
+            setNewMeetingHora(undefined);
+            setDialog({ mode: "new", prefill: m });
             setSyncFeedback(null);
           }}
           onChange={(m) => persist(meetings.map((x) => (x.id === m.id ? m : x)))}

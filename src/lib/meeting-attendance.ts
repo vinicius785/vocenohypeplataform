@@ -4,11 +4,20 @@ import type { Meeting } from "@/lib/reunioes-store";
  * linha própria de `reunioes`, então marcar uma nunca toca nas outras). Presença é diferente de
  * resposta ao convite: "Confirmado" = disse que vai; "Presente" = de fato participou.
  *
- * Estados do domínio atual (nenhum novo):
- *  - `unknown`: presença ainda não registrada (`attendanceRecorded` falso);
- *  - `present`: registrada e a pessoa está em `attendedBy`;
- *  - `absent`: registrada e a pessoa NÃO está em `attendedBy`. */
+ * Presença por pessoa em TRÊS estados:
+ *  - `present`: está em `attendedBy`;
+ *  - `absent` ("Não participou"): está em `notAttendedBy` — ou, em reunião ANTIGA (sem
+ *    `notAttendedBy`), a presença foi registrada e a pessoa não está em `attendedBy`;
+ *  - `unknown` ("Não registrada"): ainda sem decisão.
+ * Depois de registrada (present/absent) a pessoa NUNCA volta a `unknown`: cada marcação gera um
+ * evento de XP no ledger e não pode haver inconsistência histórica. */
 export type AttendanceState = "unknown" | "present" | "absent";
+
+export const ATTENDANCE_LABEL: Record<AttendanceState, string> = {
+  present: "Presente",
+  absent: "Não participou",
+  unknown: "Não registrada",
+};
 
 /** Participantes cuja presença pode ser registrada: organizador + convidados da plataforma desta
  * ocorrência que ainda são membros do workspace (`knownMemberIds`) — convidados removidos e
@@ -25,24 +34,51 @@ export function eligibleAttendeeIds(
   return Array.from(new Set(ids)).filter((id) => id === meId || knownMemberIds.has(id));
 }
 
-export function attendanceState(
-  meeting: Pick<Meeting, "attendanceRecorded" | "attendedBy">,
-  id: string,
-): AttendanceState {
-  if (!meeting.attendanceRecorded) return "unknown";
-  return (meeting.attendedBy ?? []).includes(id) ? "present" : "absent";
+type AttendanceFields = Pick<Meeting, "attendanceRecorded" | "attendedBy" | "notAttendedBy">;
+
+export function attendanceState(meeting: AttendanceFields, id: string): AttendanceState {
+  if ((meeting.attendedBy ?? []).includes(id)) return "present";
+  if ((meeting.notAttendedBy ?? []).includes(id)) return "absent";
+  // Formato antigo: registrada e fora de `attendedBy` = não participou.
+  if (meeting.notAttendedBy === undefined && meeting.attendanceRecorded) return "absent";
+  return "unknown";
 }
 
 export type AttendanceSummary = {
+  /** Alguém já teve a presença registrada. */
   recorded: boolean;
   present: number;
+  /** Quantos já têm decisão (presente ou não participou). */
+  decided: number;
   total: number;
-  /** "2 de 2 presentes" — ou `null` enquanto não registrada (nunca "0 de N" fingindo ausência). */
+  /** "2 de 4 presentes" — ou `null` enquanto nada foi registrado. */
   label: string | null;
-  /** "2 de 4 presentes" — SEMPRE a contagem real de presentes (0 quando nada foi marcado), vinda só
-   * de `attendedBy`; nunca de RSVP, nem do status da reunião. */
+  /** "2 de 4 presentes" SEMPRE (0 quando nada foi marcado), só de `attendedBy`; nunca de RSVP. */
   countLabel: string;
 };
+
+export function attendanceSummary(
+  meeting: AttendanceFields,
+  eligibleIds: readonly string[],
+): AttendanceSummary {
+  const total = eligibleIds.length;
+  let present = 0;
+  let decided = 0;
+  for (const id of eligibleIds) {
+    const st = attendanceState(meeting, id);
+    if (st === "present") present++;
+    if (st !== "unknown") decided++;
+  }
+  const countLabel = `${present} de ${total} presentes`;
+  return {
+    recorded: decided > 0,
+    present,
+    decided,
+    total,
+    label: decided > 0 ? countLabel : null,
+    countLabel,
+  };
+}
 
 /** Resposta ao CONVITE (RSVP) — conceito separado de presença. */
 export type RsvpKind = "confirmed" | "declined" | "pending";
@@ -55,73 +91,77 @@ export function rsvpKind(
   return "pending";
 }
 
-/** Clique no card da pessoa: presente ↔ não presente. */
-export function togglePersonAttendance(
-  meeting: Meeting,
-  id: string,
-  eligibleIds: readonly string[],
-): AttendanceChange {
-  return setPersonAttendance(meeting, id, attendanceState(meeting, id) !== "present", eligibleIds);
-}
-
-export function attendanceSummary(
-  meeting: Pick<Meeting, "attendanceRecorded" | "attendedBy">,
-  eligibleIds: readonly string[],
-): AttendanceSummary {
-  const total = eligibleIds.length;
-  if (!meeting.attendanceRecorded)
-    return {
-      recorded: false,
-      present: 0,
-      total,
-      label: null,
-      countLabel: `0 de ${total} presentes`,
-    };
-  const attended = new Set(meeting.attendedBy ?? []);
-  const present = eligibleIds.filter((id) => attended.has(id)).length;
-  const label = `${present} de ${total} presentes`;
-  return { recorded: true, present, total, label, countLabel: label };
-}
-
 export type AttendanceChange = {
   meeting: Meeting;
   /** Quem teve a presença (re)gravada nesta ação — alimenta o ledger de pontuação. */
   changedIds: string[];
 };
 
-/** "Marcar todos presentes": todos os elegíveis passam a presentes (quem já estava em
- * `attendedBy` e não é elegível é preservado). */
+/** Ao gravar no formato novo uma reunião ANTIGA já registrada, a regra antiga vira explícita
+ * (quem estava fora de `attendedBy` passa a constar em `notAttendedBy`), senão o 3º estado
+ * "desfaria" o que já estava decidido. */
+function currentNotAttended(meeting: Meeting, eligibleIds: readonly string[]): Set<string> {
+  if (meeting.notAttendedBy !== undefined) return new Set(meeting.notAttendedBy);
+  if (!meeting.attendanceRecorded) return new Set();
+  const attended = new Set(meeting.attendedBy ?? []);
+  return new Set(eligibleIds.filter((id) => !attended.has(id)));
+}
+
+/** "Todos presentes": todos os elegíveis passam a presentes (quem já estava presente e não é
+ * elegível é preservado). Só gera evento para quem ainda não estava presente. */
 export function markAllPresent(meeting: Meeting, eligibleIds: readonly string[]): AttendanceChange {
-  const before = new Set(meeting.attendedBy ?? []);
-  const next = new Set([...before, ...eligibleIds]);
-  const changedIds = meeting.attendanceRecorded
-    ? eligibleIds.filter((id) => !before.has(id))
-    : [...eligibleIds];
+  const notAttended = currentNotAttended(meeting, eligibleIds);
+  const attended = new Set(meeting.attendedBy ?? []);
+  const changedIds = eligibleIds.filter((id) => !attended.has(id));
+  for (const id of eligibleIds) {
+    attended.add(id);
+    notAttended.delete(id);
+  }
   return {
-    meeting: { ...meeting, attendedBy: Array.from(next), attendanceRecorded: true },
+    meeting: {
+      ...meeting,
+      attendedBy: Array.from(attended),
+      notAttendedBy: Array.from(notAttended),
+      attendanceRecorded: true,
+    },
     changedIds,
   };
 }
 
-/** Ajuste individual. Na PRIMEIRA marcação (presença ainda não registrada) o registro passa a
- * existir e quem não foi marcado fica ausente — mesma semântica da antiga lista "selecione quem
- * participou". Depois, só a pessoa escolhida muda. */
+/** Marca UMA pessoa como presente ou como "não participou". Nunca volta a "não registrada" (não
+ * existe essa transição) e, se a pessoa já está nesse estado, não faz nada (sem evento de XP). */
 export function setPersonAttendance(
   meeting: Meeting,
   id: string,
-  present: boolean,
+  next: "present" | "absent",
   eligibleIds: readonly string[],
 ): AttendanceChange {
-  const wasRecorded = !!meeting.attendanceRecorded;
+  const before = attendanceState(meeting, id);
+  if (before === next) return { meeting, changedIds: [] };
   const attended = new Set(meeting.attendedBy ?? []);
-  const wasPresent = attended.has(id);
-  if (present) attended.add(id);
-  else attended.delete(id);
-  const changedIds = wasRecorded ? (wasPresent === present ? [] : [id]) : [...eligibleIds];
+  const notAttended = currentNotAttended(meeting, eligibleIds);
+  if (next === "present") {
+    attended.add(id);
+    notAttended.delete(id);
+  } else {
+    attended.delete(id);
+    notAttended.add(id);
+  }
   return {
-    meeting: { ...meeting, attendedBy: Array.from(attended), attendanceRecorded: true },
-    changedIds,
+    meeting: {
+      ...meeting,
+      attendedBy: Array.from(attended),
+      notAttendedBy: Array.from(notAttended),
+      attendanceRecorded: true,
+    },
+    changedIds: [id],
   };
+}
+
+/** Clique rápido no card: não registrada → presente; presente → não participou; não participou →
+ * presente. */
+export function nextAttendanceOnClick(state: AttendanceState): "present" | "absent" {
+  return state === "present" ? "absent" : "present";
 }
 
 /** Presença só faz sentido depois que a reunião começou (a antiga regra do campo

@@ -1,17 +1,25 @@
 {
-  "version": "1.324.1",
+  "version": "1.325.0",
   "releases": [
     {
-      "version": "1.324.1",
-      "summary": "Correção ao salvar alterações em influenciadores aprovados.",
+      "version": "1.325.0",
+      "summary": "Detalhe da reunião refeito como ficha: estado, presença em três estados e resultado.",
       "modules": [
         {
-          "name": "CAMPANHAS",
-          "tagline": "Influenciadores",
+          "name": "REUNIÕES",
+          "tagline": "Detalhe da reunião",
           "items": [
             {
-              "title": "Erro ao subir roteiro corrigido",
-              "description": "Salvar qualquer alteração em um influenciador aprovado (como anexar um roteiro) voltou a funcionar, depois de aplicar a atualização do banco desta versão."
+              "title": "Estado da reunião claro",
+              "description": "Agendada, Em andamento, Realizada ou Cancelada, separado da resposta ao convite e da presença de cada pessoa."
+            },
+            {
+              "title": "Presença direta no card",
+              "description": "Marque Presente ou Não participou no próprio card, sem abrir nada, ou use Todos presentes. Quem já foi registrado não volta para Não registrada."
+            },
+            {
+              "title": "Resultado e novas ações",
+              "description": "Registre o resumo e os próximos passos da reunião. O menu agora tem Duplicar e Cancelar reunião, e o rodapé de Editar e Excluir saiu."
             }
           ]
         }
