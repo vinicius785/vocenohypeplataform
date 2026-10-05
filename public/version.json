@@ -1,17 +1,25 @@
 {
-  "version": "1.320.1",
+  "version": "1.321.0",
   "releases": [
     {
-      "version": "1.320.1",
-      "summary": "O cartão extra sob a mensagem com tarefa foi removido.",
+      "version": "1.321.0",
+      "summary": "Projetos ficou mais simples: três opções saíram.",
       "modules": [
         {
-          "name": "CHAT",
-          "tagline": "Tarefas nas mensagens",
+          "name": "PROJETOS",
+          "tagline": "Áreas do projeto",
           "items": [
             {
-              "title": "Só a marcação na mensagem",
-              "description": "A tarefa citada aparece apenas como o objeto dentro do texto, sem o retângulo repetido logo abaixo."
+              "title": "Calendário editorial removido",
+              "description": "A área sai de Novo projeto, da edição e da página do projeto. Ele será refeito do zero em breve."
+            },
+            {
+              "title": "Tráfego pago removido",
+              "description": "A área também sai de todos os pontos de entrada dos projetos."
+            },
+            {
+              "title": "E-mails fora dos projetos",
+              "description": "A opção E-mails não aparece mais ao criar ou editar um projeto."
             }
           ]
         }

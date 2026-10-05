@@ -1,6 +1,6 @@
 /**
  * Resize an image file client-side and return it as a JPEG data URL.
- * Shared by Marketing (blog/editorial/tráfego pago) so cover/creative
+ * Shared by Marketing (blog) so cover/creative
  * images use real file upload instead of pasting a URL — same approach
  * already used for project covers (src/components/ProjetosSection.tsx).
  */

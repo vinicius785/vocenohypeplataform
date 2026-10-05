@@ -63,11 +63,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { TYPOGRAPHY } from "@/lib/design-tokens";
 import { OPEN_STATUSES } from "@/lib/score";
-import { EditorialPanel } from "@/components/marketing/EditorialPanel";
-import { TrafegoPagoPanel } from "@/components/marketing/TrafegoPagoPanel";
 import { BlogPanel } from "@/components/marketing/BlogPanel";
 import { AeoMonitorPanel } from "@/components/marketing/AeoMonitorPanel";
-import { FluxosEmailPanel } from "@/components/marketing/FluxosEmailPanel";
 import { normalizeInflus, type Influ } from "@/lib/influencer-model";
 import { InfluencerBoard } from "@/components/influenciadores/InfluencerBoard";
 import {
@@ -98,16 +95,13 @@ const SECTION_TITLE: Record<FeatureKey, string> = {
   kanban: "Tarefas",
   influenciadores: "Influenciadores",
   documentos: "Arquivos e links",
-  calendario_editorial: "Calendário editorial",
-  trafego_pago: "Tráfego pago",
   blog: "Blog",
   aeo_monitor: "AEO Monitor",
   bugs_sugestoes: "Bugs & Sugestões",
-  fluxos_email: "E-mails",
 };
 
 /** Monta o conteúdo só quando a seção chega perto da tela (uma vez) — a
- * página mostra TODAS as seções, mas não carrega Blog/AEO/e-mails etc. de
+ * página mostra TODAS as seções, mas não carrega Blog/AEO etc. de
  * uma vez só (cada um busca seus próprios dados ao montar). */
 function LazyMount({ children, minHeight = 160 }: { children: ReactNode; minHeight?: number }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -179,8 +173,6 @@ function renderPanel(
     );
   if (k === "influenciadores") return <InfluencersPanel project={project} update={update} />;
   if (k === "documentos") return <ProjectDocumentsPanel project={project} update={update} />;
-  if (k === "calendario_editorial") return <EditorialPanel project={project} update={update} />;
-  if (k === "trafego_pago") return <TrafegoPagoPanel project={project} update={update} />;
   if (k === "blog")
     return (
       <BlogPanel
@@ -192,7 +184,6 @@ function renderPanel(
     );
   if (k === "aeo_monitor") return <AeoMonitorPanel />;
   if (k === "bugs_sugestoes") return <ProjectBugsPanel project={project} update={update} />;
-  if (k === "fluxos_email") return <FluxosEmailPanel />;
   return <SectionPanel project={project} update={update} featureKey={k} />;
 }
 

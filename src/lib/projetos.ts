@@ -7,12 +7,9 @@ export type FeatureKey =
   | "kanban"
   | "influenciadores"
   | "documentos"
-  | "calendario_editorial"
-  | "trafego_pago"
   | "blog"
   | "aeo_monitor"
-  | "bugs_sugestoes"
-  | "fluxos_email";
+  | "bugs_sugestoes";
 
 export const FEATURES: {
   key: FeatureKey;
@@ -39,18 +36,6 @@ export const FEATURES: {
     group: "core",
   },
   {
-    key: "calendario_editorial",
-    label: "Calendário editorial",
-    hint: "Planejamento de posts e conteúdo por data.",
-    group: "marketing",
-  },
-  {
-    key: "trafego_pago",
-    label: "Tráfego pago",
-    hint: "Campanhas de mídia paga, verba, canais e resultados.",
-    group: "marketing",
-  },
-  {
     key: "blog",
     label: "Blog",
     hint: "Pauta e publicação de artigos e conteúdos longos.",
@@ -67,12 +52,6 @@ export const FEATURES: {
     label: "Bugs & Sugestões",
     hint: "Relatos de bug e ideias sobre o HypeApp, com status de resolução.",
     group: "core",
-  },
-  {
-    key: "fluxos_email",
-    label: "E-mails",
-    hint: "Campanhas de e-mail: público, sequência de mensagens, disparo e resultados.",
-    group: "marketing",
   },
 ];
 
@@ -327,40 +306,6 @@ export type DocItem = {
 };
 export type SectionItem = { id: string; title: string; note?: string; date?: string; url?: string };
 
-export type EditorialStatus = "ideia" | "producao" | "agendado" | "publicado";
-export type EditorialPost = {
-  id: string;
-  title: string;
-  date: string; // ISO yyyy-mm-dd
-  channel: string; // Instagram, TikTok, YouTube...
-  status: EditorialStatus;
-  notes?: string;
-};
-
-export type CampaignPlatform = "Meta" | "Google" | "TikTok" | "LinkedIn" | "Outro";
-export type CampaignStatus = "rascunho" | "ativa" | "pausada" | "encerrada";
-export type Creative = { id: string; name: string; url: string };
-export type Campaign = {
-  id: string;
-  name: string;
-  platform: CampaignPlatform;
-  objective?: string;
-  status: CampaignStatus;
-  budget?: number;
-  startDate?: string;
-  endDate?: string;
-  brief?: string;
-  audience?: string;
-  creatives: Creative[];
-  metrics: {
-    impressions?: number;
-    clicks?: number;
-    conversions?: number;
-    spend?: number;
-  };
-  notes?: string;
-};
-
 export type BlogStatus = "rascunho" | "agendado" | "publicado" | "despublicado";
 export type BlogPost = {
   id: string;
@@ -434,8 +379,10 @@ export type Project = {
   tasks: Task[];
   docs: DocItem[];
   sections?: Partial<Record<FeatureKey, SectionItem[]>>;
-  editorial?: EditorialPost[];
-  campaigns?: Campaign[];
+  /** LEGADO: dados do antigo Calendário editorial e do Tráfego pago (removidos do produto). Ficam no
+   * JSON do projeto só para não perder histórico; nenhuma tela lê ou grava. */
+  editorial?: unknown[];
+  campaigns?: unknown[];
   blog?: BlogPost[];
   /** Token do link público/externo de Bugs & Sugestões (só usado pelo
    * Projeto HypeApp) — gerado sob demanda, mesmo padrão de

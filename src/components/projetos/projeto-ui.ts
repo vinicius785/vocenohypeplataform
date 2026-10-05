@@ -5,17 +5,7 @@
  * remota nova — opera só sobre o que `loadProjetos()` já carrega.
  */
 import type { ComponentType } from "react";
-import {
-  KanbanSquare,
-  Users,
-  FileText,
-  CalendarDays,
-  Megaphone,
-  Newspaper,
-  Radar,
-  Bug,
-  Mail,
-} from "lucide-react";
+import { KanbanSquare, Users, FileText, Newspaper, Radar, Bug } from "lucide-react";
 import type { FeatureKey, Project, ProjectStatus, Task, TeamMemberLite } from "@/lib/projetos";
 import { getTaskAssignees, loadTeamMembers } from "@/lib/projetos";
 import { OPEN_STATUSES } from "@/lib/score";
@@ -35,12 +25,9 @@ export const FEATURE_ICONS: Record<FeatureKey, ComponentType<{ className?: strin
   kanban: KanbanSquare,
   influenciadores: Users,
   documentos: FileText,
-  calendario_editorial: CalendarDays,
-  trafego_pago: Megaphone,
   blog: Newspaper,
   aeo_monitor: Radar,
   bugs_sugestoes: Bug,
-  fluxos_email: Mail,
 };
 
 /* ============================================================
