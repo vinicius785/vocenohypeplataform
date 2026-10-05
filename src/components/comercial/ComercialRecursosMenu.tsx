@@ -50,7 +50,10 @@ export function ComercialRecursosMenu() {
         onOpenChange={setOpen}
         campanhaNome="Comercial"
         backTo="a página"
-        emptyTitle="Não há documentos no Comercial."
+        description="Materiais de apoio comercial."
+        contextLabel="ao Comercial"
+        emptyTitle="Nenhum documento ainda."
+        emptyDescription="Adicione materiais de apoio comercial."
         maxFileBytes={MAX_ANEXO_BYTES}
         docs={docs}
         onChange={saveComercialDocs}

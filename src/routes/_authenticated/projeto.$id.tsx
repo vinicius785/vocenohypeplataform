@@ -4,22 +4,10 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Plus,
   X,
-  FileText,
   ImageIcon,
   ExternalLink,
-  Sheet,
-  Presentation,
-  HardDrive,
-  Figma,
-  StickyNote,
-  Notebook,
-  Palette,
-  Link as LinkIcon,
-  Pin,
-  PinOff,
   Copy,
   MoreHorizontal,
-  Paperclip,
   Pencil,
   Trash2,
   Pause,
@@ -30,10 +18,8 @@ import {
   FolderOpen,
   Newspaper,
   Radar,
-  type LucideIcon,
 } from "lucide-react";
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -65,9 +51,6 @@ import {
   type Project,
   type ProjectStatus,
   type Task,
-  type DocItem,
-  type DocSourceType,
-  type DocCategory,
   type SectionItem,
 } from "@/lib/projetos";
 import {
@@ -94,18 +77,11 @@ import {
   saveProjetoTarefas,
 } from "@/lib/projeto-scoped-store";
 import { formatIsoDate } from "@/lib/utils";
-import { NativeSelect } from "@/components/ui/native-select";
-import { EmptyState as SharedEmptyState } from "@/components/shared/EmptyState";
+
 import {
-  FilterChips,
-  FilterGroup,
-  FilterPill,
-  FilterPopover,
-  FilterRow,
-  FilterSearch,
-  FilterToolbar,
-} from "@/components/shared/FilterToolbar";
-import { CampaignToolShell } from "@/components/campanhas/tools/CampaignToolShell";
+  ProjectDocumentsDialog,
+  ProjectDocumentsPanel,
+} from "@/components/projetos/ProjectDocuments";
 import { KANBAN_COLUMN_LIMIT } from "@/lib/kanban-limit";
 
 export const Route = createFileRoute("/_authenticated/projeto/$id")({
@@ -202,7 +178,7 @@ function renderPanel(
       />
     );
   if (k === "influenciadores") return <InfluencersPanel project={project} update={update} />;
-  if (k === "documentos") return <DocsPanel project={project} update={update} />;
+  if (k === "documentos") return <ProjectDocumentsPanel project={project} update={update} />;
   if (k === "calendario_editorial") return <EditorialPanel project={project} update={update} />;
   if (k === "trafego_pago") return <TrafegoPagoPanel project={project} update={update} />;
   if (k === "blog")
@@ -606,18 +582,12 @@ function ProjetoPage() {
         {confirmDialog}
 
         {hasDocs && (
-          <CampaignToolShell
+          <ProjectDocumentsDialog
             open={docsOpen}
             onOpenChange={setDocsOpen}
-            size="medium"
-            campanhaNome={project.name}
-            backTo="o projeto"
-            icon={FolderOpen}
-            title="Documentos"
-            description="Links e materiais de referência do projeto"
-          >
-            <DocsPanel project={project} update={update} />
-          </CampaignToolShell>
+            project={project}
+            update={update}
+          />
         )}
 
         {availableSections.length === 0 ? (
@@ -707,452 +677,6 @@ function InfluencersPanel({
       allowedFields={project.influencerFeatures}
       hideTitle
     />
-  );
-}
-
-/* -------- Arquivos e links -------- */
-
-/** Detecta a origem só pelo hostname — nunca falha nem bloqueia o
- * cadastro (URL inválida/sem protocolo cai em "link" normalmente). Não
- * busca o título real da página (exigiria uma chamada de servidor e
- * cuidado com SSRF pra URL arbitrária do usuário) — "Nome" continua
- * sempre preenchido manualmente. */
-function detectSourceType(url: string): DocSourceType {
-  let host = "";
-  try {
-    host = new URL(url).hostname;
-  } catch {
-    return "link";
-  }
-  if (host.includes("docs.google.com")) return "google_docs";
-  if (host.includes("sheets.google.com")) return "google_sheets";
-  if (host.includes("slides.google.com")) return "google_slides";
-  if (host.includes("drive.google.com")) return "google_drive";
-  if (host.includes("figma.com")) return "figma";
-  if (host.includes("miro.com")) return "miro";
-  if (host.includes("notion.so") || host.includes("notion.site")) return "notion";
-  if (host.includes("canva.com")) return "canva";
-  return "link";
-}
-
-const DOC_SOURCE_META: Record<DocSourceType, { icon: LucideIcon; label: string }> = {
-  google_docs: { icon: FileText, label: "Google Docs" },
-  google_sheets: { icon: Sheet, label: "Google Sheets" },
-  google_slides: { icon: Presentation, label: "Google Slides" },
-  google_drive: { icon: HardDrive, label: "Google Drive" },
-  figma: { icon: Figma, label: "Figma" },
-  miro: { icon: StickyNote, label: "Miro" },
-  notion: { icon: Notebook, label: "Notion" },
-  canva: { icon: Palette, label: "Canva" },
-  link: { icon: LinkIcon, label: "Link externo" },
-};
-
-const DOC_CATEGORIES: DocCategory[] = [
-  "briefing",
-  "planejamento",
-  "apresentacao",
-  "relatorio",
-  "contrato",
-  "referencia",
-  "outro",
-];
-const DOC_CATEGORY_LABEL: Record<DocCategory, string> = {
-  briefing: "Briefing",
-  planejamento: "Planejamento",
-  apresentacao: "Apresentação",
-  relatorio: "Relatório",
-  contrato: "Contrato",
-  referencia: "Referência",
-  outro: "Outro",
-};
-
-/** Formulário compacto de link — reaproveitado tanto por "+ Adicionar"
- * quanto por "Editar" (`initial` presente pré-preenche e troca o texto
- * do botão). */
-function DocLinkForm({
-  initial,
-  onSubmit,
-  onCancel,
-}: {
-  initial?: DocItem;
-  onSubmit: (data: { name: string; url: string; category: DocCategory }) => void;
-  onCancel: () => void;
-}) {
-  const [url, setUrl] = useState(initial?.url ?? "");
-  const [name, setName] = useState(initial?.name ?? "");
-  const [category, setCategory] = useState<DocCategory>(initial?.category ?? "outro");
-  const urlRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    urlRef.current?.focus();
-  }, []);
-
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!url.trim()) return;
-    onSubmit({ name: name.trim(), url: url.trim(), category });
-  };
-
-  return (
-    <form onSubmit={submit} className="space-y-2 p-3">
-      <label className="block space-y-1">
-        <span className="text-[11px] font-medium text-muted-foreground">URL</span>
-        <input
-          ref={urlRef}
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://..."
-          className="h-8 w-full rounded-md border border-border bg-background px-2.5 text-xs outline-none focus:ring-2 focus:ring-ring"
-        />
-      </label>
-      <label className="block space-y-1">
-        <span className="text-[11px] font-medium text-muted-foreground">Nome</span>
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Nome do material"
-          className="h-8 w-full rounded-md border border-border bg-background px-2.5 text-xs outline-none focus:ring-2 focus:ring-ring"
-        />
-      </label>
-      <label className="block space-y-1">
-        <span className="text-[11px] font-medium text-muted-foreground">Categoria</span>
-        <NativeSelect
-          value={category}
-          onChange={(e) => setCategory(e.target.value as DocCategory)}
-          className="w-full"
-        >
-          {DOC_CATEGORIES.map((c) => (
-            <option key={c} value={c}>
-              {DOC_CATEGORY_LABEL[c]}
-            </option>
-          ))}
-        </NativeSelect>
-      </label>
-      <div className="flex justify-end gap-2 pt-1">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
-        >
-          Cancelar
-        </button>
-        <button
-          type="submit"
-          className="rounded-md bg-brand px-2.5 py-1.5 text-xs font-medium text-brand-foreground hover:bg-brand-hover"
-        >
-          {initial ? "Salvar" : "Adicionar"}
-        </button>
-      </div>
-    </form>
-  );
-}
-
-function DocRow({
-  doc,
-  onEdit,
-  onTogglePin,
-  onDelete,
-}: {
-  doc: DocItem;
-  onEdit: () => void;
-  onTogglePin: () => void;
-  onDelete: () => void;
-}) {
-  const [copied, setCopied] = useState(false);
-  const sourceType = doc.sourceType ?? detectSourceType(doc.url);
-  const category = doc.category ?? "outro";
-  const { icon: SourceIcon, label: sourceLabel } = DOC_SOURCE_META[sourceType];
-
-  const copyLink = () => {
-    void navigator.clipboard.writeText(doc.url).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  };
-
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={() => window.open(doc.url, "_blank", "noopener,noreferrer")}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          window.open(doc.url, "_blank", "noopener,noreferrer");
-        }
-      }}
-      className="group flex cursor-pointer items-center gap-2.5 px-3 py-2 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-    >
-      <SourceIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1">
-          {doc.isPinned && <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />}
-          <span title={doc.name} className="min-w-0 truncate text-sm text-foreground">
-            {doc.name}
-          </span>
-        </div>
-        <p className="truncate text-[11px] text-muted-foreground">
-          {sourceLabel} · {DOC_CATEGORY_LABEL[category]}
-        </p>
-      </div>
-      {copied && <span className="shrink-0 text-[11px] text-muted-foreground">Copiado!</span>}
-      <div onClick={(e) => e.stopPropagation()} className="shrink-0">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              aria-label="Mais ações"
-              className="shrink-0 rounded p-1 text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
-            >
-              <MoreHorizontal className="h-3.5 w-3.5" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuItem asChild>
-              <a href={doc.url} target="_blank" rel="noreferrer">
-                <ExternalLink className="h-3.5 w-3.5" /> Abrir
-              </a>
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onEdit}>
-              <Pencil className="h-3.5 w-3.5" /> Editar
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onTogglePin}>
-              {doc.isPinned ? (
-                <>
-                  <PinOff className="h-3.5 w-3.5" /> Desafixar do projeto
-                </>
-              ) : (
-                <>
-                  <Pin className="h-3.5 w-3.5" /> Fixar no projeto
-                </>
-              )}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={copyLink}>
-              <Copy className="h-3.5 w-3.5" /> Copiar link
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={onDelete}
-              className="text-destructive focus:text-destructive"
-            >
-              <X className="h-3.5 w-3.5" /> Excluir
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </div>
-  );
-}
-
-function DocsPanel({
-  project,
-  update,
-}: {
-  project: Project;
-  update: (p: Partial<Project>) => void;
-}) {
-  const [addOpen, setAddOpen] = useState(false);
-  const [addStep, setAddStep] = useState<"choose" | "link">("choose");
-  const [editing, setEditing] = useState<DocItem | null>(null);
-  const [query, setQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<DocCategory | "todas">("todas");
-  const { confirm, confirmDialog } = useConfirm();
-
-  const closeAdd = () => {
-    setAddOpen(false);
-    setAddStep("choose");
-  };
-
-  const createDoc = (data: { name: string; url: string; category: DocCategory }) => {
-    const d: DocItem = {
-      id: crypto.randomUUID(),
-      name: data.name || data.url,
-      url: data.url,
-      category: data.category,
-      isPinned: false,
-      sourceType: detectSourceType(data.url),
-    };
-    update({ docs: [...project.docs, d] });
-    closeAdd();
-  };
-
-  const saveEdit = (data: { name: string; url: string; category: DocCategory }) => {
-    if (!editing) return;
-    update({
-      docs: project.docs.map((x) =>
-        x.id === editing.id
-          ? {
-              ...x,
-              name: data.name || data.url,
-              url: data.url,
-              category: data.category,
-              sourceType: detectSourceType(data.url),
-            }
-          : x,
-      ),
-    });
-    setEditing(null);
-  };
-
-  const togglePin = (id: string) =>
-    update({
-      docs: project.docs.map((x) => (x.id === id ? { ...x, isPinned: !x.isPinned } : x)),
-    });
-
-  const remove = async (id: string, name: string) => {
-    if (
-      !(await confirm(`Você está prestes a excluir "${name}".\nEsta ação não pode ser desfeita.`, {
-        title: "Excluir item?",
-        confirmLabel: "Excluir",
-        destructive: true,
-      }))
-    )
-      return;
-    update({ docs: project.docs.filter((x) => x.id !== id) });
-  };
-
-  // Fixados primeiro — `sort` é estável, então a ordem relativa dentro
-  // de cada grupo (fixados / não-fixados) nunca muda, só o agrupamento.
-  const sortedDocs = [...project.docs]
-    .filter((d) => {
-      const q = query.trim().toLowerCase();
-      const matchesQuery =
-        !q || d.name.toLowerCase().includes(q) || d.url.toLowerCase().includes(q);
-      const matchesCategory =
-        categoryFilter === "todas" || (d.category ?? "outro") === categoryFilter;
-      return matchesQuery && matchesCategory;
-    })
-    .sort((a, b) => Number(!!b.isPinned) - Number(!!a.isPinned));
-
-  const docChips =
-    categoryFilter === "todas"
-      ? []
-      : [
-          {
-            id: "categoria",
-            label: DOC_CATEGORY_LABEL[categoryFilter],
-            onRemove: () => setCategoryFilter("todas"),
-          },
-        ];
-
-  return (
-    <div className="space-y-4">
-      <FilterToolbar>
-        <FilterRow>
-          <FilterSearch value={query} onChange={setQuery} placeholder="Buscar por nome ou link" />
-          <FilterPopover
-            title="Filtrar documentos"
-            activeCount={docChips.length}
-            onClear={() => setCategoryFilter("todas")}
-          >
-            <FilterGroup label="Categoria">
-              <FilterPill
-                active={categoryFilter === "todas"}
-                onClick={() => setCategoryFilter("todas")}
-              >
-                Todas
-              </FilterPill>
-              {(Object.keys(DOC_CATEGORY_LABEL) as DocCategory[]).map((c) => (
-                <FilterPill
-                  key={c}
-                  active={categoryFilter === c}
-                  onClick={() => setCategoryFilter(c)}
-                >
-                  {DOC_CATEGORY_LABEL[c]}
-                </FilterPill>
-              ))}
-            </FilterGroup>
-          </FilterPopover>
-          <Popover
-            open={addOpen}
-            onOpenChange={(o) => {
-              setAddOpen(o);
-              if (!o) setAddStep("choose");
-            }}
-          >
-            <PopoverTrigger asChild>
-              <Button variant="primary" size="sm" className="sm:ml-auto">
-                <Plus className="h-3.5 w-3.5" /> Adicionar
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-72 p-0">
-              {addStep === "choose" ? (
-                <div className="p-1">
-                  <p className="px-2 py-1.5 text-[11px] font-semibold text-foreground">
-                    Adicionar ao projeto
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setAddStep("link")}
-                    className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs hover:bg-muted/60"
-                  >
-                    <LinkIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span>
-                      <span className="block text-foreground">Adicionar link</span>
-                      <span className="block text-[11px] text-muted-foreground">
-                        Google Drive, Docs, Figma, Miro, Notion, Canva etc.
-                      </span>
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    disabled
-                    title="Ainda não disponível — sem infraestrutura de upload"
-                    className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs opacity-40"
-                  >
-                    <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span>
-                      <span className="block text-foreground">Enviar arquivo</span>
-                      <span className="block text-[11px] text-muted-foreground">
-                        PDF, imagem, planilha, apresentação etc.
-                      </span>
-                    </span>
-                  </button>
-                </div>
-              ) : (
-                <DocLinkForm onSubmit={createDoc} onCancel={closeAdd} />
-              )}
-            </PopoverContent>
-          </Popover>
-        </FilterRow>
-        <FilterChips chips={docChips} onClear={() => setCategoryFilter("todas")} />
-      </FilterToolbar>
-
-      {project.docs.length === 0 ? (
-        <SharedEmptyState
-          compact
-          icon={<FolderOpen className="h-5 w-5" />}
-          title="Nenhum material adicionado ainda."
-          description="Adicione links importantes deste projeto."
-          primaryAction={{ label: "Adicionar link", onClick: () => setAddOpen(true) }}
-        />
-      ) : sortedDocs.length === 0 ? (
-        <SharedEmptyState compact title="Nenhum resultado para esta busca ou filtro." />
-      ) : (
-        <div className="divide-y divide-border rounded-md border border-border bg-background">
-          {sortedDocs.map((d) => (
-            <DocRow
-              key={d.id}
-              doc={d}
-              onEdit={() => setEditing(d)}
-              onTogglePin={() => togglePin(d.id)}
-              onDelete={() => void remove(d.id, d.name)}
-            />
-          ))}
-        </div>
-      )}
-
-      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
-        <DialogContent className="max-w-xs gap-0 p-0">
-          <DialogTitle className="px-3 pt-3 text-xs font-semibold text-foreground">
-            Editar material
-          </DialogTitle>
-          {editing && (
-            <DocLinkForm initial={editing} onSubmit={saveEdit} onCancel={() => setEditing(null)} />
-          )}
-        </DialogContent>
-      </Dialog>
-      {confirmDialog}
-    </div>
   );
 }
 
