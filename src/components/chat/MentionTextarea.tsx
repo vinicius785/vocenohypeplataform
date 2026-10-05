@@ -7,188 +7,80 @@ import {
   useState,
   type KeyboardEvent,
 } from "react";
-import { getStatus, STATUS_COLOR, type ChatMember, type ChatMention } from "@/lib/chat-store";
+import type { ChatMember, ChatMention } from "@/lib/chat-store";
 import {
-  MENTION_KIND_CONFIG,
-  MENTION_KIND_ORDER,
   EVERYONE_MENTION_ID,
   EVERYONE_MENTION_LABEL,
-  contextBoost,
   matchScore,
-  type MentionContext,
-  type MentionKind,
+  normalizeForSearch,
   type MentionOption,
 } from "@/lib/mention-kinds";
-
-/** Extraído de `ChatSection.tsx` (Chat V1) pra ser reaproveitado pelo Chat V2
- * sem duplicar a lógica de @menção — mesmo comportamento (trigger "@", tabs
- * por tipo, busca, navegação por teclado, ranking por contexto). */
-
-export type MentionSourceTask = {
-  id: string;
-  label: string;
-  project?: string;
-  campanhaId?: string;
-  projectId?: string;
-};
+import { detectMentionTrigger, rankPeople, type MentionTrigger } from "@/lib/chat-mentions";
+import { EntityReferencePicker } from "./EntityReferencePicker";
+import { MentionAutocomplete, type MentionAutocompleteItem } from "./MentionAutocomplete";
 
 /**
- * Reusable input with @ mention picker. Extracts mentions used in final text.
- * Junta os 5 tipos mencionáveis num só array de opções, já com o boost de
- * contexto (`context`) calculado por opção — sem context, fica sem boost
- * (usado em edição de mensagem antiga, onde o ranking contextual não é
- * essencial).
+ * Textarea do composer com DOIS gatilhos independentes:
+ *  - `@` → MENÇÃO de pessoa (autocomplete leve, só pessoas elegíveis da conversa). Em conversa
+ *    direta (`mentionsEnabled=false`) o `@` é texto comum: nada abre, nada é selecionável.
+ *  - `#` → REFERÊNCIA a tarefa/projeto/campanha/cliente (picker à parte), em qualquer conversa.
+ * A lógica de gatilho é pura e testada em `chat-mentions.ts` (`detectMentionTrigger`).
  */
-export function useMentions(
-  members: ChatMember[],
-  tasks: MentionSourceTask[],
-  projects: MentionOption[],
-  campaigns: MentionOption[],
-  clients: MentionOption[],
-  allowUserMentions: boolean,
-  context?: MentionContext,
-) {
-  const options = useMemo<MentionOption[]>(() => {
-    const t: MentionOption[] = tasks.map((x) => ({
-      kind: "task",
-      id: x.id,
-      label: x.label?.trim() || "Tarefa sem título",
-      hint: x.project ? `Projeto: ${x.project}` : undefined,
-      campanhaId: x.campanhaId,
-      projectId: x.projectId,
-    }));
-    const u: MentionOption[] = allowUserMentions
-      ? [
-          {
-            kind: "user",
-            id: EVERYONE_MENTION_ID,
-            label: EVERYONE_MENTION_LABEL,
-            hint: "Menciona todos os participantes",
-          },
-          ...members.map((m) => ({
-            kind: "user" as const,
-            id: m.id,
-            label: m.name,
-            photo: m.photo,
-            hint: m.role,
-          })),
-        ]
-      : [];
-    // Opção sem rótulo (projeto/campanha/cliente com nome vazio) quebraria a busca e inseriria
-    // "@undefined" na mensagem: nunca entra na lista.
-    const all = [...u, ...t, ...projects, ...campaigns, ...clients].filter(
-      (o) => typeof o.label === "string" && o.label.trim() !== "",
-    );
-    if (!context) return all;
-    return all.map((o) => ({ ...o, boost: contextBoost(o, context) }));
-  }, [members, tasks, projects, campaigns, clients, allowUserMentions, context]);
-  return options;
-}
+const PEOPLE_LIMIT = 6;
+const REFERENCE_LIMIT = 7;
 
-export function extractUsedMentions(text: string, options: MentionOption[]): ChatMention[] {
+/** Registra as menções realmente usadas no texto: pessoas por `@Nome`, referências por `#Rótulo`. */
+export function extractUsedMentions(
+  text: string,
+  people: readonly ChatMember[],
+  references: readonly MentionOption[],
+  opts: { includeEveryone?: boolean } = {},
+): ChatMention[] {
   const used: ChatMention[] = [];
   const seen = new Set<string>();
-  for (const opt of options) {
-    if (text.includes("@" + opt.label)) {
-      const key = opt.kind + ":" + opt.id;
-      if (!seen.has(key)) {
-        seen.add(key);
-        used.push({ kind: opt.kind, id: opt.id, label: opt.label });
-      }
+  const push = (m: ChatMention) => {
+    const key = m.kind + ":" + m.id;
+    if (!seen.has(key)) {
+      seen.add(key);
+      used.push(m);
     }
+  };
+  if (opts.includeEveryone && text.includes("@" + EVERYONE_MENTION_LABEL)) {
+    push({ kind: "user", id: EVERYONE_MENTION_ID, label: EVERYONE_MENTION_LABEL });
+  }
+  for (const p of people) {
+    if (text.includes("@" + p.name)) push({ kind: "user", id: p.id, label: p.name });
+  }
+  for (const r of references) {
+    if (text.includes("#" + r.label)) push({ kind: r.kind, id: r.id, label: r.label });
   }
   return used;
 }
 
-/** "@Todos" nunca é uma pessoa real — expande a menção sentinela numa
- * menção individual de verdade por participante (excluindo quem enviou),
- * reaproveitando 100% a notificação/badge que já existe por menção
- * individual (contador do sino em `AppShell.tsx`, push em
- * `triggerChatPush`) sem precisar mudar nenhuma delas. */
-export function expandEveryoneMention(
-  mentions: ChatMention[],
-  participantIds: string[],
-): ChatMention[] {
-  if (!mentions.some((m) => m.kind === "user" && m.id === EVERYONE_MENTION_ID)) return mentions;
-  const already = new Set(mentions.filter((m) => m.kind === "user").map((m) => m.id));
-  const extra: ChatMention[] = participantIds
-    .filter((id) => !already.has(id))
-    .map((id) => ({ kind: "user", id, label: EVERYONE_MENTION_LABEL }));
-  return [...mentions, ...extra];
+/** Posição horizontal aproximada do gatilho dentro do textarea (largura do texto da linha até ele). */
+function caretLeft(ta: HTMLTextAreaElement, start: number): number {
+  const style = window.getComputedStyle(ta);
+  const line = ta.value.slice(0, start).split("\n").pop() ?? "";
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return 0;
+  ctx.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+  return (parseFloat(style.paddingLeft) || 0) + ctx.measureText(line).width;
 }
-
-/** Círculo com foto/inicial (+ bolinha de presença) pra pessoa; ícone lucide
- * num quadrado colorido (`MENTION_KIND_CONFIG`) pra tudo mais — "círculo pra
- * pessoa, quadrado pro resto". */
-export function MentionResultIcon({ opt }: { opt: MentionOption }) {
-  if (opt.kind === "user") {
-    const status = getStatus(opt.id);
-    return (
-      <span className="relative h-5 w-5 shrink-0">
-        {opt.photo ? (
-          <img src={opt.photo} alt="" className="h-5 w-5 rounded-full object-cover" />
-        ) : (
-          <span className="grid h-5 w-5 place-items-center rounded-full bg-sky-500/20 text-[11px] font-semibold text-sky-700 dark:text-sky-300">
-            {opt.label.trim()[0]?.toUpperCase() ?? "?"}
-          </span>
-        )}
-        <span
-          className={`absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full ring-1 ring-background ${STATUS_COLOR[status]}`}
-        />
-      </span>
-    );
-  }
-  if (opt.photo) {
-    return <img src={opt.photo} alt="" className="h-5 w-5 shrink-0 rounded object-cover" />;
-  }
-  const { Icon, badgeClass } = MENTION_KIND_CONFIG[opt.kind];
-  return (
-    <span
-      className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded ${badgeClass}`}
-    >
-      <Icon className="h-3 w-3" />
-    </span>
-  );
-}
-
-export function MentionResultRow({
-  opt,
-  highlighted,
-  onPick,
-}: {
-  opt: MentionOption;
-  highlighted: boolean;
-  onPick: (opt: MentionOption) => void;
-}) {
-  return (
-    <button
-      type="button"
-      onMouseDown={(e) => {
-        e.preventDefault();
-        onPick(opt);
-      }}
-      className={`flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs ${
-        highlighted ? "bg-muted" : "hover:bg-muted/60"
-      }`}
-    >
-      <MentionResultIcon opt={opt} />
-      <span className="min-w-0 flex-1 truncate">{opt.label}</span>
-      {opt.hint && (
-        <span className="shrink-0 truncate text-[11px] text-muted-foreground">{opt.hint}</span>
-      )}
-    </button>
-  );
-}
-
-const MENTION_ALL_TAB_CAP = 5;
-const MENTION_KIND_TAB_CAP = 20;
 
 export const MentionTextarea = forwardRef<
   HTMLTextAreaElement,
   {
     value: string;
     onChange: (v: string) => void;
-    options: MentionOption[];
+    /** Pessoas elegíveis nesta conversa (vazio em conversa direta). */
+    people: ChatMember[];
+    /** `false` em conversa direta: o `@` não faz nada. */
+    mentionsEnabled: boolean;
+    /** Tarefas, projetos, campanhas e clientes (gatilho `#`). */
+    references: MentionOption[];
+    /** Pessoas que participaram/foram mencionadas há pouco, mais recente primeiro. */
+    recentUserIds?: string[];
     autoFocus?: boolean;
     rows?: number;
     onEnterSubmit?: () => void;
@@ -196,30 +88,32 @@ export const MentionTextarea = forwardRef<
     className?: string;
   }
 >(function MentionTextarea(
-  { value, onChange, options, autoFocus, rows = 1, onEnterSubmit, placeholder, className },
+  {
+    value,
+    onChange,
+    people,
+    mentionsEnabled,
+    references,
+    recentUserIds,
+    autoFocus,
+    rows = 1,
+    onEnterSubmit,
+    placeholder,
+    className,
+  },
   forwardedRef,
 ) {
   const taRef = useRef<HTMLTextAreaElement>(null);
   useImperativeHandle(forwardedRef, () => taRef.current as HTMLTextAreaElement);
-  const searchRef = useRef<HTMLInputElement>(null);
-  const [query, setQuery] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [triggerAt, setTriggerAt] = useState(-1);
+  const [trigger, setTrigger] = useState<MentionTrigger | null>(null);
   const [highlight, setHighlight] = useState(0);
-  const [tab, setTab] = useState<MentionKind | "all">("all");
-
-  const kindsWithOptions = useMemo(
-    () => MENTION_KIND_ORDER.filter((k) => options.some((o) => o.kind === k)),
-    [options],
-  );
-  const showTabs = kindsWithOptions.length > 1;
+  const [left, setLeft] = useState(0);
 
   useEffect(() => {
     if (autoFocus) taRef.current?.focus();
   }, [autoFocus]);
 
-  // Cresce junto com o texto (até o teto de max-h-40) em vez de ficar com
-  // altura fixa e depender só da barra de rolagem interna pra textos longos.
+  // Cresce junto com o texto (até o teto de max-h-40).
   useEffect(() => {
     const el = taRef.current;
     if (!el) return;
@@ -227,112 +121,94 @@ export const MentionTextarea = forwardRef<
     el.style.height = `${el.scrollHeight}px`;
   }, [value]);
 
-  // A busca digitada na caixinha do menu tem prioridade sobre o texto após
-  // o "@" na mensagem — deixa procurar uma tarefa/pessoa sem precisar
-  // digitar o nome dela dentro da própria mensagem.
-  const effectiveQuery = search || query || "";
-  const trimmedQuery = effectiveQuery.trim();
+  // Em conversa direta qualquer gatilho `@` pendente é descartado (ex.: ao trocar de conversa).
+  useEffect(() => {
+    if (!mentionsEnabled) setTrigger((t) => (t?.char === "@" ? null : t));
+  }, [mentionsEnabled]);
 
-  // Sem busca (menu recém-aberto com só "@"): ordena só por `boost` de
-  // contexto — é literalmente a seção "Recentes" (pessoas do canal/DM,
-  // tarefas/campanha do canal ativo etc.), sem tabela nova nenhuma. Com
-  // busca: `matchScore` decide primeiro, `boost` só desempata.
-  const scored = useMemo(() => {
-    if (query === null) return [];
-    return options
-      .map((o) => ({ o, score: trimmedQuery ? matchScore(o.label, trimmedQuery) : 0 }))
-      .filter(({ score }) => !trimmedQuery || score > 0)
-      .sort((a, b) => {
-        if (trimmedQuery && a.score !== b.score) return b.score - a.score;
-        return (b.o.boost ?? 0) - (a.o.boost ?? 0);
-      })
+  const peopleItems = useMemo<{ items: MentionAutocompleteItem[]; hasMore: boolean }>(() => {
+    if (trigger?.char !== "@") return { items: [], hasMore: false };
+    const ranked = rankPeople(people, trigger.query, {
+      recentIds: recentUserIds,
+      limit: PEOPLE_LIMIT + 1,
+    });
+    const q = normalizeForSearch(trigger.query);
+    const items: MentionAutocompleteItem[] = ranked
+      .slice(0, PEOPLE_LIMIT)
+      .map((r) => ({ type: "person", member: r.member }));
+    if (people.length > 1 && (!q || normalizeForSearch("todos participantes").includes(q))) {
+      items.unshift({ type: "everyone" });
+    }
+    return { items, hasMore: ranked.length > PEOPLE_LIMIT };
+  }, [trigger, people, recentUserIds]);
+
+  const referenceItems = useMemo<MentionOption[]>(() => {
+    if (trigger?.char !== "#") return [];
+    return references
+      .map((o) => ({ o, score: matchScore(o.label, trigger.query) }))
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => b.score - a.score || (b.o.boost ?? 0) - (a.o.boost ?? 0))
+      .slice(0, REFERENCE_LIMIT)
       .map(({ o }) => o);
-  }, [query, options, trimmedQuery]);
+  }, [trigger, references]);
 
-  // Aba "Todos": agrupado por tipo, até MENTION_ALL_TAB_CAP por grupo, com
-  // "Ver todos" quando há mais — cada item já carrega o índice plano (`idx`)
-  // usado pra navegação por teclado bater com a ordem visual.
-  const groupedForAll = useMemo(() => {
-    if (tab !== "all") return [];
-    let idx = 0;
-    return MENTION_KIND_ORDER.map((k) => {
-      const inKind = scored.filter((o) => o.kind === k);
-      const items = inKind.slice(0, MENTION_ALL_TAB_CAP).map((o) => ({ o, idx: idx++ }));
-      return { kind: k, items, total: inKind.length };
-    }).filter((g) => g.items.length > 0);
-  }, [scored, tab]);
+  const activeCount = trigger?.char === "@" ? peopleItems.items.length : referenceItems.length;
+  const open = trigger !== null && activeCount > 0;
 
-  const singleKindItems = useMemo(() => {
-    if (tab === "all") return [];
-    return scored.filter((o) => o.kind === tab).slice(0, MENTION_KIND_TAB_CAP);
-  }, [scored, tab]);
-
-  const filtered = useMemo(
-    () => (tab === "all" ? groupedForAll.flatMap((g) => g.items.map((x) => x.o)) : singleKindItems),
-    [tab, groupedForAll, singleKindItems],
-  );
-
-  const goToKind = (k: MentionKind | "all") => {
-    setTab(k);
-    setSearch("");
-    setHighlight(0);
-  };
-
-  const updateQuery = (text: string, caret: number) => {
-    const before = text.slice(0, caret);
-    const at = before.lastIndexOf("@");
-    if (at < 0) return setQuery(null);
-    const prev = at === 0 ? " " : before[at - 1];
-    if (prev !== " " && prev !== "\n") return setQuery(null);
-    const q = before.slice(at + 1);
-    if (/\s/.test(q)) return setQuery(null);
-    const justOpened = query === null;
-    setTriggerAt(at);
-    setQuery(q);
-    setHighlight(0);
-    // Só reseta a aba quando o menu está abrindo (não a cada tecla digitada)
-    // — sempre abre em "Todos", que já mostra tudo agrupado por tipo.
-    if (justOpened) {
-      setTab("all");
-      setSearch("");
+  const syncTrigger = (text: string, caret: number) => {
+    const next = detectMentionTrigger(text, caret, mentionsEnabled);
+    setTrigger((prev) => {
+      if (!next) return null;
+      if (!prev || prev.start !== next.start || prev.char !== next.char) setHighlight(0);
+      return next;
+    });
+    if (next && taRef.current) {
+      const ta = taRef.current;
+      const menuWidth = next.char === "@" ? 288 : 320;
+      const max = Math.max(0, ta.clientWidth - Math.min(menuWidth, window.innerWidth - 32));
+      setLeft(Math.min(caretLeft(ta, next.start), max));
     }
   };
 
-  const pick = (opt: MentionOption) => {
-    if (triggerAt < 0) return;
-    const caret = taRef.current?.selectionStart ?? value.length;
-    const next = value.slice(0, triggerAt) + "@" + opt.label + " " + value.slice(caret);
+  const insert = (token: string) => {
+    if (!trigger) return;
+    const ta = taRef.current;
+    const caret = ta?.selectionStart ?? value.length;
+    const next = value.slice(0, trigger.start) + token + " " + value.slice(caret);
     onChange(next);
-    setQuery(null);
-    setSearch("");
-    setTriggerAt(-1);
+    setTrigger(null);
     requestAnimationFrame(() => {
-      taRef.current?.focus();
-      const pos = triggerAt + opt.label.length + 2;
-      taRef.current?.setSelectionRange(pos, pos);
+      ta?.focus();
+      const pos = trigger.start + token.length + 1;
+      ta?.setSelectionRange(pos, pos);
     });
   };
 
-  const pickerKeyDown = (e: KeyboardEvent) => {
-    if (query === null || filtered.length === 0) return false;
+  const pickPerson = (item: MentionAutocompleteItem) =>
+    insert("@" + (item.type === "everyone" ? EVERYONE_MENTION_LABEL : item.member.name));
+  const pickReference = (opt: MentionOption) => insert("#" + opt.label);
+
+  const handlePickerKey = (e: KeyboardEvent): boolean => {
+    if (!open) return false;
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setHighlight((h) => (h + 1) % filtered.length);
+      setHighlight((h) => (h + 1) % activeCount);
       return true;
     }
     if (e.key === "ArrowUp") {
       e.preventDefault();
-      setHighlight((h) => (h - 1 + filtered.length) % filtered.length);
+      setHighlight((h) => (h - 1 + activeCount) % activeCount);
       return true;
     }
     if (e.key === "Enter" || e.key === "Tab") {
       e.preventDefault();
-      pick(filtered[highlight]);
+      if (trigger?.char === "@") pickPerson(peopleItems.items[highlight] ?? peopleItems.items[0]);
+      else pickReference(referenceItems[highlight] ?? referenceItems[0]);
       return true;
     }
     if (e.key === "Escape") {
-      setQuery(null);
-      setSearch("");
+      e.preventDefault();
+      setTrigger(null);
       return true;
     }
     return false;
@@ -345,10 +221,18 @@ export const MentionTextarea = forwardRef<
         value={value}
         onChange={(e) => {
           onChange(e.target.value);
-          updateQuery(e.target.value, e.target.selectionStart);
+          syncTrigger(e.target.value, e.target.selectionStart);
         }}
+        onKeyUp={(e) => {
+          // Setas ←/→ e cliques movem o cursor sem mudar o texto: reavalia o gatilho.
+          if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+            syncTrigger(e.currentTarget.value, e.currentTarget.selectionStart);
+          }
+        }}
+        onClick={(e) => syncTrigger(e.currentTarget.value, e.currentTarget.selectionStart)}
+        onBlur={() => setTrigger(null)}
         onKeyDown={(e) => {
-          if (pickerKeyDown(e)) return;
+          if (handlePickerKey(e)) return;
           if (e.key === "Enter" && !e.shiftKey && onEnterSubmit) {
             e.preventDefault();
             onEnterSubmit();
@@ -356,119 +240,34 @@ export const MentionTextarea = forwardRef<
         }}
         rows={rows}
         placeholder={placeholder}
+        aria-autocomplete={open ? "list" : undefined}
         className={
-          // `w-full block` é a parte que importa: o wrapper (`.relative`,
-          // linha acima) é `display:block`, não `flex` — a classe Tailwind
-          // `flex-1` que os callers às vezes passam aqui não tem NENHUM
-          // efeito num filho de um container que não é flex. Sem `w-full`,
-          // um `<textarea>` cai no comportamento padrão do navegador
-          // (`display:inline-block`, largura baseada em `cols`, ~20
-          // caracteres) — era exatamente essa a causa da área digitável
-          // aparecer estreita e centralizada no Chat V2, mesmo com bastante
-          // espaço disponível ao redor.
+          // `w-full block`: o wrapper é `display:block`; sem isso o textarea cai na largura padrão
+          // do navegador (~20 colunas). Ver histórico do Chat V2.
           className ??
           "block max-h-40 min-h-[28px] w-full resize-none overflow-y-auto rounded border border-border bg-background px-2 py-1 text-base outline-none focus:ring-1 focus:ring-ring md:text-sm"
         }
       />
-      {query !== null && options.length > 0 && (
-        <div className="absolute bottom-full left-0 z-20 mb-1 flex max-h-[28rem] w-96 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-md border border-border bg-background shadow-lg">
-          {showTabs && (
-            <div className="flex shrink-0 overflow-x-auto border-b border-border">
-              <button
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => goToKind("all")}
-                className={`shrink-0 px-2.5 py-1.5 text-[11px] font-medium ${
-                  tab === "all"
-                    ? "border-b-2 border-foreground text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Todos
-              </button>
-              {kindsWithOptions.map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => goToKind(k)}
-                  className={`shrink-0 px-2.5 py-1.5 text-[11px] font-medium ${
-                    tab === k
-                      ? "border-b-2 border-foreground text-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {MENTION_KIND_CONFIG[k].label}
-                </button>
-              ))}
-            </div>
-          )}
-          <div className="shrink-0 border-b border-border p-1.5">
-            <input
-              ref={searchRef}
-              type="text"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setHighlight(0);
-              }}
-              onKeyDown={(e) => {
-                pickerKeyDown(e);
-              }}
-              placeholder={
-                tab === "all"
-                  ? "Buscar..."
-                  : `Buscar ${MENTION_KIND_CONFIG[tab].label.toLowerCase()}...`
-              }
-              className="w-full rounded border border-border bg-background px-2 py-1 text-base outline-none focus:ring-1 focus:ring-ring md:text-xs"
-            />
-          </div>
-          <ul className="min-h-0 flex-1 overflow-auto py-1">
-            {filtered.length === 0 ? (
-              <li className="px-2 py-3 text-center text-[11px] text-muted-foreground">
-                {trimmedQuery ? `Nenhum resultado para "${trimmedQuery}"` : "Nada encontrado"}
-              </li>
-            ) : tab === "all" ? (
-              <>
-                {!trimmedQuery && (
-                  <li className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Recentes
-                  </li>
-                )}
-                {groupedForAll.map((g) => (
-                  <li key={g.kind} className="mb-1 last:mb-0">
-                    <p className="px-2 pb-0.5 pt-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      {MENTION_KIND_CONFIG[g.kind].label}
-                    </p>
-                    <ul>
-                      {g.items.map(({ o, idx }) => (
-                        <li key={o.kind + ":" + o.id}>
-                          <MentionResultRow opt={o} highlighted={idx === highlight} onPick={pick} />
-                        </li>
-                      ))}
-                    </ul>
-                    {g.total > g.items.length && (
-                      <button
-                        type="button"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => goToKind(g.kind)}
-                        className="w-full px-2 py-1 text-left text-[11px] font-medium text-muted-foreground hover:text-foreground"
-                      >
-                        Ver todos ({g.total})
-                      </button>
-                    )}
-                  </li>
-                ))}
-              </>
-            ) : (
-              singleKindItems.map((o, i) => (
-                <li key={o.kind + ":" + o.id}>
-                  <MentionResultRow opt={o} highlighted={i === highlight} onPick={pick} />
-                </li>
-              ))
-            )}
-          </ul>
-        </div>
+      {open && trigger?.char === "@" && (
+        <MentionAutocomplete
+          items={peopleItems.items}
+          query={trigger.query}
+          highlighted={highlight}
+          hasMore={peopleItems.hasMore}
+          onPick={pickPerson}
+          onHover={setHighlight}
+          style={{ left }}
+        />
+      )}
+      {open && trigger?.char === "#" && (
+        <EntityReferencePicker
+          items={referenceItems}
+          query={trigger.query}
+          highlighted={highlight}
+          onPick={pickReference}
+          onHover={setHighlight}
+          style={{ left }}
+        />
       )}
     </div>
   );

@@ -1,3 +1,4 @@
+import { sanitizeMentionsForConversation } from "@/lib/chat-mentions";
 import { useSyncExternalStore } from "react";
 import { loadProjetos, type Project, type ProjectStatus, DEFAULT_PROJECT_STATUS } from "./projetos";
 import type { CampanhaStatus } from "@/components/VincularCampanhaDialog";
@@ -615,6 +616,8 @@ export async function sendMessage(input: {
   replyToId?: string;
 }): Promise<ChatMessage | null> {
   const me = getMe();
+  // Ponto único de normalização: conversa direta nunca grava menção de pessoa.
+  const mentions = sanitizeMentionsForConversation(input.convoId, input.mentions);
   const authorId = input.system ? null : (currentUserId ?? (me.id === "me" ? null : me.id));
   if (!input.system && !authorId) return null;
   const authorName = input.system ? "Sistema" : me.name;
@@ -630,7 +633,7 @@ export async function sendMessage(input: {
     authorPhoto: authorPhoto ?? undefined,
     text: input.text,
     createdAt: Date.now(),
-    mentions: input.mentions ?? [],
+    mentions,
     attachments: input.attachments ?? [],
     reactions: {},
     replyToId: input.replyToId,
@@ -646,7 +649,7 @@ export async function sendMessage(input: {
       author_name: authorName,
       author_photo: authorPhoto,
       text: input.text,
-      mentions: (input.mentions ?? []) as unknown as never,
+      mentions: mentions as unknown as never,
       attachments: (input.attachments ?? []) as unknown as never,
       reply_to_id: input.replyToId ?? null,
     })
@@ -686,11 +689,13 @@ async function triggerChatPush(message: ChatMessage) {
 }
 
 export async function editMessage(id: string, text: string, mentions: ChatMention[]) {
+  const convoId = messagesCache.find((m) => m.id === id)?.convoId;
+  const safeMentions = convoId ? sanitizeMentionsForConversation(convoId, mentions) : mentions;
   const { data } = await supabase
     .from("chat_messages")
     .update({
       text,
-      mentions: mentions as unknown as never,
+      mentions: safeMentions as unknown as never,
       edited_at: new Date().toISOString(),
     })
     .eq("id", id)

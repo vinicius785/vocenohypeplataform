@@ -121,8 +121,10 @@ export const sendChatPush = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: z.infer<typeof ChatPushInput>) => ChatPushInput.parse(input))
   .handler(async ({ data, context }) => {
-    const recipients = new Set<string>(data.mentionedUserIds);
-    if (data.convoId.startsWith("dm:")) {
+    // Conversa direta não tem menção: só os dois participantes recebem (nunca por "mencionado").
+    const isDm = data.convoId.startsWith("dm:");
+    const recipients = new Set<string>(isDm ? [] : data.mentionedUserIds);
+    if (isDm) {
       for (const id of data.convoId.slice(3).split("|")) recipients.add(id);
     }
     recipients.delete(context.userId);

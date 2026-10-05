@@ -39,3 +39,23 @@ describe("splitMentionParts", () => {
     expect(mentionCount).toBe(1);
   });
 });
+
+describe("referências com '#' (separadas das menções de pessoa com '@')", () => {
+  const user = { kind: "user", id: "u1", label: "Lucas" } as const;
+  const task = { kind: "task", id: "t1", label: "Briefing" } as const;
+  it("pessoa é recortada por '@Nome' e referência por '#Rótulo'", () => {
+    expect(splitMentionParts("Oi @Lucas veja #Briefing hoje", [user, task])).toEqual([
+      "Oi ",
+      user,
+      " veja ",
+      task,
+      " hoje",
+    ]);
+  });
+  it("mensagens antigas com '@Rótulo' para entidade continuam renderizando", () => {
+    expect(splitMentionParts("veja @Briefing", [task])).toEqual(["veja ", task, ""]);
+  });
+  it("'@Rótulo' de uma entidade não é confundido com pessoa e '#Nome' de pessoa não casa", () => {
+    expect(splitMentionParts("#Lucas", [user])).toEqual(["#Lucas"]);
+  });
+});

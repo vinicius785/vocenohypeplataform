@@ -1,21 +1,25 @@
 {
-  "version": "1.308.0",
+  "version": "1.309.0",
   "releases": [
     {
-      "version": "1.308.0",
-      "summary": "Documentos com a mesma experiência em Projetos, Campanhas e Comercial.",
+      "version": "1.309.0",
+      "summary": "Menções do Chat redesenhadas: @ é para pessoas.",
       "modules": [
         {
-          "name": "PLATAFORMA",
-          "tagline": "Documentos",
+          "name": "CHAT",
+          "tagline": "Menções",
           "items": [
             {
-              "title": "Documentos em galeria, igual em toda a plataforma",
-              "description": "Projetos, Campanhas e Comercial agora usam a mesma tela de Documentos: cards em grade com o ícone da origem (Drive, Docs, Figma…), busca, filtros e o mesmo formulário para adicionar ou editar."
+              "title": "@ agora menciona só pessoas",
+              "description": "Ao digitar @ em canais aparece uma lista compacta de pessoas da conversa, com foto, nome e cargo, busca destacada e navegação pelo teclado. Em conversas diretas o @ é só texto."
             },
             {
-              "title": "Editar e copiar link em todos os contextos",
-              "description": "Em Campanhas e no Comercial também é possível editar o nome ou o link de um documento e copiar o link, como já era em Projetos."
+              "title": "Referências a tarefas e projetos com #",
+              "description": "Para citar uma tarefa, projeto, campanha ou cliente, digite # e o nome. Funciona em qualquer conversa e não gera aviso de menção."
+            },
+            {
+              "title": "@Todos funcionando em canais",
+              "description": "A opção “Todos os participantes” passa a avisar de fato cada pessoa da conversa."
             }
           ]
         }

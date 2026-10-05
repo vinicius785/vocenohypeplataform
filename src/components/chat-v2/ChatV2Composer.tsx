@@ -7,6 +7,9 @@ import {
   uploadChatAttachment,
   REACTION_EMOJIS,
   loadMembers,
+  loadChannels,
+  loadMessages,
+  getMe,
   loadDraftFromDb,
   saveDraftToDb,
   deleteDraftFromDb,
@@ -17,37 +20,78 @@ import { useClientes } from "@/lib/clientes-store";
 import { loadProjetos } from "@/lib/projetos";
 import { useTaskDirectory } from "@/lib/task-directory";
 import type { MentionOption } from "@/lib/mention-kinds";
+import { extractUsedMentions, MentionTextarea } from "@/components/chat/MentionTextarea";
 import {
-  useMentions,
-  extractUsedMentions,
-  MentionTextarea,
-} from "@/components/chat/MentionTextarea";
+  canMentionPeople,
+  eligibleMentionMembers,
+  expandEveryoneMention,
+  sanitizeMentionsForConversation,
+} from "@/lib/chat-mentions";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { VoiceRecorderBar } from "@/components/chat/VoiceRecorderBar";
 import { computeComposerPlaceholder } from "./composer-placeholder";
 
-/** Fonte das opções de @menção do composer — mesmos 5 tipos do Chat V1
- * (pessoa/tarefa/projeto/campanha/cliente), reaproveitando `useMentions`/
- * `MentionTextarea` (extraídos de `ChatSection.tsx`) em vez de duplicar a
- * lógica. Sem `MentionContext` de ranking por enquanto (o card de
- * relevância por canal/DM do V1 fica pra uma rodada futura) — a busca e
- * a navegação por tipo já funcionam iguais. */
-function useV2MentionOptions() {
+/** Fontes do composer, separadas por responsabilidade:
+ *  - `@` → MENÇÃO: só pessoas elegíveis desta conversa (nenhuma em conversa direta);
+ *  - `#` → REFERÊNCIA a tarefa/projeto/campanha/cliente (qualquer conversa). */
+function useV2MentionSources(convoId: string) {
   const members = loadMembers();
+  const channels = loadChannels();
   const tasks = useTaskDirectory();
   const clientes = useClientes();
-  const projects = useMemo<MentionOption[]>(
-    () =>
-      loadProjetos().map((p) => ({ kind: "project", id: p.id, label: p.name, hint: "Projeto" })),
+  const meId = getMe().id;
+
+  const mentionsEnabled = canMentionPeople(convoId);
+  const people = useMemo(
+    () => eligibleMentionMembers({ convoId, members, channels, meId }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [tasks],
+    [convoId, members.length, channels, meId],
   );
-  const campaigns = useMemo<MentionOption[]>(() => {
-    const out: MentionOption[] = [];
+
+  // Pessoas que falaram há pouco nesta conversa (mais recente primeiro) — prioridade quando só se
+  // digita "@". Usa as mensagens que o Chat já tem em memória; nada novo é consultado.
+  const recentUserIds = useMemo(() => {
+    if (!mentionsEnabled) return [];
+    const ids: string[] = [];
+    const msgs = loadMessages();
+    for (let i = msgs.length - 1; i >= 0 && ids.length < 12; i--) {
+      const m = msgs[i];
+      if (m.convoId === convoId && m.authorId !== meId && !ids.includes(m.authorId)) {
+        ids.push(m.authorId);
+      }
+    }
+    return ids;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [convoId, mentionsEnabled, meId]);
+
+  const references = useMemo<MentionOption[]>(() => {
+    const t: MentionOption[] = tasks.map((x) => ({
+      kind: "task",
+      id: x.id,
+      label: x.label?.trim() || "Tarefa sem título",
+      hint: x.project ? `Projeto: ${x.project}` : undefined,
+      campanhaId: x.campanhaId,
+      projectId: x.projectId,
+    }));
+    const projects: MentionOption[] = loadProjetos().map((p) => ({
+      kind: "project",
+      id: p.id,
+      label: p.name,
+      hint: "Projeto",
+    }));
+    const campaigns: MentionOption[] = [];
+    const clientOptions: MentionOption[] = [];
     for (const c of clientes) {
+      clientOptions.push({
+        kind: "client",
+        id: c.id,
+        label: c.empresa,
+        photo: c.photo,
+        hint: "Cliente",
+      });
       for (const camp of c.campanhas ?? []) {
-        out.push({
+        campaigns.push({
           kind: "campaign",
           id: camp.id,
           label: camp.nome,
@@ -57,20 +101,13 @@ function useV2MentionOptions() {
         });
       }
     }
-    return out;
-  }, [clientes]);
-  const clientOptions = useMemo<MentionOption[]>(
-    () =>
-      clientes.map((c) => ({
-        kind: "client",
-        id: c.id,
-        label: c.empresa,
-        photo: c.photo,
-        hint: "Cliente",
-      })),
-    [clientes],
-  );
-  return useMentions(members, tasks, projects, campaigns, clientOptions, true);
+    // Rótulo vazio quebraria a busca e inseriria "#undefined": nunca entra.
+    return [...t, ...projects, ...campaigns, ...clientOptions].filter(
+      (o) => typeof o.label === "string" && o.label.trim() !== "",
+    );
+  }, [tasks, clientes]);
+
+  return { people, references, recentUserIds, mentionsEnabled };
 }
 
 export function ChatV2Composer({
@@ -108,7 +145,7 @@ export function ChatV2Composer({
   const [voiceMode, setVoiceMode] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
-  const mentionOptions = useV2MentionOptions();
+  const { people, references, recentUserIds, mentionsEnabled } = useV2MentionSources(convoId);
   const placeholder = computeComposerPlaceholder({ replyToId, conversationLabel, isThread });
 
   const insertEmoji = (emoji: string) => {
@@ -163,7 +200,16 @@ export function ChatV2Composer({
         const uploaded = await uploadChatAttachment(pf.file);
         if (uploaded) attachments.push(uploaded);
       }
-      const mentions: ChatMention[] = extractUsedMentions(trimmed, mentionOptions);
+      // Normalização central: em conversa direta nenhuma menção de PESSOA sobrevive.
+      const mentions: ChatMention[] = sanitizeMentionsForConversation(
+        convoId,
+        expandEveryoneMention(
+          extractUsedMentions(trimmed, people, references, {
+            includeEveryone: mentionsEnabled && people.length > 1,
+          }),
+          people.map((p) => p.id),
+        ),
+      );
       const result = await sendMessage({
         convoId,
         text: trimmed,
@@ -275,7 +321,10 @@ export function ChatV2Composer({
                 setText(v);
                 broadcastTyping(convoId);
               }}
-              options={mentionOptions}
+              people={people}
+              mentionsEnabled={mentionsEnabled}
+              references={references}
+              recentUserIds={recentUserIds}
               onEnterSubmit={() => void handleSend()}
               placeholder={placeholder}
               rows={1}

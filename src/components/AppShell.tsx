@@ -1761,6 +1761,8 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
         .filter(
           (m) =>
             m.authorId !== me.id &&
+            // Conversa direta não tem menção (registros antigos incluídos).
+            !m.convoId.startsWith("dm:") &&
             !seenMentions.has(m.id) &&
             m.mentions?.some((x) => x.kind === "user" && x.id === me.id),
         )

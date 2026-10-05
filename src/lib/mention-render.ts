@@ -17,11 +17,18 @@ export function splitMentionParts(
   const parts: (string | ChatMention)[] = [text];
   if (!mentions || mentions.length === 0) return parts;
   for (const m of mentions) {
-    const token = "@" + m.label;
+    // Pessoa: "@Nome". Referência a entidade (tarefa/projeto/campanha/cliente): "#Rótulo" — e,
+    // para mensagens antigas (anteriores à separação @/#), "@Rótulo" também continua valendo.
+    const tokens = m.kind === "user" ? ["@" + m.label] : ["#" + m.label, "@" + m.label];
     for (let i = 0; i < parts.length; i++) {
       const seg = parts[i];
       if (typeof seg !== "string") continue;
-      const idx = seg.indexOf(token);
+      let token = tokens[0];
+      let idx = seg.indexOf(token);
+      for (let t = 1; idx < 0 && t < tokens.length; t++) {
+        token = tokens[t];
+        idx = seg.indexOf(token);
+      }
       if (idx < 0) continue;
       const before = seg.slice(0, idx);
       const after = seg.slice(idx + token.length);
