@@ -29,6 +29,7 @@ import {
   ChevronDown,
   FolderOpen,
   Newspaper,
+  Radar,
   type LucideIcon,
 } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
@@ -225,6 +226,8 @@ function ProjetoPage() {
   const [blogEditingId, setBlogEditingId] = useState<string | null>(null);
   // Blog aberto por "Recursos": a página mostra só o Blog (lista e editor), não a página corrida.
   const [blogOpen, setBlogOpen] = useState(false);
+  // AEO Monitor aberto por "Recursos": mesma ideia — a página mostra só o monitor.
+  const [aeoOpen, setAeoOpen] = useState(false);
   const { id } = Route.useParams();
   const { taskId } = Route.useSearch();
   const navigate = useNavigate();
@@ -357,11 +360,34 @@ function ProjetoPage() {
   const availableSections = FEATURES.map((f) => f.key).filter((k) =>
     featuresWithHypeApp.includes(k),
   );
-  // Documentos e Blog não são mais seções empilhadas: abrem pelo menu "Recursos" do cabeçalho,
+  // Documentos, Blog e AEO Monitor não são mais seções empilhadas: abrem pelo menu "Recursos" do cabeçalho,
   // como em Campanhas e no Comercial.
   const hasDocs = availableSections.includes("documentos");
   const hasBlog = availableSections.includes("blog");
-  const sections = availableSections.filter((k) => k !== "documentos" && k !== "blog");
+  const hasAeo = availableSections.includes("aeo_monitor");
+  const sections = availableSections.filter(
+    (k) => k !== "documentos" && k !== "blog" && k !== "aeo_monitor",
+  );
+
+  if (aeoOpen) {
+    return (
+      <AppShell active="projetos" onSelect={goToSection}>
+        <PageContainer variant="wide" className="space-y-6">
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={() => setAeoOpen(false)}
+              className="inline-flex items-center gap-1 rounded-md text-xs text-text-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" /> {project.name}
+            </button>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">AEO Monitor</h1>
+          </div>
+          <AeoMonitorPanel />
+        </PageContainer>
+      </AppShell>
+    );
+  }
 
   if (blogOpen || (blogEditingId && project.blog?.some((b) => b.id === blogEditingId))) {
     return (
@@ -439,7 +465,7 @@ function ProjetoPage() {
             </div>
 
             <div className="flex shrink-0 items-center gap-1.5 self-start">
-              {(hasDocs || hasBlog) && (
+              {(hasDocs || hasBlog || hasAeo) && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="sm" aria-haspopup="menu">
@@ -457,6 +483,12 @@ function ProjetoPage() {
                             {project.docs.length}
                           </span>
                         )}
+                      </DropdownMenuItem>
+                    )}
+                    {hasAeo && (
+                      <DropdownMenuItem onSelect={() => setAeoOpen(true)}>
+                        <Radar className="h-3.5 w-3.5 text-text-secondary" />
+                        <span className="min-w-0 flex-1 truncate">AEO Monitor</span>
                       </DropdownMenuItem>
                     )}
                     {hasBlog && (
