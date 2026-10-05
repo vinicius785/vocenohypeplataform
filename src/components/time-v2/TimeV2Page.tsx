@@ -401,7 +401,6 @@ export function TimeV2Page() {
             tasksByDay={weekdayTasksByDay}
             memberRows={deliveryMemberRows}
             weeklyTrendPct={weeklyTrendPct}
-            insights={teamInsights}
             onOpenTask={openTask}
             onOpenMember={setViewing}
           />

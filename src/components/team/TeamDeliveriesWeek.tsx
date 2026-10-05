@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/dialog";
 import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { WeekdayBucket } from "@/lib/score";
-import type { Insight } from "@/lib/insights-engine";
 import type { DashTask, DashTaskFlat } from "@/lib/task-aggregation";
 import type { Member } from "@/components/TimeSection";
 import { avatarAccent, initialsOf } from "./member-ui";
@@ -134,13 +133,10 @@ function DeliveryTasksDialog({
 
 function MemberRow({
   row,
-  insights,
   onOpenTasks,
   onOpenMember,
 }: {
   row: DeliveryMemberRow;
-  /** Insights de ATENÇÃO deste membro (os mesmos de "Insights do Time"). */
-  insights: Insight[];
   onOpenTasks: () => void;
   onOpenMember: () => void;
 }) {
@@ -209,19 +205,15 @@ function MemberRow({
         </span>
       </div>
 
-      {/* Expansão inline, compacta: SÓ o que a linha não mostra — distribuição da semana, ritmo
-       * (média diária e melhor dia) e, se existir, atenção. As médias ficam na linha. */}
+      {/* Expansão inline, compacta: SÓ o que a linha não mostra — distribuição da semana e ritmo
+       * (média diária e melhor dia). As médias ficam na linha. */}
       <div
         className={`grid transition-[grid-template-rows] duration-200 motion-reduce:transition-none ${expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
         aria-hidden={!expanded}
         inert={!expanded}
       >
         <div className="overflow-hidden">
-          <div
-            className={`grid gap-x-10 gap-y-4 border-t border-border/60 bg-muted/20 px-4 py-3 ${
-              insights.length > 0 ? "md:grid-cols-[1.6fr_1fr_1.3fr]" : "md:grid-cols-[1.6fr_1fr]"
-            }`}
-          >
+          <div className="grid gap-x-10 gap-y-4 border-t border-border/60 bg-muted/20 px-4 py-3 md:grid-cols-[1.6fr_1fr]">
             <div>
               <p className="text-[11px] font-medium uppercase tracking-wide text-text-secondary">
                 Distribuição da semana
@@ -267,28 +259,6 @@ function MemberRow({
                 </div>
               </dl>
             </div>
-
-            {insights.length > 0 && (
-              <div>
-                <p className="text-[11px] font-medium uppercase tracking-wide text-warning-soft-foreground">
-                  Atenção
-                </p>
-                <ul className="mt-2 space-y-1.5">
-                  {insights.slice(0, 2).map((i) => (
-                    <li key={`${i.ruleId}:${i.memberId}`} className="text-xs text-foreground">
-                      {i.text}
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  type="button"
-                  onClick={onOpenMember}
-                  className="mt-1.5 cursor-pointer text-[11px] font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-                >
-                  Ver {member.name.split(" ")[0]} →
-                </button>
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -348,7 +318,6 @@ export function TeamDeliveriesWeek({
    * `null` quando a semana anterior não teve nenhuma entrega nos mesmos
    * dias (sem base pra calcular %). */
   weeklyTrendPct,
-  insights = [],
   onOpenTask,
   onOpenMember,
 }: {
@@ -357,8 +326,6 @@ export function TeamDeliveriesWeek({
   tasksByDay: Map<number, DashTaskFlat[]>;
   memberRows: DeliveryMemberRow[];
   weeklyTrendPct: number | null;
-  /** Insights do time (`generateInsights`); a expansão de cada membro mostra os de ATENÇÃO dele. */
-  insights?: Insight[];
   onOpenTask: (t: DashTask) => void;
   onOpenMember: (m: Member, opts?: { showComposition?: boolean }) => void;
 }) {
@@ -557,9 +524,6 @@ export function TeamDeliveriesWeek({
               <MemberRow
                 key={row.member.id}
                 row={row}
-                insights={insights.filter(
-                  (i) => i.memberId === row.member.id && i.nature === "atencao",
-                )}
                 onOpenTasks={() => setOpenMemberTasks(row)}
                 onOpenMember={() => onOpenMember(row.member)}
               />
