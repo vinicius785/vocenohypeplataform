@@ -5,6 +5,7 @@ import {
   contratoInfo,
   hasBankData,
   paymentState,
+  paymentTone,
   remuneracaoSummary,
 } from "./influencer-finance";
 
@@ -98,5 +99,17 @@ describe("dados para pagamento e contrato", () => {
       kind: "pdf",
       name: "Contrato_Influenciador.pdf",
     });
+  });
+});
+
+describe("tom do pagamento", () => {
+  it("cor só para estado: pago verde, pendente âmbar, vencido/recusado vermelho", () => {
+    expect(paymentTone("pago")).toBe("ok");
+    expect(paymentTone("pendente")).toBe("pending");
+    expect(paymentTone("vencido")).toBe("alert");
+    expect(paymentTone("recusado")).toBe("alert");
+    expect(paymentTone("agendado")).toBe("info");
+    expect(paymentTone("nao_iniciado")).toBe("neutral");
+    expect(paymentTone("cancelado")).toBe("neutral");
   });
 });

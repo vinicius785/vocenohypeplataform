@@ -45,7 +45,7 @@ export function HeaderContact({
     );
   }
   return (
-    <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-foreground/90">
+    <p className="mt-0.5 flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs text-foreground/90">
       {phone && (
         <span className="inline-flex items-center gap-0.5">
           <span>{phone}</span>
@@ -70,11 +70,6 @@ export function HeaderContact({
               <MessageCircle className="h-3 w-3" />
             </a>
           )}
-        </span>
-      )}
-      {phone && mail && (
-        <span aria-hidden className="text-text-secondary">
-          ·
         </span>
       )}
       {mail && (

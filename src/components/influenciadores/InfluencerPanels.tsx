@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { ChevronRight, MoreVertical, Plus, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
@@ -197,41 +197,6 @@ export function ClientFeedbackBlock({
         </p>
         <p className="text-xs font-medium text-foreground">{f.statusLabel}</p>
       </div>
-    </section>
-  );
-}
-
-/** MAIS INFORMAÇÕES — uma única área recolhível para o que é consultado raramente. */
-export function MoreInfo({
-  open,
-  onToggle,
-  summary,
-  children,
-}: {
-  open: boolean;
-  onToggle: () => void;
-  summary?: string;
-  children: ReactNode;
-}) {
-  return (
-    <section aria-label="Mais informações" className="space-y-3">
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        className="flex w-full items-center justify-between gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-      >
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
-          Mais informações
-          {summary && (
-            <span className="ml-1.5 font-normal normal-case tracking-normal">· {summary}</span>
-          )}
-        </span>
-        <ChevronRight
-          className={cn("h-4 w-4 text-text-secondary transition-transform", open && "rotate-90")}
-        />
-      </button>
-      {open && <div className="space-y-5">{children}</div>}
     </section>
   );
 }

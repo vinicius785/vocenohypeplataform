@@ -2,20 +2,12 @@ import { canTransitionInflu, type EntregaStage, type InfluStatus } from "@/lib/c
 import { deriveEntregaNextStep, type EntregaEngineActionKind } from "@/lib/entrega-engine";
 import { entregaAjusteView, type AjustePhase } from "@/lib/entrega-ajustes";
 import type { Entrega, Influ } from "@/lib/influencer-model";
-import type { PaymentStateKey } from "@/lib/influencer-finance";
 
 /**
  * Regras PURAS da V2 do detalhe do influenciador: "próxima melhor ação", tom de cada entrega e
- * feedbacks do cliente. Só LÊ o estado que já existe (status, entregas, ciclo de ajustes e
- * financeiro) — nenhuma regra de negócio nova.
+ * feedbacks do cliente. Só LÊ o estado que já existe (status, entregas e ciclo de ajustes) —
+ * nenhuma regra de negócio nova. O financeiro NÃO entra aqui: ele vive em Recursos → Financeiro.
  */
-
-export type FinanceSignal = {
-  /** O usuário enxerga o financeiro do influenciador neste painel. */
-  enabled: boolean;
-  hasRemuneracao: boolean;
-  payment: PaymentStateKey;
-};
 
 export type NextAction =
   | { kind: "avancar_status"; area: string; hint: string; label: string; to: InfluStatus }
@@ -31,13 +23,6 @@ export type NextAction =
       action: EntregaEngineActionKind;
       /** Quantas outras entregas também pedem ação (sem listá-las — só um número discreto). */
       others: number;
-    }
-  | {
-      kind: "financeiro";
-      area: string;
-      hint: string;
-      label: string;
-      step: "definir_remuneracao" | "aprovar_pagamento";
     }
   | {
       kind: "aguardando";
@@ -76,7 +61,7 @@ function nextPrazo(e: Entrega): string | undefined {
     .at(-1);
 }
 
-export function nextBestAction(influ: Influ, fin: FinanceSignal): NextAction {
+export function nextBestAction(influ: Influ): NextAction {
   switch (influ.status) {
     case "RECUSADO":
       return { kind: "nenhuma", area: "Status", hint: "Este influenciador não foi aprovado." };
@@ -139,25 +124,6 @@ export function nextBestAction(influ: Influ, fin: FinanceSignal): NextAction {
       label: top.step.actionLabel ?? "Abrir entrega",
       action: top.step.action,
       others: actionable.length - 1,
-    };
-  }
-
-  if (fin.enabled && !fin.hasRemuneracao) {
-    return {
-      kind: "financeiro",
-      area: "Financeiro",
-      hint: "Nenhuma remuneração definida",
-      label: "Definir remuneração",
-      step: "definir_remuneracao",
-    };
-  }
-  if (fin.enabled && fin.payment === "pendente") {
-    return {
-      kind: "financeiro",
-      area: "Financeiro",
-      hint: "Solicitação de pagamento aguardando aprovação",
-      label: "Aprovar pagamento",
-      step: "aprovar_pagamento",
     };
   }
 

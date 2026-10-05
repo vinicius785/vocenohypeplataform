@@ -35,6 +35,24 @@ export const PAYMENT_STATE_LABEL: Record<PaymentStateKey, string> = {
   cancelado: "Cancelado",
 };
 
+/** Tom do ponto de estado do pagamento (cor só comunica estado). */
+export type PaymentTone = "ok" | "pending" | "alert" | "info" | "neutral";
+export function paymentTone(state: PaymentStateKey): PaymentTone {
+  switch (state) {
+    case "pago":
+      return "ok";
+    case "pendente":
+      return "pending";
+    case "vencido":
+    case "recusado":
+      return "alert";
+    case "agendado":
+      return "info";
+    default:
+      return "neutral";
+  }
+}
+
 /** O que o módulo Financeiro sabe sobre o lançamento deste influenciador (se tiver acesso). */
 export type PaymentExecution = {
   status?: "a_pagar" | "pago" | "vencido" | "cancelado" | string;

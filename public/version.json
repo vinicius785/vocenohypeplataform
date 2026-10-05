@@ -1,25 +1,29 @@
 {
-  "version": "1.333.0",
+  "version": "1.334.0",
   "releases": [
     {
-      "version": "1.333.0",
-      "summary": "Detalhe do influenciador: perfil e financeiro em linha única, feedback com link no título e atividade com o nome da entrega.",
+      "version": "1.334.0",
+      "summary": "Detalhe do influenciador enxuto: só operação na tela principal e uma camada de consulta em Recursos.",
       "modules": [
         {
           "name": "CAMPANHAS",
           "tagline": "Detalhe do influenciador",
           "items": [
             {
-              "title": "Perfil em uma linha",
-              "description": "Seguidores, interação, views e atenção juntos, sem caixas por métrica."
+              "title": "Tela principal só de operação",
+              "description": "Cabeçalho, próxima ação (quando houver), entregas, feedback do cliente (quando houver) e atividade. Perfil, financeiro e contexto saíram do fluxo principal."
             },
             {
-              "title": "Financeiro como linha-resumo",
-              "description": "Remuneração, pagamento, contrato e dados bancários numa linha clicável; abaixo, só o que falta fazer."
+              "title": "Recursos",
+              "description": "Novo menu no cabeçalho com Perfil e audiência, Financeiro, Contexto da campanha, Inscrição original, NPS e Outros dados, abertos dentro do próprio painel. Um ponto discreto avisa quando o financeiro tem pendências."
             },
             {
-              "title": "Feedback e atividade",
-              "description": "'Ver feedback completo' no título do bloco e eventos de atividade com o nome da entrega."
+              "title": "Financeiro em visão própria",
+              "description": "Remuneração, pagamento, dados bancários e contrato em linhas compactas, cada uma com seu estado e sua ação."
+            },
+            {
+              "title": "Cabeçalho sem o menu ⋯",
+              "description": "Status logo abaixo do nome; editar e remover da campanha ficam na edição do cabeçalho; o link do NPS passou para Recursos."
             }
           ]
         }
