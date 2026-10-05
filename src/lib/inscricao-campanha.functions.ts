@@ -396,10 +396,19 @@ export const submitInscricaoCampanha = createServerFn({ method: "POST" })
       cicloMes,
     };
 
+    // Vínculo REAL da participação ao mês (ciclo), além do `cicloMes` legado — sem isso o
+    // influenciador inscrito ficava "sem ciclo" e não aparecia por mês no Portal do Cliente.
+    const { ensureCampaignCycleIdAdmin } = await import("@/lib/campaign-cycles.server");
+    const campaignCycleId = await ensureCampaignCycleIdAdmin(
+      supabaseAdmin,
+      found.campanha.id,
+      cicloMes,
+    );
     const { error } = await supabaseAdmin.from("campanha_influenciadores").insert({
       id: influ.id,
       campanha_id: found.campanha.id,
       data: influ as unknown as never,
+      ...(campaignCycleId ? { campaign_cycle_id: campaignCycleId } : {}),
     });
     if (error) throwSafeDbError(error);
     const result = { ok: true as const, merged: false };

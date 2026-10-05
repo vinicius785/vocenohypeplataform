@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { barWidth } from "@/lib/audience-distribution";
+import { cicloMesLabel, participationMonth } from "@/lib/ciclo-mes";
+import { ensureCampaignCycleId } from "@/lib/campaign-cycles";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -583,7 +585,7 @@ export function InfluencerBoard({
   allowedFields,
   headerExtra,
   defaultCicloMes,
-  cicloMesOptions,
+  campanhaId,
   nps,
   hideTitle = false,
 }: {
@@ -607,11 +609,11 @@ export function InfluencerBoard({
    * influenciador criado ficava só com `createdAt`, que sempre bate no mês
    * corrente independente do mês selecionado no filtro. */
   defaultCicloMes?: string;
-  /** Lista de opções de mês (mesma de `buildMesReferenciaOptions`) — quando
-   * presente, o perfil do influenciador ganha um seletor pra mudar
-   * `cicloMes` manualmente (mover pra outro mês). `undefined`/vazio em
-   * campanhas não-recorrentes: sem seletor, nada muda. */
-  cicloMesOptions?: { value: string; label: string }[];
+  /** Campanha dona do board. Com `defaultCicloMes`, é usada para gravar o vínculo REAL da
+   * participação ao mês (`campaign_cycle_id`) quando um influenciador é adicionado. O mês nunca é
+   * escolhido no detalhe do influenciador: ele é o mês que está selecionado na campanha no
+   * momento em que o influenciador entra. */
+  campanhaId?: string;
   /** Quando o board vive numa seção que já tem título (página do Projeto). */
   hideTitle?: boolean;
 }) {
@@ -825,10 +827,25 @@ export function InfluencerBoard({
 
   // `InfluenciadorDialog` só cria (editar um influenciador existente abre o
   // perfil via `viewing`, que salva imediato campo a campo).
+  // Grava o ciclo real (`campaign_cycle_id`) das participações recém-adicionadas, em segundo plano:
+  // o `cicloMes` já foi carimbado na criação, então a tela não espera por isso.
+  const stampCycle = (ids: string[]) => {
+    if (!campanhaId || !defaultCicloMes) return;
+    void ensureCampaignCycleId(campanhaId, defaultCicloMes).then((cycleId) => {
+      if (!cycleId) return;
+      applyInflusChange(
+        latestInflusRef.current.map((x) =>
+          ids.includes(x.id) && !x.campaignCycleId ? { ...x, campaignCycleId: cycleId } : x,
+        ),
+      );
+    });
+  };
+
   const create = (i: Influ) => {
     const now = new Date().toISOString();
     const withStamps = { ...i, createdAt: now, updatedAt: now, cicloMes: defaultCicloMes };
     applyInflusChange([...latestInflusRef.current, withStamps]);
+    stampCycle([withStamps.id]);
     addToBankIfMissing(withStamps);
   };
 
@@ -1246,7 +1263,7 @@ export function InfluencerBoard({
         <InfluencerWorkspaceSheet
           influ={viewing}
           has={has}
-          cicloMesOptions={cicloMesOptions}
+          showCicloMes={defaultCicloMes !== undefined}
           onOpenChange={(o) => !o && setViewing(null)}
           onRemove={async () => {
             if (await removeInflu(viewing.id)) setViewing(null);
@@ -1281,23 +1298,22 @@ export function InfluencerBoard({
         currentInflus={influs}
         onAdd={(picked) => {
           const now = new Date().toISOString();
-          applyInflusChange([
-            ...latestInflusRef.current,
-            ...picked.map(
-              (b): Influ => ({
-                id: crypto.randomUUID(),
-                foto: b.foto,
-                nome: b.nome,
-                nicho: b.nicho,
-                redes: b.redes,
-                entregas: [],
-                status: "EM_CURADORIA",
-                createdAt: now,
-                updatedAt: now,
-                cicloMes: defaultCicloMes,
-              }),
-            ),
-          ]);
+          const added: Influ[] = picked.map(
+            (b): Influ => ({
+              id: crypto.randomUUID(),
+              foto: b.foto,
+              nome: b.nome,
+              nicho: b.nicho,
+              redes: b.redes,
+              entregas: [],
+              status: "EM_CURADORIA",
+              createdAt: now,
+              updatedAt: now,
+              cicloMes: defaultCicloMes,
+            }),
+          );
+          applyInflusChange([...latestInflusRef.current, ...added]);
+          stampCycle(added.map((x) => x.id));
           setBankPickerOpen(false);
         }}
       />
@@ -2906,7 +2922,7 @@ type InfluWorkspaceView = "detail" | "entrega" | "activity";
 function InfluencerWorkspaceSheet({
   influ,
   has,
-  cicloMesOptions,
+  showCicloMes,
   onOpenChange,
   onRemove,
   onSetStatus,
@@ -2921,7 +2937,7 @@ function InfluencerWorkspaceSheet({
 }: {
   influ: Influ;
   has: (k: InfluencerFieldKey) => boolean;
-  cicloMesOptions?: { value: string; label: string }[];
+  showCicloMes?: boolean;
   onOpenChange: (open: boolean) => void;
   onRemove: () => void;
   onSetStatus: (status: InfluStatus) => void;
@@ -3067,7 +3083,7 @@ function InfluencerWorkspaceSheet({
           <WorkspaceDetailHeader
             influ={influ}
             has={has}
-            cicloMesOptions={cicloMesOptions}
+            showCicloMes={showCicloMes}
             editingHeader={editingHeader}
             draft={draft}
             setDraft={setDraft}
@@ -3199,7 +3215,7 @@ function InfluencerWorkspaceSheet({
 function WorkspaceDetailHeader({
   influ,
   has,
-  cicloMesOptions,
+  showCicloMes,
   editingHeader,
   draft,
   setDraft,
@@ -3218,7 +3234,7 @@ function WorkspaceDetailHeader({
 }: {
   influ: Influ;
   has: (k: InfluencerFieldKey) => boolean;
-  cicloMesOptions?: { value: string; label: string }[];
+  showCicloMes?: boolean;
   nps?: InfluNpsBoardProp;
   editingHeader: boolean;
   draft: { nome: string; nicho: string; telefone: string; email: string };
@@ -3347,19 +3363,13 @@ function WorkspaceDetailHeader({
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-none text-muted-foreground">
                 {has("status") && <InfluStatusPill value={influ.status} onChange={onSetStatus} />}
-                {cicloMesOptions && cicloMesOptions.length > 0 && (
-                  <NativeSelect
-                    value={influ.cicloMes ?? ""}
-                    onChange={(e) => onPatch({ cicloMes: e.target.value })}
-                    aria-label="Mês de referência"
+                {showCicloMes && cicloMesLabel(participationMonth(influ)) && (
+                  <span
+                    className="text-muted-foreground"
+                    title="Mês da participação nesta campanha"
                   >
-                    {!influ.cicloMes && <option value="">Sem mês</option>}
-                    {cicloMesOptions.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </NativeSelect>
+                    {cicloMesLabel(participationMonth(influ))}
+                  </span>
                 )}
                 {has("redes") && influ.redes[0] && (
                   <span className="inline-flex items-center gap-1">

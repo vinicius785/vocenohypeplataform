@@ -1153,7 +1153,7 @@ function CampanhaDetail({
             onChange={persistVisibleInflus}
             exportName={c.nome}
             defaultCicloMes={isRecorrente ? monthFilter : undefined}
-            cicloMesOptions={isRecorrente ? monthOptions : undefined}
+            campanhaId={c.id}
             nps={npsBoardProp}
           />
         </section>

@@ -1,25 +1,17 @@
 {
-  "version": "1.306.0",
+  "version": "1.307.0",
   "releases": [
     {
-      "version": "1.306.0",
-      "summary": "Audiência do influenciador redesenhada, igual nos portais do Time e do Cliente.",
+      "version": "1.307.0",
+      "summary": "O mês de um influenciador passa a ser definido pela campanha.",
       "modules": [
         {
-          "name": "INFLUENCIADORES",
-          "tagline": "Audiência",
+          "name": "CAMPANHAS",
+          "tagline": "Influenciadores por mês",
           "items": [
             {
-              "title": "Audiência do influenciador redesenhada",
-              "description": "Gênero, faixa etária, países e cidades agora aparecem como listas com barras horizontais simples, em ordem do maior para o menor e com o percentual sempre visível. O gráfico de pizza saiu."
-            },
-            {
-              "title": "Mesma leitura no Portal do Cliente",
-              "description": "O cliente vê a audiência do influenciador com a mesma linguagem do time, nas telas de aprovação e de detalhe da campanha."
-            },
-            {
-              "title": "Edição da audiência mais clara",
-              "description": "No cadastro do influenciador, métricas e audiência ficam separadas, e cada percentual mostra a sua barra na hora."
+              "title": "Mês do influenciador definido pela campanha",
+              "description": "O seletor de mês saiu do detalhe do influenciador: o mês aparece só como informação (ex.: Outubro de 2026) e é o mês da campanha em que ele foi adicionado. Para outro mês, adicione o influenciador no mês desejado."
             }
           ]
         }
