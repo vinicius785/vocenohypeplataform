@@ -191,13 +191,13 @@ function chat() {
 // COMERCIAL — arpejo ascendente sincopado de Em7(9) (Mi–Sol–Si–Ré–Fá♯) que "fecha" em Ré maior:
 // otimista e sóbrio, com o pulso de um samba-canção.
 function commercial() {
-  const b = alloc(1.6);
-  nylon(b, M.E4, 0.0, { len: 0.4, amp: 0.45 });
-  nylon(b, M.G4, 0.09, { len: 0.4, amp: 0.45 });
-  nylon(b, M.B4, 0.2, { len: 0.45, amp: 0.5 });
-  nylon(b, M.D5, 0.29, { len: 0.5, amp: 0.5 });
-  nylon(b, M.Fs5, 0.42, { len: 0.45, amp: 0.55 });
-  strum(b, [M.D3, M.A3, M.Cs5, M.Fs5], 0.62, { gap: 0.025, len: 0.62, amp: 0.38 });
+  const b = alloc(1.1);
+  nylon(b, M.E4, 0.0, { len: 0.25, amp: 0.45 });
+  nylon(b, M.G4, 0.06, { len: 0.25, amp: 0.45 });
+  nylon(b, M.B4, 0.13, { len: 0.28, amp: 0.5 });
+  nylon(b, M.D5, 0.19, { len: 0.3, amp: 0.5 });
+  nylon(b, M.Fs5, 0.28, { len: 0.34, amp: 0.55 });
+  strum(b, [M.D3, M.A3, M.Cs5, M.Fs5], 0.4, { gap: 0.02, len: 0.4, amp: 0.38 });
   return lowpass(lowpass(b, 4200), 4200);
 }
 

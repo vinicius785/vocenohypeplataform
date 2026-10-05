@@ -6,7 +6,7 @@ A família sonora oficial: três sons curtos de **violão de nylon em Ré maior*
 | Arquivo | Evento | Duração | Desenho |
 | --- | --- | --- | --- |
 | `chat-notification.mp3` | Nova mensagem de Chat | ≈ 0,45 s | Curtíssimo: Fá♯4 → Dó♯5 (a sétima maior do Dmaj7), violão de nylon, quase sem cauda |
-| `commercial-notification.mp3` | Notificação Comercial (novo lead) | ≈ 1,4 s | Arpejo ascendente e sincopado de Em7(9) (Mi–Sol–Si–Ré–Fá♯) que fecha num acorde de Ré: otimista e sóbrio, pulso de samba-canção |
+| `commercial-notification.mp3` | Notificação Comercial (novo lead) | ≈ 1,0 s | Arpejo ascendente e sincopado de Em7(9) (Mi–Sol–Si–Ré–Fá♯) que fecha num acorde de Ré: otimista e sóbrio, pulso de samba-canção |
 | `meeting-notification.mp3` | Lembrete de reunião | ≈ 1,5 s | Cadência da bossa: Em7(9) dedilhado resolvendo em Dmaj7(9), com nota aguda ao final e cauda calma |
 
 Volume percebido equalizado (RMS ativo ≈ −21 dBFS nos três, pico ≤ −6 dBFS, sem clipping), MP3 mono,

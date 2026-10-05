@@ -9,7 +9,7 @@ export type SoundKind = "chat" | "commercial" | "meeting";
 
 /** Versão dos arquivos de áudio: entra na URL (`?v=`) para o navegador/CDN nunca servir uma versão
  * antiga em cache quando os sons forem refeitos. SUBIR este valor sempre que trocar um MP3. */
-export const SOUND_ASSETS_VERSION = "6";
+export const SOUND_ASSETS_VERSION = "7";
 const asset = (name: string) => `/audio/voce-no-hype/${name}.mp3?v=${SOUND_ASSETS_VERSION}`;
 
 export const SOUND_KINDS: SoundKind[] = ["chat", "commercial", "meeting"];
