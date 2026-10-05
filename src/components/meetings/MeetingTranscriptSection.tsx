@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FileText } from "lucide-react";
+import { FileText, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -42,24 +42,42 @@ export function MeetingTranscriptSection({
         <h3 className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
           Transcrição
         </h3>
-        {has && <span className="text-sm text-text-secondary">Disponível</span>}
       </div>
       {has ? (
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm text-text-secondary">
-            {wordCount(text).toLocaleString("pt-BR")} palavras
-            {updated ? ` · atualizada em ${updated}` : ""}
-          </p>
-          <Button variant="outline" size="sm" onClick={() => openDialog(false)}>
-            <FileText className="h-3.5 w-3.5" /> Abrir transcrição
-          </Button>
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => openDialog(false)}
+            className="block w-full text-left"
+            aria-label="Abrir transcrição"
+          >
+            <p className="line-clamp-4 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
+              {text}
+            </p>
+          </button>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-text-secondary">
+              {wordCount(text).toLocaleString("pt-BR")} palavras
+              {updated ? ` · atualizada em ${updated}` : ""}
+            </p>
+            <div className="flex gap-1">
+              <Button variant="ghost" size="sm" onClick={() => openDialog(false)}>
+                <FileText className="h-3.5 w-3.5" /> Abrir
+              </Button>
+              {canEdit && (
+                <Button variant="ghost" size="sm" onClick={() => openDialog(true)}>
+                  Editar
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
       ) : (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm text-text-secondary">Nenhuma transcrição adicionada.</p>
           {canEdit && (
             <Button variant="outline" size="sm" onClick={() => openDialog(true)}>
-              <FileText className="h-3.5 w-3.5" /> Adicionar transcrição
+              <Plus className="h-3.5 w-3.5" /> Adicionar transcrição
             </Button>
           )}
         </div>

@@ -1,25 +1,25 @@
 {
-  "version": "1.312.0",
+  "version": "1.313.0",
   "releases": [
     {
-      "version": "1.312.0",
-      "summary": "A barra de progresso da inscrição agora mostra o andamento real do preenchimento.",
+      "version": "1.313.0",
+      "summary": "Detalhe da reunião refeito: participantes e presença numa área só, com cards.",
       "modules": [
         {
-          "name": "INSCRIÇÃO",
-          "tagline": "Página pública de inscrição",
+          "name": "REUNIÕES",
+          "tagline": "Detalhe da reunião",
           "items": [
             {
-              "title": "Progresso real das etapas",
-              "description": "A barra mostra quantas das etapas foram concluídas de verdade (N de 4 concluídas e o percentual), sem depender de rolagem ou foco."
+              "title": "Participantes e presença juntos",
+              "description": "Cada pessoa aparece uma vez, em um card com avatar, cargo e presença. Clique no card para marcar quem participou; o contador mostra 2 de 4 presentes."
             },
             {
-              "title": "Mostra o que falta",
-              "description": "A barra lista o que ainda falta (Faltam: Redes sociais e Materiais) e, com tudo pronto, avisa que dá para enviar."
+              "title": "Convite separado de presença",
+              "description": "Confirmado ou pendente aparece como Convite, em segundo plano, e nunca altera a presença de ninguém."
             },
             {
-              "title": "Revisar leva ao primeiro pendente",
-              "description": "O botão Revisar inscrição leva ao primeiro item obrigatório pendente; campos opcionais vazios não bloqueiam o envio."
+              "title": "Transcrição em destaque",
+              "description": "A transcrição ganhou uma seção própria com prévia do texto, e os detalhes técnicos ficam recolhidos."
             }
           ]
         }

@@ -12,7 +12,6 @@ import {
   Repeat,
   ExternalLink,
   MoreHorizontal,
-  RefreshCw,
   AlertTriangle,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -39,28 +38,16 @@ import {
   canRecordAttendance,
   eligibleAttendeeIds,
   markAllPresent,
-  setPersonAttendance,
+  togglePersonAttendance,
   type AttendanceChange,
 } from "@/lib/meeting-attendance";
 import { loadMembers } from "@/lib/chat-store";
 import { linkifyText } from "@/lib/linkify";
-import { formatBR, statusTone, statusDot, participantBadge } from "./meeting-status";
+import { formatBR, statusDot } from "./meeting-status";
 import { joinUrlFor } from "./MeetingLine";
 import { loadTeam, type TeamMember } from "./team";
-import { MeetingPresenceSection } from "./MeetingPresenceSection";
+import { MeetingParticipantsSection, type ParticipantCard } from "./MeetingParticipantsSection";
 import { MeetingTranscriptSection } from "./MeetingTranscriptSection";
-
-function MiniAvatar({ member, fallback }: { member?: TeamMember; fallback: string }) {
-  if (member?.photo) {
-    return <img src={member.photo} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />;
-  }
-  const label = member?.name ?? fallback;
-  return (
-    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-muted text-xs font-medium text-text-secondary">
-      {label.trim()[0]?.toUpperCase() ?? "?"}
-    </span>
-  );
-}
 
 /** Fim (HH:MM) a partir do início + duração — usado só pra exibir
  * "10:00–10:30" numa linha só, nunca pra cálculo de negócio. */
@@ -68,8 +55,6 @@ function endTimeLabel(meeting: Meeting): string {
   const end = new Date(meetingStartTime(meeting) + meeting.duracao * 60_000);
   return `${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`;
 }
-
-const PARTICIPANTS_PREVIEW = 5;
 
 export function MeetingSummaryDialog({
   meeting,
@@ -99,7 +84,6 @@ export function MeetingSummaryDialog({
   const [propData, setPropData] = useState("");
   const [propHora, setPropHora] = useState("");
   const [propNote, setPropNote] = useState("");
-  const [showAllParticipants, setShowAllParticipants] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   // Depois que a pessoa já respondeu (confirmou/recusou), os botões de
   // ação ficam escondidos atrás de "Alterar" — reduz o ruído do modal em
@@ -115,7 +99,6 @@ export function MeetingSummaryDialog({
     setPropHora(meeting.hora);
     setPropNote("");
     setChangingResponse(false);
-    setShowAllParticipants(false);
     setDetailsOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meeting?.id]);
@@ -141,11 +124,19 @@ export function MeetingSummaryDialog({
   const joinUrl = joinUrlFor(meeting);
   const roleOf = (id: string) => loadMembers().find((m) => m.id === id)?.role;
   const attendeeIds = eligibleAttendeeIds(meeting, new Set(team.map((t) => t.id)), me.id);
-  const attendees = attendeeIds.map((id) => ({
+  const cards: ParticipantCard[] = participantIds.map((id) => ({
     id,
     name: nameFor(id),
     photo: memberFor(id)?.photo,
+    sub: [id === meeting.criadorId ? "Organizador" : null, roleOf(id)].filter(Boolean).join(" · "),
+    eligible: attendeeIds.includes(id),
   }));
+  const externals =
+    (meeting.convidadosExternos?.length ?? 0) > 0
+      ? meeting.convidadosExternos!.map((g) => `${g.nome} (${g.email})`)
+      : participantIds.length === 0 && meeting.com
+        ? [meeting.com]
+        : [];
   const canRecord = canRecordAttendance(meeting, meetingStartTime(meeting), Date.now());
   const myResponse = confirmedBy.includes(me.id)
     ? "confirmed"
@@ -223,8 +214,8 @@ export function MeetingSummaryDialog({
     applyAttendance(change);
     toast.success(`Presença registrada: ${attendeeIds.length} de ${attendeeIds.length} presentes.`);
   };
-  const setAttendance = (id: string, present: boolean) =>
-    applyAttendance(setPersonAttendance(meeting, id, present, attendeeIds));
+  const togglePresence = (id: string) =>
+    applyAttendance(togglePersonAttendance(meeting, id, attendeeIds));
   const saveTranscript = (text: string) => {
     const clean = text.trim();
     onChange({
@@ -236,10 +227,6 @@ export function MeetingSummaryDialog({
   };
 
   const displayStatus = meetingDisplayStatus(meeting);
-
-  const shownParticipants = showAllParticipants
-    ? participantIds
-    : participantIds.slice(0, PARTICIPANTS_PREVIEW);
 
   const hasDetails =
     !!meeting.seriesId ||
@@ -263,14 +250,15 @@ export function MeetingSummaryDialog({
     );
   };
 
-  const presence = (
-    <MeetingPresenceSection
+  const participants = (
+    <MeetingParticipantsSection
       meeting={meeting}
-      people={attendees}
+      people={cards}
+      externals={externals}
       canEdit={isCreator}
-      canRecord={canRecord}
+      canRecord={canRecord && !cancelled}
       onMarkAll={markEveryonePresent}
-      onSet={setAttendance}
+      onToggle={togglePresence}
     />
   );
   const transcript = showTranscript ? (
@@ -420,36 +408,22 @@ export function MeetingSummaryDialog({
               {formatBR(meeting.data)} · {meeting.hora}–{endTimeLabel(meeting)} · {meeting.duracao}{" "}
               min
             </SheetDescription>
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              {(cancelled || !showsResponseSection) && (
-                <span
-                  className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${statusTone(displayStatus)}`}
-                >
-                  <span className={`h-1.5 w-1.5 rounded-full ${statusDot(displayStatus)}`} />
-                  {displayStatus}
-                </span>
-              )}
-              {source === "google" && (
-                <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-text-secondary">
-                  Google Calendar
-                </span>
-              )}
+            <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-text-secondary">
+              <span className="inline-flex items-center gap-1.5">
+                <span className={`h-1.5 w-1.5 rounded-full ${statusDot(displayStatus)}`} />
+                {displayStatus}
+              </span>
               {meeting.seriesId && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-text-secondary">
-                  <Repeat className="h-2.5 w-2.5" /> Recorrente
+                <span className="inline-flex items-center gap-1">
+                  <Repeat className="h-3 w-3" /> Recorrente
                 </span>
               )}
               {meeting.syncStatus === "error" && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-danger-soft px-2 py-0.5 text-[11px] font-medium text-danger">
-                  <AlertTriangle className="h-2.5 w-2.5" /> Falha na sincronização
+                <span className="inline-flex items-center gap-1 text-danger">
+                  <AlertTriangle className="h-3 w-3" /> Falha na sincronização
                 </span>
               )}
-              {meeting.syncStatus === "pending" && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-text-secondary">
-                  <RefreshCw className="h-2.5 w-2.5" /> Sincronizando
-                </span>
-              )}
-            </div>
+            </p>
           </div>
           <div className="flex shrink-0 items-center gap-1">
             {canJoin && (
@@ -508,85 +482,8 @@ export function MeetingSummaryDialog({
 
         {/* Único scroll da tela: header e rodapé ficam fixos. */}
         <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-5 sm:px-6">
-          {/* Participantes + resposta ao convite de cada um */}
-          <section aria-label="Participantes">
-            <h3 className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
-              Participantes · {participantIds.length + (meeting.convidadosExternos?.length ?? 0)}
-            </h3>
-            <ul className="-mx-2 mt-1.5">
-              {shownParticipants.map((id) => {
-                const kind = confirmedBy.includes(id)
-                  ? "confirmed"
-                  : declinedBy.includes(id)
-                    ? "declined"
-                    : "pending";
-                const label =
-                  kind === "confirmed"
-                    ? "Confirmado"
-                    : kind === "declined"
-                      ? "Recusado"
-                      : "Pendente";
-                const sub = [id === meeting.criadorId ? "Organizador" : null, roleOf(id)]
-                  .filter(Boolean)
-                  .join(" · ");
-                return (
-                  <li
-                    key={id}
-                    className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/50"
-                  >
-                    <MiniAvatar member={memberFor(id)} fallback={nameFor(id)} />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-foreground">{nameFor(id)}</p>
-                      {sub && <p className="truncate text-xs text-text-secondary">{sub}</p>}
-                    </div>
-                    <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${participantBadge(kind)}`}
-                    >
-                      {label}
-                    </span>
-                  </li>
-                );
-              })}
-              {(meeting.convidadosExternos?.length ?? 0) > 0
-                ? meeting.convidadosExternos!.map((g) => (
-                    <li
-                      key={g.email}
-                      className="rounded-lg px-2 py-1.5 text-sm text-text-secondary"
-                    >
-                      {g.nome} <span className="text-xs">(externo · {g.email})</span>
-                    </li>
-                  ))
-                : participantIds.length === 0 &&
-                  meeting.com && (
-                    <li className="rounded-lg px-2 py-1.5 text-sm text-text-secondary">
-                      {meeting.com} (externo)
-                    </li>
-                  )}
-            </ul>
-            {participantIds.length > PARTICIPANTS_PREVIEW && !showAllParticipants && (
-              <button
-                type="button"
-                onClick={() => setShowAllParticipants(true)}
-                className="ml-2 mt-1 text-xs font-medium text-text-secondary hover:text-foreground"
-              >
-                Ver todos os {participantIds.length}
-              </button>
-            )}
-          </section>
-
-          {isFinished || cancelled ? (
-            <>
-              {!cancelled && presence}
-              {transcript}
-              {responseBlock}
-            </>
-          ) : (
-            <>
-              {responseBlock}
-              {!cancelled && presence}
-              {transcript}
-            </>
-          )}
+          {responseBlock}
+          {participants}
 
           {hasAgenda && (
             <section aria-label="Pauta" className="space-y-1">
@@ -606,6 +503,8 @@ export function MeetingSummaryDialog({
             </section>
           )}
 
+          {transcript}
+
           {/* Detalhes — só o secundário/técnico, fechado por padrão */}
           {hasDetails && (
             <section aria-label="Detalhes">
@@ -624,6 +523,12 @@ export function MeetingSummaryDialog({
               </button>
               {detailsOpen && (
                 <dl className="mt-2.5 space-y-3 text-sm">
+                  {source === "google" && (
+                    <div>
+                      <dt className="text-xs text-text-secondary">Origem</dt>
+                      <dd className="text-foreground">Google Calendar</dd>
+                    </div>
+                  )}
                   {meeting.syncStatus && (
                     <div>
                       <dt className="text-xs text-text-secondary">Sincronização com o Google</dt>

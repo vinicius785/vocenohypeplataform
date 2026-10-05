@@ -39,17 +39,48 @@ export type AttendanceSummary = {
   total: number;
   /** "2 de 2 presentes" — ou `null` enquanto não registrada (nunca "0 de N" fingindo ausência). */
   label: string | null;
+  /** "2 de 4 presentes" — SEMPRE a contagem real de presentes (0 quando nada foi marcado), vinda só
+   * de `attendedBy`; nunca de RSVP, nem do status da reunião. */
+  countLabel: string;
 };
+
+/** Resposta ao CONVITE (RSVP) — conceito separado de presença. */
+export type RsvpKind = "confirmed" | "declined" | "pending";
+export function rsvpKind(
+  meeting: Pick<Meeting, "confirmedBy" | "declinedBy">,
+  id: string,
+): RsvpKind {
+  if ((meeting.confirmedBy ?? []).includes(id)) return "confirmed";
+  if ((meeting.declinedBy ?? []).includes(id)) return "declined";
+  return "pending";
+}
+
+/** Clique no card da pessoa: presente ↔ não presente. */
+export function togglePersonAttendance(
+  meeting: Meeting,
+  id: string,
+  eligibleIds: readonly string[],
+): AttendanceChange {
+  return setPersonAttendance(meeting, id, attendanceState(meeting, id) !== "present", eligibleIds);
+}
 
 export function attendanceSummary(
   meeting: Pick<Meeting, "attendanceRecorded" | "attendedBy">,
   eligibleIds: readonly string[],
 ): AttendanceSummary {
   const total = eligibleIds.length;
-  if (!meeting.attendanceRecorded) return { recorded: false, present: 0, total, label: null };
+  if (!meeting.attendanceRecorded)
+    return {
+      recorded: false,
+      present: 0,
+      total,
+      label: null,
+      countLabel: `0 de ${total} presentes`,
+    };
   const attended = new Set(meeting.attendedBy ?? []);
   const present = eligibleIds.filter((id) => attended.has(id)).length;
-  return { recorded: true, present, total, label: `${present} de ${total} presentes` };
+  const label = `${present} de ${total} presentes`;
+  return { recorded: true, present, total, label, countLabel: label };
 }
 
 export type AttendanceChange = {

@@ -6,6 +6,8 @@ import {
   canRecordAttendance,
   eligibleAttendeeIds,
   markAllPresent,
+  rsvpKind,
+  togglePersonAttendance,
   setPersonAttendance,
   wordCount,
 } from "./meeting-attendance";
@@ -49,6 +51,7 @@ describe("resumo e estados", () => {
       present: 0,
       total: 2,
       label: null,
+      countLabel: "0 de 2 presentes",
     });
     expect(attendanceState(base, "vini")).toBe("unknown");
   });
@@ -113,5 +116,44 @@ describe("wordCount", () => {
   it("conta palavras ignorando espaços extras", () => {
     expect(wordCount("")).toBe(0);
     expect(wordCount("  oi  tudo   bem\n ok ")).toBe(4);
+  });
+});
+
+describe("cenário: 4 participantes, RSVP ≠ presença", () => {
+  const ids = ["a", "b", "c", "d"];
+  const m0: Meeting = {
+    ...base,
+    criadorId: "a",
+    participanteIds: ["b", "c", "d"],
+    confirmedBy: ["a"],
+  };
+  it("1 confirmado + 3 pendentes → 0 de 4 presentes", () => {
+    expect(ids.map((i) => rsvpKind(m0, i))).toEqual(["confirmed", "pending", "pending", "pending"]);
+    expect(attendanceSummary(m0, ids).countLabel).toBe("0 de 4 presentes");
+  });
+  it("marcar 2 → 2 de 4; marcar todos → 4 de 4", () => {
+    let m = togglePersonAttendance(m0, "b", ids).meeting;
+    m = togglePersonAttendance(m, "c", ids).meeting;
+    expect(attendanceSummary(m, ids).countLabel).toBe("2 de 4 presentes");
+    m = markAllPresent(m, ids).meeting;
+    expect(attendanceSummary(m, ids).countLabel).toBe("4 de 4 presentes");
+  });
+  it("clicar de novo desmarca", () => {
+    let m = togglePersonAttendance(m0, "b", ids).meeting;
+    m = togglePersonAttendance(m, "b", ids).meeting;
+    expect(attendanceSummary(m, ids).present).toBe(0);
+  });
+  it("mudar o RSVP não altera a presença (e vice-versa)", () => {
+    const m = markAllPresent(m0, ids).meeting;
+    const pendente = { ...m, confirmedBy: [], declinedBy: [] };
+    expect(rsvpKind(pendente, "a")).toBe("pending");
+    expect(attendanceSummary(pendente, ids).countLabel).toBe("4 de 4 presentes");
+    expect(attendanceState(pendente, "a")).toBe("present");
+    const recusou = { ...m, declinedBy: ["b"] };
+    expect(attendanceState(recusou, "b")).toBe("present");
+    // e marcar presença não mexe no RSVP
+    const t = togglePersonAttendance(m0, "b", ids).meeting;
+    expect(t.confirmedBy).toEqual(["a"]);
+    expect(t.declinedBy).toEqual(m0.declinedBy);
   });
 });
