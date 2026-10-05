@@ -53,9 +53,9 @@ describe("gatilho de menção", () => {
   it("e-mail no meio da palavra não abre", () => {
     expect(detectMentionTrigger("fale com a@b.com", 16, true)).toBeNull();
   });
-  it("'#' só abre com ao menos 1 caractere, em qualquer conversa (referência, não menção)", () => {
+  it("'#' abre já ao digitar (lista sugerida), em qualquer conversa; '# ' com espaço não abre", () => {
     expect(detectMentionTrigger("# Título", 2, false)).toBeNull();
-    expect(detectMentionTrigger("#", 1, false)).toBeNull();
+    expect(detectMentionTrigger("#", 1, false)).toEqual({ char: "#", start: 0, query: "" });
     expect(detectMentionTrigger("veja #lan", 9, false)).toEqual({
       char: "#",
       start: 5,

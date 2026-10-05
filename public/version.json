@@ -1,21 +1,21 @@
 {
-  "version": "1.313.2",
+  "version": "1.314.0",
   "releases": [
     {
-      "version": "1.313.2",
-      "summary": "A roda do mouse volta a rolar as listas dentro de janelas.",
+      "version": "1.314.0",
+      "summary": "No chat, ficou fácil achar como referenciar tarefas, projetos, campanhas e clientes.",
       "modules": [
         {
-          "name": "PROJETOS",
-          "tagline": "Seletores nas janelas",
+          "name": "CHAT",
+          "tagline": "Menções e referências",
           "items": [
             {
-              "title": "Rolagem no seletor de status",
-              "description": "Na tarefa aberta, a lista de status agora rola com a roda do mouse até o fim."
+              "title": "Atalho para referências no @",
+              "description": "Ao digitar @, a lista de pessoas ganhou um atalho no rodapé: Tarefas, projetos, campanhas e clientes. Um clique troca para as referências."
             },
             {
-              "title": "Vale para outros seletores",
-              "description": "A mesma correção vale para qualquer lista aberta dentro de uma janela, como responsável, prioridade e etiquetas."
+              "title": "# abre as sugestões na hora",
+              "description": "Digitar # agora já mostra as sugestões, sem precisar escrever uma letra antes."
             }
           ]
         }

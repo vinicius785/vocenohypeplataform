@@ -58,6 +58,7 @@ export function MentionAutocomplete({
   hasMore,
   onPick,
   onHover,
+  onSwitchToReference,
   style,
 }: {
   items: MentionAutocompleteItem[];
@@ -66,6 +67,8 @@ export function MentionAutocomplete({
   hasMore: boolean;
   onPick: (item: MentionAutocompleteItem) => void;
   onHover: (index: number) => void;
+  /** Troca `@` por `#`: referências a tarefas, projetos, campanhas e clientes. */
+  onSwitchToReference?: () => void;
   style?: React.CSSProperties;
 }) {
   return (
@@ -129,6 +132,19 @@ export function MentionAutocomplete({
           );
         })}
       </ul>
+      {onSwitchToReference && (
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={onSwitchToReference}
+          className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-xs text-text-secondary hover:bg-muted/60 hover:text-foreground"
+        >
+          <span className="grid h-5 w-5 shrink-0 place-items-center rounded bg-muted text-[11px] font-semibold">
+            #
+          </span>
+          Tarefas, projetos, campanhas e clientes
+        </button>
+      )}
       {hasMore && (
         <p className="border-t border-border px-3 py-1.5 text-[11px] text-text-secondary">
           Continue digitando para filtrar

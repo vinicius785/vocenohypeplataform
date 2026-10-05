@@ -144,12 +144,15 @@ export const MentionTextarea = forwardRef<
 
   const referenceItems = useMemo<MentionOption[]>(() => {
     if (trigger?.char !== "#") return [];
-    return references
-      .map((o) => ({ o, score: matchScore(o.label, trigger.query) }))
-      .filter(({ score }) => score > 0)
-      .sort((a, b) => b.score - a.score || (b.o.boost ?? 0) - (a.o.boost ?? 0))
-      .slice(0, REFERENCE_LIMIT)
-      .map(({ o }) => o);
+    return (
+      references
+        // Sem busca ainda: mostra as sugestões (ordenadas pelo contexto) em vez de lista vazia.
+        .map((o) => ({ o, score: trigger.query ? matchScore(o.label, trigger.query) : 1 }))
+        .filter(({ score }) => score > 0)
+        .sort((a, b) => b.score - a.score || (b.o.boost ?? 0) - (a.o.boost ?? 0))
+        .slice(0, REFERENCE_LIMIT)
+        .map(({ o }) => o)
+    );
   }, [trigger, references]);
 
   const activeCount = trigger?.char === "@" ? peopleItems.items.length : referenceItems.length;
@@ -181,6 +184,19 @@ export const MentionTextarea = forwardRef<
       ta?.focus();
       const pos = trigger.start + token.length + 1;
       ta?.setSelectionRange(pos, pos);
+    });
+  };
+
+  const switchToReference = () => {
+    if (!trigger) return;
+    const ta = taRef.current;
+    const caret = ta?.selectionStart ?? value.length;
+    onChange(value.slice(0, trigger.start) + "#" + value.slice(caret));
+    setTrigger({ ...trigger, char: "#", query: "" });
+    setHighlight(0);
+    requestAnimationFrame(() => {
+      ta?.focus();
+      ta?.setSelectionRange(trigger.start + 1, trigger.start + 1);
     });
   };
 
@@ -256,6 +272,7 @@ export const MentionTextarea = forwardRef<
           hasMore={peopleItems.hasMore}
           onPick={pickPerson}
           onHover={setHighlight}
+          onSwitchToReference={switchToReference}
           style={{ left }}
         />
       )}

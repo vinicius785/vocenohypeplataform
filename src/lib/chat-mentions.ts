@@ -178,6 +178,5 @@ export function detectMentionTrigger(
   if (prev !== " " && prev !== "\n") return null;
   const query = before.slice(at + 1);
   if (/\s/.test(query)) return null;
-  if (char === "#" && query.length === 0) return null;
   return { char, start: at, query };
 }
