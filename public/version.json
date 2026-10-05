@@ -1,25 +1,25 @@
 {
-  "version": "1.326.0",
+  "version": "1.327.0",
   "releases": [
     {
-      "version": "1.326.0",
-      "summary": "Detalhe da entrega com ajustes pedidos pelo cliente agora mostra o que fazer.",
+      "version": "1.327.0",
+      "summary": "Detalhe da entrega: ajustes pedidos pelo cliente agora têm destaque na medida certa.",
       "modules": [
         {
           "name": "CAMPANHAS",
           "tagline": "Detalhe da entrega",
           "items": [
             {
-              "title": "Feedback do cliente à vista",
-              "description": "Quando o cliente pede ajustes, o detalhe mostra quem pediu, quando, em qual etapa e um resumo do que foi dito, com o texto completo a um clique."
+              "title": "Status e feedback em destaque",
+              "description": "O status vira um badge com leve tom de atenção, e o pedido do cliente fica num bloco discreto logo abaixo, com quem pediu, quando e em qual etapa."
             },
             {
-              "title": "Um próximo passo claro",
-              "description": "Editar roteiro, depois Enviar novamente para aprovação. O status acompanha o ciclo: Ajustes solicitados, Em ajustes e Reenviado para aprovação."
+              "title": "Próxima ação e trilha",
+              "description": "A ação principal vem logo depois do feedback, com a trilha Ajustes solicitados, Em ajustes e Aguardando aprovação mostrando em que ponto você está."
             },
             {
-              "title": "Telas mais limpas",
-              "description": "Mover manualmente e Remover entrega foram para o menu de três pontos, e o histórico ficou mais leve."
+              "title": "Menos peso no resto",
+              "description": "Prazos recolhidos, histórico em linha do tempo e arquivos com Abrir, Substituir e Remover."
             }
           ]
         }

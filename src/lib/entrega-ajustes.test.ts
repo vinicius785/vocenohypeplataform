@@ -8,6 +8,7 @@ import {
   feedbackExcerpt,
   formatFeedbackWhen,
   historyActionText,
+  reenviadoMessage,
 } from "./entrega-ajustes";
 import { applyEntregaAction, deriveEntregaNextStep } from "./entrega-engine";
 
@@ -66,7 +67,7 @@ describe("ciclo de ajustes (apresentação sobre a máquina existente)", () => {
       "Em ajustes",
     );
     expect(entregaStatusLabel(base({ stage: "ROTEIRO_APROVACAO", roteiroReprovacao: V }))).toBe(
-      "Reenviado para aprovação",
+      "Aguardando aprovação",
     );
   });
 });
@@ -140,6 +141,17 @@ describe("arquivo novo desde o feedback", () => {
         V.respondedAt,
       ),
     ).toBe(false);
+  });
+});
+
+describe("depois do reenvio", () => {
+  it("o status volta a ser 'Aguardando aprovação' e o aviso é uma mensagem à parte", () => {
+    expect(reenviadoMessage({ etapa: "roteiro" })).toBe(
+      "Roteiro reenviado para aprovação do cliente.",
+    );
+    expect(reenviadoMessage({ etapa: "conteudo" })).toBe(
+      "Conteúdo reenviado para aprovação do cliente.",
+    );
   });
 });
 

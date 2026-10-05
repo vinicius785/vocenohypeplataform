@@ -62,6 +62,8 @@ import {
   AjusteStatusPill,
   EntregaFeedbackSection,
   EntregaProximoPasso,
+  EntregaReenviadoNote,
+  EntregaStatusBadge,
 } from "@/components/influenciadores/EntregaAjustePanel";
 import {
   ajusteNextStep,
@@ -2471,6 +2473,8 @@ function EntregaDetailBody({
   const ajuste = entregaAjusteView(entrega);
   const statusLabel = entregaStatusLabel(entrega);
   const ajusteStep = ajuste ? ajusteNextStep(ajuste, step.action) : null;
+  // Com pendência do cliente, "Editar" (metadados) fica só como ícone para não competir com a ação principal.
+  const ajustePendente = !!ajuste && ajuste.phase !== "reenviado";
   const { confirm: confirmAction, confirmDialog: entregaConfirmDialog } = useConfirm();
   const arquivosRef = useRef<HTMLDivElement>(null);
   // Roteiro/conteúdo ainda não foi atualizado desde o feedback?
@@ -2599,18 +2603,11 @@ function EntregaDetailBody({
                   Unidade independente — aprovada separadamente das demais.
                 </p>
               )}
-              <div className="mt-1.5">
+              <div className="mt-2">
                 {ajuste ? (
                   <AjusteStatusPill phase={ajuste.phase} />
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground">
-                    <span
-                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                        stage === "PUBLICADA" ? "bg-emerald-500" : "bg-muted-foreground/60"
-                      }`}
-                    />
-                    {statusLabel}
-                  </span>
+                  <EntregaStatusBadge label={statusLabel} done={stage === "PUBLICADA"} />
                 )}
               </div>
             </div>
@@ -2621,7 +2618,8 @@ function EntregaDetailBody({
                 className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
                 aria-label="Editar tipo, título e quantidade"
               >
-                <Pencil className="h-3 w-3" /> Editar
+                <Pencil className="h-3 w-3" />
+                {!ajustePendente && "Editar"}
               </button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -2724,11 +2722,50 @@ function EntregaDetailBody({
           )}
         </div>
 
+        {/* Feedback do cliente (quando existe um ciclo de ajustes) */}
+        {ajuste && <EntregaFeedbackSection view={ajuste} />}
+
+        {/* Próximo passo — UMA ação principal por momento. */}
+        {ajusteStep ? (
+          <EntregaProximoPasso
+            step={ajusteStep}
+            phase={ajuste!.phase}
+            note={
+              semArquivoNovo
+                ? `O ${ajuste!.etapa === "roteiro" ? "roteiro" : "conteúdo final"} ainda não foi atualizado desde o feedback.`
+                : undefined
+            }
+            onRun={() => void handleAjusteStep()}
+          />
+        ) : step.action ? (
+          <button
+            type="button"
+            onClick={handleActionClick}
+            disabled={uploading}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-foreground px-4 py-2.5 text-sm font-semibold text-background shadow-sm hover:opacity-90 disabled:opacity-60"
+          >
+            {uploading ? "Enviando..." : step.actionLabel}
+          </button>
+        ) : (
+          stage !== "PUBLICADA" &&
+          ajuste?.phase !== "reenviado" && (
+            <p className="text-xs text-muted-foreground">
+              {step.responsavel === "cliente"
+                ? "Aguardando aprovação do cliente."
+                : "Nenhuma ação pendente no momento."}
+            </p>
+          )
+        )}
+        {ajuste?.phase === "reenviado" && <EntregaReenviadoNote view={ajuste} />}
+        {uploadError && <p className="text-xs text-destructive">{uploadError}</p>}
+
         {/* Progresso — as 4 fases num stepper único, sem repetir
               "Situação atual"/"Etapas" como dois blocos dizendo quase a
               mesma coisa. */}
         <div className="space-y-2">
-          <FieldLabel title="Progresso" />
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
+            Progresso
+          </h3>
           <div className="flex items-center gap-1.5">
             {ENTREGA_FASE_COLUNAS.map((c, i) => (
               <div key={c} className="flex flex-1 flex-col items-center gap-1">
@@ -2750,65 +2787,36 @@ function EntregaDetailBody({
           <p className="text-xs text-text-secondary">{ENTREGA_STAGE_DESCRIPTION[stage]}</p>
         </div>
 
-        {/* Feedback do cliente (quando existe um ciclo de ajustes) */}
-        {ajuste && <EntregaFeedbackSection view={ajuste} />}
-
-        {/* Próximo passo — UMA ação principal por momento. */}
-        {ajusteStep ? (
-          <EntregaProximoPasso
-            step={ajusteStep}
-            note={
-              semArquivoNovo
-                ? `O ${ajuste!.etapa === "roteiro" ? "roteiro" : "conteúdo final"} ainda não foi atualizado desde o feedback.`
-                : undefined
-            }
-            onRun={() => void handleAjusteStep()}
-          />
-        ) : step.action ? (
-          <button
-            type="button"
-            onClick={handleActionClick}
-            disabled={uploading}
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-foreground px-4 py-2.5 text-sm font-semibold text-background shadow-sm hover:opacity-90 disabled:opacity-60"
+        {/* Prazos — recolhidos: não competem com a pendência do cliente. */}
+        <div className="border-y border-border/60">
+          <CollapsibleSection
+            title="Prazos"
+            summary={[
+              ["Roteiro", entrega.dataRecebimentoRoteiro],
+              ["Conteúdo", entrega.dataRecebimentoConteudo],
+              ["Publicação", entrega.dataPostagem],
+            ]
+              .map(([l, d]) => `${l} ${d ? formatDataCurta(d) : "—"}`)
+              .join(" · ")}
           >
-            {uploading ? "Enviando..." : step.actionLabel}
-          </button>
-        ) : (
-          stage !== "PUBLICADA" && (
-            <p className="text-xs text-muted-foreground">
-              {ajuste?.phase === "reenviado"
-                ? "Reenviado — aguardando a aprovação do cliente."
-                : step.responsavel === "cliente"
-                  ? "Aguardando aprovação do cliente."
-                  : "Nenhuma ação pendente no momento."}
-            </p>
-          )
-        )}
-        {uploadError && <p className="text-xs text-destructive">{uploadError}</p>}
-
-        {/* Prazos — grade compacta (rótulo em cima do input, não ao
-              lado), sem indicador de atrasado/no prazo (ver comentário de
-              formatDataCurta/nextPrazoData: essas datas não distinguem
-              "prazo planejado" de "recebimento real"). */}
-        <div className="space-y-2">
-          <FieldLabel title="Prazos" />
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-            <PrazoField
-              label="Roteiro"
-              value={entrega.dataRecebimentoRoteiro}
-              onChange={(v) => onChange({ dataRecebimentoRoteiro: v })}
-            />
-            <PrazoField
-              label="Conteúdo"
-              value={entrega.dataRecebimentoConteudo}
-              onChange={(v) => onChange({ dataRecebimentoConteudo: v })}
-            />
-            <PrazoField
-              label="Publicação"
-              value={entrega.dataPostagem}
-              onChange={(v) => onChange({ dataPostagem: v })}
-            />
-          </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <PrazoField
+                label="Roteiro"
+                value={entrega.dataRecebimentoRoteiro}
+                onChange={(v) => onChange({ dataRecebimentoRoteiro: v })}
+              />
+              <PrazoField
+                label="Conteúdo"
+                value={entrega.dataRecebimentoConteudo}
+                onChange={(v) => onChange({ dataRecebimentoConteudo: v })}
+              />
+              <PrazoField
+                label="Publicação"
+                value={entrega.dataPostagem}
+                onChange={(v) => onChange({ dataPostagem: v })}
+              />
+            </div>
+          </CollapsibleSection>
         </div>
 
         {/* Arquivos */}
@@ -2847,9 +2855,10 @@ function EntregaDetailBody({
           {historico.length === 0 ? (
             <p className="text-[11px] text-text-secondary">Nenhum evento registrado ainda.</p>
           ) : (
-            <ul className="space-y-1.5">
+            <ul className="space-y-2 border-l border-border/60 pl-3">
               {historico.map((a) => (
-                <li key={a.id} className="text-xs leading-relaxed text-text-secondary">
+                <li key={a.id} className="relative text-xs leading-relaxed text-text-secondary">
+                  <span className="absolute -left-[15.5px] top-1.5 h-1.5 w-1.5 rounded-full bg-border" />
                   <span className="text-foreground">{a.author}</span> {historyActionText(a.action)}
                   <span className="ml-1.5 text-[11px] tabular-nums">
                     {new Date(a.createdAt).toLocaleString("pt-BR", {
@@ -5806,14 +5815,33 @@ function EntregaAnexosEditor({
                             </span>
                           )}
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => onChange(anexos.filter((x) => x.id !== a.id))}
-                          className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
-                          aria-label="Remover anexo"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
+                        <div className="flex shrink-0 items-center gap-0.5 text-[11px]">
+                          <a
+                            href={a.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded px-1.5 py-1 font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                          >
+                            Abrir
+                          </a>
+                          <button
+                            type="button"
+                            disabled={uploading !== null}
+                            onClick={() => pick(a.categoria)}
+                            title="Envia uma nova versão (a anterior continua no histórico de versões)"
+                            className="rounded px-1.5 py-1 font-medium text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-60"
+                          >
+                            Substituir
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onChange(anexos.filter((x) => x.id !== a.id))}
+                            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+                            aria-label="Remover anexo"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </li>
                     );
                   })}

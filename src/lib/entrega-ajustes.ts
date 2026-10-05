@@ -19,7 +19,9 @@ export type AjusteEtapa = "roteiro" | "conteudo";
 export const AJUSTE_PHASE_LABEL: Record<AjustePhase, string> = {
   solicitados: "Ajustes solicitados",
   em_ajustes: "Em ajustes",
-  reenviado: "Reenviado para aprovação",
+  // Depois do reenvio o status volta a ser o de sempre (“Aguardando aprovação”); o aviso de que foi
+  // reenviado é uma mensagem pequena à parte (`reenviadoMessage`), nunca o status principal.
+  reenviado: "Aguardando aprovação",
 };
 
 export type AjusteView = {
@@ -153,3 +155,11 @@ export function historyActionText(action: string): string {
   if (m) return `solicitou ajustes ${m[1] === "o roteiro" ? "no roteiro" : "no conteúdo"}`;
   return action;
 }
+
+/** Mensagem pequena exibida depois do reenvio. */
+export function reenviadoMessage(a: Pick<AjusteView, "etapa">): string {
+  return `${a.etapa === "roteiro" ? "Roteiro" : "Conteúdo"} reenviado para aprovação do cliente.`;
+}
+
+/** Os 3 momentos do ciclo, na ordem em que a história se conta. */
+export const AJUSTE_TRAIL: AjustePhase[] = ["solicitados", "em_ajustes", "reenviado"];
