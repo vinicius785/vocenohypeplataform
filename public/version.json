@@ -1,25 +1,25 @@
 {
-  "version": "1.315.0",
+  "version": "1.316.0",
   "releases": [
     {
-      "version": "1.315.0",
-      "summary": "O # do chat virou uma busca rápida de referências.",
+      "version": "1.316.0",
+      "summary": "A inscrição original agora é lida em formato humano.",
       "modules": [
         {
-          "name": "CHAT",
-          "tagline": "Referências com #",
+          "name": "CAMPANHAS",
+          "tagline": "Detalhe do influenciador",
           "items": [
             {
-              "title": "Recentes e categorias",
-              "description": "Ao digitar #, aparecem suas referências recentes e as categorias Tarefas, Projetos, Campanhas e Clientes, sem uma lista gigante."
+              "title": "Inscrição original legível",
+              "description": "Ver inscrição original agora mostra contato, redes, respostas e mensagem de forma organizada, em vez de um bloco de código."
             },
             {
-              "title": "Busca que agrupa",
-              "description": "Escreva #portal e os resultados já aparecem separados por categoria, achando também pelo nome do projeto."
+              "title": "Status na candidatura",
+              "description": "A seção Dados da inscrição mostra também o status atual do influenciador, junto da data e da origem."
             },
             {
-              "title": "Tudo pelo teclado",
-              "description": "Setas navegam, Enter seleciona e Esc volta ou fecha. A tela é a mesma no celular."
+              "title": "Dados técnicos recolhidos",
+              "description": "O registro bruto continua disponível, mas fica escondido em Dados técnicos, só para diagnóstico."
             }
           ]
         }

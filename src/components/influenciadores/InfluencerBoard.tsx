@@ -77,6 +77,7 @@ import {
   sanitizeHandleForDisplay,
 } from "@/lib/social-profiles";
 import type { CustomQuestionType } from "@/lib/inscricao-page";
+import { describeInscricaoSnapshot } from "@/lib/inscricao-snapshot";
 
 /* ============================================================
  * Shared Influenciadores model + UI.
@@ -3642,6 +3643,88 @@ function InscricaoResumo({ influ }: { influ: Influ }) {
   );
 }
 
+/** "Ver inscrição original": o que o influenciador enviou, em linguagem humana (contato, redes,
+ * respostas, mensagem). O JSON bruto fica só numa camada técnica recolhida, para diagnóstico. */
+function InscricaoOriginalDialog({
+  snapshot,
+  submittedAt,
+  onClose,
+}: {
+  snapshot: Record<string, unknown>;
+  submittedAt?: string;
+  onClose: () => void;
+}) {
+  const view = describeInscricaoSnapshot(snapshot);
+  const [raw, setRaw] = useState(false);
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-lg">
+        <DialogTitle>Inscrição original</DialogTitle>
+        <DialogDescription>
+          Exatamente como foi enviado
+          {submittedAt && `, em ${new Date(submittedAt).toLocaleString("pt-BR")}`}. Alterações
+          feitas depois no perfil não mudam este registro.
+        </DialogDescription>
+        <div className="space-y-4">
+          {view.contato.length > 0 && (
+            <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {view.contato.map((c) => (
+                <div key={c.label} className="space-y-0.5">
+                  <dt className="text-xs font-medium text-muted-foreground">{c.label}</dt>
+                  <dd className="break-words text-sm text-foreground">{c.value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          {view.redes.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground">Redes sociais</p>
+              <ul className="space-y-1">
+                {view.redes.map((r, i) => (
+                  <li key={i} className="flex items-center gap-1.5 text-sm text-foreground">
+                    {platformIcon(r.plataforma)}@{sanitizeHandleForDisplay(r.plataforma, r.handle)}
+                    {r.seguidores && (
+                      <span className="text-xs text-muted-foreground">· {r.seguidores}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {view.respostas.length > 0 && (
+            <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {view.respostas.map((r) => (
+                <AnswerField key={r.questionId} r={r as InscricaoResposta} />
+              ))}
+            </dl>
+          )}
+          {view.mensagem && (
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground">Mensagem do candidato</p>
+              <p className="whitespace-pre-line text-sm text-foreground">{view.mensagem}</p>
+            </div>
+          )}
+          <div className="border-t border-border/60 pt-2">
+            <button
+              type="button"
+              onClick={() => setRaw((v) => !v)}
+              aria-expanded={raw}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              {raw ? "Ocultar dados técnicos" : "Dados técnicos"}
+            </button>
+            {raw && (
+              <pre className="mt-2 max-h-[30vh] overflow-auto whitespace-pre-wrap rounded-md bg-muted p-3 text-xs text-foreground">
+                {JSON.stringify(snapshot, null, 2)}
+              </pre>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /** Seção "Dados da inscrição" (pedido, seção 3) — só existe quando a
  * candidatura veio da Página de Inscrição pública. Nunca mistura com
  * "Observações internas": tudo aqui é o que o influenciador enviou, não
@@ -3669,7 +3752,8 @@ function InscricaoDadosSection({ influ }: { influ: Influ }) {
               })}
             </span>
           )}
-          <span>· Origem: Página de Inscrição</span>
+          <span>· Origem: Página de inscrição</span>
+          <span>· Status: {INFLU_STATUS_LABEL[influ.status]}</span>
           {influ.inscricaoSnapshot && (
             <button
               type="button"
@@ -3713,21 +3797,12 @@ function InscricaoDadosSection({ influ }: { influ: Influ }) {
         )}
       </div>
 
-      {showOriginal && (
-        <Dialog open={showOriginal} onOpenChange={setShowOriginal}>
-          <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-lg">
-            <DialogTitle>Inscrição original</DialogTitle>
-            <DialogDescription>
-              Exatamente como foi enviado
-              {influ.inscricaoMeta?.submittedAt &&
-                `, em ${new Date(influ.inscricaoMeta.submittedAt).toLocaleString("pt-BR")}`}
-              . Alterações feitas depois no perfil não mudam este registro.
-            </DialogDescription>
-            <pre className="mt-2 max-h-[50vh] overflow-auto whitespace-pre-wrap rounded-md bg-muted p-3 text-xs text-foreground">
-              {JSON.stringify(influ.inscricaoSnapshot, null, 2)}
-            </pre>
-          </DialogContent>
-        </Dialog>
+      {showOriginal && influ.inscricaoSnapshot && (
+        <InscricaoOriginalDialog
+          snapshot={influ.inscricaoSnapshot}
+          submittedAt={influ.inscricaoMeta?.submittedAt}
+          onClose={() => setShowOriginal(false)}
+        />
       )}
     </CollapsibleSection>
   );
