@@ -1,43 +1,65 @@
 {
-  "version": "1.298.0",
+  "version": "1.299.0",
   "releases": [
     {
-      "version": "1.298.0",
-      "summary": "Comercial com Kanban de tarefas e Recursos, sidebar compacta mais clara e portal do cliente para o time.",
+      "version": "1.299.0",
+      "summary": "Configurações reorganizadas, sons da plataforma, convite por e-mail ao portal do cliente e várias telas mais compactas.",
       "modules": [
         {
-          "name": "COMERCIAL",
-          "tagline": "Pipeline, tarefas e recursos",
+          "name": "CONFIGURAÇÕES",
+          "tagline": "Uma central mais clara",
           "items": [
             {
-              "title": "Kanban de tarefas no Comercial",
-              "description": "Um quadro de tarefas abaixo do pipeline, com os mesmos status das demais áreas, até 4 cards por coluna e Ver mais para o restante."
-            },
-            {
-              "title": "Pipeline mais enxuto",
-              "description": "O gráfico de funil saiu; cada etapa mostra 4 oportunidades e abre o restante em Ver mais."
-            },
-            {
-              "title": "Botão Recursos",
-              "description": "Documentos do Comercial (links e anexos) no mesmo formato das campanhas."
+              "title": "Configurações reorganizadas",
+              "description": "Menu por intenção (Conta, Workspace, Segurança e Administração), seções mais compactas e o Cofre de senhas em página própria. Na Auditoria, os detalhes de cada evento abrem num painel lateral."
             }
           ]
         },
         {
           "name": "PLATAFORMA",
-          "tagline": "Navegação e acesso",
+          "tagline": "Avisos e acesso",
           "items": [
             {
-              "title": "Sidebar reduzida refinada",
-              "description": "Alvos de clique maiores, dicas ao passar o mouse, botão de recolher dentro da barra e perfil acessível."
+              "title": "Sons da plataforma",
+              "description": "Sons curtos inspirados na MPB para Chat, Comercial, Reuniões e Atualizações. Volume, liga/desliga por tipo e botão Testar em Configurações > Preferências."
             },
             {
-              "title": "Portal do cliente para o time",
-              "description": "Em Recursos da campanha, Portal do cliente abre a visão do cliente sem login (somente leitura). Os links públicos antigos foram desativados."
+              "title": "Convite por e-mail ao portal do cliente",
+              "description": "Ao dar acesso ao portal na ficha do cliente, a pessoa recebe um e-mail com o nível de acesso e um link para criar a própria senha."
             },
             {
-              "title": "Aviso de nova versão restaurado",
-              "description": "Quem está com a plataforma aberta volta a ser avisado quando sai uma versão nova."
+              "title": "Aviso de nova versão renovado",
+              "description": "Mostra a versão atual e a nova lado a lado, as principais novidades e o botão Atualizar agora."
+            }
+          ]
+        },
+        {
+          "name": "OPERAÇÃO",
+          "tagline": "Telas mais enxutas",
+          "items": [
+            {
+              "title": "Início com Lembretes compactos",
+              "description": "Lista curta e acionável, com criação rápida (Hoje, Amanhã ou escolher data)."
+            },
+            {
+              "title": "Central de Problemas com Responsável",
+              "description": "Novo tipo Chat e responsável definido na criação e na lista."
+            },
+            {
+              "title": "Financeiro V2",
+              "description": "Período global único, resumo com pontos de atenção e projeção, e lançamentos com ação principal."
+            },
+            {
+              "title": "Projetos: Blog e AEO Monitor focados",
+              "description": "Abrem por Recursos numa visão própria, com editor do Blog em modo focado e AEO com leitura do resultado às oportunidades."
+            },
+            {
+              "title": "Inscrição pública renovada",
+              "description": "Nova página de inscrição com briefing, etapas, mapa do Brasil, botão Dúvidas? e Instagram."
+            },
+            {
+              "title": "Campanha e Time mais compactos",
+              "description": "Cabeçalho da campanha em duas linhas e Entregas da Semana em faixa semanal."
             }
           ]
         }
