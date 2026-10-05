@@ -11,13 +11,15 @@ import type { PublicInfluencer, RedeMetrics } from "@/lib/portal-types";
  */
 export function resolveProfileMetricEntries(
   influencer: Pick<PublicInfluencer, "profileMetrics" | "redes">,
-): { plataforma: string; metrics: RedeMetrics }[] {
+): { plataforma: string; seguidores?: string; metrics: RedeMetrics }[] {
   const porRede = influencer.profileMetrics?.porRede;
   if (!porRede) return [];
-  const entries: { plataforma: string; metrics: RedeMetrics }[] = [];
+  const entries: { plataforma: string; seguidores?: string; metrics: RedeMetrics }[] = [];
   for (const [redeId, metrics] of Object.entries(porRede)) {
-    const plataforma = influencer.redes.find((r) => r.id === redeId)?.plataforma;
-    if (plataforma) entries.push({ plataforma, metrics });
+    const rede = influencer.redes.find((r) => r.id === redeId);
+    if (rede?.plataforma) {
+      entries.push({ plataforma: rede.plataforma, seguidores: rede.seguidores, metrics });
+    }
   }
   return entries;
 }

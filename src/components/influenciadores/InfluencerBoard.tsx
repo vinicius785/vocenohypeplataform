@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { DemographicMiniChart } from "@/components/shared/DemographicChart";
+import { barWidth } from "@/lib/audience-distribution";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -243,63 +243,78 @@ function MetricsEditor({
   );
 }
 
+/** Editor de UMA distribuição (gênero, faixa etária, país, cidade): linhas "rótulo + %" com uma
+ * barra fina viva logo abaixo de cada uma — a mesma linguagem de barras horizontais da leitura
+ * (`AudienceInsights`), sem donut e sem gráfico à parte. */
 function DemographicEntriesEditor({
   title,
   placeholder,
   entries,
   onChange,
-  chartType = "bar",
+  scale = "share",
+  level = "section",
 }: {
   title: string;
   placeholder: string;
   entries: DemographicEntry[];
   onChange: (entries: DemographicEntry[]) => void;
-  chartType?: "bar" | "pie";
+  scale?: "share" | "relative";
+  level?: "section" | "sub";
 }) {
-  const chartData = entries
-    .filter((e) => e.label.trim())
-    .map((e) => ({ name: e.label, valor: e.percentual }))
-    .sort((a, b) => b.valor - a.valor);
-
+  const max = Math.max(0, ...entries.map((e) => e.percentual || 0));
   return (
-    <div className="space-y-3 rounded-xl border border-border bg-muted/20 p-3.5">
-      <p className="text-xs font-semibold text-foreground">{title}</p>
-      {entries.length > 0 && (
-        <div className="space-y-1.5">
-          {entries.map((entry) => (
-            <div key={entry.id} className="flex items-center gap-2">
+    <div className="min-w-0 space-y-2">
+      <p
+        className={
+          level === "sub"
+            ? "text-xs font-medium text-foreground"
+            : "text-[11px] font-semibold uppercase tracking-wide text-text-secondary"
+        }
+      >
+        {title}
+      </p>
+      {entries.map((entry) => (
+        <div key={entry.id} className="space-y-1">
+          <div className="flex items-center gap-2">
+            <input
+              value={entry.label}
+              onChange={(e) =>
+                onChange(
+                  entries.map((x) => (x.id === entry.id ? { ...x, label: e.target.value } : x)),
+                )
+              }
+              placeholder={placeholder}
+              aria-label={`${title}: nome`}
+              className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-ring"
+            />
+            <div className="flex shrink-0 items-center gap-1">
               <input
-                value={entry.label}
+                type="number"
+                min={0}
+                max={100}
+                value={entry.percentual || ""}
                 onChange={(e) =>
                   onChange(
-                    entries.map((x) => (x.id === entry.id ? { ...x, label: e.target.value } : x)),
+                    entries.map((x) =>
+                      x.id === entry.id ? { ...x, percentual: Number(e.target.value) || 0 } : x,
+                    ),
                   )
                 }
-                placeholder={placeholder}
-                className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-ring"
+                aria-label={`${title}: percentual`}
+                className="w-16 rounded-md border border-border bg-background px-2 py-1.5 text-right text-xs outline-none focus:ring-1 focus:ring-ring"
               />
-              <div className="flex shrink-0 items-center gap-1">
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={entry.percentual || ""}
-                  onChange={(e) =>
-                    onChange(
-                      entries.map((x) =>
-                        x.id === entry.id ? { ...x, percentual: Number(e.target.value) || 0 } : x,
-                      ),
-                    )
-                  }
-                  className="w-16 rounded-md border border-border bg-background px-2 py-1.5 text-right text-xs outline-none focus:ring-1 focus:ring-ring"
-                />
-                <span className="text-xs text-muted-foreground">%</span>
-              </div>
-              <RemoveBtn onClick={() => onChange(entries.filter((x) => x.id !== entry.id))} />
+              <span className="text-xs text-muted-foreground">%</span>
             </div>
-          ))}
+            <RemoveBtn onClick={() => onChange(entries.filter((x) => x.id !== entry.id))} />
+          </div>
+          <div className="h-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+            <div
+              className="h-full rounded-full bg-foreground/50"
+              style={{ width: `${barWidth(entry.percentual, max, scale)}%` }}
+            />
+          </div>
         </div>
-      )}
+      ))}
       <button
         type="button"
         onClick={() =>
@@ -309,22 +324,21 @@ function DemographicEntriesEditor({
       >
         <Plus className="h-3 w-3" /> Adicionar
       </button>
-      <DemographicMiniChart data={chartData} chartType={chartType} />
     </div>
   );
 }
 
-/** Editor das métricas do perfil do influenciador (não de uma entrega
- * específica): números agregados de audiência/engajamento + composição
- * demográfica do público, cada bloco demográfico com seu próprio gráfico. */
-/** Métricas de uma única rede (sub-editor usado por `ProfileMetricsEditor`
- * uma vez por rede selecionada). */
+/** Métricas de uma única rede (sub-editor usado por `ProfileMetricsEditor` uma vez por rede
+ * selecionada), em duas partes que nunca se misturam: MÉTRICAS (números do perfil) e AUDIÊNCIA
+ * (gênero → faixa etária → localização), sem cards dentro de cards. */
 function RedeMetricsFields({
+  plataforma,
   seguidores,
   onChangeSeguidores,
   value,
   onChange,
 }: {
+  plataforma?: string;
   seguidores?: string;
   onChangeSeguidores: (v: string) => void;
   value?: RedeMetrics;
@@ -337,34 +351,31 @@ function RedeMetricsFields({
     { key: "interacoes", label: "Interações" },
     { key: "visualizacoes", label: "Visualizações" },
     { key: "taxaInteracao", label: "Taxa de interação", suffix: "%" },
-    { key: "taxaAtencaoInicial", label: "Taxa de atenção inicial", suffix: "%" },
+    { key: "taxaAtencaoInicial", label: "Atenção inicial", suffix: "%" },
   ];
+  const fieldLabel = "block text-[11px] font-semibold uppercase tracking-wide text-text-secondary";
+  const fieldInput =
+    "w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring";
+  const followersText = formatSeguidores(seguidores);
 
   return (
     <div className="space-y-6">
-      <div className="space-y-3">
-        <FieldLabel title="Métricas gerais" hint="Números agregados dessa rede." />
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <label className="space-y-1 rounded-xl border border-border bg-muted/20 p-3">
-            <span className="block text-[11px] font-semibold uppercase tracking-tight text-muted-foreground">
-              Seguidores
-            </span>
+      <section className="space-y-3" aria-label="Métricas">
+        <FieldLabel title="Métricas" hint="Números do perfil nesta rede." />
+        <div className="grid grid-cols-2 gap-x-3 gap-y-3 sm:grid-cols-3">
+          <label className="space-y-1">
+            <span className={fieldLabel}>Seguidores</span>
             <input
-              value={formatSeguidores(seguidores)}
+              value={followersText}
               onChange={(e) => onChangeSeguidores(e.target.value.replace(/\D/g, ""))}
               placeholder="0"
               inputMode="numeric"
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+              className={fieldInput}
             />
           </label>
           {SCALAR_FIELDS.map((f) => (
-            <label
-              key={f.key}
-              className="space-y-1 rounded-xl border border-border bg-muted/20 p-3"
-            >
-              <span className="block text-[11px] font-semibold uppercase tracking-tight text-muted-foreground">
-                {f.label}
-              </span>
+            <label key={f.key} className="space-y-1">
+              <span className={fieldLabel}>{f.label}</span>
               <div className="flex items-center gap-1">
                 <input
                   type="number"
@@ -373,48 +384,65 @@ function RedeMetricsFields({
                   onChange={(e) =>
                     set({ [f.key]: e.target.value === "" ? undefined : Number(e.target.value) })
                   }
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+                  className={fieldInput}
                 />
                 {f.suffix && <span className="text-xs text-muted-foreground">{f.suffix}</span>}
               </div>
             </label>
           ))}
         </div>
-      </div>
+      </section>
 
-      <div className="space-y-3 border-t border-border pt-5">
-        <FieldLabel
-          title="Demografia do público"
-          hint="Distribuição percentual do público real dessa rede, por gênero, faixa etária, país e cidade."
-        />
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <DemographicEntriesEditor
-            title="Gênero"
-            placeholder="Ex: Feminino"
-            entries={m.genero ?? []}
-            onChange={(genero) => set({ genero })}
-            chartType="pie"
+      <section className="space-y-5 border-t border-border pt-5" aria-label="Audiência">
+        <div>
+          <FieldLabel
+            title="Audiência"
+            hint="Distribuição percentual do público real dessa rede."
           />
-          <DemographicEntriesEditor
-            title="Faixa etária"
-            placeholder="Ex: 18-24 anos"
-            entries={m.faixaEtaria ?? []}
-            onChange={(faixaEtaria) => set({ faixaEtaria })}
-          />
-          <DemographicEntriesEditor
-            title="Principais países"
-            placeholder="Ex: Brasil"
-            entries={m.paises ?? []}
-            onChange={(paises) => set({ paises })}
-          />
-          <DemographicEntriesEditor
-            title="Principais cidades"
-            placeholder="Ex: São Paulo"
-            entries={m.cidades ?? []}
-            onChange={(cidades) => set({ cidades })}
-          />
+          {(plataforma || followersText) && (
+            <p className="mt-1 text-sm text-foreground">
+              {[plataforma, followersText && `${followersText} seguidores`]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          )}
         </div>
-      </div>
+        <DemographicEntriesEditor
+          title="Gênero"
+          placeholder="Ex: Feminino"
+          entries={m.genero ?? []}
+          onChange={(genero) => set({ genero })}
+        />
+        <DemographicEntriesEditor
+          title="Faixa etária"
+          placeholder="Ex: 25–34"
+          entries={m.faixaEtaria ?? []}
+          onChange={(faixaEtaria) => set({ faixaEtaria })}
+        />
+        <div className="space-y-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
+            Localização
+          </p>
+          <div className="grid gap-5 @md:grid-cols-2">
+            <DemographicEntriesEditor
+              title="Principais países"
+              placeholder="Ex: Brasil"
+              entries={m.paises ?? []}
+              onChange={(paises) => set({ paises })}
+              scale="relative"
+              level="sub"
+            />
+            <DemographicEntriesEditor
+              title="Principais cidades"
+              placeholder="Ex: São Paulo"
+              entries={m.cidades ?? []}
+              onChange={(cidades) => set({ cidades })}
+              scale="relative"
+              level="sub"
+            />
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
@@ -492,7 +520,7 @@ function ProfileMetricsEditor({
           ))}
         </div>
       )}
-      <div className="space-y-3 rounded-xl border border-border bg-muted/20 p-4">
+      <div className="@container space-y-4">
         <div>
           <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             <PlatformIcon plataforma={activeRede.plataforma} className="h-3.5 w-3.5" />
@@ -504,6 +532,7 @@ function ProfileMetricsEditor({
           />
         </div>
         <RedeMetricsFields
+          plataforma={activeRede.plataforma}
           seguidores={activeRede.seguidores}
           onChangeSeguidores={(seguidores) =>
             onChangeRedes(redes.map((x) => (x.id === activeRede.id ? { ...x, seguidores } : x)))

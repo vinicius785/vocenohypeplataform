@@ -15,13 +15,13 @@ import {
   PlatformIcon,
   profileUrl,
   initialsOf,
-  DemographicChart,
   MetricStat,
   hasRedeMetrics,
   entregasSummary,
   PerfilRejectDialog,
 } from "@/components/portal/portal-widgets";
 import { formatSeguidores } from "@/lib/format";
+import { AudienceInsights } from "@/components/shared/AudienceInsights";
 
 /**
  * Modo de revisão sequencial (item 2 do redesenho do Portal do Cliente) —
@@ -300,12 +300,7 @@ function RevisarPerfisPage() {
                           }
                         />
                       </div>
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <DemographicChart title="Gênero" entries={rm.genero} chartType="pie" />
-                        <DemographicChart title="Faixa etária" entries={rm.faixaEtaria} />
-                        <DemographicChart title="Principais países" entries={rm.paises} />
-                        <DemographicChart title="Principais cidades" entries={rm.cidades} />
-                      </div>
+                      <AudienceInsights data={rm} />
                     </div>
                   );
                 })}

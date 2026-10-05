@@ -1,19 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  LabelList,
-  Legend,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  XAxis,
-  YAxis,
-} from "recharts";
-import {
   AtSign,
   BarChart3,
   CalendarDays,
@@ -87,6 +74,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { submitRelatorioNps } from "@/lib/cliente-link.functions";
 import { formatSeguidores } from "@/lib/format";
+import { AudienceInsights } from "@/components/shared/AudienceInsights";
 import { t, type PortalLang } from "@/lib/portal-i18n";
 import { mesLabel } from "@/lib/relatorio-mensal";
 import { SURFACE } from "@/lib/design-tokens";
@@ -236,137 +224,6 @@ export function MetricStat({ label, value }: { label: string; value: string }) {
         {label}
       </p>
       <p className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">{value}</p>
-    </div>
-  );
-}
-
-const PIE_COLORS = [
-  "var(--chart-1)",
-  "var(--chart-2)",
-  "var(--chart-3)",
-  "var(--chart-4)",
-  "var(--chart-5)",
-];
-
-function renderPieLabel(props: {
-  cx: number;
-  cy: number;
-  midAngle: number;
-  outerRadius: number;
-  valor: number;
-}) {
-  const { cx, cy, midAngle, outerRadius, valor } = props;
-  const RADIAN = Math.PI / 180;
-  const radius = outerRadius + 16;
-  const x = cx + radius * Math.cos(-midAngle * RADIAN);
-  const y = cy + radius * Math.sin(-midAngle * RADIAN);
-  return (
-    <text
-      x={x}
-      y={y}
-      fill="var(--muted-foreground)"
-      fontSize={10}
-      textAnchor={x > cx ? "start" : "end"}
-      dominantBaseline="central"
-    >
-      {`${valor}%`}
-    </text>
-  );
-}
-
-function DemographicMiniChart({
-  data,
-  chartType,
-}: {
-  data: { name: string; valor: number }[];
-  chartType: "bar" | "pie";
-}) {
-  if (data.length === 0) return null;
-  if (chartType === "pie") {
-    return (
-      <div className="h-[150px] w-full pt-1">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={data}
-              dataKey="valor"
-              nameKey="name"
-              innerRadius="42%"
-              outerRadius="72%"
-              isAnimationActive={false}
-              label={renderPieLabel}
-              labelLine={{ stroke: "var(--muted-foreground)", strokeWidth: 1 }}
-            >
-              {data.map((entry, i) => (
-                <Cell key={entry.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-              ))}
-            </Pie>
-            <Legend
-              layout="vertical"
-              verticalAlign="middle"
-              align="right"
-              formatter={(value, entry) =>
-                `${value} — ${(entry as { payload?: { valor?: number } }).payload?.valor ?? 0}%`
-              }
-              wrapperStyle={{ fontSize: 10, color: "var(--muted-foreground)" }}
-            />
-          </PieChart>
-        </ResponsiveContainer>
-      </div>
-    );
-  }
-  return (
-    <div className="h-[100px] w-full pt-1">
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} layout="vertical" margin={{ left: 0, right: 28 }}>
-          <CartesianGrid horizontal={false} strokeOpacity={0.15} />
-          <XAxis type="number" domain={[0, 100]} hide />
-          <YAxis
-            type="category"
-            dataKey="name"
-            width={90}
-            tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-            axisLine={false}
-            tickLine={false}
-          />
-          <Bar
-            dataKey="valor"
-            fill="var(--foreground)"
-            radius={3}
-            barSize={12}
-            isAnimationActive={false}
-          >
-            <LabelList
-              dataKey="valor"
-              position="right"
-              formatter={(v: number) => `${v}%`}
-              style={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-            />
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-export function DemographicChart({
-  title,
-  entries,
-  chartType = "bar",
-}: {
-  title: string;
-  entries?: { id: string; label: string; percentual: number }[];
-  chartType?: "bar" | "pie";
-}) {
-  const data = (entries ?? [])
-    .filter((e) => e.label.trim() && e.percentual > 0)
-    .map((e) => ({ name: e.label, valor: e.percentual }))
-    .sort((a, b) => b.valor - a.valor);
-  if (data.length === 0) return null;
-  return (
-    <div className="rounded-lg border border-border bg-muted/20 p-3">
-      <p className="text-xs font-semibold text-foreground">{title}</p>
-      <DemographicMiniChart data={data} chartType={chartType} />
     </div>
   );
 }
@@ -1547,19 +1404,18 @@ export function InfluencerDetail({
                             />
                           ) : null}
                         </div>
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                          <DemographicChart
-                            title={t(lang, "genero")}
-                            entries={rm.genero}
-                            chartType="pie"
-                          />
-                          <DemographicChart
-                            title={t(lang, "faixaEtaria")}
-                            entries={rm.faixaEtaria}
-                          />
-                          <DemographicChart title={t(lang, "paises")} entries={rm.paises} />
-                          <DemographicChart title={t(lang, "cidades")} entries={rm.cidades} />
-                        </div>
+                        <AudienceInsights
+                          data={rm}
+                          labels={{
+                            audience: t(lang, "audiencia"),
+                            gender: t(lang, "genero"),
+                            age: t(lang, "faixaEtaria"),
+                            location: t(lang, "localizacao"),
+                            countries: t(lang, "paises"),
+                            cities: t(lang, "cidades"),
+                            empty: t(lang, "semDadosAudiencia"),
+                          }}
+                        />
                       </div>
                     );
                   })}
