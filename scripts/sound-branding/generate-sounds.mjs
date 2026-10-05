@@ -14,8 +14,25 @@ const lamejs = globalThis.lamejs;
 const SR = 44100;
 const OUT = process.argv[2];
 
-// Notas (Hz) — tudo em Lá maior; A5 é a "assinatura" que reaparece nos três sons.
-const N = { A4: 440.0, Cs5: 554.37, E5: 659.25, A5: 880.0, Cs6: 1108.73, E6: 1318.51, A6: 1760.0 };
+// Harmonia de MPB/bossa nova em Ré maior: acordes com sétima maior e nona (Dmaj7(9), Em7(9)),
+// tocados num "violão de nylon" sintetizado. Notas por número MIDI (A4 = 69).
+const hz = (midi) => 440 * 2 ** ((midi - 69) / 12);
+const M = {
+  D3: 50,
+  A3: 57,
+  B3: 59,
+  D4: 62,
+  E4: 64,
+  Fs4: 66,
+  G4: 67,
+  A4: 69,
+  B4: 71,
+  Cs5: 73,
+  D5: 74,
+  E5: 76,
+  Fs5: 78,
+  A5: 81,
+};
 
 const alloc = (secs) => new Float64Array(Math.ceil(secs * SR));
 
@@ -129,103 +146,68 @@ function normalize(b, targetRmsDb = -21, peakCeilDb = -1.2) {
   return b;
 }
 
-// ---------------- Os três sons ----------------
-
-// CHAT — muito curto e grave-médio: duas notas (Lá4 → Mi5, quinta ascendente), sem brilho.
-function chat() {
-  const b = alloc(0.7);
-  note(b, N.A4, 0.0, { len: 0.16, amp: 0.55, bright: 0.45, ring: 0.7 });
-  note(b, N.E5, 0.085, { len: 0.3, amp: 0.6, bright: 0.5, ring: 0.8 });
-  return lowpass(lowpass(b, 2800), 2800);
-}
-
-/** Moeda: transiente curto de ruído + parciais metálicos inarmônicos (tilintar de moeda). */
-function coin(buf, freq, t0, { len = 0.22, amp = 0.4 } = {}) {
+/** Corda de violão de nylon: parciais harmônicas com decaimento rápido nos agudos + "toque" do dedo. */
+function nylon(buf, midi, t0, { len = 1.0, amp = 0.5 } = {}) {
+  const f = hz(midi);
   const start = Math.floor(t0 * SR);
   const n = Math.floor(len * SR);
   const parts = [
     [1, 1.0, 1.0],
-    [2.76, 0.55, 0.7],
-    [5.4, 0.3, 0.45],
-    [8.93, 0.14, 0.3],
+    [2, 0.55, 0.62],
+    [3, 0.3, 0.42],
+    [4, 0.16, 0.3],
+    [5, 0.08, 0.22],
+    [6, 0.04, 0.16],
   ];
-  let seed = 12345;
-  for (let i = 0; i < n && start + i < buf.length; i++) {
-    const t = i / SR;
-    const attack = Math.min(1, t / 0.0015);
-    let v = 0;
-    for (const [m, a, d] of parts) {
-      v += Math.sin(2 * Math.PI * freq * m * t) * a * Math.exp(-t / ((len / 3.5) * d));
-    }
-    // "clique" metálico inicial (ruído filtrado muito curto)
-    seed = (seed * 1664525 + 1013904223) >>> 0;
-    const noise = (seed / 0xffffffff - 0.5) * Math.exp(-t / 0.0025) * 0.7;
-    buf[start + i] += (v * 0.35 + noise) * attack * amp;
-  }
-}
-
-/** Corpo grave sob a moeda: seno curto em 220 Hz — dá peso (e tira o "tilintar" de brinquedo). */
-function thud(buf, t0, { len = 0.09, amp = 0.5 } = {}) {
-  const start = Math.floor(t0 * SR);
-  const n = Math.floor(len * SR);
-  for (let i = 0; i < n && start + i < buf.length; i++) {
-    const t = i / SR;
-    buf[start + i] +=
-      Math.sin(2 * Math.PI * 220 * t) * Math.exp(-t / 0.03) * Math.min(1, t / 0.002) * amp;
-  }
-}
-
-/** Sino de campainha: parciais de sino (1, 2.4, 3.9) com decaimento longo — "ding-dong". */
-function bell(buf, freq, t0, { len = 0.9, amp = 0.5, warm = false } = {}) {
-  const start = Math.floor(t0 * SR);
-  const n = Math.floor(len * SR);
-  // `warm`: registro grave e poucos harmônicos agudos — campainha encorpada, sem brilho estridente.
-  const parts = warm
-    ? [
-        [1, 1.0, 1.0],
-        [2.0, 0.32, 0.7],
-        [2.9, 0.1, 0.4],
-      ]
-    : [
-        [1, 1.0, 1.0],
-        [2.4, 0.4, 0.55],
-        [3.9, 0.22, 0.35],
-        [5.8, 0.1, 0.22],
-      ];
+  let seed = 4242 + midi;
   for (let i = 0; i < n && start + i < buf.length; i++) {
     const t = i / SR;
     const attack = Math.min(1, t / 0.002);
     let v = 0;
     for (const [m, a, d] of parts) {
-      v += Math.sin(2 * Math.PI * freq * m * t) * a * Math.exp(-t / ((len / 3.2) * d));
+      v += Math.sin(2 * Math.PI * f * m * t) * a * Math.exp(-t / ((len / 3.2) * d));
     }
-    buf[start + i] += v * 0.4 * attack * amp;
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    const nail = (seed / 0xffffffff - 0.5) * Math.exp(-t / 0.003) * 0.18;
+    buf[start + i] += (v * 0.3 + nail) * attack * amp;
   }
 }
 
-// COMERCIAL — dinheiro, sóbrio e firme: duas moedas pesadas sobre um corpo grave, fechando em
-// duas notas médias (Lá4 → Mi5). Sem arpejo brilhante.
-function commercial() {
-  const b = alloc(1.2);
-  thud(b, 0.0, { len: 0.09, amp: 0.34 });
-  coin(b, 1568, 0.0, { len: 0.2, amp: 0.5 });
-  coin(b, 1976, 0.08, { len: 0.22, amp: 0.55 });
-  note(b, N.A4, 0.17, { len: 0.34, amp: 0.55, bright: 0.55, ring: 0.8 });
-  note(b, N.E5, 0.27, { len: 0.46, amp: 0.6, bright: 0.6, ring: 0.9 });
-  return lowpass(lowpass(b, 6500), 6500);
+/** Acorde dedilhado/arpejado para cima (como a mão direita no violão). */
+function strum(buf, midis, t0, { gap = 0.03, len = 1.2, amp = 0.4 } = {}) {
+  midis.forEach((m, i) => nylon(buf, m, t0 + i * gap, { len, amp: amp * (1 - i * 0.04) }));
 }
 
-// REUNIÃO — micro-melodia calorosa e firme: Lá4 → Dó♯5 → Mi5 subindo suave e pousando em Lá5 longo,
-// com um colchão macio (Lá4+Mi5) por baixo. Marimba/pluck encorpado, registro médio, sem sino.
+// ---------------- Os três sons (todos em MPB: violão de nylon, Ré maior) ----------------
+
+// CHAT — curtíssimo: Fá♯4 → Dó♯5 (a sétima maior do Dmaj7, "cor" clássica da bossa).
+function chat() {
+  const b = alloc(0.7);
+  nylon(b, M.Fs4, 0, { len: 0.25, amp: 0.55 });
+  nylon(b, M.Cs5, 0.1, { len: 0.38, amp: 0.55 });
+  return lowpass(lowpass(b, 3200), 3200);
+}
+
+// COMERCIAL — arpejo ascendente sincopado de Em7(9) (Mi–Sol–Si–Ré–Fá♯) que "fecha" em Ré maior:
+// otimista e sóbrio, com o pulso de um samba-canção.
+function commercial() {
+  const b = alloc(1.6);
+  nylon(b, M.E4, 0.0, { len: 0.4, amp: 0.45 });
+  nylon(b, M.G4, 0.09, { len: 0.4, amp: 0.45 });
+  nylon(b, M.B4, 0.2, { len: 0.45, amp: 0.5 });
+  nylon(b, M.D5, 0.29, { len: 0.5, amp: 0.5 });
+  nylon(b, M.Fs5, 0.42, { len: 0.45, amp: 0.55 });
+  strum(b, [M.D3, M.A3, M.Cs5, M.Fs5], 0.62, { gap: 0.025, len: 0.62, amp: 0.38 });
+  return lowpass(lowpass(b, 4200), 4200);
+}
+
+// REUNIÃO — a cadência da bossa: Em7(9) dedilhado e resolvendo em Dmaj7(9), com cauda longa e calma.
 function meeting() {
-  const b = alloc(2.0);
-  swell(b, N.A4, 0.0, { len: 0.9, amp: 0.16, attack: 0.1 });
-  swell(b, N.E5, 0.0, { len: 0.9, amp: 0.12, attack: 0.1 });
-  note(b, N.A4, 0.0, { len: 0.3, amp: 0.5, bright: 0.5, ring: 0.8 });
-  note(b, N.Cs5, 0.17, { len: 0.3, amp: 0.52, bright: 0.55, ring: 0.8 });
-  note(b, N.E5, 0.34, { len: 0.34, amp: 0.56, bright: 0.6, ring: 0.85 });
-  note(b, N.A5, 0.54, { len: 0.8, amp: 0.62, bright: 0.65, ring: 1.1 });
-  return lowpass(lowpass(b, 3000), 3000);
+  const b = alloc(2.4);
+  strum(b, [M.E4 - 12, M.B3, M.D4, M.Fs4, M.G4], 0.0, { gap: 0.035, len: 0.5, amp: 0.38 });
+  strum(b, [M.D3, M.A3, M.Cs5 - 12, M.E4, M.Fs4], 0.5, { gap: 0.04, len: 0.85, amp: 0.4 });
+  nylon(b, M.E5, 0.62, { len: 0.65, amp: 0.3 });
+  return lowpass(lowpass(b, 3600), 3600);
 }
 
 /** Passa-baixa de um polo (aplicado duas vezes = ~12 dB/oit): tira o brilho agudo. */
@@ -265,7 +247,7 @@ for (const [name, fn] of Object.entries(defs)) {
   let b = fn();
   // Chat: quase sem cauda (reverb mínimo e corte mais cedo) — é o som mais repetido.
   const isChat = name.startsWith("chat");
-  b = reverb(b, name.startsWith("meeting") ? 0.18 : isChat ? 0.04 : 0.13);
+  b = reverb(b, name.startsWith("meeting") ? 0.18 : isChat ? 0.04 : 0.12);
   b = trim(b, isChat ? 0.01 : 0.0008);
   normalize(b);
   let peak = 0;

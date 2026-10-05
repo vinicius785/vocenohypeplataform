@@ -1,13 +1,13 @@
 # Sound branding — Você no Hype
 
-A família sonora oficial: três sons curtos em Lá maior, com reverb curto e a nota-assinatura **Lá (A5)**
-reaparecendo em todos. Chat = pluck curto; Comercial = moedas; Reunião = micro-melodia ascendente.
+A família sonora oficial: três sons curtos de **violão de nylon em Ré maior**, com a harmonia da MPB/bossa nova
+(sétima maior e nona). Chat = duas notas (Fá♯→Dó♯); Comercial = arpejo sincopado de Em7(9); Reunião = cadência Em7(9)→Dmaj7(9).
 
 | Arquivo | Evento | Duração | Desenho |
 | --- | --- | --- | --- |
-| `chat-notification.mp3` | Nova mensagem de Chat | ≈ 0,4 s | Curtíssimo e médio-grave: duas notas (Lá → Mi), sem brilho e quase sem cauda — feito para ser ouvido muitas vezes |
-| `commercial-notification.mp3` | Notificação Comercial (novo lead) | ≈ 0,9 s | Dinheiro, sóbrio e firme: duas moedas sobre um corpo grave e duas notas médias (Lá → Mi), sem arpejo brilhante |
-| `meeting-notification.mp3` | Lembrete de reunião | ≈ 1,4 s | Micro-melodia calorosa: Lá4 → Dó♯5 → Mi5 subindo e pousando em Lá5 longo, sobre um colchão macio; marimba encorpada, registro médio, sem sino |
+| `chat-notification.mp3` | Nova mensagem de Chat | ≈ 0,45 s | Curtíssimo: Fá♯4 → Dó♯5 (a sétima maior do Dmaj7), violão de nylon, quase sem cauda |
+| `commercial-notification.mp3` | Notificação Comercial (novo lead) | ≈ 1,4 s | Arpejo ascendente e sincopado de Em7(9) (Mi–Sol–Si–Ré–Fá♯) que fecha num acorde de Ré: otimista e sóbrio, pulso de samba-canção |
+| `meeting-notification.mp3` | Lembrete de reunião | ≈ 1,5 s | Cadência da bossa: Em7(9) dedilhado resolvendo em Dmaj7(9), com nota aguda ao final e cauda calma |
 
 Volume percebido equalizado (RMS ativo ≈ −21 dBFS nos três, pico ≤ −6 dBFS, sem clipping), MP3 mono,
 ~11–22 KB cada. Os arquivos foram gerados por síntese, sem samples de terceiros.
