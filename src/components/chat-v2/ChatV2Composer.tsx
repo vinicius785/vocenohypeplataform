@@ -71,6 +71,12 @@ function useV2MentionSources(convoId: string) {
       id: x.id,
       label: x.label?.trim() || "Tarefa sem título",
       hint: x.project ? `Projeto: ${x.project}` : undefined,
+      status: x.status,
+      assigneeIds: x.assignees,
+      // Sem busca, as minhas tarefas ativas aparecem primeiro (depois as demais ativas).
+      boost:
+        (x.assignees?.includes(meId) ? 50 : 0) +
+        (x.status === "Concluído" || x.status === "Arquivado" || x.status === "Aprovado" ? 0 : 10),
       campanhaId: x.campanhaId,
       projectId: x.projectId,
     }));

@@ -71,6 +71,9 @@ export type MentionOption = {
   projectId?: string;
   clienteId?: string;
   boost?: number;
+  /** Só para tarefas (`#`): status atual (mesma paleta do Kanban) e responsáveis. */
+  status?: string;
+  assigneeIds?: string[];
 };
 
 export type MentionContext = {

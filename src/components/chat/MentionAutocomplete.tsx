@@ -67,7 +67,7 @@ export function MentionAutocomplete({
   hasMore: boolean;
   onPick: (item: MentionAutocompleteItem) => void;
   onHover: (index: number) => void;
-  /** Troca `@` por `#`: referências a tarefas, projetos, campanhas e clientes. */
+  /** Troca `@` por `#`: referência a tarefas. */
   onSwitchToReference?: () => void;
   style?: React.CSSProperties;
 }) {
@@ -142,7 +142,7 @@ export function MentionAutocomplete({
           <span className="grid h-5 w-5 shrink-0 place-items-center rounded bg-muted text-[11px] font-semibold">
             #
           </span>
-          Tarefas, projetos, campanhas e clientes
+          Para referenciar uma tarefa, use #
         </button>
       )}
       {hasMore && (

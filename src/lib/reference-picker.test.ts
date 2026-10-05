@@ -2,94 +2,48 @@ import { describe, expect, it } from "vitest";
 import type { MentionOption } from "./mention-kinds";
 import { buildReferenceView, pushRecent } from "./reference-picker";
 
-const o = (kind: MentionOption["kind"], id: string, label: string, hint?: string, boost?: number) =>
-  ({ kind, id, label, hint, boost }) as MentionOption;
+const t = (id: string, label: string, hint?: string, boost?: number) =>
+  ({ kind: "task", id, label, hint, boost }) as MentionOption;
 const refs: MentionOption[] = [
-  o("task", "t1", "Portal do Cliente - VNH", "Projeto: Você no Hype"),
-  o("task", "t2", "Tela de Login - VNH", "Projeto: Você no Hype"),
-  o("task", "t3", "Revisar contrato", "Projeto: Jurídico"),
-  o("project", "p1", "Você no Hype", "Projeto"),
-  o("project", "p2", "Marketing", "Projeto"),
-  o("campaign", "c1", "PoupaTempo RJ", "Campanha · Governo"),
-  o("client", "k1", "Governo RJ", "Cliente"),
-  o("user", "u1", "Lucas"),
+  t("t1", "Portal do Cliente - VNH", "Projeto: Você no Hype", 10),
+  t("t2", "Tela de Login - VNH", "Projeto: Você no Hype", 60),
+  t("t3", "Revisar contrato", "Projeto: Jurídico", 0),
+  { kind: "project", id: "p1", label: "Portal Projeto" } as MentionOption,
 ];
 
-describe("seletor # — home", () => {
-  it("só '#': recentes (resolvidos) + categorias com contagem; pessoas nunca entram", () => {
+describe("# = tarefas", () => {
+  it("nunca lista outras categorias", () => {
+    const v = buildReferenceView({ references: refs, query: "portal" });
+    expect(v.items.map((o) => o.id)).toEqual(["t1"]);
+  });
+  it("sem texto: recentes primeiro, depois sugeridas por relevância, sem repetir", () => {
     const v = buildReferenceView({
       references: refs,
       query: "",
       recents: [
-        { kind: "project", id: "p2" },
-        { kind: "task", id: "removida" },
-        { kind: "campaign", id: "c1" },
+        { kind: "task", id: "t3" },
+        { kind: "task", id: "sumiu" },
       ],
     });
     expect(v.mode).toBe("home");
-    expect(v.sections.map((s) => s.key)).toEqual(["recents", "categories"]);
-    const rec = v.sections[0].rows.map((r) => r.type === "item" && r.option.label);
-    expect(rec).toEqual(["Marketing", "PoupaTempo RJ"]);
-    expect(v.sections[1].rows).toEqual([
-      { type: "category", kind: "task", count: 3 },
-      { type: "category", kind: "project", count: 2 },
-      { type: "category", kind: "campaign", count: 1 },
-      { type: "category", kind: "client", count: 1 },
-    ]);
+    expect(v.sections.map((s) => s.key)).toEqual(["recents", "suggested"]);
+    expect(v.items.map((o) => o.id)).toEqual(["t3", "t2", "t1"]);
   });
-  it("sem recentes: só categorias", () => {
-    const v = buildReferenceView({ references: refs, query: "", recents: [] });
-    expect(v.sections.map((s) => s.key)).toEqual(["categories"]);
+  it("sem recentes: só uma seção, ordenada pelo boost", () => {
+    const v = buildReferenceView({ references: refs, query: "" });
+    expect(v.sections.map((s) => s.key)).toEqual(["suggested"]);
+    expect(v.items[0].id).toBe("t2");
   });
-  it("limita recentes a 5", () => {
-    const many = Array.from({ length: 9 }, (_, i) => o("task", "x" + i, "T" + i));
-    const v = buildReferenceView({
-      references: many,
-      query: "",
-      recents: many.map((m) => ({ kind: "task" as const, id: m.id })),
-    });
-    expect(v.sections[0].rows).toHaveLength(5);
+  it("limita a lista inicial", () => {
+    const many = Array.from({ length: 30 }, (_, i) => t("x" + i, "T" + i));
+    expect(buildReferenceView({ references: many, query: "" }).items).toHaveLength(8);
   });
-});
-
-describe("seletor # — busca", () => {
-  it("agrupa por categoria e mostra só o que casa", () => {
-    const v = buildReferenceView({ references: refs, query: "portal" });
-    expect(v.mode).toBe("search");
-    expect(v.sections.map((s) => s.label)).toEqual(["Tarefas"]);
-    expect(v.rows).toHaveLength(1);
-  });
-  it("acha pelo contexto (projeto da tarefa) e pelo nome, nome primeiro", () => {
+  it("busca por título e também por projeto, título primeiro", () => {
     const v = buildReferenceView({ references: refs, query: "hype" });
-    expect(v.sections.map((s) => s.key)).toEqual(["task", "project"]);
-    expect(v.sections[0].rows).toHaveLength(2); // as tarefas do projeto
-    expect(v.sections[1].rows[0]).toMatchObject({ option: { label: "Você no Hype" } });
+    expect(v.items.map((o) => o.id).sort()).toEqual(["t1", "t2"]);
+    expect(buildReferenceView({ references: refs, query: "zzz" }).items).toEqual([]);
   });
-  it("sem resultado irrelevante", () => {
-    expect(buildReferenceView({ references: refs, query: "zzz" }).rows).toEqual([]);
-  });
-  it("poucos por grupo", () => {
-    const many = Array.from({ length: 10 }, (_, i) => o("task", "x" + i, "Portal " + i));
-    expect(buildReferenceView({ references: many, query: "portal" }).rows).toHaveLength(3);
-  });
-});
-
-describe("seletor # — categoria", () => {
-  it("lista só aquela categoria, melhores (boost) primeiro; busca filtra dentro", () => {
-    const r = [
-      o("task", "a", "A", undefined, 1),
-      o("task", "b", "B", undefined, 9),
-      o("client", "c", "C"),
-    ];
-    const v = buildReferenceView({ references: r, query: "", kind: "task" });
-    expect(v.mode).toBe("category");
-    expect(v.rows.map((x) => x.type === "item" && x.option.id)).toEqual(["b", "a"]);
-    expect(buildReferenceView({ references: r, query: "a", kind: "task" }).rows).toHaveLength(1);
-  });
-});
-
-describe("recentes", () => {
-  it("mais recente primeiro, sem duplicar", () => {
+  it("recentes: mais recente primeiro, sem duplicar", () => {
     let l = pushRecent([], { kind: "task", id: "1" });
     l = pushRecent(l, { kind: "task", id: "2" });
     l = pushRecent(l, { kind: "task", id: "1" });

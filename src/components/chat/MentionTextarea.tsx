@@ -19,8 +19,6 @@ import {
   buildReferenceView,
   loadRecents,
   rememberRecent,
-  type ReferenceKind,
-  type ReferenceRow,
   type RecentRef,
 } from "@/lib/reference-picker";
 import { EntityReferencePicker } from "./EntityReferencePicker";
@@ -30,7 +28,7 @@ import { MentionAutocomplete, type MentionAutocompleteItem } from "./MentionAuto
  * Textarea do composer com DOIS gatilhos independentes:
  *  - `@` → MENÇÃO de pessoa (autocomplete leve, só pessoas elegíveis da conversa). Em conversa
  *    direta (`mentionsEnabled=false`) o `@` é texto comum: nada abre, nada é selecionável.
- *  - `#` → REFERÊNCIA a tarefa/projeto/campanha/cliente (picker à parte), em qualquer conversa.
+ *  - `#` → REFERÊNCIA a uma TAREFA (seletor de tarefas à parte), em qualquer conversa.
  * A lógica de gatilho é pura e testada em `chat-mentions.ts` (`detectMentionTrigger`).
  */
 const PEOPLE_LIMIT = 6;
@@ -114,8 +112,6 @@ export const MentionTextarea = forwardRef<
   const [trigger, setTrigger] = useState<MentionTrigger | null>(null);
   const [highlight, setHighlight] = useState(0);
   const [left, setLeft] = useState(0);
-  // Categoria escolhida dentro do `#` (Tarefas, Projetos...); some ao fechar o seletor.
-  const [refKind, setRefKind] = useState<ReferenceKind | null>(null);
   const [recents, setRecents] = useState<RecentRef[]>([]);
 
   useEffect(() => {
@@ -154,25 +150,21 @@ export const MentionTextarea = forwardRef<
   const referenceView = useMemo(
     () =>
       trigger?.char === "#"
-        ? buildReferenceView({ references, query: trigger.query, recents, kind: refKind })
+        ? buildReferenceView({ references, query: trigger.query, recents })
         : null,
-    [trigger, references, recents, refKind],
+    [trigger, references, recents],
   );
 
   const activeCount =
-    trigger?.char === "@" ? peopleItems.items.length : (referenceView?.rows.length ?? 0);
+    trigger?.char === "@" ? peopleItems.items.length : (referenceView?.items.length ?? 0);
   // `#` fica aberto mesmo sem resultado ("Nada encontrado"), para a busca ser sempre explicável.
   const open = trigger !== null && (trigger.char === "#" || activeCount > 0);
 
   useEffect(() => {
-    if (trigger?.char !== "#") {
-      setRefKind(null);
-      return;
-    }
-    setRecents(loadRecents());
+    if (trigger?.char === "#") setRecents(loadRecents());
   }, [trigger?.char]);
   // A cada letra a lista muda: volta o destaque para o primeiro resultado.
-  useEffect(() => setHighlight(0), [trigger?.query, refKind]);
+  useEffect(() => setHighlight(0), [trigger?.query]);
 
   const syncTrigger = (text: string, caret: number) => {
     const next = detectMentionTrigger(text, caret, mentionsEnabled);
@@ -218,16 +210,10 @@ export const MentionTextarea = forwardRef<
 
   const pickPerson = (item: MentionAutocompleteItem) =>
     insert("@" + (item.type === "everyone" ? EVERYONE_MENTION_LABEL : item.member.name));
-  const pickReference = (row: ReferenceRow | undefined) => {
-    if (!row) return;
-    if (row.type === "category") {
-      // Escolher a categoria só filtra: o texto do composer não muda.
-      setRefKind(row.kind);
-      setHighlight(0);
-      return;
-    }
-    rememberRecent({ kind: row.option.kind as ReferenceKind, id: row.option.id });
-    insert("#" + row.option.label);
+  const pickReference = (opt: MentionOption | undefined) => {
+    if (!opt) return;
+    rememberRecent({ kind: "task", id: opt.id });
+    insert("#" + opt.label);
   };
 
   const handlePickerKey = (e: KeyboardEvent): boolean => {
@@ -247,13 +233,12 @@ export const MentionTextarea = forwardRef<
     if (e.key === "Enter" || e.key === "Tab") {
       e.preventDefault();
       if (trigger?.char === "@") pickPerson(peopleItems.items[highlight] ?? peopleItems.items[0]);
-      else pickReference(referenceView?.rows[highlight] ?? referenceView?.rows[0]);
+      else pickReference(referenceView?.items[highlight] ?? referenceView?.items[0]);
       return true;
     }
     if (e.key === "Escape") {
       e.preventDefault();
-      if (trigger?.char === "#" && refKind) setRefKind(null);
-      else setTrigger(null);
+      setTrigger(null);
       return true;
     }
     return false;
@@ -309,11 +294,9 @@ export const MentionTextarea = forwardRef<
         <EntityReferencePicker
           view={referenceView}
           query={trigger.query}
-          kind={refKind}
           highlighted={highlight}
           onPick={pickReference}
           onHover={setHighlight}
-          onBack={() => setRefKind(null)}
           style={{ left }}
         />
       )}

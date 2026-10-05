@@ -48,6 +48,7 @@ import {
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { TaskStatusDot } from "@/components/chat/EntityReferencePicker";
 import { TaskMentionCard, type ChatTaskInfo } from "@/components/chat/TaskMentionCard";
 import { AttachmentList } from "@/components/chat/AttachmentList";
 import { MessageAvatar } from "@/components/chat/MessageAvatar";
@@ -129,6 +130,7 @@ function renderTextWithMentions(
   meId: string,
   members: ChatMember[],
   onOpenMention: (m: ChatMention) => void,
+  taskInfoById: Map<string, ChatTaskInfo>,
 ) {
   const parts = splitMentionParts(text, mentions);
   return parts.map((p, i) => {
@@ -161,6 +163,25 @@ function renderTextWithMentions(
     }
 
     const { Icon } = MENTION_KIND_CONFIG[p.kind];
+    const task = p.kind === "task" ? taskInfoById.get(p.id) : undefined;
+    if (task) {
+      // Tarefa: bolinha com a cor REAL do status (mesma paleta do Kanban) + título.
+      return (
+        <button
+          key={i}
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenMention(p);
+          }}
+          title={`Tarefa · ${task.status}${task.project ? ` · ${task.project}` : ""}`}
+          className="mx-0.5 inline-flex max-w-full items-center gap-1.5 rounded border border-border/80 bg-muted/60 px-1.5 py-px align-middle text-xs font-medium text-foreground hover:bg-muted"
+        >
+          <TaskStatusDot status={task.status} className="h-2 w-2" />
+          <span className="min-w-0 truncate">{p.label}</span>
+        </button>
+      );
+    }
     return (
       <button
         key={i}
@@ -223,17 +244,19 @@ function MessageText({
   meId,
   members,
   onOpenMention,
+  taskInfoById,
 }: {
   text: string;
   mentions: ChatMention[] | undefined;
   meId: string;
   members: ChatMember[];
   onOpenMention: (m: ChatMention) => void;
+  taskInfoById: Map<string, ChatTaskInfo>;
 }) {
   if (!text) return null;
   return (
     <p className={MESSAGE_BODY_CLASS}>
-      {renderTextWithMentions(text, mentions, meId, members, onOpenMention)}
+      {renderTextWithMentions(text, mentions, meId, members, onOpenMention, taskInfoById)}
     </p>
   );
 }
@@ -480,6 +503,7 @@ export function ChatV2Message({
             meId={meId}
             members={members}
             onOpenMention={openMention}
+            taskInfoById={taskInfoById}
           />
         )}
         {taskMentionsOf(message.mentions, taskInfoById).map((task) => (
