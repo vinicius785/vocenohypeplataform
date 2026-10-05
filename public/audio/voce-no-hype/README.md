@@ -1,13 +1,13 @@
 # Sound branding — Você no Hype
 
 A família sonora oficial: três sons curtos em Lá maior, com reverb curto e a nota-assinatura **Lá (A5)**
-reaparecendo em todos. Chat = pluck curto; Comercial = moedas; Reunião = campainha grave.
+reaparecendo em todos. Chat = pluck curto; Comercial = moedas; Reunião = micro-melodia ascendente.
 
 | Arquivo | Evento | Duração | Desenho |
 | --- | --- | --- | --- |
 | `chat-notification.mp3` | Nova mensagem de Chat | ≈ 0,4 s | Curtíssimo e médio-grave: duas notas (Lá → Mi), sem brilho e quase sem cauda — feito para ser ouvido muitas vezes |
 | `commercial-notification.mp3` | Notificação Comercial (novo lead) | ≈ 0,9 s | Dinheiro, sóbrio e firme: duas moedas sobre um corpo grave e duas notas médias (Lá → Mi), sem arpejo brilhante |
-| `meeting-notification.mp3` | Lembrete de reunião | ≈ 1,5 s | Campainha do carteiro: "ding-dong" (Dó♯ → Lá) em registro grave, filtrado e quente; nota final longa |
+| `meeting-notification.mp3` | Lembrete de reunião | ≈ 1,4 s | Micro-melodia calorosa: Lá4 → Dó♯5 → Mi5 subindo e pousando em Lá5 longo, sobre um colchão macio; marimba encorpada, registro médio, sem sino |
 
 Volume percebido equalizado (RMS ativo ≈ −21 dBFS nos três, pico ≤ −6 dBFS, sem clipping), MP3 mono,
 ~11–22 KB cada. Os arquivos foram gerados por síntese, sem samples de terceiros.

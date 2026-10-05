@@ -215,13 +215,17 @@ function commercial() {
   return lowpass(lowpass(b, 6500), 6500);
 }
 
-// REUNIÃO — carteiro na campainha: "ding-dong" (Dó♯ → Lá), com a nota final longa e clara.
+// REUNIÃO — micro-melodia calorosa e firme: Lá4 → Dó♯5 → Mi5 subindo suave e pousando em Lá5 longo,
+// com um colchão macio (Lá4+Mi5) por baixo. Marimba/pluck encorpado, registro médio, sem sino.
 function meeting() {
   const b = alloc(2.0);
-  // Uma oitava abaixo do desenho anterior (Dó♯5 → Lá4) e filtrada: grave, quente, sem agudo estridente.
-  bell(b, N.Cs5, 0.0, { len: 0.7, amp: 0.5, warm: true });
-  bell(b, N.A4, 0.36, { len: 1.0, amp: 0.66, warm: true });
-  return lowpass(lowpass(b, 2600), 2600);
+  swell(b, N.A4, 0.0, { len: 0.9, amp: 0.16, attack: 0.1 });
+  swell(b, N.E5, 0.0, { len: 0.9, amp: 0.12, attack: 0.1 });
+  note(b, N.A4, 0.0, { len: 0.3, amp: 0.5, bright: 0.5, ring: 0.8 });
+  note(b, N.Cs5, 0.17, { len: 0.3, amp: 0.52, bright: 0.55, ring: 0.8 });
+  note(b, N.E5, 0.34, { len: 0.34, amp: 0.56, bright: 0.6, ring: 0.85 });
+  note(b, N.A5, 0.54, { len: 0.8, amp: 0.62, bright: 0.65, ring: 1.1 });
+  return lowpass(lowpass(b, 3000), 3000);
 }
 
 /** Passa-baixa de um polo (aplicado duas vezes = ~12 dB/oit): tira o brilho agudo. */
