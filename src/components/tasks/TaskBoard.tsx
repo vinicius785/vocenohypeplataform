@@ -77,6 +77,10 @@ import { useConfirm } from "@/hooks/use-confirm";
 import { DateField } from "@/components/ui/date-field";
 import { TimeTrackingPanel } from "@/components/tasks/TimeTrackingPanel";
 import { startTimerOnInProgress, stopIfRunningOnTask } from "@/lib/time-entries";
+import {
+  shouldStartTimerOnStatusChange,
+  shouldStopTimerOnStatusChange,
+} from "@/lib/timer-status-rules";
 import { linkifyText } from "@/lib/linkify";
 import { loadTeamMembers, loadProjetos, ACTIVITY_STATUS_COMPLETED_ACTION } from "@/lib/projetos";
 import { getMe } from "@/lib/chat-store";
@@ -2283,13 +2287,16 @@ export function TaskBoard({
                             // antigo que `withStatusChange` já tratou acima) — só
                             // "Concluído" para sozinho, silenciosamente.
                             const dragOrigin = taskOriginFromScope(scope);
-                            if (col.key === "Concluído" && dragOrigin) {
+                            // Saiu de "Em andamento" (ou concluiu): o cronômetro para.
+                            if (
+                              shouldStopTimerOnStatusChange(dragged.status, col.key) &&
+                              dragOrigin
+                            ) {
                               void stopIfRunningOnTask(dragged.id.replace(/^mkt:/, ""), dragOrigin);
                             }
                             // Entrou em "Em andamento": o cronômetro começa para quem moveu.
                             if (
-                              col.key === "Em andamento" &&
-                              dragged.status !== "Em andamento" &&
+                              shouldStartTimerOnStatusChange(dragged.status, col.key) &&
                               dragOrigin
                             ) {
                               void startTimerOnInProgress(
@@ -3124,6 +3131,10 @@ export function TaskDialog({
       if (fields.category === "dependencia_tarefa" && fields.relatedTaskEntry && depTaskId) {
         await handlePickDependency("depends", fields.relatedTaskEntry);
       }
+      // Bloquear tira a tarefa de "Em andamento": o cronômetro de quem estava contando para.
+      if (shouldStopTimerOnStatusChange(status, "Bloqueada") && timeTrackingTaskId) {
+        void stopIfRunningOnTask(timeTrackingTaskId, origin);
+      }
       setStatus("Bloqueada");
       lastAtomicStatusRef.current = "Bloqueada";
       setBlockedState(res.blockedState);
@@ -3165,6 +3176,10 @@ export function TaskDialog({
           thisBlockBlockedAt: blockedState.blockedAt,
         },
       });
+      // Retomada direto em "Em andamento": o cronômetro começa para quem desbloqueou.
+      if (shouldStartTimerOnStatusChange("Bloqueada", res.newStatus) && timeTrackingTaskId) {
+        void startTimerOnInProgress(timeTrackingTaskId, origin, title.trim());
+      }
       setStatus(res.newStatus as TaskStatus);
       lastAtomicStatusRef.current = res.newStatus as TaskStatus;
       setBlockedState(res.blockedState);
@@ -3259,11 +3274,15 @@ export function TaskDialog({
         // Cronômetro de `time_entries` (independente do campo antigo que
         // `withStatusChange` tratou acima) — só "Concluído" para sozinho,
         // silenciosamente; qualquer outra troca de status nunca toca nele.
-        if (status === "Concluído" && origin && timeTrackingTaskId) {
+        if (shouldStopTimerOnStatusChange(initial.status, status) && origin && timeTrackingTaskId) {
           void stopIfRunningOnTask(timeTrackingTaskId, origin);
         }
         // Passou para "Em andamento": o cronômetro começa para quem mudou o status.
-        if (status === "Em andamento" && origin && timeTrackingTaskId) {
+        if (
+          shouldStartTimerOnStatusChange(initial.status, status) &&
+          origin &&
+          timeTrackingTaskId
+        ) {
           void startTimerOnInProgress(timeTrackingTaskId, origin, title.trim());
         }
         nextTimerRunning = withTimer.timerRunning ?? false;
@@ -4295,15 +4314,17 @@ export function TaskDialog({
                                   setActivity((a) =>
                                     pushActivity(a, `mudou status de "${s.title}" para ${next}`),
                                   );
-                                  if (next === "Concluído" && timeTrackingOrigin) {
+                                  if (
+                                    shouldStopTimerOnStatusChange(s.status, next) &&
+                                    timeTrackingOrigin
+                                  ) {
                                     void stopIfRunningOnTask(
                                       s.id.replace(/^mkt:/, ""),
                                       timeTrackingOrigin,
                                     );
                                   }
                                   if (
-                                    next === "Em andamento" &&
-                                    s.status !== "Em andamento" &&
+                                    shouldStartTimerOnStatusChange(s.status, next) &&
                                     timeTrackingOrigin
                                   ) {
                                     void startTimerOnInProgress(

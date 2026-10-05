@@ -224,8 +224,8 @@ export async function listEntriesByTask(
 
 /** Para (silenciosamente) o cronômetro do usuário atual SE ele estiver
  * rodando nesta tarefa específica — chamado quando uma tarefa entra em
- * "Concluído" (regra: o cronômetro só PARA sozinho em "Concluído"; e só
- * COMEÇA sozinho ao entrar em "Em andamento", ver `startTimerOnInProgress`). Fire-and-forget: nunca bloqueia a mudança de status
+ * "Concluído" ou quando sai de "Em andamento" (regras em `timer-status-rules.ts`); e COMEÇA
+ * sozinho ao entrar em "Em andamento" (ver `startTimerOnInProgress`). Fire-and-forget: nunca bloqueia a mudança de status
  * principal por causa disso. */
 /** Quando uma tarefa passa para "Em andamento", o cronômetro começa sozinho para QUEM mudou o
  * status (o usuário atual). Fire-and-forget: nunca bloqueia a mudança de status.

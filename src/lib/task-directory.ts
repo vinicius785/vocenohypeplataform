@@ -15,6 +15,10 @@ import {
 import { saveProjetoTarefas } from "@/lib/projeto-scoped-store";
 import { useClientes } from "@/lib/clientes-store";
 import { cleanupDependenciesForTask } from "@/lib/task-dependencies-store";
+import {
+  shouldStartTimerOnStatusChange,
+  shouldStopTimerOnStatusChange,
+} from "@/lib/timer-status-rules";
 import type { Task, TaskBoardScope, TaskStatus } from "@/components/tasks/TaskBoard";
 
 /** Diretório "achatado" de todas as tarefas da plataforma (projetos +
@@ -192,16 +196,24 @@ export function useTaskDirectory(): TaskDirectoryEntry[] {
  * item de primeiro nível — quem chama decide como avisar o usuário. */
 export function updateTaskDirectoryStatus(entry: TaskDirectoryEntry, newStatus: string): boolean {
   const ok = applyTaskDirectoryStatus(entry, newStatus);
-  // Mesmo comportamento do board: ao entrar em "Em andamento" o cronômetro começa para quem mudou.
-  if (ok && newStatus === "Em andamento" && entry.status !== "Em andamento") {
+  // Mesmo comportamento do board: entrar em "Em andamento" inicia o cronômetro; sair dele (ou
+  // concluir) para.
+  if (ok) {
     const origin = entry.campanhaId
       ? "campanha"
       : entry.id.startsWith("mkt:")
         ? "marketing"
         : "projeto";
-    void import("@/lib/time-entries").then(({ startTimerOnInProgress }) =>
-      startTimerOnInProgress(entry.rawId, origin, entry.label),
-    );
+    if (shouldStopTimerOnStatusChange(entry.status, newStatus)) {
+      void import("@/lib/time-entries").then(({ stopIfRunningOnTask }) =>
+        stopIfRunningOnTask(entry.rawId, origin),
+      );
+    }
+    if (shouldStartTimerOnStatusChange(entry.status, newStatus)) {
+      void import("@/lib/time-entries").then(({ startTimerOnInProgress }) =>
+        startTimerOnInProgress(entry.rawId, origin, entry.label),
+      );
+    }
   }
   return ok;
 }

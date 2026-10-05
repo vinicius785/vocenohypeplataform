@@ -1,17 +1,17 @@
 {
-  "version": "1.310.0",
+  "version": "1.310.1",
   "releases": [
     {
-      "version": "1.310.0",
-      "summary": "O cronômetro começa sozinho quando a tarefa vai para Em andamento.",
+      "version": "1.310.1",
+      "summary": "O cronômetro agora também pausa ao sair de Em andamento.",
       "modules": [
         {
           "name": "TAREFAS",
           "tagline": "Cronômetro",
           "items": [
             {
-              "title": "Cronômetro automático em “Em andamento”",
-              "description": "Ao colocar uma tarefa em andamento (arrastando, no detalhe, nas subtarefas ou pelo card no Chat), o cronômetro começa a contar para quem fez a mudança. Se você já tem outro cronômetro rodando, a plataforma avisa e oferece trocar."
+              "title": "Cronômetro pausa ao sair de “Em andamento”",
+              "description": "Se a tarefa muda de Em andamento para qualquer outro status (inclusive Bloqueada e Concluído), o cronômetro para e o tempo trabalhado fica registrado. Ao desbloquear direto para Em andamento, ele volta a contar."
             }
           ]
         }
