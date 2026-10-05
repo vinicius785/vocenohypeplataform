@@ -188,16 +188,15 @@ function chat() {
   return lowpass(lowpass(b, 3200), 3200);
 }
 
-// COMERCIAL — arpejo ascendente sincopado de Em7(9) (Mi–Sol–Si–Ré–Fá♯) que "fecha" em Ré maior:
-// otimista e sóbrio, com o pulso de um samba-canção.
+// COMERCIAL — a volta harmônica de "Beleza Pura" (Caetano, 1979): C – Am – Dm – G7 → C, em Dó maior
+// (tom da cifra original). Quatro "batidas" de violão sincopadas e leves, a última soando por mais tempo.
 function commercial() {
-  const b = alloc(1.1);
-  nylon(b, M.E4, 0.0, { len: 0.25, amp: 0.45 });
-  nylon(b, M.G4, 0.06, { len: 0.25, amp: 0.45 });
-  nylon(b, M.B4, 0.13, { len: 0.28, amp: 0.5 });
-  nylon(b, M.D5, 0.19, { len: 0.3, amp: 0.5 });
-  nylon(b, M.Fs5, 0.28, { len: 0.34, amp: 0.55 });
-  strum(b, [M.D3, M.A3, M.Cs5, M.Fs5], 0.4, { gap: 0.02, len: 0.4, amp: 0.38 });
+  const b = alloc(1.3);
+  const chord = (t, midis, len, amp) => strum(b, midis, t, { gap: 0.014, len, amp });
+  chord(0.0, [48, 64, 69, 72], 0.3, 0.4); // Am (Mi–Lá–Dó)
+  chord(0.17, [50, 65, 69, 74], 0.3, 0.4); // Dm
+  chord(0.34, [43, 65, 71, 74], 0.3, 0.42); // G7
+  chord(0.52, [48, 64, 67, 72, 76], 0.34, 0.45); // C
   return lowpass(lowpass(b, 4200), 4200);
 }
 
