@@ -49,7 +49,7 @@ import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/u
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TaskRefChip } from "@/components/chat/TaskRefChip";
-import { TaskMentionCard, type ChatTaskInfo } from "@/components/chat/TaskMentionCard";
+import type { ChatTaskInfo } from "@/components/chat/TaskMentionCard";
 import { AttachmentList } from "@/components/chat/AttachmentList";
 import { MessageAvatar } from "@/components/chat/MessageAvatar";
 import { useMentionNavigation } from "./use-mention-navigation";
@@ -193,23 +193,6 @@ function renderTextWithMentions(
   });
 }
 
-function taskMentionsOf(
-  mentions: ChatMention[] | undefined,
-  taskInfoById: Map<string, ChatTaskInfo>,
-): ChatTaskInfo[] {
-  if (!mentions || mentions.length === 0) return [];
-  const seen = new Set<string>();
-  const out: ChatTaskInfo[] = [];
-  for (const m of mentions) {
-    if (m.kind !== "task" || seen.has(m.id)) continue;
-    const task = taskInfoById.get(m.id);
-    if (!task) continue;
-    seen.add(m.id);
-    out.push(task);
-  }
-  return out;
-}
-
 /** Sanitização mínima do texto renderizado: nunca HTML arbitrário. O texto
  * chega como string simples do banco — quebra de linha é a única
  * "formatação" que precisamos preservar visualmente (markdown controlado
@@ -351,7 +334,7 @@ export function ChatV2Message({
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMine = isMineProp ?? message.authorId === meId;
   const isSystem = message.authorId === "system";
-  const { openMention, openTask, taskInfoById } = useMentionNavigation();
+  const { openMention, taskInfoById } = useMentionNavigation();
   const effectiveConvoId = convoId ?? message.convoId;
   const saved = isMessageSaved(message.id);
   const pinned = isMessagePinned(effectiveConvoId, message.id);
@@ -500,11 +483,6 @@ export function ChatV2Message({
             taskInfoById={taskInfoById}
           />
         )}
-        {taskMentionsOf(message.mentions, taskInfoById).map((task) => (
-          <div key={task.id} className="mt-1.5 max-w-[420px]">
-            <TaskMentionCard task={task} onOpen={openTask} />
-          </div>
-        ))}
         {!editing && <ChatV2LinkPreviews text={message.text} />}
         {message.attachments && message.attachments.length > 0 && (
           <AttachmentList message={message} attachments={message.attachments} />

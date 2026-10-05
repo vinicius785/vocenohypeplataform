@@ -1,25 +1,17 @@
 {
-  "version": "1.320.0",
+  "version": "1.320.1",
   "releases": [
     {
-      "version": "1.320.0",
-      "summary": "A tarefa citada com # agora aparece como um objeto rico, no editor e na mensagem.",
+      "version": "1.320.1",
+      "summary": "O cartão extra sob a mensagem com tarefa foi removido.",
       "modules": [
         {
           "name": "CHAT",
           "tagline": "Tarefas nas mensagens",
           "items": [
             {
-              "title": "Tarefa como objeto",
-              "description": "Na mensagem, a tarefa mostra a cor do status, o título, o responsável e o projeto, e abre a tarefa ao clicar."
-            },
-            {
-              "title": "Sempre atualizada",
-              "description": "O status, o título e o responsável vêm da tarefa de verdade, então acompanham as mudanças depois que a mensagem foi enviada."
-            },
-            {
-              "title": "Também no editor",
-              "description": "Ao escrever, as tarefas citadas aparecem acima do campo no mesmo formato, e dá para remover com o ×."
+              "title": "Só a marcação na mensagem",
+              "description": "A tarefa citada aparece apenas como o objeto dentro do texto, sem o retângulo repetido logo abaixo."
             }
           ]
         }
