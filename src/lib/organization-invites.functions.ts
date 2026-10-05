@@ -23,6 +23,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { z } from "zod";
 import { assertOrganizationIsNotDemo } from "@/lib/demo/demo-guards";
+import { buildPortalAccessEmail, type PortalAccessRole } from "@/lib/portal-access-email";
 
 /** The only two client-facing roles as of the role-collapse migration
  * (`20260922184944_collapse_client_roles_to_standard_viewer.sql`):
@@ -83,6 +84,66 @@ function generateTempPassword(): string {
   // since client_admin/create UI for accept-invite isn't built this phase,
   // but the auth user itself is fully functional immediately).
   return `Vnh-${Math.random().toString(36).slice(2, 8)}${Math.random().toString(36).slice(2, 6)}!`;
+}
+
+export type InviteEmailResult = { emailSent: boolean; emailError: string | null };
+
+/** Envia ao convidado o e-mail com as informações do acesso ao portal. Conta nova recebe um link
+ * (de uso único) para CRIAR a própria senha — a senha temporária nunca vai por e-mail; conta
+ * existente recebe o link do login. Falha de envio NUNCA desfaz o convite: devolve o motivo para a
+ * tela avisar o admin (que ainda pode compartilhar a senha temporária manualmente). */
+export async function sendPortalAccessInviteEmail(
+  supabaseAdmin: SupabaseClient<Database>,
+  opts: {
+    actorUserId: string;
+    organizationId: string;
+    email: string;
+    role: PortalAccessRole;
+    existingAccount: boolean;
+  },
+): Promise<InviteEmailResult> {
+  try {
+    const [{ data: org }, { data: inviter }] = await Promise.all([
+      supabaseAdmin
+        .from("organizations")
+        .select("name")
+        .eq("id", opts.organizationId)
+        .maybeSingle(),
+      supabaseAdmin.from("profiles").select("full_name").eq("id", opts.actorUserId).maybeSingle(),
+    ]);
+    const { getAppUrl } = await import("@/lib/google-oauth-config");
+    const appUrl = getAppUrl();
+    let actionUrl = `${appUrl}/`;
+    if (!opts.existingAccount) {
+      const { data: link, error } = await supabaseAdmin.auth.admin.generateLink({
+        type: "recovery",
+        email: opts.email,
+        options: { redirectTo: `${appUrl}/criar-senha` },
+      });
+      if (error || !link?.properties?.action_link) {
+        console.error("[portal-invite] falha ao gerar link de acesso", error?.message);
+        return { emailSent: false, emailError: "Não foi possível gerar o link de acesso." };
+      }
+      actionUrl = link.properties.action_link;
+    }
+    const { subject, html } = buildPortalAccessEmail({
+      clienteName: org?.name || "seu cliente",
+      inviterName: inviter?.full_name || "Alguém do time da Você no Hype",
+      role: opts.role,
+      actionUrl,
+      existingAccount: opts.existingAccount,
+    });
+    const { sendEmail } = await import("@/lib/email-provider.server");
+    const result = await sendEmail({ to: opts.email, subject, html });
+    if (!result.ok) {
+      console.error("[portal-invite] falha ao enviar e-mail", result.error);
+      return { emailSent: false, emailError: result.error };
+    }
+    return { emailSent: true, emailError: null };
+  } catch (err) {
+    console.error("[portal-invite] erro inesperado no envio", err);
+    return { emailSent: false, emailError: "Falha ao enviar o e-mail." };
+  }
 }
 
 const InviteInput = z.object({
@@ -269,7 +330,15 @@ export const inviteClientUser = createServerFn({ method: "POST" })
     );
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    return inviteClientUserCore(supabaseAdmin, context.userId, data);
+    const invited = await inviteClientUserCore(supabaseAdmin, context.userId, data);
+    const email = await sendPortalAccessInviteEmail(supabaseAdmin, {
+      actorUserId: context.userId,
+      organizationId: data.organizationId,
+      email: data.email,
+      role: data.role,
+      existingAccount: invited.existingAccount,
+    });
+    return { ...invited, ...email };
   });
 
 /** The `clientes` client-side store only syncs the JSONB `data` column
@@ -369,11 +438,24 @@ export const resendClientInvite = createServerFn({ method: "POST" })
       throw new Error('Só é possível reenviar convite para acessos com status "Convidado".');
     }
 
-    const tempPassword = generateTempPassword();
-    const { error: pwErr } = await supabaseAdmin.auth.admin.updateUserById(membership.user_id, {
-      password: tempPassword,
-    });
-    if (pwErr) throw new Error(pwErr.message);
+    // Conta criada por este convite (ainda precisa definir senha) x conta que já existia: só a
+    // primeira tem a senha trocada — nunca sobrescrevemos a senha de quem já usa a plataforma.
+    const { data: authUser, error: authErr } = await supabaseAdmin.auth.admin.getUserById(
+      membership.user_id,
+    );
+    if (authErr || !authUser?.user?.email) {
+      throw new Error(authErr?.message ?? "Usuário do convite não encontrado.");
+    }
+    const existingAccount = authUser.user.user_metadata?.must_change_password !== true;
+
+    let tempPassword: string | null = null;
+    if (!existingAccount) {
+      tempPassword = generateTempPassword();
+      const { error: pwErr } = await supabaseAdmin.auth.admin.updateUserById(membership.user_id, {
+        password: tempPassword,
+      });
+      if (pwErr) throw new Error(pwErr.message);
+    }
 
     const invitedAt = new Date().toISOString();
     const { error: updErr } = await supabaseAdmin
@@ -389,7 +471,17 @@ export const resendClientInvite = createServerFn({ method: "POST" })
       targetUserId: membership.user_id,
     });
 
-    return { tempPassword };
+    const email = await sendPortalAccessInviteEmail(supabaseAdmin, {
+      actorUserId: context.userId,
+      organizationId: membership.organization_id,
+      email: authUser.user.email,
+      role: (membership.role === "client_viewer"
+        ? "client_viewer"
+        : "client_standard") as PortalAccessRole,
+      existingAccount,
+    });
+
+    return { tempPassword, ...email };
   });
 
 const UpdateRoleInput = z.object({

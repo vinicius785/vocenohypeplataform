@@ -199,6 +199,12 @@ export function PortalAccessSection({
   const [error, setError] = useState<string | null>(null);
   const [tempPassword, setTempPassword] = useState<string | null>(null);
   const [inviteWasExistingAccount, setInviteWasExistingAccount] = useState(false);
+  /** Resultado do último envio de e-mail do convite (null = nenhum convite recente). */
+  const [inviteEmail, setInviteEmail] = useState<{
+    to: string;
+    sent: boolean;
+    error: string | null;
+  } | null>(null);
   const [rowBusyId, setRowBusyId] = useState<string | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
 
@@ -250,6 +256,7 @@ export function PortalAccessSection({
       });
       setInviteWasExistingAccount(result.existingAccount);
       setTempPassword(result.tempPassword);
+      setInviteEmail({ to: email.trim(), sent: result.emailSent, error: result.emailError });
       await refreshMembers(organizationId);
 
       // "Campanhas liberadas" at invite time (spec) — a second call right
@@ -309,6 +316,11 @@ export function PortalAccessSection({
     withRowBusy(m.id, async () => {
       const result = await resendFn({ data: { organizationMemberId: m.id } });
       setTempPassword(result.tempPassword);
+      setInviteEmail({
+        to: m.email ?? "o convidado",
+        sent: result.emailSent,
+        error: result.emailError,
+      });
     });
 
   const openRoleDialog = (m: Member) => {
@@ -522,12 +534,32 @@ export function PortalAccessSection({
         </DialogContent>
       </Dialog>
 
+      {inviteEmail && (
+        <div role="status" className="mb-3 rounded-xl border border-border/60 bg-card p-3 text-xs">
+          <p className="font-medium text-foreground">
+            {inviteEmail.sent
+              ? `Convite enviado por e-mail para ${inviteEmail.to}.`
+              : "O convite foi criado, mas o e-mail não foi enviado."}
+          </p>
+          {!inviteEmail.sent && (
+            <p className="mt-1 text-text-secondary">
+              {inviteEmail.error ? `${inviteEmail.error} ` : ""}
+              {tempPassword
+                ? "Compartilhe a senha temporária abaixo ou use “Reenviar convite” depois."
+                : "Use “Reenviar convite” para tentar de novo."}
+            </p>
+          )}
+        </div>
+      )}
+
       {tempPassword && (
         <div className="mb-3 rounded-xl border border-border/60 bg-card p-3 text-xs">
           <p className="font-medium text-foreground">
-            {inviteWasExistingAccount
-              ? "Convite enviado — conta existente vinculada. Senha temporária (caso precise):"
-              : "Convite enviado. Senha temporária para o primeiro acesso:"}
+            {inviteEmail?.sent
+              ? "Senha temporária (opcional — o convidado recebeu um link por e-mail para criar a própria senha):"
+              : inviteWasExistingAccount
+                ? "Conta existente vinculada. Senha temporária (caso precise):"
+                : "Senha temporária para o primeiro acesso:"}
           </p>
           <div className="mt-1 flex items-center gap-2">
             <p className="select-all rounded bg-muted px-2 py-1 font-mono text-foreground">
@@ -543,8 +575,7 @@ export function PortalAccessSection({
             </Button>
           </div>
           <p className="mt-1 text-text-secondary">
-            Compartilhe manualmente (WhatsApp/e-mail) — não há envio automático nesta fase. Só é
-            exibida agora; não fica disponível depois.
+            Só é exibida agora; não fica disponível depois.
           </p>
         </div>
       )}
