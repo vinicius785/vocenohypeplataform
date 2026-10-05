@@ -1,25 +1,25 @@
 {
-  "version": "1.323.0",
+  "version": "1.324.0",
   "releases": [
     {
-      "version": "1.323.0",
-      "summary": "Calendário Editorial refinado: criar conteúdo com tarefa, legenda e arquivos.",
+      "version": "1.324.0",
+      "summary": "Meu trabalho no Início agora permite agir nas tarefas sem abri-las.",
       "modules": [
         {
-          "name": "PROJETOS",
-          "tagline": "Marketing · Calendário Editorial",
+          "name": "INÍCIO",
+          "tagline": "Meu trabalho",
           "items": [
             {
-              "title": "Criar conteúdo + tarefa",
-              "description": "Ao criar um conteúdo você escolhe entre só o conteúdo ou o conteúdo com uma tarefa de produção já criada, herdando título, data e responsável."
+              "title": "Mude o status pela Home",
+              "description": "Clique na bolinha de status da tarefa e escolha o novo status, com as mesmas regras do Kanban: conclusão, pontuação e recorrência."
             },
             {
-              "title": "Detalhe para trabalhar",
-              "description": "O detalhe agora tem briefing, legenda com contador por canal, arquivos (imagem, vídeo, PDF) e a tarefa do conteúdo, com ações no topo."
+              "title": "Cronômetro na linha",
+              "description": "Tarefas em andamento mostram o tempo correndo, com botões para iniciar e parar, sempre sincronizado com o resto da plataforma."
             },
             {
-              "title": "Formulário mais claro",
-              "description": "O formulário foi reorganizado em Detalhes, Publicação e Contexto, e Excluir ficou discreto no menu de três pontos."
+              "title": "Mais contexto",
+              "description": "Cada linha mostra cliente e projeto, prioridade e prazo (Hoje, Atrasada · 2d), com o título em destaque."
             }
           ]
         }

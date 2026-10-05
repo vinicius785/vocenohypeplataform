@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getMe } from "@/lib/chat-store";
 import { isValidUuid, type DateRange } from "@/lib/performance-engine";
@@ -288,50 +288,72 @@ export async function getRunningEntryForUser(userId: string): Promise<TimeEntry 
   return fromRow(data as unknown as TimeEntryRow);
 }
 
-/** Cronômetro rodando do usuário atual, pro indicador global. Busca ao
- * montar + repolling a cada 20s como rede de segurança entre
- * abas/dispositivos — quem inicia/para na mesma aba deve também
- * atualizar seu próprio estado local otimisticamente, sem esperar o
- * próximo poll (ver AppShell.tsx). */
+/** Cronômetro rodando do usuário atual — UMA fonte compartilhada (indicador global do AppShell e
+ * "Meu trabalho" do Início leem o MESMO estado): uma única busca inicial e um único repolling de
+ * 20 s como rede de segurança entre abas/dispositivos, não importa quantos componentes usem o
+ * hook. Quem inicia/para na mesma aba avisa via `emitTimerChanged()` e o estado atualiza na hora. */
 const RUNNING_TIMER_POLL_MS = 20_000;
+
+type RunningState = { entry: TimeEntry | null; loading: boolean };
+let runningState: RunningState = { entry: null, loading: true };
+const runningListeners = new Set<() => void>();
+let runningPoll: number | null = null;
+let runningSeq = 0;
+
+function setRunningState(next: RunningState) {
+  const same =
+    next.loading === runningState.loading &&
+    next.entry?.id === runningState.entry?.id &&
+    next.entry?.endedAt === runningState.entry?.endedAt;
+  if (same) return;
+  runningState = next;
+  runningListeners.forEach((l) => l());
+}
+
+async function refreshRunning() {
+  const me = getMe();
+  if (!isValidUuid(me.id)) {
+    setRunningState({ entry: null, loading: false });
+    return;
+  }
+  const mine = ++runningSeq;
+  const entry = await getRunningEntryForUser(me.id);
+  if (mine === runningSeq) setRunningState({ entry, loading: false });
+}
+
+function subscribeRunning(listener: () => void): () => void {
+  runningListeners.add(listener);
+  // Cada novo componente confere o estado atual ao montar (como antes); o repolling é um só.
+  void refreshRunning();
+  if (runningListeners.size === 1) {
+    runningPoll = window.setInterval(() => void refreshRunning(), RUNNING_TIMER_POLL_MS);
+    window.addEventListener(TIMER_CHANGED_EVENT, onRunningChanged);
+  }
+  return () => {
+    runningListeners.delete(listener);
+    if (runningListeners.size === 0) {
+      if (runningPoll !== null) window.clearInterval(runningPoll);
+      runningPoll = null;
+      window.removeEventListener(TIMER_CHANGED_EVENT, onRunningChanged);
+    }
+  };
+}
+function onRunningChanged() {
+  void refreshRunning();
+}
+const SERVER_RUNNING_STATE: RunningState = { entry: null, loading: true };
 
 export function useRunningTimer(): {
   entry: TimeEntry | null;
   loading: boolean;
   refetch: () => void;
 } {
-  const [entry, setEntry] = useState<TimeEntry | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [tick, setTick] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    const me = getMe();
-    if (!isValidUuid(me.id)) {
-      setLoading(false);
-      return;
-    }
-    void getRunningEntryForUser(me.id).then((result) => {
-      if (!cancelled) {
-        setEntry(result);
-        setLoading(false);
-      }
-    });
-    const reload = () => {
-      void getRunningEntryForUser(me.id).then((result) => {
-        if (!cancelled) setEntry(result);
-      });
-    };
-    const interval = window.setInterval(reload, RUNNING_TIMER_POLL_MS);
-    window.addEventListener(TIMER_CHANGED_EVENT, reload);
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-      window.removeEventListener(TIMER_CHANGED_EVENT, reload);
-    };
-  }, [tick]);
-
-  return { entry, loading, refetch: () => setTick((t) => t + 1) };
+  const state = useSyncExternalStore(
+    subscribeRunning,
+    () => runningState,
+    () => SERVER_RUNNING_STATE,
+  );
+  return { entry: state.entry, loading: state.loading, refetch: () => void refreshRunning() };
 }
 
 export function useTaskTimeEntries(

@@ -250,7 +250,7 @@ function applyTaskDirectoryStatus(entry: TaskDirectoryEntry, newStatus: string):
  * `Task` que `TaskDialog` espera — mesmo mapeamento de campos já usado em
  * `MarketingSection.tsx`'s `resolveTasks` (replicado aqui, não importado,
  * porque lá é uma função privada do arquivo, só isso). */
-function standaloneToTask(s: MktStandalone): Task {
+export function standaloneToTask(s: MktStandalone): Task {
   return {
     id: s.id,
     title: s.title,
@@ -278,7 +278,7 @@ function standaloneToTask(s: MktStandalone): Task {
   } as Task;
 }
 
-function taskToStandalonePatch(t: Task): Partial<Omit<MktStandalone, "id" | "createdAt">> {
+export function taskToStandalonePatch(t: Task): Partial<Omit<MktStandalone, "id" | "createdAt">> {
   return {
     title: t.title,
     status: t.status,

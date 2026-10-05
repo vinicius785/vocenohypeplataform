@@ -11,6 +11,15 @@ import {
 import { colorFor, initialsOf } from "@/lib/person-avatar";
 import { getTaskAssignees, getTaskPrimaryAssignee } from "@/lib/projetos";
 import type { TaskStatus } from "@/lib/task-status";
+import { loadProjetoTarefas, saveProjetoTarefas } from "@/lib/projeto-scoped-store";
+import { getAllCampanhaTarefas, saveCampanhaTarefas } from "@/lib/campanha-scoped-store";
+import { loadStandalone, updateStandalone } from "@/lib/marketing-tasks";
+import { standaloneToTask, taskToStandalonePatch } from "@/lib/task-directory";
+import { startTimerOnInProgress, stopIfRunningOnTask } from "@/lib/time-entries";
+import {
+  shouldStartTimerOnStatusChange,
+  shouldStopTimerOnStatusChange,
+} from "@/lib/timer-status-rules";
 import type { ActivityKind, Member, Task, TaskBoardScope } from "@/components/tasks/TaskBoard";
 
 /**
@@ -262,3 +271,111 @@ export function applyRecurrenceIfCompleted(prev: Task, next: Task): Task {
 // meio-dia local evita esse desvio de fuso horário.
 export const fmtDate = (d: string) =>
   d ? new Date(`${d}T00:00:00`).toLocaleDateString("pt-BR") : "—";
+
+/* ---------------- Mudar o status de uma tarefa a partir de qualquer tela ---------------- */
+
+/** Como achar a tarefa: `id` é o da própria tarefa/subtarefa (com `mkt:` nas avulsas do Marketing),
+ * `parentId` só existe em subtarefa. */
+export type StatusTarget = {
+  id: string;
+  projectId: string;
+  campanhaId?: string;
+  parentId?: string;
+};
+export type StatusChangeContext = { members: Member[]; performanceSettings: PerformanceSettings };
+
+export function statusTargetOrigin(t: StatusTarget): "projeto" | "campanha" | "marketing" {
+  if (t.campanhaId) return "campanha";
+  if (t.id.startsWith("mkt:") || t.parentId?.startsWith("mkt:")) return "marketing";
+  return "projeto";
+}
+
+/** Atualiza (recursivamente) a tarefa/subtarefa `id` dentro de `list`. */
+export function updateTaskNode(
+  list: Task[],
+  id: string,
+  fn: (t: Task) => Task,
+): { list: Task[]; prev: Task; next: Task } | null {
+  for (let i = 0; i < list.length; i++) {
+    const t = list[i];
+    if (t.id === id) {
+      const next = fn(t);
+      return { list: list.map((x, j) => (j === i ? next : x)), prev: t, next };
+    }
+    if (t.subtasks?.length) {
+      const r = updateTaskNode(t.subtasks, id, fn);
+      if (r) {
+        return {
+          list: list.map((x, j) => (j === i ? { ...x, subtasks: r.list } : x)),
+          prev: r.prev,
+          next: r.next,
+        };
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Muda o status de uma tarefa (ou subtarefa) pelo MESMO pipeline do Kanban: `withStatusChange` →
+ * XP/performance → recorrência → grava no store da origem → cronômetro (para ao sair de "Em
+ * andamento"/concluir; começa para quem mudou ao entrar em "Em andamento"). As regras que exigem
+ * tela (dependência pendente, bloqueio) são decididas por quem chama — ver `home-work.ts`.
+ */
+export function changeTaskStatus(
+  target: StatusTarget,
+  newStatus: TaskStatus,
+  ctx: StatusChangeContext,
+): { ok: boolean; completed: boolean } {
+  const origin = statusTargetOrigin(target);
+  const scope: TaskBoardScope =
+    origin === "campanha"
+      ? { kind: "campanha", id: target.campanhaId! }
+      : origin === "marketing"
+        ? { kind: "marketing" }
+        : { kind: "projeto", id: target.projectId };
+  const rawId = target.id.replace(/^mkt:/, "");
+  let changed: { prev: Task; next: Task } | null = null;
+
+  const pipeline = (t: Task): Task => {
+    const updated = withStatusChange(t, newStatus);
+    if (updated !== t) {
+      recordTaskLedgerEventsOnStatusChange(t, updated, { scope, ...ctx });
+    }
+    return applyRecurrenceIfCompleted(t, updated);
+  };
+
+  if (origin === "campanha") {
+    const list = getAllCampanhaTarefas().get(target.campanhaId!);
+    const r = list ? updateTaskNode(list, target.id, pipeline) : null;
+    if (r) {
+      saveCampanhaTarefas(target.campanhaId!, r.list);
+      changed = r;
+    }
+  } else if (origin === "marketing") {
+    for (const s of loadStandalone()) {
+      const r = updateTaskNode([standaloneToTask(s)], rawId, pipeline);
+      if (r) {
+        updateStandalone(s.id, taskToStandalonePatch(r.list[0]));
+        changed = r;
+        break;
+      }
+    }
+  } else {
+    const r = updateTaskNode(loadProjetoTarefas(target.projectId), target.id, pipeline);
+    if (r) {
+      saveProjetoTarefas(target.projectId, r.list);
+      changed = r;
+    }
+  }
+  if (!changed) return { ok: false, completed: false };
+
+  const prevStatus = changed.prev.status;
+  if (shouldStopTimerOnStatusChange(prevStatus, newStatus)) {
+    void stopIfRunningOnTask(rawId, origin);
+  }
+  if (shouldStartTimerOnStatusChange(prevStatus, newStatus)) {
+    void startTimerOnInProgress(rawId, origin, changed.prev.title);
+  }
+  return { ok: true, completed: newStatus === "Concluído" };
+}

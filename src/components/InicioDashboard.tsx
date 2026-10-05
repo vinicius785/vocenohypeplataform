@@ -6,7 +6,6 @@ import {
   Calendar,
   CheckCircle2,
   ChevronDown,
-  Flag,
   MessageSquare,
   Newspaper,
   X,
@@ -39,6 +38,7 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { Card, CardHeader } from "@/components/shared/SectionCard";
 import { AvatarStack } from "@/components/meetings/AvatarStack";
 import { useConfirm } from "@/hooks/use-confirm";
+import { toast } from "sonner";
 import {
   subscribeChat,
   getMe,
@@ -61,18 +61,25 @@ import {
   declineMeetingFor,
   type Meeting,
 } from "@/lib/reunioes-store";
-import { PRIORITY_TONE } from "@/lib/task-status";
 import { useTeamMembers } from "@/components/tasks/task-people";
+import { WorkTaskRow } from "@/components/inicio/WorkTaskRow";
+import { changeTaskStatus } from "@/lib/task-status-change";
 import {
-  TaskDeadlineBadge,
-  TaskStatusBadge,
-  deadlineViewFromDashTask,
-} from "@/components/tasks/task-ui";
+  pendingDependencyCount,
+  statusGate,
+  timerMatchesTask,
+  workContextLabel,
+} from "@/lib/home-work";
+import { useTaskDependencies } from "@/lib/task-dependencies-store";
+import { startTimerOnInProgress, stopTimer, useRunningTimer } from "@/lib/time-entries";
+import { statusTargetOrigin } from "@/lib/task-status-change";
+import type { TaskStatus } from "@/lib/task-status";
 import { MeetingSummaryDialog } from "@/components/ReunioesSection";
 import { onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
 import { onStandaloneChange } from "@/lib/marketing-tasks";
 import {
   loadAllTasks,
+  loadAllTasksFlat,
   WEEKDAYS,
   type DashTask,
   collectTaskCommentMentions,
@@ -348,6 +355,11 @@ export function InicioDashboard() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [meetingSummary, setMeetingSummary] = useState<Meeting | null>(null);
   const [workExpanded, setWorkExpanded] = useState(false);
+  // Tarefas concluídas agora pela Home: ficam um instante riscadas antes de sair da lista.
+  const [leaving, setLeaving] = useState<Map<string, { task: DashTask; index: number }>>(new Map());
+  const allDeps = useTaskDependencies();
+  const running = useRunningTimer();
+  const workMembers = useTeamMembers();
   const [commentsExpanded, setCommentsExpanded] = useState(false);
   const workCardRef = useRef<HTMLDivElement>(null);
   const { confirm, confirmDialog } = useConfirm();
@@ -804,7 +816,86 @@ export function InicioDashboard() {
     navigate({ to: "/projeto/$id", params: { id: t.projectId }, search: { taskId: t.id } });
   };
 
+  const clienteByCampanha = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of clientesForChat) {
+      for (const camp of c.campanhas ?? []) map.set(camp.id, c.empresa);
+    }
+    return map;
+  }, [clientesForChat]);
+
+  const workKey = (t: Pick<DashTask, "projectId" | "id">) => `${t.projectId}_${t.id}`;
+
+  /** Muda o status direto da Home pelo MESMO pipeline do Kanban (`changeTaskStatus`). Bloqueio e
+   * desbloqueio exigem o questionário: abrem a tarefa em vez de contornar a regra. */
+  const handleWorkStatus = async (t: DashTask, next: TaskStatus, index: number) => {
+    const raw = t.id.replace(/^mkt:/, "");
+    const hasDeps = allDeps.some((d) => d.blockedTaskId === raw);
+    const pending = hasDeps
+      ? pendingDependencyCount(
+          raw,
+          allDeps,
+          (id) =>
+            loadAllTasksFlat(campanhaNameMap).find((x) => x.id.replace(/^mkt:/, "") === id)?.status,
+        )
+      : 0;
+    const gate = statusGate(t.status, next, pending);
+    if (gate === "noop") return;
+    if (gate === "open-task") return openTask(t);
+    if (gate === "blocked-by-dependency") {
+      toast.error("Esta tarefa depende de outra ainda não concluída.");
+      return;
+    }
+    if (gate === "confirm-complete") {
+      const yes = await confirm(
+        "Esta tarefa depende de outra ainda não concluída. Concluir mesmo assim?",
+        { title: "Concluir tarefa?", confirmLabel: "Concluir" },
+      );
+      if (!yes) return;
+    }
+    const res = changeTaskStatus(t, next, {
+      members: workMembers,
+      performanceSettings,
+    });
+    if (!res.ok) {
+      toast.error("Não foi possível alterar o status desta tarefa.");
+      return;
+    }
+    if (res.completed) {
+      const key = workKey(t);
+      setLeaving((m) => new Map(m).set(key, { task: { ...t, status: "Concluído" }, index }));
+      window.setTimeout(
+        () =>
+          setLeaving((m) => {
+            const n = new Map(m);
+            n.delete(key);
+            return n;
+          }),
+        1400,
+      );
+    }
+  };
+
+  const startWorkTimer = (t: DashTask) =>
+    void startTimerOnInProgress(t.id.replace(/^mkt:/, ""), statusTargetOrigin(t), t.title);
+  const stopWorkTimer = () => {
+    if (running.entry) void stopTimer(running.entry.id, running.entry.startedAt);
+  };
+
   const visibleWorkTasks = workExpanded ? filteredTasks : filteredTasks.slice(0, WORK_PAGE_SIZE);
+  const workRows = useMemo(() => {
+    const rows = visibleWorkTasks.map((task, index) => ({ task, index, isLeaving: false }));
+    const present = new Set(visibleWorkTasks.map(workKey));
+    for (const [key, snap] of leaving) {
+      if (present.has(key)) continue;
+      rows.splice(Math.min(snap.index, rows.length), 0, {
+        task: snap.task,
+        index: snap.index,
+        isLeaving: true,
+      });
+    }
+    return rows;
+  }, [visibleWorkTasks, leaving]);
   const visibleComments = commentsExpanded
     ? assignedComments
     : assignedComments.slice(0, COMMENTS_PAGE_SIZE);
@@ -961,48 +1052,20 @@ export function InicioDashboard() {
                     title="Nada por aqui. Bom trabalho."
                   />
                 )}
-                {visibleWorkTasks.map((t) => (
-                  <div
-                    key={`${t.projectId}_${t.id}`}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => openTask(t)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        openTask(t);
-                      }
-                    }}
-                    className="group flex w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset md:px-5"
-                  >
-                    <PriorityFlag priority={t.priority} />
-                    <div className="min-w-0 flex-1">
-                      <p
-                        className="flex min-w-0 items-center gap-1.5 truncate text-sm text-foreground group-hover:underline"
-                        title={t.title}
-                      >
-                        {t.parentTitle && (
-                          <span
-                            title={`Subtarefa de "${t.parentTitle}"`}
-                            className="inline-flex shrink-0 items-center rounded-full border border-border bg-muted/60 px-1.5 py-0.5 text-[11px] font-semibold uppercase leading-none tracking-wide text-muted-foreground"
-                          >
-                            Sub
-                          </span>
-                        )}
-                        <span className="truncate">{t.title}</span>
-                      </p>
-                    </div>
-                    <TaskStatusBadge
-                      status={t.status}
-                      size="xs"
-                      className="hidden sm:inline-flex"
-                    />
-                    <Badge variant="secondary" className="hidden shrink-0 sm:inline-flex">
-                      {t.projectName}
-                    </Badge>
-                    <TaskDeadlineBadge view={deadlineViewFromDashTask(t)} size="xs" />
-                    <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-                  </div>
+                {workRows.map(({ task: t, index, isLeaving }) => (
+                  <WorkTaskRow
+                    key={workKey(t)}
+                    task={t}
+                    context={workContextLabel(t, clienteByCampanha)}
+                    timerStartedAt={
+                      timerMatchesTask(t, running.entry) ? (running.entry?.startedAt ?? null) : null
+                    }
+                    leaving={isLeaving}
+                    onOpen={() => openTask(t)}
+                    onStatus={(next) => void handleWorkStatus(t, next, index)}
+                    onTimerStart={() => startWorkTimer(t)}
+                    onTimerStop={stopWorkTimer}
+                  />
                 ))}
                 {filteredTasks.length > WORK_PAGE_SIZE && (
                   <button
@@ -1445,20 +1508,6 @@ function HeaderIndicatorCell({
         {label}
       </span>
     </button>
-  );
-}
-
-/** Bandeira de prioridade (só ícone, texto no aria-label) — mesma cor de
- * `PRIORITY_TONE` usada em toda a plataforma. Nunca muda de cor por
- * atraso: prazo tem indicador próprio (`TaskDeadlineBadge`). */
-function PriorityFlag({ priority }: { priority?: DashTask["priority"] }) {
-  return (
-    <Flag
-      className={`h-3.5 w-3.5 shrink-0 ${priority ? PRIORITY_TONE[priority] : "text-text-secondary"}`}
-      fill="currentColor"
-      strokeWidth={1.5}
-      aria-label={`Prioridade: ${priority ?? "sem prioridade"}`}
-    />
   );
 }
 
