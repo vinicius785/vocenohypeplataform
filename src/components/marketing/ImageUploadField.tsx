@@ -30,16 +30,22 @@ export function CoverUploadField({
 
   return (
     <div className="space-y-1">
-      <span className="text-[11px] font-medium text-muted-foreground">{label}</span>
-      <div className="aspect-video overflow-hidden rounded-md border border-border bg-muted">
-        {cover ? (
+      <span className="text-xs font-semibold uppercase tracking-widest text-text-secondary">
+        {label}
+      </span>
+      {cover ? (
+        <div className="aspect-video overflow-hidden rounded-lg border border-border bg-muted">
           <img src={cover} alt={label} className="h-full w-full object-cover" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center">
-            <ImageIcon className="h-6 w-6 text-muted-foreground" />
-          </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          className="flex h-24 w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-muted/30 text-sm text-text-secondary hover:border-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+        >
+          <ImageIcon className="h-4 w-4" /> Adicionar imagem de capa
+        </button>
+      )}
       <input
         ref={fileRef}
         type="file"
@@ -47,16 +53,16 @@ export function CoverUploadField({
         className="hidden"
         onChange={(e) => e.target.files?.[0] && void handleFile(e.target.files[0])}
       />
-      <div className="flex items-center gap-1.5">
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          className={`${inputCls} inline-flex w-auto flex-1 items-center justify-center gap-1.5 font-medium hover:bg-muted`}
-        >
-          <Upload className="h-3.5 w-3.5" />
-          {cover ? "Trocar imagem" : "Enviar imagem"}
-        </button>
-        {cover && (
+      {cover && (
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className={`${inputCls} inline-flex w-auto flex-1 items-center justify-center gap-1.5 font-medium hover:bg-muted`}
+          >
+            <Upload className="h-3.5 w-3.5" />
+            Trocar imagem
+          </button>
           <button
             type="button"
             onClick={() => onChange(undefined)}
@@ -65,8 +71,8 @@ export function CoverUploadField({
           >
             <X className="h-3.5 w-3.5" />
           </button>
-        )}
-      </div>
+        </div>
+      )}
       {error && <p className="text-[11px] text-rose-600">{error}</p>}
     </div>
   );

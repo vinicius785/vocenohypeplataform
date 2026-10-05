@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, Check, Eye } from "lucide-react";
+import { ChevronDown, Check } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -80,64 +80,58 @@ export function PublishActions({
 
   return (
     <>
-      <div className="ml-auto flex gap-2">
-        <button
-          onClick={onPreview}
-          className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs hover:bg-muted"
-        >
-          <Eye className="h-3.5 w-3.5" /> Pré-visualizar
-        </button>
-        <DropdownMenu>
-          <div className="inline-flex overflow-hidden rounded-full bg-foreground text-background">
+      <DropdownMenu>
+        <div className="inline-flex overflow-hidden rounded-md bg-brand text-brand-foreground shadow">
+          <button
+            type="button"
+            onClick={requestPrimaryAction}
+            className="h-8 px-3 text-xs font-medium hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {isPublished ? "Atualizar publicação" : "Publicar"}
+          </button>
+          <DropdownMenuTrigger asChild>
             <button
-              onClick={requestPrimaryAction}
-              className="px-3 py-1.5 text-xs font-medium hover:opacity-90"
+              type="button"
+              aria-label="Mais opções de publicação"
+              className="h-8 border-l border-brand-foreground/25 px-2 hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              {isPublished ? "Atualizar publicação" : "Publicar"}
+              <ChevronDown className="h-3.5 w-3.5" />
             </button>
-            <DropdownMenuTrigger asChild>
-              <button
-                aria-label="Mais opções de publicação"
-                className="border-l border-background/20 px-2 py-1.5 hover:opacity-90"
+          </DropdownMenuTrigger>
+        </div>
+        <DropdownMenuContent align="end">
+          {!isPublished && (
+            <>
+              <DropdownMenuItem onClick={() => setStep({ kind: "confirm-publish" })}>
+                Publicar agora
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  if (willSchedule) setStep({ kind: "confirm-schedule", at: scheduleAt });
+                  else onRequestSchedule();
+                }}
               >
-                <ChevronDown className="h-3.5 w-3.5" />
-              </button>
-            </DropdownMenuTrigger>
-          </div>
-          <DropdownMenuContent align="end">
-            {!isPublished && (
-              <>
-                <DropdownMenuItem onClick={() => setStep({ kind: "confirm-publish" })}>
-                  Publicar agora
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => {
-                    if (willSchedule) setStep({ kind: "confirm-schedule", at: scheduleAt });
-                    else onRequestSchedule();
-                  }}
-                >
-                  Agendar publicação
-                </DropdownMenuItem>
-              </>
-            )}
-            {isPublished && (
-              <>
-                <DropdownMenuItem onClick={() => setStep({ kind: "confirm-unpublish" })}>
-                  Despublicar
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => {
-                    if (willSchedule) setStep({ kind: "confirm-schedule", at: scheduleAt });
-                    else onRequestSchedule();
-                  }}
-                >
-                  Agendar alteração
-                </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+                Agendar publicação
+              </DropdownMenuItem>
+            </>
+          )}
+          {isPublished && (
+            <>
+              <DropdownMenuItem onClick={() => setStep({ kind: "confirm-unpublish" })}>
+                Despublicar
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  if (willSchedule) setStep({ kind: "confirm-schedule", at: scheduleAt });
+                  else onRequestSchedule();
+                }}
+              >
+                Agendar alteração
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       <Dialog open={!!step} onOpenChange={(open) => !open && setStep(null)}>
         <DialogContent className="max-w-sm">

@@ -1,16 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Eye, Check, Loader2 } from "lucide-react";
+import { ArrowLeft, Check, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import type { BlogPost } from "@/lib/projetos";
 import { loadTeamMembers } from "@/lib/projetos";
 import { initialsOf, colorFor } from "@/lib/blog-engagement";
 import { renderMarkdownLite, MARKDOWN_LITE_CLASSES } from "./markdown";
 import { BlogToolbar } from "./Toolbar";
-import { PublishSidebar, type FieldRefs } from "./PublishSidebar";
+import { ArticleSettings, type FieldRefs } from "./ArticleSettings";
 import { PublishActions } from "./PublishActions";
 import { slugify, statusInfo } from "./types";
-
-const inputCls =
-  "h-8 w-full rounded-md border border-border bg-background px-2.5 text-xs outline-none focus:ring-2 focus:ring-ring";
 
 function fmtDateTime(iso?: string): string {
   if (!iso) return "";
@@ -90,11 +89,19 @@ export function BlogEditor({
   const [scheduleMode, setScheduleMode] = useState<"now" | "schedule">("now");
   const [scheduleAt, setScheduleAt] = useState("");
   const [previewTab, setPreviewTab] = useState<"site" | "mural" | "portal">("site");
+  const [mode, setMode] = useState<"edit" | "preview">("edit");
+  // Autor: "time" (usuário cadastrado) ou "personalizado" (texto livre) — decisão explícita, só
+  // o campo do tipo escolhido aparece. Inicial: texto livre só se há nome sem usuário vinculado.
+  const [authorMode, setAuthorMode] = useState<"team" | "custom">(() =>
+    !post.authorId && (post.authorName ?? "").trim() ? "custom" : "team",
+  );
 
   useEffect(() => {
     setDraft(post);
     setScheduleMode("now");
     setScheduleAt("");
+    setMode("edit");
+    setAuthorMode(!post.authorId && (post.authorName ?? "").trim() ? "custom" : "team");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [post.id]);
 
@@ -177,62 +184,94 @@ export function BlogEditor({
     ? previewTab
     : (destinosDisponiveis[0] ?? "site");
 
+  const goPreview = () => {
+    setPreviewTab(activePreviewTab);
+    setMode("preview");
+  };
+
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          onClick={handleClose}
-          className="rounded-full border border-border px-3 py-1.5 text-xs hover:bg-muted"
-        >
-          ← Voltar
-        </button>
-        <span className="text-sm font-normal tracking-tight text-foreground">
-          {p.title || "Novo artigo"}
-        </span>
-        <StatusHeader post={p} />
-        <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-          {saveState === "saving" ? (
-            <>
-              <Loader2 className="h-3 w-3 animate-spin" /> Salvando...
-            </>
-          ) : saveState === "saved" ? (
-            <>
-              <Check className="h-3 w-3" /> Salvo agora
-            </>
-          ) : null}
-        </span>
-        <button
-          onClick={onDelete}
-          className="rounded-full border border-border px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10"
-        >
-          Excluir
-        </button>
-        <PublishActions
-          post={p}
-          scheduleMode={scheduleMode}
-          scheduleAt={scheduleAt}
-          onPreview={() => setPreviewTab(activePreviewTab)}
-          onPublishNow={() =>
-            patchImmediate({
-              status: "publicado",
-              publishedAt: new Date().toISOString(),
-              publishDate: new Date().toISOString(),
-            })
-          }
-          onSchedule={(iso) => patchImmediate({ status: "agendado", publishDate: iso })}
-          onUnpublish={() => patchImmediate({ status: "despublicado" })}
-          onFocusField={focusField}
-          onRequestSchedule={requestSchedule}
-        />
+    <div className="space-y-6">
+      {/* Cabeçalho do artigo: contexto à esquerda, ações à direita — Publicar é a principal. */}
+      <div className="sticky top-0 z-20 -mx-4 border-b border-border/60 bg-background/95 px-4 py-3 backdrop-blur md:-mx-8 md:px-8">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <button
+            type="button"
+            onClick={handleClose}
+            className="inline-flex items-center gap-1 rounded-md text-xs text-text-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Blog
+          </button>
+          <span className="min-w-0 max-w-[16rem] truncate text-sm font-medium text-foreground">
+            {p.title || "Novo artigo"}
+          </span>
+          <StatusHeader post={p} />
+          <span
+            role="status"
+            className="inline-flex items-center gap-1 text-xs text-text-secondary"
+          >
+            {saveState === "saving" ? (
+              <>
+                <Loader2 className="h-3 w-3 animate-spin" /> Salvando...
+              </>
+            ) : saveState === "saved" ? (
+              <>
+                <Check className="h-3 w-3" /> Salvo
+              </>
+            ) : null}
+          </span>
+
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <SegmentedControl
+              aria-label="Modo do artigo"
+              size="sm"
+              value={mode}
+              onChange={(v) => (v === "preview" ? goPreview() : setMode("edit"))}
+              options={[
+                { value: "edit", label: "Editar" },
+                { value: "preview", label: "Pré-visualizar" },
+              ]}
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                if (debounceRef.current) window.clearTimeout(debounceRef.current);
+                flush(draftRef.current);
+              }}
+            >
+              {p.status === "rascunho" ? "Salvar rascunho" : "Salvar"}
+            </Button>
+            <PublishActions
+              post={p}
+              scheduleMode={scheduleMode}
+              scheduleAt={scheduleAt}
+              onPreview={goPreview}
+              onPublishNow={() =>
+                patchImmediate({
+                  status: "publicado",
+                  publishedAt: new Date().toISOString(),
+                  publishDate: new Date().toISOString(),
+                })
+              }
+              onSchedule={(iso) => patchImmediate({ status: "agendado", publishDate: iso })}
+              onUnpublish={() => patchImmediate({ status: "despublicado" })}
+              onFocusField={(key) => {
+                setMode("edit");
+                window.setTimeout(() => focusField(key), 50);
+              }}
+              onRequestSchedule={() => {
+                setMode("edit");
+                window.setTimeout(requestSchedule, 50);
+              }}
+            />
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[2fr_1.75fr_1.25fr]">
-        <div className="space-y-3 rounded-xl border border-border bg-background p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Conteúdo
-          </p>
-          <label className="block space-y-1">
-            <span className="text-[11px] font-medium text-muted-foreground">Título</span>
+      {mode === "edit" ? (
+        <>
+          {/* Editor: o conteúdo é o protagonista — coluna larga, título como campo editorial. */}
+          <div className="mx-auto w-full max-w-4xl space-y-5">
             <input
               ref={fieldRefs.title}
               value={p.title}
@@ -240,127 +279,116 @@ export function BlogEditor({
                 const title = e.target.value;
                 patchDebounced({ title, slug: p.slug ? p.slug : slugify(title) });
               }}
-              className="w-full border-0 bg-transparent p-0 text-xl font-semibold outline-none focus:ring-0"
+              aria-label="Título do artigo"
+              placeholder="Digite o título do artigo"
+              className="w-full border-0 bg-transparent p-0 text-3xl font-semibold tracking-tight text-foreground outline-none placeholder:text-text-secondary/60 focus:ring-0 md:text-4xl"
             />
-          </label>
-          <label className="block space-y-1">
-            <span className="text-[11px] font-medium text-muted-foreground">Slug</span>
-            <input
-              value={p.slug ?? ""}
-              onChange={(e) => patchDebounced({ slug: slugify(e.target.value) })}
-              className={inputCls}
-            />
-          </label>
-          <label className="block space-y-1">
-            <span className="text-[11px] font-medium text-muted-foreground">Resumo</span>
             <textarea
               value={p.excerpt ?? ""}
               onChange={(e) => patchDebounced({ excerpt: e.target.value })}
+              aria-label="Resumo do artigo"
               rows={2}
-              className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-ring"
+              placeholder="Resumo: uma ou duas frases que apresentam o artigo"
+              className="w-full resize-none border-0 border-b border-border/60 bg-transparent px-0 pb-3 text-base text-text-secondary outline-none placeholder:text-text-secondary/60 focus:border-foreground/40 focus:ring-0"
             />
-          </label>
-          <div className="space-y-1">
-            <span className="text-[11px] font-medium text-muted-foreground">Conteúdo</span>
-            <BlogToolbar
-              textareaRef={contentRef}
-              value={p.content ?? ""}
-              onChange={(content) => patchDebounced({ content })}
-            />
-            <textarea
-              ref={contentRef}
-              value={p.content ?? ""}
-              onChange={(e) => patchDebounced({ content: e.target.value })}
-              rows={20}
-              placeholder="Escreva o artigo... (markdown básico: # título, **negrito**, *itálico*, - lista)"
-              className="w-full rounded-b-md rounded-t-none border border-border bg-background px-2.5 py-2 font-mono text-xs outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
-        </div>
-
-        <div className="space-y-2 rounded-xl border border-border bg-muted/20 p-4">
-          <div className="flex items-center justify-between">
-            <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              <Eye className="h-3.5 w-3.5" /> Pré-visualização
-            </p>
-            {destinosDisponiveis.length > 1 && (
-              <div className="flex gap-1 rounded-md bg-background p-0.5 text-[11px]">
-                {destinosDisponiveis.map((d) => (
-                  <button
-                    key={d}
-                    onClick={() => setPreviewTab(d)}
-                    className={`rounded px-2 py-1 font-medium ${
-                      activePreviewTab === d ? "bg-muted text-foreground" : "text-muted-foreground"
-                    }`}
-                  >
-                    {d === "site" ? "Site" : d === "mural" ? "Mural" : "Portal"}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          <article
-            className={`max-h-[560px] overflow-y-auto rounded-md border p-4 ${
-              activePreviewTab === "mural"
-                ? "border-border bg-background shadow-sm"
-                : "border-border bg-background"
-            }`}
-          >
-            {p.cover && (
-              <img
-                src={p.cover}
-                alt=""
-                className="mb-3 aspect-video w-full rounded-md object-cover"
+            <div>
+              <BlogToolbar
+                textareaRef={contentRef}
+                value={p.content ?? ""}
+                onChange={(content) => patchDebounced({ content })}
               />
-            )}
-            {p.category && (
-              <span className="mb-1.5 inline-block rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                {p.category}
-              </span>
-            )}
-            <h1 className="text-xl font-normal leading-tight tracking-tight">
-              {p.title || "Sem título"}
-            </h1>
-            <div className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              {authorPhoto ? (
-                <img src={authorPhoto} alt="" className="h-5 w-5 rounded-full object-cover" />
-              ) : (
-                <span
-                  className={`flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold ${colorFor(p.authorName || "?")}`}
-                >
-                  {initialsOf(p.authorName || "") || "?"}
-                </span>
-              )}
-              <span className="font-medium text-foreground">{p.authorName || "Sem autor"}</span>
-              {p.publishDate && (
-                <span>· {new Date(p.publishDate).toLocaleDateString("pt-BR")}</span>
-              )}
+              <textarea
+                ref={contentRef}
+                value={p.content ?? ""}
+                onChange={(e) => patchDebounced({ content: e.target.value })}
+                aria-label="Conteúdo do artigo"
+                placeholder="Escreva o artigo... (markdown básico: # título, **negrito**, *itálico*, - lista)"
+                className="min-h-[28rem] w-full rounded-b-lg rounded-t-none border border-border bg-background px-4 py-3 font-mono text-sm leading-relaxed outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-[34rem]"
+              />
             </div>
-            {p.excerpt && <p className="mt-2 text-sm italic text-muted-foreground">{p.excerpt}</p>}
-            <div
-              className={`mt-4 ${MARKDOWN_LITE_CLASSES}`}
-              dangerouslySetInnerHTML={{
-                __html:
-                  renderMarkdownLite(p.content ?? "") ||
-                  '<p class="text-muted-foreground">O conteúdo aparece aqui conforme você escreve.</p>',
-              }}
-            />
-          </article>
-        </div>
+          </div>
 
-        <PublishSidebar
-          post={p}
-          patchImmediate={patchImmediate}
-          patchDebounced={patchDebounced}
-          portalEnabled={portalEnabled}
-          onPortalEnabledChange={setPortalEnabled}
-          scheduleMode={scheduleMode}
-          onScheduleModeChange={setScheduleMode}
-          scheduleAt={scheduleAt}
-          onScheduleAtChange={setScheduleAt}
-          fieldRefs={fieldRefs}
-        />
-      </div>
+          <div className="mx-auto w-full max-w-4xl border-t border-border/60 pt-8">
+            <ArticleSettings
+              post={p}
+              patchImmediate={patchImmediate}
+              patchDebounced={patchDebounced}
+              portalEnabled={portalEnabled}
+              onPortalEnabledChange={setPortalEnabled}
+              scheduleMode={scheduleMode}
+              onScheduleModeChange={setScheduleMode}
+              scheduleAt={scheduleAt}
+              onScheduleAtChange={setScheduleAt}
+              authorModeState={authorMode}
+              onAuthorModeChange={setAuthorMode}
+              fieldRefs={fieldRefs}
+            />
+            <div className="mt-8 flex justify-end">
+              <Button variant="ghost" size="sm" className="text-destructive" onClick={onDelete}>
+                Excluir artigo
+              </Button>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="mx-auto w-full max-w-3xl space-y-4">
+          {destinosDisponiveis.length > 1 && (
+            <SegmentedControl
+              aria-label="Ver como aparece em"
+              size="sm"
+              value={activePreviewTab}
+              onChange={setPreviewTab}
+              options={destinosDisponiveis.map((d) => ({
+                value: d,
+                label: d === "site" ? "Site" : d === "mural" ? "Mural" : "Portal",
+              }))}
+            />
+          )}
+          <ArticlePreview post={p} authorPhoto={authorPhoto} />
+        </div>
+      )}
     </div>
+  );
+}
+
+/** Pré-visualização sob demanda — o mesmo markup de antes, só montado no modo "Pré-visualizar"
+ * (não renderiza markdown nem carrega a imagem enquanto se escreve). */
+function ArticlePreview({ post: p, authorPhoto }: { post: BlogPost; authorPhoto?: string }) {
+  return (
+    <article className="rounded-xl border border-border bg-background p-6 md:p-10">
+      {p.cover && (
+        <img src={p.cover} alt="" className="mb-6 aspect-video w-full rounded-lg object-cover" />
+      )}
+      {p.category && (
+        <span className="mb-2 inline-block rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-text-secondary">
+          {p.category}
+        </span>
+      )}
+      <h1 className="text-3xl font-semibold leading-tight tracking-tight md:text-4xl">
+        {p.title || "Sem título"}
+      </h1>
+      <div className="mt-3 flex items-center gap-2 text-xs text-text-secondary">
+        {authorPhoto ? (
+          <img src={authorPhoto} alt="" className="h-6 w-6 rounded-full object-cover" />
+        ) : (
+          <span
+            className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold ${colorFor(p.authorName || "?")}`}
+          >
+            {initialsOf(p.authorName || "") || "?"}
+          </span>
+        )}
+        <span className="font-medium text-foreground">{p.authorName || "Sem autor"}</span>
+        {p.publishDate && <span>· {new Date(p.publishDate).toLocaleDateString("pt-BR")}</span>}
+      </div>
+      {p.excerpt && <p className="mt-4 text-base italic text-text-secondary">{p.excerpt}</p>}
+      <div
+        className={`mt-6 ${MARKDOWN_LITE_CLASSES}`}
+        dangerouslySetInnerHTML={{
+          __html:
+            renderMarkdownLite(p.content ?? "") ||
+            '<p class="text-muted-foreground">O conteúdo aparece aqui conforme você escreve.</p>',
+        }}
+      />
+    </article>
   );
 }
