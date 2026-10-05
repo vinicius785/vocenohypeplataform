@@ -12,6 +12,7 @@ import {
   HelpCircle,
   Hourglass,
   Lightbulb,
+  MessageSquare,
   Search,
   Wrench,
   XCircle,
@@ -33,6 +34,7 @@ export const KIND_ICON: Record<ProblemKind, LucideIcon> = {
   problema: AlertTriangle,
   sugestao: Lightbulb,
   duvida: HelpCircle,
+  chat: MessageSquare,
 };
 
 export function ProblemKindIcon({ kind, className }: { kind: ProblemKind; className?: string }) {

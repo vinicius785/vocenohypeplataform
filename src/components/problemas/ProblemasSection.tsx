@@ -422,7 +422,7 @@ export function ProblemasSection() {
                   <button
                     type="button"
                     onClick={() => setOpenId(p.id)}
-                    className="grid w-full min-w-0 grid-cols-[20px_minmax(0,1fr)] items-start gap-x-3 gap-y-1 px-5 py-3 text-left transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none md:grid-cols-[20px_minmax(0,1fr)_110px_84px_150px_130px_72px] md:items-center"
+                    className="grid w-full min-w-0 grid-cols-[20px_minmax(0,1fr)] items-start gap-x-3 gap-y-1 px-5 py-3 text-left transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none md:grid-cols-[20px_minmax(0,1fr)_96px_84px_150px_130px_110px_72px] md:items-center"
                   >
                     <ProblemKindIcon kind={p.kind} className="mt-0.5 h-4 w-4 md:mt-0" />
                     <div className="min-w-0">
@@ -446,8 +446,14 @@ export function ProblemasSection() {
                       <ProblemStatusBadge status={p.status} />
                     </span>
                     <span
+                      className={`hidden truncate text-xs md:block ${p.assigneeName ? "text-foreground" : "text-text-secondary/70"}`}
+                      title={p.assigneeName ? `Responsável: ${p.assigneeName}` : "Sem responsável"}
+                    >
+                      {p.assigneeName ?? "Sem responsável"}
+                    </span>
+                    <span
                       className="hidden truncate text-xs text-text-secondary md:block"
-                      title={p.reporterName}
+                      title={`Reportado por ${p.reporterName}`}
                     >
                       {p.reporterName}
                     </span>

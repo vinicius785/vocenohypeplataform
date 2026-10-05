@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Flag, Loader2, MapPin, Paperclip, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, Flag, Loader2, MapPin, Paperclip, User, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   Sheet,
@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { loadMembers } from "@/lib/chat-store";
 import { TaskOptionPicker } from "@/components/tasks/task-ui";
 import {
   createProblem,
@@ -47,6 +49,8 @@ export function ReportProblemSheet() {
   const [description, setDescription] = useState("");
   const [area, setArea] = useState<string>("Outro");
   const [priority, setPriority] = useState<ProblemPriority>("normal");
+  // "" = Sem responsável (padrão). Responsável ≠ "Reportado por": é quem deve tratar o chamado.
+  const [assigneeId, setAssigneeId] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -60,11 +64,15 @@ export function ReportProblemSheet() {
         setDescription("");
         setArea(c.defaultArea);
         setPriority("normal");
+        setAssigneeId("");
         setFiles([]);
         setOpen(true);
       }),
     [],
   );
+
+  const members = useMemo(() => loadMembers(), []);
+  const assignee = members.find((m) => m.id === assigneeId);
 
   const valid = title.trim().length >= 3 && description.trim().length >= 5;
 
@@ -78,10 +86,11 @@ export function ReportProblemSheet() {
         description,
         area,
         priority,
+        assigneeId: assigneeId || null,
         files,
         diagnostics: ctx.diagnostics,
       });
-      toast.success("Report enviado. Você pode acompanhar em Problemas.");
+      toast.success("Problema reportado. Você pode acompanhar em Problemas.");
       window.dispatchEvent(new CustomEvent(PROBLEM_CREATED_EVENT));
       setOpen(false);
     } catch (err) {
@@ -194,6 +203,46 @@ export function ReportProblemSheet() {
           </div>
 
           <div className="space-y-1.5">
+            <span className="block text-xs font-medium text-muted-foreground">
+              Responsável <span className="font-normal">(opcional)</span>
+            </span>
+            <TaskOptionPicker
+              value={assigneeId}
+              ariaLabel="Responsável"
+              widthClass="w-72"
+              searchable
+              searchPlaceholder="Buscar pessoa..."
+              options={[
+                { value: "", label: "Sem responsável" },
+                ...members.map((m) => ({
+                  value: m.id,
+                  label: m.role ? `${m.name} · ${m.role}` : m.name,
+                  icon: (
+                    <Avatar className="h-5 w-5 shrink-0">
+                      {m.photo && <AvatarImage src={m.photo} alt="" />}
+                      <AvatarFallback className="text-[9px] font-semibold">
+                        {m.name.slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                  ),
+                })),
+              ]}
+              onSelect={setAssigneeId}
+              trigger={
+                <button type="button" className={PICKER}>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <User aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className={`truncate ${assignee ? "" : "text-muted-foreground"}`}>
+                      {assignee ? assignee.name : "Selecione um responsável"}
+                    </span>
+                  </span>
+                  <ChevronDown aria-hidden className="h-4 w-4 shrink-0 opacity-60" />
+                </button>
+              }
+            />
+          </div>
+
+          <div className="space-y-1.5">
             <span className="block text-xs font-medium text-muted-foreground">Anexos</span>
             {files.length > 0 && (
               <ul className="space-y-1">
@@ -254,7 +303,7 @@ export function ReportProblemSheet() {
           </Button>
           <Button variant="primary" onClick={() => void submit()} disabled={!valid || submitting}>
             {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-            {submitting ? "Enviando..." : "Enviar report"}
+            {submitting ? "Enviando..." : "Reportar"}
           </Button>
         </div>
       </SheetContent>

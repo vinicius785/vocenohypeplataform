@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
 
-const { fallbackTitle, mapProblem, summarizeProblems } = await import("./problems");
+const { fallbackTitle, mapProblem, summarizeProblems, PROBLEM_KINDS, PROBLEM_KIND_LABEL } =
+  await import("./problems");
 const { areaForContext, captureReportContext, rememberNavigationContext } =
   await import("./problem-context");
 
@@ -90,5 +91,26 @@ describe("contexto automático do report", () => {
     expect(ctx.defaultArea).toBe("Financeiro");
     expect(ctx.diagnostics.route).toBe("/time?section=financeiro");
     expect(ctx.diagnostics.appVersion).toBeTruthy();
+  });
+});
+
+describe("tipos de registro", () => {
+  it("inclui Chat, com rótulo, numa lista central única", () => {
+    expect(PROBLEM_KINDS).toContain("chat");
+    expect(PROBLEM_KIND_LABEL.chat).toBe("Chat");
+    expect(PROBLEM_KINDS.every((k) => !!PROBLEM_KIND_LABEL[k])).toBe(true);
+  });
+  it("mapeia o tipo chat e o responsável separado do reportado por", () => {
+    const p = mapProblem(
+      row({ kind: "chat", assignee_id: "u2", assignee_name: "Lucas", reporter_name: "Ana" }),
+    );
+    expect(p.kind).toBe("chat");
+    expect(p.assigneeName).toBe("Lucas");
+    expect(p.reporterName).toBe("Ana");
+  });
+  it("sem responsável fica nulo (nunca confundido com o autor)", () => {
+    const p = mapProblem(row({ kind: "bug" }));
+    expect(p.assigneeId).toBeNull();
+    expect(p.assigneeName).toBeNull();
   });
 });

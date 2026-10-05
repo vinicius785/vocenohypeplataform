@@ -788,6 +788,11 @@ function DetailBody({
             ) : (
               <span className={problem.assigneeId ? "" : "text-muted-foreground"}>
                 {assigneeLabel}
+                {canManage && legacy && (
+                  <span className="block text-[11px] text-text-secondary">
+                    Disponível após atualizar o banco da Central de Problemas.
+                  </span>
+                )}
               </span>
             )}
           </PropRow>

@@ -9,7 +9,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 
-export type ProblemKind = "bug" | "problema" | "sugestao" | "duvida";
+export type ProblemKind = "bug" | "problema" | "sugestao" | "duvida" | "chat";
 export type ProblemStatus =
   | "novo"
   | "em_analise"
@@ -19,12 +19,13 @@ export type ProblemStatus =
   | "fechado";
 export type ProblemPriority = "baixa" | "normal" | "alta" | "critica";
 
-export const PROBLEM_KINDS: ProblemKind[] = ["bug", "problema", "sugestao", "duvida"];
+export const PROBLEM_KINDS: ProblemKind[] = ["bug", "problema", "sugestao", "duvida", "chat"];
 export const PROBLEM_KIND_LABEL: Record<ProblemKind, string> = {
   bug: "Bug",
   problema: "Problema",
   sugestao: "Sugestão",
   duvida: "Dúvida",
+  chat: "Chat",
 };
 
 export const PROBLEM_STATUSES: ProblemStatus[] = [
@@ -335,6 +336,8 @@ export async function createProblem(input: {
   description: string;
   area: string;
   priority: ProblemPriority;
+  /** Quem deve tratar o chamado (opcional). Não é o "reportado por". */
+  assigneeId?: string | null;
   files: File[];
   diagnostics: ProblemDiagnostics;
 }): Promise<string> {
@@ -357,6 +360,7 @@ export async function createProblem(input: {
       description: input.description.trim(),
       area: input.area,
       priority: input.priority,
+      assignee_id: input.assigneeId ?? null,
       page_context: input.diagnostics.route ?? null,
       source: "plataforma",
     })
