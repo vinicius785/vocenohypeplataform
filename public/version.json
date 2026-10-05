@@ -1,21 +1,25 @@
 {
-  "version": "1.319.1",
+  "version": "1.320.0",
   "releases": [
     {
-      "version": "1.319.1",
-      "summary": "O responsável de cada tarefa voltou a aparecer na busca do #.",
+      "version": "1.320.0",
+      "summary": "A tarefa citada com # agora aparece como um objeto rico, no editor e na mensagem.",
       "modules": [
         {
           "name": "CHAT",
-          "tagline": "Referenciar tarefas com #",
+          "tagline": "Tarefas nas mensagens",
           "items": [
             {
-              "title": "Foto do responsável",
-              "description": "Na lista de tarefas do #, cada tarefa mostra a foto do responsável, ou as iniciais quando não há foto."
+              "title": "Tarefa como objeto",
+              "description": "Na mensagem, a tarefa mostra a cor do status, o título, o responsável e o projeto, e abre a tarefa ao clicar."
             },
             {
-              "title": "Suas tarefas primeiro",
-              "description": "Sem texto digitado, as tarefas em que você é responsável aparecem antes das demais."
+              "title": "Sempre atualizada",
+              "description": "O status, o título e o responsável vêm da tarefa de verdade, então acompanham as mudanças depois que a mensagem foi enviada."
+            },
+            {
+              "title": "Também no editor",
+              "description": "Ao escrever, as tarefas citadas aparecem acima do campo no mesmo formato, e dá para remover com o ×."
             }
           ]
         }

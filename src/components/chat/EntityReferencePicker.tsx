@@ -1,51 +1,10 @@
 import { useEffect, useRef } from "react";
 import { Search } from "lucide-react";
 import { Highlighted } from "./MentionAutocomplete";
-import { Avatar, useTeamMembers } from "@/components/tasks/task-people";
+import { AssigneeAvatar, TaskStatusDot } from "./TaskRefChip";
 import type { MentionOption } from "@/lib/mention-kinds";
 import type { ReferenceView } from "@/lib/reference-picker";
-import { TASK_STATUS_DOT } from "@/lib/task-status";
-import { isTaskStatus } from "@/components/tasks/task-ui";
 import { cn } from "@/lib/utils";
-
-/** Bolinha de status — MESMA paleta (`TASK_STATUS_DOT`) do Kanban e do detalhe da tarefa. */
-export function TaskStatusDot({ status, className }: { status?: string; className?: string }) {
-  const s = status && isTaskStatus(status) ? status : "Aberto";
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        "inline-block h-2.5 w-2.5 shrink-0 rounded-full",
-        TASK_STATUS_DOT[s],
-        className,
-      )}
-    />
-  );
-}
-
-/** Responsável da tarefa. `assignees` guarda o NOME do membro (como no Kanban); aceita id também. */
-function Assignee({ ids }: { ids?: string[] }) {
-  const team = useTeamMembers();
-  const find = (key: string) => {
-    const k = key.trim().toLowerCase();
-    return team.find((m) => m.id === key || m.name.toLowerCase() === k);
-  };
-  const first = ids?.map(find).find(Boolean);
-  if (!first) {
-    return (
-      <span
-        title={ids && ids.length > 0 ? ids[0] : "Sem responsável"}
-        className="h-5 w-5 shrink-0 rounded-full border border-dashed border-border"
-      />
-    );
-  }
-  const extra = (ids?.length ?? 1) - 1;
-  return (
-    <span title={first.name + (extra > 0 ? ` e mais ${extra}` : "")} className="shrink-0">
-      <Avatar member={first} size={20} />
-    </span>
-  );
-}
 
 /** Contexto secundário só quando agrega ("Projeto: X"). */
 function secondary(hint?: string): string | null {
@@ -138,7 +97,7 @@ export function EntityReferencePicker({
                             </span>
                           )}
                         </span>
-                        <Assignee ids={o.assigneeIds} />
+                        <AssigneeAvatar ids={o.assigneeIds} />
                       </button>
                     </li>
                   );

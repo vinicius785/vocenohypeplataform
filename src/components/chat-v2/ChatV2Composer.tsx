@@ -30,6 +30,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { VoiceRecorderBar } from "@/components/chat/VoiceRecorderBar";
+import { TaskRefChip } from "@/components/chat/TaskRefChip";
 import { computeComposerPlaceholder } from "./composer-placeholder";
 
 /** Fontes do composer, separadas por responsabilidade:
@@ -153,6 +154,11 @@ export function ChatV2Composer({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const { people, references, recentUserIds, mentionsEnabled } = useV2MentionSources(convoId);
+  // Tarefas citadas com `#` no texto: aparecem como objeto (status + título + responsável).
+  const usedTasks = useMemo(
+    () => references.filter((o) => o.kind === "task" && text.includes("#" + o.label)).slice(0, 4),
+    [references, text],
+  );
   const placeholder = computeComposerPlaceholder({ replyToId, conversationLabel, isThread });
 
   const insertEmoji = (emoji: string) => {
@@ -318,6 +324,22 @@ export function ChatV2Composer({
                       <X className="h-3 w-3" />
                     </button>
                   </div>
+                ))}
+              </div>
+            )}
+            {usedTasks.length > 0 && (
+              <div className="flex flex-wrap gap-1 px-3 pt-2" aria-label="Tarefas referenciadas">
+                {usedTasks.map((o) => (
+                  <TaskRefChip
+                    key={o.id}
+                    title={o.label}
+                    status={o.status}
+                    project={o.hint?.replace(/^Projeto:\s*/, "")}
+                    assignees={o.assigneeIds}
+                    onRemove={() =>
+                      setText((t) => t.replace("#" + o.label + " ", "").replace("#" + o.label, ""))
+                    }
+                  />
                 ))}
               </div>
             )}
