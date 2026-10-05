@@ -49,11 +49,21 @@ export function QuietButton({
 /** Faixa única de indicadores (uma superfície, divisores sutis) — não são cards independentes. */
 export function SummaryStrip({
   items,
+  wrapOnMobile,
 }: {
   items: { label: string; value: string; emphasis?: boolean }[];
+  /** 2×2 no celular (quando os valores são textos longos demais para 4 colunas). */
+  wrapOnMobile?: boolean;
 }) {
   return (
-    <div className="grid grid-cols-4 divide-x divide-border/60 rounded-lg bg-muted/25 py-2.5">
+    <div
+      className={cn(
+        "grid divide-border/60 rounded-lg bg-muted/25 py-2.5",
+        wrapOnMobile
+          ? "grid-cols-2 gap-y-3 sm:grid-cols-4 sm:divide-x [&>*:nth-child(even)]:border-l [&>*:nth-child(even)]:border-border/60 sm:[&>*:nth-child(even)]:border-l-0"
+          : "grid-cols-4 divide-x",
+      )}
+    >
       {items.map((s) => (
         <div key={s.label} className="min-w-0 px-2.5 sm:px-3.5">
           <p className="truncate text-[10px] font-medium uppercase tracking-wide text-text-secondary sm:text-[11px]">

@@ -841,6 +841,27 @@ export function buildEntries(
  * lançamentos manuais num único array de `Entry`. Compartilhado entre
  * FinanceiroSection (visão completa) e o dashboard Início (resumo).
  */
+/** O que o Financeiro sabe sobre o pagamento de UM influenciador numa campanha (status e data em que
+ * foi pago), lido do override do lançamento `inf:<campanha>:<influenciador>`. `undefined` = sem
+ * registro (ainda não pago/cancelado) ou sem acesso ao Financeiro. Só leitura. */
+export function useInfluencerPaymentExecution(
+  campanhaId?: string,
+  influId?: string,
+): { status?: string; paidOn?: string } | undefined {
+  const id = campanhaId && influId ? `inf:${campanhaId}:${influId}` : null;
+  const [ov, setOv] = useState<StatusOverride | undefined>(() =>
+    id ? loadOverrides()[id] : undefined,
+  );
+  useEffect(() => {
+    if (!id) return;
+    void initOverridesSync();
+    const sync = () => setOv(loadOverrides()[id]);
+    sync();
+    return onOverridesChange(sync);
+  }, [id]);
+  return ov ? { status: ov.status, paidOn: ov.pagamento } : undefined;
+}
+
 export function useFinanceiroEntries(): Entry[] {
   const clientes = useClientes();
   const [manual, setManual] = useState<ManualEntry[]>(() => loadManual());

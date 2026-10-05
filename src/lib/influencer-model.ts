@@ -69,6 +69,8 @@ export type InfluActivity = {
    * entrega do mesmo tipo). Ausente em atividade registrada antes desse
    * campo existir. */
   entregaId?: string;
+  /** Marca eventos de uma área (hoje só "financeiro"), para a linha do tempo daquela área. */
+  area?: "financeiro";
   createdAt: string;
 };
 
@@ -163,7 +165,12 @@ export const ENTREGA_ACTION_LOG: Record<EntregaEngineActionKind, string> = {
 
 /** Registra uma linha de Atividade no influenciador (autor/hora
  * automáticos via `getCurrentAuthor`) — única forma de anotar histórico. */
-export function logInfluActivity(i: Influ, action: string, entregaId?: string): Influ {
+export function logInfluActivity(
+  i: Influ,
+  action: string,
+  entregaId?: string,
+  area?: "financeiro",
+): Influ {
   const me = getCurrentAuthor();
   return {
     ...i,
@@ -177,6 +184,7 @@ export function logInfluActivity(i: Influ, action: string, entregaId?: string): 
         color: me.color,
         action,
         entregaId,
+        ...(area ? { area } : {}),
         createdAt: new Date().toISOString(),
       },
     ],
@@ -846,6 +854,8 @@ export type Influ = {
   entregas: Entrega[];
   profileMetrics?: ProfileMetrics;
   contrato?: string;
+  /** Nome do arquivo do contrato (aditivo: contratos antigos, em data URL, não têm). */
+  contratoNome?: string;
   status: InfluStatus;
   statusUpdatedAt?: string; // data em que o status atual foi definido (p/ SLA de aprovação)
   bank?: BankInfo;

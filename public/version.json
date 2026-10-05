@@ -1,25 +1,29 @@
 {
-  "version": "1.328.0",
+  "version": "1.329.0",
   "releases": [
     {
-      "version": "1.328.0",
-      "summary": "Detalhe do influenciador na campanha reorganizado como um cockpit operacional.",
+      "version": "1.329.0",
+      "summary": "Financeiro do influenciador reorganizado em Remuneração, Pagamento, Dados para pagamento, Contrato e Atividade.",
       "modules": [
         {
           "name": "CAMPANHAS",
-          "tagline": "Detalhe do influenciador",
+          "tagline": "Financeiro do influenciador",
           "items": [
             {
-              "title": "Resumo e próxima ação",
-              "description": "Uma faixa com entregas, publicadas, pendentes e próximo prazo, e uma caixa de Próxima ação que mostra o que a equipe precisa fazer agora."
+              "title": "Remuneração separada do pagamento",
+              "description": "Quanto foi combinado fica em um bloco; o estado do pagamento (pendente, agendado, pago, recusado) em outro, com valor e vencimento."
             },
             {
-              "title": "Entregas em unidades",
-              "description": "Cada entrega vira uma pequena unidade com o estado atual, o prazo e a ação contextual, em duas colunas quando há espaço."
+              "title": "Solicitação de pagamento",
+              "description": "Aceitar/Recusar agora se chama Aprovar pagamento/Recusar e explica que a aprovação lança a despesa no Financeiro, onde o pagamento é registrado."
             },
             {
-              "title": "Seções por assunto",
-              "description": "Contexto da seleção, perfil e audiência, contato, financeiro e atividade ficam em blocos próprios, em leitura, com edição só quando você pede."
+              "title": "Dados bancários e contrato",
+              "description": "Dados para pagamento em modo leitura com Editar/Cadastrar, e contrato com nome do arquivo, Abrir, Substituir e Remover."
+            },
+            {
+              "title": "Atividade financeira",
+              "description": "Linha do tempo compacta com os eventos financeiros do influenciador."
             }
           ]
         }

@@ -104,6 +104,19 @@ import {
 import { AudienceInsights } from "@/components/shared/AudienceInsights";
 import { hasAudienceData } from "@/lib/audience-distribution";
 import { formatActivityWhen } from "@/lib/activity-time";
+import { FinanceBlock, FinanceTimeline, FileLine, PaymentStateBadge } from "./InfluencerFinanceiro";
+import {
+  bankFields,
+  contratoInfo,
+  formatBRLValue,
+  hasBankData,
+  openFileUrl,
+  paymentState,
+  remuneracaoSummary,
+  formatIsoDate,
+} from "@/lib/influencer-finance";
+import { useInfluencerPaymentExecution } from "@/lib/financeiro-entries";
+import { useNavigate } from "@tanstack/react-router";
 import { describeInscricaoSnapshot } from "@/lib/inscricao-snapshot";
 
 /* ============================================================
@@ -1306,6 +1319,7 @@ export function InfluencerBoard({
           onComment={(text) => addComment(viewing.id, text)}
           onPatch={(patch) => patchInflu(viewing.id, patch)}
           nps={nps}
+          campanhaId={campanhaId}
         />
       )}
 
@@ -2978,7 +2992,9 @@ function InfluencerWorkspaceSheet({
   onPatch,
   onSendToClient,
   nps,
+  campanhaId,
 }: {
+  campanhaId?: string;
   influ: Influ;
   has: (k: InfluencerFieldKey) => boolean;
   showCicloMes?: boolean;
@@ -3191,6 +3207,7 @@ function InfluencerWorkspaceSheet({
               onApplyChecklistToAll={onApplyChecklistToAll}
               onRunEntregaAction={onRunEntregaAction}
               onOpenActivity={openActivity}
+              campanhaId={campanhaId}
             />
           )}
           {view === "entrega" && selectedEntrega && (
@@ -4395,94 +4412,464 @@ function PerfilAudienciaSection({
   );
 }
 
-/** Financeiro e contrato: resumo em leitura (valor, pagamento, contrato, dados bancários) e os
- * editores existentes sob demanda. (Direitos de imagem é campo da CAMPANHA, não do influenciador.) */
+/** Financeiro do influenciador na campanha, com cinco conceitos SEPARADOS (e os mesmos dados de
+ * antes): REMUNERAÇÃO (o combinado), PAGAMENTO (solicitação + execução no Financeiro), DADOS PARA
+ * PAGAMENTO (`bank`), CONTRATO e ATIVIDADE FINANCEIRA. Regras puras em `lib/influencer-finance.ts`.
+ *
+ * "Aceitar/Recusar" do pagamento era a APROVAÇÃO que lança a despesa no módulo Financeiro (só
+ * `aceito` vira lançamento); aqui isso é a "solicitação de pagamento" (Aprovar / Recusar). Registrar
+ * que foi PAGO continua sendo feito no Financeiro (aqui só se lê o resultado). */
 function FinanceiroContratoSection({
   influ,
   has,
   bank,
+  campanhaId,
   onPatch,
 }: {
   influ: Influ;
   has: (k: InfluencerFieldKey) => boolean;
   bank: BankInfo;
+  campanhaId?: string;
   onPatch: (patch: Partial<Influ>) => void;
 }) {
-  const [editing, setEditing] = useState(false);
+  const navigate = useNavigate();
+  const access = useMyAccess();
+  const canFinanceiro = hasPermission(access, "financeiro");
+  const execution = useInfluencerPaymentExecution(campanhaId, influ.id);
+  const today = todayISO();
   const pag = normalizePagamento(influ.pagamento);
-  const temBanco = Object.values(bank ?? {}).some((v) => typeof v === "string" && v.trim() !== "");
+  const state = paymentState(pag, execution, today);
+  const rem = remuneracaoSummary(pag);
+  const contrato = contratoInfo(influ.contrato, influ.contratoNome);
+  const bankItems = bankFields(bank);
+  const temBanco = hasBankData(bank);
+
+  const [editing, setEditing] = useState<null | "rem" | "bank">(null);
+  const [remDraft, setRemDraft] = useState<PagamentoEntrega | undefined>(influ.pagamento);
+  const [bankDraft, setBankDraft] = useState<BankInfo>(bank);
+  const [dueOpen, setDueOpen] = useState(false);
+  const [busy, setBusy] = useState<"contrato" | "comprovante" | null>(null);
+  const [fileError, setFileError] = useState("");
+  const contratoRef = useRef<HTMLInputElement>(null);
+
+  /** Um único `onPatch` com a mudança E o evento financeiro (evita um sobrescrever o outro). */
+  const commit = (patch: Partial<Influ>, text: string) =>
+    onPatch({
+      ...patch,
+      activity: logInfluActivity(influ, text, undefined, "financeiro").activity,
+    });
+  const setPagamento = (next: PagamentoEntrega | undefined, text: string) =>
+    commit({ pagamento: next }, text);
+
+  const saveRem = () => {
+    const n = normalizePagamento(remDraft);
+    const r = remuneracaoSummary(n);
+    commit(
+      { pagamento: remDraft },
+      !n || n.tipos.length === 0
+        ? "removeu a remuneração"
+        : r?.total != null
+          ? `definiu a remuneração em ${formatBRLValue(r.total)}`
+          : "atualizou a remuneração",
+    );
+    setEditing(null);
+  };
+  const saveBank = () => {
+    commit({ bank: bankDraft }, "atualizou os dados para pagamento");
+    setEditing(null);
+  };
+  const uploadContrato = async (file: File) => {
+    setBusy("contrato");
+    setFileError("");
+    try {
+      const url = await uploadEntregaAnexo(file);
+      commit(
+        { contrato: url, contratoNome: file.name },
+        influ.contrato ? "substituiu o contrato" : "anexou o contrato",
+      );
+    } catch (err) {
+      setFileError(err instanceof Error ? err.message : "Falha ao subir o contrato.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const executionItems = [...(influ.activity ?? []).filter((a) => a.area === "financeiro")]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 5)
+    .map((a) => ({
+      id: a.id,
+      when: formatActivityWhen(a.createdAt),
+      text: `${a.author} ${a.action}`,
+    }));
+  if (state.key === "pago" && state.paidOn) {
+    executionItems.unshift({
+      id: "pago-financeiro",
+      when: formatIsoDate(state.paidOn),
+      text: "Pagamento registrado no Financeiro",
+    });
+  }
+
+  const money = (n: number) => formatBRLValue(n);
   const dash = <span className="text-text-secondary">—</span>;
-  const items: { label: string; value: ReactNode; muted?: boolean }[] = [];
-  if (has("pagamentos")) {
-    const valor = pagamentoResumo(influ.pagamento);
-    items.push({ label: "Valor", value: valor === "—" ? dash : valor });
-    items.push({
-      label: "Pagamento",
-      value: pag ? APROVACAO_LABEL[pag.aprovacao ?? "pendente"] : dash,
-    });
-  }
-  if (has("contrato")) {
-    items.push({
-      label: "Contrato",
-      value: influ.contrato ? "Anexado" : "Não cadastrado",
-      muted: !influ.contrato,
-    });
-  }
-  if (has("bancario")) {
-    items.push({
-      label: "Dados bancários",
-      value: temBanco ? "Cadastrados" : "Não cadastrados",
-      muted: !temBanco,
-    });
-  }
+  const showPagamento = has("pagamentos");
+  const showBanco = has("bancario");
+  const showContrato = has("contrato");
+
   return (
-    <section aria-label="Financeiro e contrato" className="space-y-3">
-      <CockpitTitle
-        action={
-          <QuietButton onClick={() => setEditing((v) => !v)}>
-            {editing ? "Concluir" : "Editar"}
-          </QuietButton>
-        }
-      >
-        Financeiro e contrato
-      </CockpitTitle>
-      <KeyStats items={items} />
-      {editing && (
-        <div className="space-y-6 border-t border-border/60 pt-4">
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[2fr_3fr]">
-            {has("pagamentos") && (
-              <div>
-                <FieldLabel title="Pagamento" hint="Valor combinado, cobrindo todas as entregas." />
-                <div className="mt-2">
-                  <PagamentoInfluSection
-                    value={influ.pagamento}
-                    onChange={(pagamento) => onPatch({ pagamento })}
-                  />
-                </div>
-              </div>
-            )}
-            {has("bancario") && (
-              <div>
-                <FieldLabel title="Dados bancários" />
-                <div className="mt-2">
-                  <BankFields value={bank} onChange={(b) => onPatch({ bank: b })} />
-                </div>
-              </div>
-            )}
-          </div>
-          {has("contrato") && (
-            <div className="border-t border-border/60 pt-5">
-              <FieldLabel title="Contrato" />
-              <div className="mt-2">
-                <ContratoEditor
-                  value={influ.contrato}
-                  onChange={(contrato) => onPatch({ contrato })}
-                />
+    <section aria-label="Financeiro e contrato" className="space-y-6">
+      <input
+        ref={contratoRef}
+        type="file"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (contratoRef.current) contratoRef.current.value = "";
+          if (f) void uploadContrato(f);
+        }}
+      />
+      <CockpitTitle>Financeiro</CockpitTitle>
+
+      {/* Resumo — estado financeiro em poucos segundos */}
+      <SummaryStrip
+        wrapOnMobile
+        items={[
+          {
+            label: "Remuneração",
+            value: rem ? (rem.total != null ? money(rem.total) : rem.tipoLabel) : "—",
+            emphasis: !!rem,
+          },
+          { label: "Pagamento", value: state.label, emphasis: state.key === "pendente" },
+          { label: "Contrato", value: contrato.present ? "Anexado" : "Pendente" },
+          { label: "Dados banc.", value: temBanco ? "Cadastrados" : "Pendente" },
+        ]}
+      />
+
+      {/* A. REMUNERAÇÃO — quanto foi combinado */}
+      {showPagamento && (
+        <FinanceBlock
+          title="Remuneração"
+          action={
+            editing !== "rem" && (
+              <QuietButton
+                onClick={() => {
+                  setRemDraft(influ.pagamento);
+                  setEditing("rem");
+                }}
+              >
+                {rem ? "Editar remuneração" : "Definir remuneração"}
+              </QuietButton>
+            )
+          }
+        >
+          {editing === "rem" ? (
+            <div className="space-y-3">
+              <PagamentoEditor value={remDraft} onChange={setRemDraft} parts="remuneracao" />
+              <div className="flex justify-end gap-3">
+                <QuietButton onClick={() => setEditing(null)}>Cancelar</QuietButton>
+                <button
+                  type="button"
+                  onClick={saveRem}
+                  className="rounded-md bg-foreground px-2.5 py-1 text-xs font-medium text-background hover:opacity-90"
+                >
+                  Salvar remuneração
+                </button>
               </div>
             </div>
+          ) : rem ? (
+            <div className="space-y-3">
+              <KeyStats
+                items={[
+                  {
+                    label: "Valor total",
+                    value: rem.total != null ? money(rem.total) : "Sem valor em caixa",
+                  },
+                  { label: "Tipo", value: rem.tipoLabel },
+                ]}
+              />
+              {(rem.lines.length > 1 || rem.tipoLabel !== "Valor fechado") && (
+                <ul className="space-y-1 border-t border-border/60 pt-2.5 text-sm">
+                  {rem.lines.map((l, i) => (
+                    <li key={i} className="flex flex-wrap justify-between gap-x-4">
+                      <span className="text-text-secondary">{l.label}</span>
+                      <span className="font-medium text-foreground">{l.value}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="text-xs text-text-secondary">
+                Um único pagamento cobre todas as entregas deste influenciador.
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-text-secondary">Nenhuma remuneração definida.</p>
+          )}
+        </FinanceBlock>
+      )}
+
+      {/* B. PAGAMENTO — o que aconteceu com esse valor */}
+      {showPagamento && (
+        <FinanceBlock
+          title="Pagamento"
+          className="border-t border-border/60 pt-5"
+          action={<PaymentStateBadge state={state.key} label={state.label} />}
+        >
+          {state.key === "nao_iniciado" ? (
+            <p className="text-sm text-text-secondary">
+              Defina a remuneração para iniciar o pagamento.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              <KeyStats
+                items={[
+                  {
+                    label: "Valor",
+                    value: state.amount > 0 ? money(state.amount) : "Sem valor em caixa",
+                  },
+                  {
+                    label: state.key === "pago" ? "Pago em" : "Vencimento",
+                    value:
+                      state.key === "pago"
+                        ? state.paidOn
+                          ? formatIsoDate(state.paidOn)
+                          : dash
+                        : state.due
+                          ? formatIsoDate(state.due)
+                          : "Não definido",
+                    muted: state.key !== "pago" && !state.due,
+                  },
+                ]}
+              />
+
+              {/* Solicitação de pagamento — a aprovação que lança a despesa no Financeiro */}
+              {state.key === "pendente" && pag && (
+                <div className="space-y-2.5 rounded-lg bg-amber-500/[0.06] p-3">
+                  <p className="text-sm text-foreground">
+                    <span className="font-medium">Solicitação de pagamento</span> aguardando
+                    aprovação. Ao aprovar, o valor é lançado como despesa no Financeiro.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPagamento(
+                          { ...pag, aprovacao: "aceito", data: pag.data || todayISO() },
+                          "aprovou a solicitação de pagamento",
+                        )
+                      }
+                      className="rounded-md bg-foreground px-3 py-1.5 text-xs font-semibold text-background hover:opacity-90"
+                    >
+                      Aprovar pagamento
+                    </button>
+                    <QuietButton
+                      onClick={() =>
+                        setPagamento(
+                          { ...pag, aprovacao: "recusado" },
+                          "recusou a solicitação de pagamento",
+                        )
+                      }
+                    >
+                      Recusar
+                    </QuietButton>
+                  </div>
+                </div>
+              )}
+
+              {state.key === "recusado" && pag && (
+                <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-text-secondary">
+                  Solicitação de pagamento recusada.
+                  <QuietButton
+                    onClick={() =>
+                      setPagamento(
+                        { ...pag, aprovacao: "pendente" },
+                        "reabriu a solicitação de pagamento",
+                      )
+                    }
+                  >
+                    Reabrir solicitação
+                  </QuietButton>
+                </p>
+              )}
+
+              {(state.key === "agendado" || state.key === "vencido") && pag && (
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <p className="text-sm text-text-secondary">
+                    Aprovado e lançado no Financeiro
+                    {state.key === "vencido" ? " — vencimento passou." : "."}
+                  </p>
+                  {canFinanceiro && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void navigate({ to: "/time", search: { section: "financeiro" as const } })
+                      }
+                      className="rounded-md bg-foreground px-3 py-1.5 text-xs font-semibold text-background hover:opacity-90"
+                    >
+                      Registrar pagamento no Financeiro →
+                    </button>
+                  )}
+                </div>
+              )}
+              {state.key === "cancelado" && (
+                <p className="text-sm text-text-secondary">Lançamento cancelado no Financeiro.</p>
+              )}
+
+              {/* Vencimento e desfazer aprovação */}
+              {pag && state.key !== "recusado" && (
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                  {dueOpen ? (
+                    <div className="w-44">
+                      <DateField
+                        value={pag.data ?? undefined}
+                        onChange={(v) => {
+                          setPagamento(
+                            { ...pag, data: v },
+                            v
+                              ? `definiu o vencimento em ${formatIsoDate(v)}`
+                              : "removeu o vencimento",
+                          );
+                          setDueOpen(false);
+                        }}
+                        className="text-xs"
+                      />
+                    </div>
+                  ) : (
+                    state.key !== "pago" && (
+                      <QuietButton onClick={() => setDueOpen(true)}>
+                        {pag.data ? "Alterar vencimento" : "Definir vencimento"}
+                      </QuietButton>
+                    )
+                  )}
+                  {pag.aprovacao === "aceito" && state.key !== "pago" && (
+                    <QuietButton
+                      onClick={() =>
+                        setPagamento(
+                          { ...pag, aprovacao: "pendente" },
+                          "voltou a solicitação de pagamento para pendente",
+                        )
+                      }
+                    >
+                      Voltar para pendente
+                    </QuietButton>
+                  )}
+                </div>
+              )}
+
+              {/* Comprovante */}
+              {pag &&
+                (pag.comprovanteUrl ? (
+                  <FileLine
+                    name={pag.comprovanteNome || "Comprovante"}
+                    hint="Comprovante de pagamento"
+                    onOpen={() => openFileUrl(pag.comprovanteUrl!)}
+                    onRemove={() =>
+                      setPagamento(
+                        { ...pag, comprovanteNome: undefined, comprovanteUrl: undefined },
+                        "removeu o comprovante de pagamento",
+                      )
+                    }
+                  />
+                ) : (
+                  pag.aprovacao === "aceito" && (
+                    <BriefingAnexoUploadButton
+                      onUpload={(nome, url) =>
+                        setPagamento(
+                          { ...pag, comprovanteNome: nome, comprovanteUrl: url },
+                          "anexou o comprovante de pagamento",
+                        )
+                      }
+                    />
+                  )
+                ))}
+            </div>
+          )}
+        </FinanceBlock>
+      )}
+
+      {/* C. DADOS PARA PAGAMENTO + D. CONTRATO */}
+      {(showBanco || showContrato) && (
+        <div className="grid grid-cols-1 gap-x-8 gap-y-6 border-t border-border/60 pt-5 md:grid-cols-2">
+          {showBanco && (
+            <FinanceBlock
+              title="Dados para pagamento"
+              action={
+                editing !== "bank" && (
+                  <QuietButton
+                    onClick={() => {
+                      setBankDraft(bank);
+                      setEditing("bank");
+                    }}
+                  >
+                    {temBanco ? "Editar dados" : "Cadastrar dados"}
+                  </QuietButton>
+                )
+              }
+            >
+              {editing === "bank" ? (
+                <div className="space-y-3">
+                  <BankFields value={bankDraft} onChange={setBankDraft} compact />
+                  <div className="flex justify-end gap-3">
+                    <QuietButton onClick={() => setEditing(null)}>Cancelar</QuietButton>
+                    <button
+                      type="button"
+                      onClick={saveBank}
+                      className="rounded-md bg-foreground px-2.5 py-1 text-xs font-medium text-background hover:opacity-90"
+                    >
+                      Salvar dados
+                    </button>
+                  </div>
+                </div>
+              ) : temBanco ? (
+                <dl className="space-y-1.5">
+                  {bankItems.map((f) => (
+                    <div key={f.label} className="flex justify-between gap-4 text-sm">
+                      <dt className="shrink-0 text-text-secondary">{f.label}</dt>
+                      <dd className="min-w-0 break-all text-right font-medium text-foreground">
+                        {f.value}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : (
+                <p className="text-sm text-text-secondary">Nenhum dado bancário cadastrado.</p>
+              )}
+            </FinanceBlock>
+          )}
+
+          {showContrato && (
+            <FinanceBlock
+              title="Contrato"
+              action={
+                !contrato.present && (
+                  <QuietButton onClick={() => contratoRef.current?.click()}>
+                    {busy === "contrato" ? "Enviando..." : "Anexar contrato"}
+                  </QuietButton>
+                )
+              }
+            >
+              {contrato.present ? (
+                <FileLine
+                  name={contrato.name}
+                  hint="Contrato anexado"
+                  onOpen={() => openFileUrl(influ.contrato!)}
+                  onReplace={() => contratoRef.current?.click()}
+                  onRemove={() =>
+                    commit({ contrato: undefined, contratoNome: undefined }, "removeu o contrato")
+                  }
+                />
+              ) : (
+                <p className="text-sm text-text-secondary">Contrato não cadastrado.</p>
+              )}
+              {fileError && <p className="text-xs text-destructive">{fileError}</p>}
+            </FinanceBlock>
           )}
         </div>
       )}
+
+      {/* E. ATIVIDADE FINANCEIRA */}
+      <FinanceBlock title="Atividade financeira" className="border-t border-border/60 pt-5">
+        <FinanceTimeline items={executionItems} />
+      </FinanceBlock>
     </section>
   );
 }
@@ -4540,7 +4927,9 @@ function WorkspaceDetailBody({
   onApplyChecklistToAll,
   onRunEntregaAction,
   onOpenActivity,
+  campanhaId,
 }: {
+  campanhaId?: string;
   influ: Influ;
   has: (k: InfluencerFieldKey) => boolean;
   bank: BankInfo;
@@ -4701,7 +5090,13 @@ function WorkspaceDetailBody({
       {/* 7. Financeiro e contrato */}
       {temFinanceiro && (
         <div className="border-t border-border/60 pt-5">
-          <FinanceiroContratoSection influ={influ} has={has} bank={bank} onPatch={onPatch} />
+          <FinanceiroContratoSection
+            influ={influ}
+            has={has}
+            bank={bank}
+            campanhaId={campanhaId}
+            onPatch={onPatch}
+          />
         </div>
       )}
 
@@ -5429,10 +5824,15 @@ function RemoveBtn({ onClick }: { onClick: () => void }) {
 function PagamentoEditor({
   value,
   onChange,
+  parts = "all",
 }: {
   value?: PagamentoEntrega;
   onChange: (p: PagamentoEntrega | undefined) => void;
+  /** "remuneracao" = só o combinado (modalidades e valores); "pagamento" = vencimento e comprovante. */
+  parts?: "all" | "remuneracao" | "pagamento";
 }) {
+  const showRem = parts !== "pagamento";
+  const showPag = parts !== "remuneracao";
   const norm = normalizePagamento(value);
   if (!norm) {
     return (
@@ -5441,7 +5841,7 @@ function PagamentoEditor({
         onClick={() => onChange({ tipos: [], config: {}, aprovacao: "pendente" })}
         className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground"
       >
-        <Coins className="h-3 w-3" /> Adicionar pagamento
+        <Coins className="h-3 w-3" /> Definir remuneração
       </button>
     );
   }
@@ -5455,154 +5855,161 @@ function PagamentoEditor({
 
   return (
     <div className="space-y-2 rounded-md border border-border bg-muted/20 p-2">
-      <div className="flex items-center justify-between">
-        <div className="flex flex-wrap gap-1">
-          {PAG_TIPOS_ENTREGA.map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => toggleTipo(t)}
-              className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors ${
-                norm.tipos.includes(t)
-                  ? "bg-foreground text-background"
-                  : "bg-background text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-        <button
-          type="button"
-          onClick={() => onChange(undefined)}
-          className="text-muted-foreground hover:text-destructive"
-          aria-label="Remover pagamento"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      </div>
-
-      {norm.tipos.includes("Valor") && (
-        <div className="flex items-center gap-1 rounded-md border border-border bg-background px-2">
-          <span className="text-xs text-muted-foreground">R$</span>
-          <input
-            value={norm.config.Valor?.valor ?? ""}
-            onChange={(e) => updateConfig("Valor", { valor: e.target.value })}
-            placeholder="0,00"
-            className="w-full bg-transparent py-1.5 text-sm tabular-nums outline-none"
-          />
-        </div>
-      )}
-      {norm.tipos.includes("Por Hora") && (
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-1 rounded-md border border-border bg-background px-2">
-            <span className="text-xs text-muted-foreground">R$/h</span>
-            <input
-              value={norm.config["Por Hora"]?.porHoraValor ?? ""}
-              onChange={(e) => updateConfig("Por Hora", { porHoraValor: e.target.value })}
-              placeholder="0,00"
-              className="w-full bg-transparent py-1.5 text-sm tabular-nums outline-none"
-            />
-          </div>
-          <textarea
-            value={norm.config["Por Hora"]?.porHoraDescricao ?? ""}
-            onChange={(e) => updateConfig("Por Hora", { porHoraDescricao: e.target.value })}
-            placeholder="Detalhes (ex: quantidade de horas estimada, escopo do trabalho...)"
-            rows={2}
-            className="w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none"
-          />
-        </div>
-      )}
-      {norm.tipos.includes("Comissão") && (
-        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-          <input
-            value={norm.config.Comissão?.comissaoPct ?? ""}
-            onChange={(e) => updateConfig("Comissão", { comissaoPct: e.target.value })}
-            placeholder="Ex: 10%"
-            className="rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none"
-          />
-          <input
-            value={norm.config.Comissão?.comissaoSobre ?? ""}
-            onChange={(e) => updateConfig("Comissão", { comissaoSobre: e.target.value })}
-            placeholder="Sobre o quê (ex: vendas via cupom)"
-            className="rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none"
-          />
-        </div>
-      )}
-      {norm.tipos.includes("Permuta") && (
-        <textarea
-          value={norm.config.Permuta?.permutaDescricao ?? ""}
-          onChange={(e) => updateConfig("Permuta", { permutaDescricao: e.target.value })}
-          placeholder="Descrição da permuta"
-          rows={2}
-          className="w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none"
-        />
-      )}
-      {norm.tipos.includes("Outro") && (
-        <div className="space-y-1.5">
-          <input
-            value={norm.config.Outro?.outroDescricao ?? ""}
-            onChange={(e) => updateConfig("Outro", { outroDescricao: e.target.value })}
-            placeholder="Descrição"
-            className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none"
-          />
-          <div className="flex items-center gap-1 rounded-md border border-border bg-background px-2">
-            <span className="text-xs text-muted-foreground">R$</span>
-            <input
-              value={norm.config.Outro?.outroValor ?? ""}
-              onChange={(e) => updateConfig("Outro", { outroValor: e.target.value })}
-              placeholder="0,00"
-              className="w-full bg-transparent py-1.5 text-sm tabular-nums outline-none"
-            />
-          </div>
-          <textarea
-            value={norm.config.Outro?.outroCriterios ?? ""}
-            onChange={(e) => updateConfig("Outro", { outroCriterios: e.target.value })}
-            placeholder="Critérios de pagamento"
-            rows={2}
-            className="w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none"
-          />
-        </div>
-      )}
-      <DateField
-        value={norm.data ?? undefined}
-        onChange={(v) => update({ data: v })}
-        className="text-xs"
-      />
-
-      <div className="space-y-1">
-        <p className="text-[11px] font-medium text-muted-foreground">Comprovante</p>
-        {norm.comprovanteUrl ? (
-          <div className="flex items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1.5">
-            <a
-              href={norm.comprovanteUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-foreground hover:underline"
-            >
-              <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
-              <span className="truncate">{norm.comprovanteNome || "Comprovante"}</span>
-            </a>
+      {showRem && (
+        <>
+          <div className="flex items-center justify-between">
+            <div className="flex flex-wrap gap-1">
+              {PAG_TIPOS_ENTREGA.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => toggleTipo(t)}
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                    norm.tipos.includes(t)
+                      ? "bg-foreground text-background"
+                      : "bg-background text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
             <button
               type="button"
-              onClick={() => update({ comprovanteNome: undefined, comprovanteUrl: undefined })}
-              aria-label="Remover comprovante"
-              className="shrink-0 text-muted-foreground hover:text-destructive"
+              onClick={() => onChange(undefined)}
+              className="text-muted-foreground hover:text-destructive"
+              aria-label="Remover remuneração"
             >
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
-        ) : (
-          <BriefingAnexoUploadButton
-            onUpload={(nome, url) => update({ comprovanteNome: nome, comprovanteUrl: url })}
-          />
-        )}
-      </div>
 
-      <p className="text-[11px] text-muted-foreground">
-        Some como <b>Pendente</b> — só vira despesa no Financeiro depois de aceito (Aceitar/Recusar
-        fica logo abaixo, quando esse campo estiver habilitado).
-      </p>
+          {norm.tipos.includes("Valor") && (
+            <div className="flex items-center gap-1 rounded-md border border-border bg-background px-2">
+              <span className="text-xs text-muted-foreground">R$</span>
+              <input
+                value={norm.config.Valor?.valor ?? ""}
+                onChange={(e) => updateConfig("Valor", { valor: e.target.value })}
+                placeholder="0,00"
+                className="w-full bg-transparent py-1.5 text-sm tabular-nums outline-none"
+              />
+            </div>
+          )}
+          {norm.tipos.includes("Por Hora") && (
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1 rounded-md border border-border bg-background px-2">
+                <span className="text-xs text-muted-foreground">R$/h</span>
+                <input
+                  value={norm.config["Por Hora"]?.porHoraValor ?? ""}
+                  onChange={(e) => updateConfig("Por Hora", { porHoraValor: e.target.value })}
+                  placeholder="0,00"
+                  className="w-full bg-transparent py-1.5 text-sm tabular-nums outline-none"
+                />
+              </div>
+              <textarea
+                value={norm.config["Por Hora"]?.porHoraDescricao ?? ""}
+                onChange={(e) => updateConfig("Por Hora", { porHoraDescricao: e.target.value })}
+                placeholder="Detalhes (ex: quantidade de horas estimada, escopo do trabalho...)"
+                rows={2}
+                className="w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none"
+              />
+            </div>
+          )}
+          {norm.tipos.includes("Comissão") && (
+            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+              <input
+                value={norm.config.Comissão?.comissaoPct ?? ""}
+                onChange={(e) => updateConfig("Comissão", { comissaoPct: e.target.value })}
+                placeholder="Ex: 10%"
+                className="rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none"
+              />
+              <input
+                value={norm.config.Comissão?.comissaoSobre ?? ""}
+                onChange={(e) => updateConfig("Comissão", { comissaoSobre: e.target.value })}
+                placeholder="Sobre o quê (ex: vendas via cupom)"
+                className="rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none"
+              />
+            </div>
+          )}
+          {norm.tipos.includes("Permuta") && (
+            <textarea
+              value={norm.config.Permuta?.permutaDescricao ?? ""}
+              onChange={(e) => updateConfig("Permuta", { permutaDescricao: e.target.value })}
+              placeholder="Descrição da permuta"
+              rows={2}
+              className="w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none"
+            />
+          )}
+          {norm.tipos.includes("Outro") && (
+            <div className="space-y-1.5">
+              <input
+                value={norm.config.Outro?.outroDescricao ?? ""}
+                onChange={(e) => updateConfig("Outro", { outroDescricao: e.target.value })}
+                placeholder="Descrição"
+                className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none"
+              />
+              <div className="flex items-center gap-1 rounded-md border border-border bg-background px-2">
+                <span className="text-xs text-muted-foreground">R$</span>
+                <input
+                  value={norm.config.Outro?.outroValor ?? ""}
+                  onChange={(e) => updateConfig("Outro", { outroValor: e.target.value })}
+                  placeholder="0,00"
+                  className="w-full bg-transparent py-1.5 text-sm tabular-nums outline-none"
+                />
+              </div>
+              <textarea
+                value={norm.config.Outro?.outroCriterios ?? ""}
+                onChange={(e) => updateConfig("Outro", { outroCriterios: e.target.value })}
+                placeholder="Critérios de pagamento"
+                rows={2}
+                className="w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none"
+              />
+            </div>
+          )}
+        </>
+      )}
+
+      {showPag && (
+        <>
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-muted-foreground">Vencimento</p>
+            <DateField
+              value={norm.data ?? undefined}
+              onChange={(v) => update({ data: v })}
+              className="text-xs"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-muted-foreground">Comprovante</p>
+            {norm.comprovanteUrl ? (
+              <div className="flex items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1.5">
+                <a
+                  href={norm.comprovanteUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-foreground hover:underline"
+                >
+                  <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
+                  <span className="truncate">{norm.comprovanteNome || "Comprovante"}</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => update({ comprovanteNome: undefined, comprovanteUrl: undefined })}
+                  aria-label="Remover comprovante"
+                  className="shrink-0 text-muted-foreground hover:text-destructive"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ) : (
+              <BriefingAnexoUploadButton
+                onUpload={(nome, url) => update({ comprovanteNome: nome, comprovanteUrl: url })}
+              />
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
