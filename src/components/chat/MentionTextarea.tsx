@@ -11,11 +11,18 @@ import type { ChatMember, ChatMention } from "@/lib/chat-store";
 import {
   EVERYONE_MENTION_ID,
   EVERYONE_MENTION_LABEL,
-  matchScore,
   normalizeForSearch,
   type MentionOption,
 } from "@/lib/mention-kinds";
 import { detectMentionTrigger, rankPeople, type MentionTrigger } from "@/lib/chat-mentions";
+import {
+  buildReferenceView,
+  loadRecents,
+  rememberRecent,
+  type ReferenceKind,
+  type ReferenceRow,
+  type RecentRef,
+} from "@/lib/reference-picker";
 import { EntityReferencePicker } from "./EntityReferencePicker";
 import { MentionAutocomplete, type MentionAutocompleteItem } from "./MentionAutocomplete";
 
@@ -27,7 +34,6 @@ import { MentionAutocomplete, type MentionAutocompleteItem } from "./MentionAuto
  * A lógica de gatilho é pura e testada em `chat-mentions.ts` (`detectMentionTrigger`).
  */
 const PEOPLE_LIMIT = 6;
-const REFERENCE_LIMIT = 7;
 
 /** Registra as menções realmente usadas no texto: pessoas por `@Nome`, referências por `#Rótulo`. */
 export function extractUsedMentions(
@@ -108,6 +114,9 @@ export const MentionTextarea = forwardRef<
   const [trigger, setTrigger] = useState<MentionTrigger | null>(null);
   const [highlight, setHighlight] = useState(0);
   const [left, setLeft] = useState(0);
+  // Categoria escolhida dentro do `#` (Tarefas, Projetos...); some ao fechar o seletor.
+  const [refKind, setRefKind] = useState<ReferenceKind | null>(null);
+  const [recents, setRecents] = useState<RecentRef[]>([]);
 
   useEffect(() => {
     if (autoFocus) taRef.current?.focus();
@@ -142,21 +151,28 @@ export const MentionTextarea = forwardRef<
     return { items, hasMore: ranked.length > PEOPLE_LIMIT };
   }, [trigger, people, recentUserIds]);
 
-  const referenceItems = useMemo<MentionOption[]>(() => {
-    if (trigger?.char !== "#") return [];
-    return (
-      references
-        // Sem busca ainda: mostra as sugestões (ordenadas pelo contexto) em vez de lista vazia.
-        .map((o) => ({ o, score: trigger.query ? matchScore(o.label, trigger.query) : 1 }))
-        .filter(({ score }) => score > 0)
-        .sort((a, b) => b.score - a.score || (b.o.boost ?? 0) - (a.o.boost ?? 0))
-        .slice(0, REFERENCE_LIMIT)
-        .map(({ o }) => o)
-    );
-  }, [trigger, references]);
+  const referenceView = useMemo(
+    () =>
+      trigger?.char === "#"
+        ? buildReferenceView({ references, query: trigger.query, recents, kind: refKind })
+        : null,
+    [trigger, references, recents, refKind],
+  );
 
-  const activeCount = trigger?.char === "@" ? peopleItems.items.length : referenceItems.length;
-  const open = trigger !== null && activeCount > 0;
+  const activeCount =
+    trigger?.char === "@" ? peopleItems.items.length : (referenceView?.rows.length ?? 0);
+  // `#` fica aberto mesmo sem resultado ("Nada encontrado"), para a busca ser sempre explicável.
+  const open = trigger !== null && (trigger.char === "#" || activeCount > 0);
+
+  useEffect(() => {
+    if (trigger?.char !== "#") {
+      setRefKind(null);
+      return;
+    }
+    setRecents(loadRecents());
+  }, [trigger?.char]);
+  // A cada letra a lista muda: volta o destaque para o primeiro resultado.
+  useEffect(() => setHighlight(0), [trigger?.query, refKind]);
 
   const syncTrigger = (text: string, caret: number) => {
     const next = detectMentionTrigger(text, caret, mentionsEnabled);
@@ -202,10 +218,22 @@ export const MentionTextarea = forwardRef<
 
   const pickPerson = (item: MentionAutocompleteItem) =>
     insert("@" + (item.type === "everyone" ? EVERYONE_MENTION_LABEL : item.member.name));
-  const pickReference = (opt: MentionOption) => insert("#" + opt.label);
+  const pickReference = (row: ReferenceRow | undefined) => {
+    if (!row) return;
+    if (row.type === "category") {
+      // Escolher a categoria só filtra: o texto do composer não muda.
+      setRefKind(row.kind);
+      setHighlight(0);
+      return;
+    }
+    rememberRecent({ kind: row.option.kind as ReferenceKind, id: row.option.id });
+    insert("#" + row.option.label);
+  };
 
   const handlePickerKey = (e: KeyboardEvent): boolean => {
     if (!open) return false;
+    // Sem resultado, Enter/setas voltam a ser do composer (Enter envia a mensagem).
+    if (activeCount === 0 && e.key !== "Escape") return false;
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setHighlight((h) => (h + 1) % activeCount);
@@ -219,12 +247,13 @@ export const MentionTextarea = forwardRef<
     if (e.key === "Enter" || e.key === "Tab") {
       e.preventDefault();
       if (trigger?.char === "@") pickPerson(peopleItems.items[highlight] ?? peopleItems.items[0]);
-      else pickReference(referenceItems[highlight] ?? referenceItems[0]);
+      else pickReference(referenceView?.rows[highlight] ?? referenceView?.rows[0]);
       return true;
     }
     if (e.key === "Escape") {
       e.preventDefault();
-      setTrigger(null);
+      if (trigger?.char === "#" && refKind) setRefKind(null);
+      else setTrigger(null);
       return true;
     }
     return false;
@@ -276,13 +305,15 @@ export const MentionTextarea = forwardRef<
           style={{ left }}
         />
       )}
-      {open && trigger?.char === "#" && (
+      {open && trigger?.char === "#" && referenceView && (
         <EntityReferencePicker
-          items={referenceItems}
+          view={referenceView}
           query={trigger.query}
+          kind={refKind}
           highlighted={highlight}
           onPick={pickReference}
           onHover={setHighlight}
+          onBack={() => setRefKind(null)}
           style={{ left }}
         />
       )}
