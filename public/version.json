@@ -1,6 +1,22 @@
 {
-  "version": "1.350.0",
+  "version": "1.351.0",
   "releases": [
+    {
+      "version": "1.351.0",
+      "summary": "Detalhe do evento: data, horário e tipo com mais clareza.",
+      "modules": [
+        {
+          "name": "CAMPANHAS",
+          "tagline": "Recursos · Calendário",
+          "items": [
+            {
+              "title": "Data e horário em destaque",
+              "description": "“13 out. 2026” e o horário com ícones discretos; dia da semana e tipo logo abaixo, em texto secundário."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.350.0",
       "summary": "Novo evento do calendário: formulário refinado, com seletores próprios de data, horário e tipo.",

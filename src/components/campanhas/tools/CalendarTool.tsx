@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   CalendarClock,
+  Clock,
   ChevronLeft,
   ChevronRight,
   Check,
@@ -52,6 +53,13 @@ import {
 } from "@/lib/campanha-calendario";
 import { CampaignToolShell } from "./CampaignToolShell";
 import { CAMPAIGN_TOOLS } from "./campaign-tools";
+
+const parseDia = (iso: string) => new Date(`${iso.slice(0, 10)}T12:00:00`);
+/** "13 out. 2026" */
+const dataCurta = (iso: string) =>
+  parseDia(iso).toLocaleDateString("pt-BR", { day: "numeric", month: "short", year: "numeric" });
+/** "terça-feira" */
+const diaSemana = (iso: string) => parseDia(iso).toLocaleDateString("pt-BR", { weekday: "long" });
 
 const DIAS_LABEL = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
 const FILTROS = [
@@ -344,12 +352,27 @@ export function CalendarTool({
                   <DialogTitle className="text-base font-semibold leading-snug">
                     {detalhe.item.title}
                   </DialogTitle>
-                  <DialogDescription className="text-sm text-text-secondary">
-                    {detalhe.item.recurring
-                      ? `Todo dia ${Number(detalhe.item.date.slice(8, 10))}`
-                      : fmtDate(detalhe.date)}
-                    {detalhe.item.hora ? ` · ${detalhe.item.hora}` : ""} ·{" "}
-                    {EVENTO_TIPO_LABEL[tipoDe(detalhe.item)]}
+                  <DialogDescription asChild>
+                    <div className="mt-1.5 space-y-0.5">
+                      <p className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm font-semibold text-foreground">
+                        <span className="inline-flex items-center gap-1.5">
+                          <CalendarClock className="h-3.5 w-3.5 text-text-secondary" aria-hidden />
+                          {detalhe.item.recurring
+                            ? `Todo dia ${Number(detalhe.item.date.slice(8, 10))}`
+                            : dataCurta(detalhe.date)}
+                        </span>
+                        {detalhe.item.hora && (
+                          <span className="inline-flex items-center gap-1.5 tabular-nums">
+                            <Clock className="h-3.5 w-3.5 text-text-secondary" aria-hidden />
+                            {detalhe.item.hora}
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-text-secondary">
+                        {detalhe.item.recurring ? "" : `${diaSemana(detalhe.date)} · `}
+                        {EVENTO_TIPO_LABEL[tipoDe(detalhe.item)]}
+                      </p>
+                    </div>
                   </DialogDescription>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">

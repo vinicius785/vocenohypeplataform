@@ -1,5 +1,6 @@
 {
   "notes": [
+    "1.351.0: detalhe do evento do calendário — só apresentação (data curta, horário, dia da semana e tipo em hierarquia). Sem mudança de dados.",
     "1.350.0: EventoForm refinado — TimeField ganhou layout=\"colunas\" (horas/minutos 5 em 5, valor HH:MM inalterado), Tipo em Popover próprio, Checkbox Radix, validação inline e toast ao salvar. Sem mudança de dados.",
     "1.349.0: CalendarTool V2 (só eventos manuais; removidos marcos derivados). CronogramaItem ganhou hora/tipo/visivelCliente/criadoPor/criadoEm/atualizadoEm (JSONB, sem migration; sem a propriedade = legado visível). lib/campanha-calendario.ts (regras puras + cronogramaPublico aplicado em buildClienteLinkData: só compartilhados, só campos públicos).",
     "1.348.0: Influ.ocultoDoCliente (sem migration, JSONB). buildClienteLinkData filtra ocultos e loadInfluRow bloqueia id adivinhado; UI: PortalVisibilityDialog no menu Visualização do InfluencerBoard, com log na Atividade.",
