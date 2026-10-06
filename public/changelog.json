@@ -1,5 +1,6 @@
 {
   "notes": [
+    "1.366.0: TaskOrigin/task_origin ganham 'comercial' (migration 20261007030000 amplia os CHECKs de time_entries e performance_events — aplicar ANTES de usar timer/score no Comercial); statusTargetOrigin/taskOriginFromScope devolvem 'comercial'; move-task e MoveTaskDialog com Comercial; indicador de timer do AppShell resolve tarefas do Comercial.",
     "1.365.0: Comercial como origem de tarefa — task-aggregation (loadTasksByAssignee/AllTasksFlat/mentions), comercialAsTaskGroup no Score/Time, task-status-change e task-directory com origem 'comercial', TaskBoardScope.comercial (sem mover/duplicar, origem de performance/timer nula como antes), deep-link comercial-task-link, init global do sync em _authenticated. Sem migration.",
     "1.364.0: anexosComNotaDoInflu injeta Influ.notaFiscal nos anexos do lançamento (id fixo influ-nf); updateEntryAnexos grava a nota fiscal de lançamento de influenciador no cadastro do influenciador (+ atividade financeira) e o restante no override.",
     "1.363.0: EntryDetailsDialog reescrito (drawer) + financeiro/entry-detail.ts (statusLine, canMarkPaid, docGroups, entryHistorico); updateEntryAnexos grava anexos de lançamentos manuais e gerados (override); HistoricoEvento.semHora; ArquivoMaterial.onRemove opcional. Sem mudança de regra/cálculo.",

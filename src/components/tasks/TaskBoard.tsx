@@ -3644,7 +3644,7 @@ export function TaskDialog({
                     {/* Ações DA TAREFA, agrupadas por contexto — nunca um
                         catálogo do que existe dentro dela. */}
                     <DropdownMenuContent align="end" className="w-52">
-                      {!parentTitle && scope && scope.kind !== "comercial" && (
+                      {!parentTitle && scope && (
                         <>
                           <DropdownMenuItem onClick={() => setMoveDialogOpen(true)}>
                             <FolderInput className="h-3.5 w-3.5" /> Mover para...
@@ -3719,7 +3719,7 @@ export function TaskDialog({
             )}
           </div>
 
-          {scope && scope.kind !== "comercial" && initial && (
+          {scope && initial && (
             <MoveTaskDialog
               open={moveDialogOpen}
               onOpenChange={setMoveDialogOpen}

@@ -863,7 +863,6 @@ export function InicioDashboard() {
   };
 
   const startWorkTimer = (t: DashTask) =>
-    !t.comercial &&
     void startTimerOnInProgress(t.id.replace(/^mkt:/, ""), statusTargetOrigin(t), t.title);
   const stopWorkTimer = () => {
     if (running.entry) void stopTimer(running.entry.id, running.entry.startedAt);

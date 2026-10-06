@@ -1,6 +1,30 @@
 {
-  "version": "1.365.0",
+  "version": "1.366.0",
   "releases": [
+    {
+      "version": "1.366.0",
+      "summary": "Tarefas do Comercial agora têm cronômetro, score por origem e podem ser movidas e duplicadas.",
+      "modules": [
+        {
+          "name": "TAREFAS",
+          "tagline": "Comercial",
+          "items": [
+            {
+              "title": "Cronômetro",
+              "description": "Iniciar, parar e acompanhar o timer em tarefas do Comercial, inclusive pelo Início e pelo indicador do topo."
+            },
+            {
+              "title": "Mover e duplicar",
+              "description": "Mover tarefas entre Comercial, Marketing, projetos e campanhas, e duplicar dentro do Comercial."
+            },
+            {
+              "title": "Score",
+              "description": "Os eventos de performance do Comercial ficam registrados com origem própria."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.365.0",
       "summary": "Tarefas do Comercial agora são tarefas como as outras: aparecem no Início, no Time e entram no score.",

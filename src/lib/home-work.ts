@@ -20,7 +20,7 @@ export function timerMatchesTask(
   task: Pick<DashTask, "id" | "projectId" | "campanhaId" | "parentId" | "comercial">,
   entry: Pick<TimeEntry, "taskId" | "taskOrigin"> | null | undefined,
 ): boolean {
-  if (!entry || task.comercial) return false;
+  if (!entry) return false;
   return (
     entry.taskId === task.id.replace(/^mkt:/, "") && entry.taskOrigin === statusTargetOrigin(task)
   );

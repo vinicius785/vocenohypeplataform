@@ -235,12 +235,14 @@ export function updateTaskDirectoryStatus(entry: TaskDirectoryEntry, newStatus: 
   const ok = applyTaskDirectoryStatus(entry, newStatus);
   // Mesmo comportamento do board: entrar em "Em andamento" inicia o cronômetro; sair dele (ou
   // concluir) para.
-  if (ok && !entry.comercial) {
-    const origin = entry.campanhaId
-      ? "campanha"
-      : entry.id.startsWith("mkt:")
-        ? "marketing"
-        : "projeto";
+  if (ok) {
+    const origin = entry.comercial
+      ? "comercial"
+      : entry.campanhaId
+        ? "campanha"
+        : entry.id.startsWith("mkt:")
+          ? "marketing"
+          : "projeto";
     if (shouldStopTimerOnStatusChange(entry.status, newStatus)) {
       void import("@/lib/time-entries").then(({ stopIfRunningOnTask }) =>
         stopIfRunningOnTask(entry.rawId, origin),

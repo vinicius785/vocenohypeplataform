@@ -1,6 +1,7 @@
 import type { Task, TaskBoardScope } from "@/components/tasks/TaskBoard";
 import { loadProjetoTarefas, saveProjetoTarefas } from "@/lib/projeto-scoped-store";
 import { loadCampanhaTarefas, saveCampanhaTarefas } from "@/lib/campanha-scoped-store";
+import { loadComercialTasks, saveComercialTasks } from "@/lib/comercial-tasks";
 import {
   insertStandaloneWithId,
   removeStandalone,
@@ -13,7 +14,8 @@ import {
 export type MoveTarget =
   | { kind: "projeto"; id: string; label: string }
   | { kind: "campanha"; id: string; label: string }
-  | { kind: "marketing"; label: string };
+  | { kind: "marketing"; label: string }
+  | { kind: "comercial"; label: string };
 
 /** Marketing guarda tarefas num shape próprio (`MktStandalone`, quase
  * idêntico a `Task` — ver `marketing-tasks.ts`). Mesma lista de campos que
@@ -49,7 +51,7 @@ function taskToMkt(t: Task): MktStandalone {
   };
 }
 
-/** Move uma tarefa de um board pra outro (Projeto/Campanha/Marketing).
+/** Move uma tarefa de um board pra outro (Projeto/Campanha/Marketing/Comercial).
  * Escreve direto nas stores já existentes (mesmas usadas por cada
  * board) — não depende de estado de página nenhum, e a mudança chega
  * sozinha em quem estiver com o board de origem ou destino aberto via
@@ -75,6 +77,8 @@ export function moveTask(task: Task, from: TaskBoardScope, to: MoveTarget): void
       from.id,
       loadCampanhaTarefas(from.id).filter((t) => t.id !== task.id),
     );
+  } else if (from.kind === "comercial") {
+    saveComercialTasks(loadComercialTasks().filter((t) => t.id !== task.id));
   } else {
     removeStandalone(rawId);
   }
@@ -83,6 +87,8 @@ export function moveTask(task: Task, from: TaskBoardScope, to: MoveTarget): void
     saveProjetoTarefas(to.id, [...loadProjetoTarefas(to.id), movedTask]);
   } else if (to.kind === "campanha") {
     saveCampanhaTarefas(to.id, [...loadCampanhaTarefas(to.id), movedTask]);
+  } else if (to.kind === "comercial") {
+    saveComercialTasks([...loadComercialTasks(), movedTask]);
   } else {
     insertStandaloneWithId(taskToMkt(movedTask));
   }
@@ -111,6 +117,8 @@ export function duplicateTask(task: Task, scope: TaskBoardScope): Task {
     saveProjetoTarefas(scope.id, [...loadProjetoTarefas(scope.id), copy]);
   } else if (scope.kind === "campanha") {
     saveCampanhaTarefas(scope.id, [...loadCampanhaTarefas(scope.id), copy]);
+  } else if (scope.kind === "comercial") {
+    saveComercialTasks([...loadComercialTasks(), copy]);
   } else {
     insertStandaloneWithId(taskToMkt(copy));
   }

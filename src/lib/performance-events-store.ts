@@ -35,7 +35,7 @@ export type PerformanceEvent = {
   actorName: string;
   occurredAt: string;
   taskId: string | null;
-  taskOrigin: "projeto" | "campanha" | "marketing" | null;
+  taskOrigin: "projeto" | "campanha" | "marketing" | "comercial" | null;
   taskTitle: string | null;
   meetingId: string | null;
   data: Record<string, unknown>;
@@ -52,7 +52,7 @@ type PerformanceEventRow = {
   actor_name: string;
   occurred_at: string;
   task_id: string | null;
-  task_origin: "projeto" | "campanha" | "marketing" | null;
+  task_origin: "projeto" | "campanha" | "marketing" | "comercial" | null;
   task_title: string | null;
   meeting_id: string | null;
   data: Record<string, unknown>;

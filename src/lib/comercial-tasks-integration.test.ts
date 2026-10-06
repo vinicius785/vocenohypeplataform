@@ -18,9 +18,18 @@ vi.mock("@/lib/campanha-scoped-store", async (orig) => ({
   ...(await orig<typeof import("@/lib/campanha-scoped-store")>()),
   getAllCampanhaTarefas: () => new Map(),
 }));
+const mkt = vi.hoisted(() => ({ inserted: [] as unknown[], removed: [] as string[] }));
 vi.mock("@/lib/marketing-tasks", async (orig) => ({
   ...(await orig<typeof import("@/lib/marketing-tasks")>()),
   loadStandalone: () => [],
+  insertStandaloneWithId: (t: unknown) => mkt.inserted.push(t),
+  removeStandalone: (id: string) => mkt.removed.push(id),
+}));
+const proj = vi.hoisted(() => ({ saved: [] as { id: string; list: unknown[] }[] }));
+vi.mock("@/lib/projeto-scoped-store", async (orig) => ({
+  ...(await orig<typeof import("@/lib/projeto-scoped-store")>()),
+  loadProjetoTarefas: () => [],
+  saveProjetoTarefas: (id: string, list: unknown[]) => proj.saved.push({ id, list }),
 }));
 vi.mock("@/lib/comercial-tasks", () => ({
   loadComercialTasks: () => state.comercial,
@@ -58,6 +67,9 @@ const task = (o: Record<string, unknown> = {}) => ({
 beforeEach(() => {
   state.comercial = [];
   state.saved = [];
+  mkt.inserted = [];
+  mkt.removed = [];
+  proj.saved = [];
 });
 
 describe("Início / Time: agregação", () => {
@@ -148,7 +160,7 @@ describe("Score: tarefas abertas do Comercial contam", () => {
 });
 
 describe("mudança de status pelo Início/Time", () => {
-  it("grava na tabela do Comercial, sem cronômetro", async () => {
+  it("grava na tabela do Comercial e liga o cronômetro com origem 'comercial'", async () => {
     const { changeTaskStatus } = await import("./task-status-change");
     const { startTimerOnInProgress } = await import("./time-entries");
     state.comercial = [task()];
@@ -159,7 +171,11 @@ describe("mudança de status pelo Início/Time", () => {
     expect(res.ok).toBe(true);
     expect(state.saved).toHaveLength(1);
     expect((state.saved[0][0] as { status: string }).status).toBe("Em andamento");
-    expect(startTimerOnInProgress).not.toHaveBeenCalled();
+    expect(startTimerOnInProgress).toHaveBeenCalledWith(
+      "t1",
+      "comercial",
+      "Ligar para a Rodonaves",
+    );
   });
   it("concluir devolve completed e tarefa inexistente falha sem gravar", async () => {
     const { changeTaskStatus } = await import("./task-status-change");
@@ -196,5 +212,69 @@ describe("diretório (@menção, dependências, modal)", () => {
     expect(sub.breadcrumb).toBe("Comercial · Ligar para a Rodonaves");
     sub.remove();
     expect((state.saved.at(-1)![0] as { subtasks: unknown[] }).subtasks).toEqual([]);
+  });
+});
+
+describe("origem 'comercial' (cronômetro e performance)", () => {
+  it("o escopo do board e o alvo de status resolvem para a origem 'comercial'", async () => {
+    const { taskOriginFromScope, statusTargetOrigin } = await import("./task-status-change");
+    expect(taskOriginFromScope({ kind: "comercial" })).toBe("comercial");
+    expect(statusTargetOrigin({ id: "t1", projectId: "", comercial: true })).toBe("comercial");
+    expect(statusTargetOrigin({ id: "t1", projectId: "p" })).toBe("projeto");
+  });
+  it("o evento de performance sai com task_origin 'comercial' ao concluir", async () => {
+    const { changeTaskStatus } = await import("./task-status-change");
+    const chat = await import("@/lib/chat-store");
+    vi.spyOn(chat, "getMe").mockReturnValue({
+      id: "8f14e45f-ceea-4672-9c8e-2f3f6a1b7f10",
+      name: "Vini",
+    } as never);
+    const { recordPerformanceEvent } = await import("@/lib/performance-events-store");
+    state.comercial = [task()];
+    changeTaskStatus({ id: "t1", projectId: "", comercial: true }, "Concluído", {
+      members: [{ id: "m1", name: "Vinícius Garcia" }] as never,
+      performanceSettings: { deadlineCutoffHour: 19 } as never,
+    });
+    const calls = vi.mocked(recordPerformanceEvent).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls.every(([e]) => (e as { taskOrigin: string }).taskOrigin === "comercial")).toBe(
+      true,
+    );
+  });
+});
+
+describe("mover e duplicar", () => {
+  it("mover do Comercial para projeto tira de lá e coloca lá, mantendo o id", async () => {
+    const { moveTask } = await import("./move-task");
+    state.comercial = [task(), task({ id: "t2" })];
+    moveTask(task() as never, { kind: "comercial" }, { kind: "projeto", id: "p9", label: "Proj" });
+    expect((state.saved.at(-1) as { id: string }[]).map((t) => t.id)).toEqual(["t2"]);
+    expect(proj.saved.at(-1)?.id).toBe("p9");
+    expect((proj.saved.at(-1)!.list as { id: string }[]).map((t) => t.id)).toEqual(["t1"]);
+  });
+  it("mover do Marketing para o Comercial tira o prefixo mkt:", async () => {
+    const { moveTask } = await import("./move-task");
+    state.comercial = [];
+    moveTask(
+      task({ id: "mkt:x1" }) as never,
+      { kind: "marketing" },
+      { kind: "comercial", label: "Comercial" },
+    );
+    expect(mkt.removed).toEqual(["x1"]);
+    expect((state.saved.at(-1) as { id: string }[]).map((t) => t.id)).toEqual(["x1"]);
+  });
+  it("duplicar no Comercial cria cópia sem histórico, no próprio Comercial", async () => {
+    const { duplicateTask } = await import("./move-task");
+    state.comercial = [task()];
+    const copy = duplicateTask(
+      task({ activity: [{ id: "a" }], comments: [{ id: "c" }], completedAt: "x" }) as never,
+      { kind: "comercial" },
+    );
+    expect(copy.id).not.toBe("t1");
+    expect(copy.title).toBe("Ligar para a Rodonaves (cópia)");
+    expect(copy.activity).toBeUndefined();
+    const list = state.saved.at(-1) as { id: string }[];
+    expect(list).toHaveLength(2);
+    expect(list.map((t) => t.id)).toContain(copy.id);
   });
 });

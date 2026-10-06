@@ -14,7 +14,7 @@ import { isValidUuid, type DateRange } from "@/lib/performance-engine";
  * task_id/user_id/período no servidor.
  */
 
-export type TaskOrigin = "projeto" | "campanha" | "marketing";
+export type TaskOrigin = "projeto" | "campanha" | "marketing" | "comercial";
 export type TimeEntrySource = "cronometro" | "manual";
 
 export type TimeEntry = {

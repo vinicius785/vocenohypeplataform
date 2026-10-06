@@ -35,6 +35,8 @@ import { loadProjetos, onProjetosChange, loadTeamMembers, getTaskAssignees } fro
 import { metricasPendentes, type Influ } from "@/lib/influencer-model";
 import { getAllCampanhaTarefas, onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
 import { loadStandalone, onStandaloneChange } from "@/lib/marketing-tasks";
+import { loadComercialTasks } from "@/lib/comercial-tasks";
+import { stageComercialTask } from "@/lib/comercial-task-link";
 import type { Task } from "@/components/tasks/TaskBoard";
 import { supabase } from "@/integrations/supabase/client";
 import { getTheme, setTheme } from "@/lib/theme";
@@ -1212,6 +1214,17 @@ function ActiveTimerIndicator({ onSelect }: { onSelect: (key: SectionKey) => voi
         };
       }
     }
+    if (entry.taskOrigin === "comercial") {
+      const found = findById(loadComercialTasks() as unknown as MinimalTask[], entry.taskId);
+      if (found) {
+        return {
+          title: found.node.title,
+          startedAt: entry.startedAt,
+          section: "comercial" as const,
+          taskId: found.rootId,
+        };
+      }
+    }
     // Tarefa não encontrada nos stores (ex.: removida enquanto o
     // cronômetro corria) — mostra o indicador mesmo assim, sem título,
     // em vez de escondê-lo ou quebrar a navegação.
@@ -1241,6 +1254,11 @@ function ActiveTimerIndicator({ onSelect }: { onSelect: (key: SectionKey) => voi
             params: { id: active.projectId },
             search: { taskId: active.taskId },
           });
+          return;
+        }
+        if (active.section === "comercial") {
+          stageComercialTask(active.taskId);
+          onSelect("comercial");
           return;
         }
         if (active.section !== "campanhas") return;

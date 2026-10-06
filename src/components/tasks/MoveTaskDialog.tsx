@@ -51,6 +51,7 @@ export function MoveTaskDialog({
     .filter((c) => !(currentScope.kind === "campanha" && currentScope.id === c.id))
     .filter((c) => !q || c.nome.toLowerCase().includes(q));
   const showMarketing = currentScope.kind !== "marketing" && (!q || "marketing".includes(q));
+  const showComercial = currentScope.kind !== "comercial" && (!q || "comercial".includes(q));
 
   const reset = () => {
     setSearch("");
@@ -104,6 +105,21 @@ export function MoveTaskDialog({
             </button>
           )}
 
+          {showComercial && (
+            <button
+              type="button"
+              onClick={() => setSelected({ kind: "comercial", label: "Comercial" })}
+              className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs hover:bg-muted/60 ${
+                selected?.kind === "comercial" ? "bg-muted" : ""
+              }`}
+            >
+              <span className="font-medium text-foreground">Comercial</span>
+              <span className="text-[11px] text-muted-foreground">
+                Kanban de tarefas do Comercial
+              </span>
+            </button>
+          )}
+
           {filteredProjetos.length > 0 && (
             <>
               <p className="px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -147,11 +163,14 @@ export function MoveTaskDialog({
             </>
           )}
 
-          {!showMarketing && filteredProjetos.length === 0 && filteredCampanhas.length === 0 && (
-            <p className="p-4 text-center text-xs text-muted-foreground">
-              Nenhum resultado encontrado.
-            </p>
-          )}
+          {!showMarketing &&
+            !showComercial &&
+            filteredProjetos.length === 0 &&
+            filteredCampanhas.length === 0 && (
+              <p className="p-4 text-center text-xs text-muted-foreground">
+                Nenhum resultado encontrado.
+              </p>
+            )}
         </div>
 
         <DialogFooter className="border-t border-border px-6 py-3.5">

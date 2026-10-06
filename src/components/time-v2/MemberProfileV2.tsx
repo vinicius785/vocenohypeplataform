@@ -267,7 +267,6 @@ function ProfileBody({
       });
     },
     onTimerStart: (t) =>
-      !t.comercial &&
       void startTimerOnInProgress(t.id.replace(/^mkt:/, ""), statusTargetOrigin(t), t.title),
     onTimerStop: () => {
       if (running.entry) void stopTimer(running.entry.id, running.entry.startedAt);
