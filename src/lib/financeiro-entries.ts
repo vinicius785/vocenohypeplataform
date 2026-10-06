@@ -154,7 +154,33 @@ type InfluPersisted = {
   entregas?: Entrega[];
   pagamento?: PagamentoEntrega;
   bank?: BankInfo;
+  /** Nota fiscal anexada na aba Financeiro do influenciador (fonte única dela). */
+  notaFiscal?: string;
+  notaFiscalNome?: string;
 };
+
+/** Id fixo do anexo "Nota fiscal" que vem do cadastro do influenciador (não é do override). */
+export const INFLU_NF_ID = "influ-nf";
+
+/** Anexos do lançamento de influenciador: a nota fiscal DO INFLUENCIADOR + o que o lançamento tem. */
+export function anexosComNotaDoInflu(
+  inf: Pick<InfluPersisted, "notaFiscal" | "notaFiscalNome">,
+  doLancamento: FinanceiroAnexo[] | undefined,
+): FinanceiroAnexo[] | undefined {
+  const proprios = (doLancamento ?? []).filter((a) => a.id !== INFLU_NF_ID);
+  const nf: FinanceiroAnexo[] = inf.notaFiscal
+    ? [
+        {
+          id: INFLU_NF_ID,
+          categoria: "Nota fiscal",
+          nome: inf.notaFiscalNome?.trim() || "Nota fiscal",
+          url: inf.notaFiscal,
+        },
+      ]
+    : [];
+  const all = [...nf, ...proprios];
+  return all.length > 0 ? all : undefined;
+}
 
 function pagamentoDescription(p: PagamentoEntrega, nome: string): string {
   if (p.tipos.includes("Valor")) return `Pagamento a ${nome}`;
@@ -751,7 +777,7 @@ export function buildEntries(
           editable: false,
           bank: inf.bank,
           influencerName: inf.nome,
-          anexos: infOverride?.anexos,
+          anexos: anexosComNotaDoInflu(inf, infOverride?.anexos),
         });
       }
       // Nota: o "Outro" configurado no pagamento da campanha (na criação/
@@ -1011,15 +1037,48 @@ export async function updateEntryAnexos(entry: Entry, anexos: FinanceiroAnexo[])
     const manual = manualCache.find((e) => e.id === entry.id);
     if (!manual) throw new Error("Lançamento não encontrado.");
     await updateManualEntry({ ...manual, anexos });
-  } else {
-    await upsertStatusOverride(entry.id, {
-      status: entry.status,
-      ...(entry.payment ?? {}),
-      anexos,
-      cobrancaHistorico: entry.cobrancaHistorico,
-      proximaCobranca: entry.proximaCobranca,
-    });
+    return;
   }
+  let proprios = anexos;
+  // Pagamento a influenciador: a nota fiscal é UMA só e mora no cadastro do influenciador (a mesma
+  // da aba Financeiro dele) — anexar/substituir/remover aqui grava lá, nos dois lugares ao mesmo tempo.
+  if (entry.source === "influenciador" && entry.campanhaId && entry.influenciadorId) {
+    const { loadCampanhaInflus, saveCampanhaInflus } = await import("./campanha-scoped-store");
+    const { logInfluActivity } = await import("./influencer-model");
+    const lista = loadCampanhaInflus(entry.campanhaId);
+    const influ = lista.find((i) => i.id === entry.influenciadorId);
+    if (influ) {
+      const nf = anexos.filter((a) => a.categoria === "Nota fiscal").at(-1);
+      const mudou = (nf?.url ?? undefined) !== influ.notaFiscal;
+      if (mudou) {
+        const texto = !nf
+          ? "removeu a nota fiscal"
+          : influ.notaFiscal
+            ? "substituiu a nota fiscal"
+            : "anexou a nota fiscal";
+        const atualizado = logInfluActivity(
+          { ...influ, notaFiscal: nf?.url, notaFiscalNome: nf?.nome },
+          texto,
+          undefined,
+          "financeiro",
+        );
+        const ok = await saveCampanhaInflus(
+          entry.campanhaId,
+          lista.map((i) => (i.id === influ.id ? atualizado : i)),
+        );
+        if (!ok)
+          throw new Error("Não foi possível salvar a nota fiscal no cadastro do influenciador.");
+      }
+      proprios = anexos.filter((a) => a.categoria !== "Nota fiscal");
+    }
+  }
+  await upsertStatusOverride(entry.id, {
+    status: entry.status,
+    ...(entry.payment ?? {}),
+    anexos: proprios.filter((a) => a.id !== INFLU_NF_ID),
+    cobrancaHistorico: entry.cobrancaHistorico,
+    proximaCobranca: entry.proximaCobranca,
+  });
 }
 
 /** Registra uma ação de cobrança (contato feito) e, opcionalmente, agenda a

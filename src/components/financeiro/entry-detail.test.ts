@@ -100,3 +100,37 @@ describe("histórico", () => {
     expect(entryHistorico(e())).toEqual([]);
   });
 });
+
+import { INFLU_NF_ID, anexosComNotaDoInflu } from "@/lib/financeiro-entries";
+
+describe("nota fiscal do influenciador aparece no detalhe da despesa", () => {
+  it("a nota anexada na aba Financeiro do influenciador entra nos documentos do lançamento", () => {
+    const anexos = anexosComNotaDoInflu(
+      { notaFiscal: "https://x/nf.pdf", notaFiscalNome: "NF-1023.pdf" },
+      undefined,
+    );
+    expect(anexos).toEqual([
+      { id: INFLU_NF_ID, categoria: "Nota fiscal", nome: "NF-1023.pdf", url: "https://x/nf.pdf" },
+    ]);
+    expect(docGroups({ anexos }).notaFiscal.map((a) => a.nome)).toEqual(["NF-1023.pdf"]);
+  });
+  it("sem nota no influenciador, só o que o lançamento já tem; sem nada, undefined", () => {
+    const comp = { id: "c", categoria: "Comprovante" as const, nome: "c.png", url: "u" };
+    expect(anexosComNotaDoInflu({}, [comp])).toEqual([comp]);
+    expect(anexosComNotaDoInflu({}, undefined)).toBeUndefined();
+  });
+  it("não duplica a nota quando o override já guarda uma cópia com o id fixo", () => {
+    const copia = {
+      id: INFLU_NF_ID,
+      categoria: "Nota fiscal" as const,
+      nome: "velha.pdf",
+      url: "old",
+    };
+    const out = anexosComNotaDoInflu({ notaFiscal: "new", notaFiscalNome: "nova.pdf" }, [copia]);
+    expect(out).toHaveLength(1);
+    expect(out?.[0]).toMatchObject({ nome: "nova.pdf", url: "new" });
+  });
+  it("nome ausente cai em 'Nota fiscal'", () => {
+    expect(anexosComNotaDoInflu({ notaFiscal: "u" }, undefined)?.[0].nome).toBe("Nota fiscal");
+  });
+});

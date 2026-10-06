@@ -1,6 +1,22 @@
 {
-  "version": "1.363.0",
+  "version": "1.364.0",
   "releases": [
+    {
+      "version": "1.364.0",
+      "summary": "A nota fiscal anexada no financeiro do influenciador agora aparece no detalhe da despesa.",
+      "modules": [
+        {
+          "name": "FINANCEIRO",
+          "tagline": "Nota fiscal",
+          "items": [
+            {
+              "title": "Uma nota fiscal só",
+              "description": "Em pagamento a influenciador, a nota fiscal é a mesma nos dois lugares: anexar, substituir ou remover na despesa grava no cadastro do influenciador e vice-versa."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.363.0",
       "summary": "Detalhe da despesa/receita no Financeiro refeito como painel, com nota fiscal e histórico.",
