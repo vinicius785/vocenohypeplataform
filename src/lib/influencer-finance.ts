@@ -193,8 +193,21 @@ export function bankFields(b: BankInfo | undefined): { label: string; value: str
 
 export type ContratoInfo = { present: boolean; name: string; kind: "pdf" | "imagem" | "arquivo" };
 export function contratoInfo(contrato: string | undefined, nome?: string): ContratoInfo {
-  if (!contrato) return { present: false, name: "", kind: "arquivo" };
-  const mime = contrato.startsWith("data:") ? (contrato.match(/^data:([^;,]+)/)?.[1] ?? "") : "";
+  return documentoInfo(contrato, nome, "Contrato");
+}
+
+/** Nota fiscal: mesmo padrão de documento do contrato (nome, formato, presença). */
+export function notaFiscalInfo(nota: string | undefined, nome?: string): ContratoInfo {
+  return documentoInfo(nota, nome, "Nota fiscal");
+}
+
+function documentoInfo(
+  url: string | undefined,
+  nome: string | undefined,
+  rotulo: string,
+): ContratoInfo {
+  if (!url) return { present: false, name: "", kind: "arquivo" };
+  const mime = url.startsWith("data:") ? (url.match(/^data:([^;,]+)/)?.[1] ?? "") : "";
   const fromName = (nome ?? "").toLowerCase();
   const kind: ContratoInfo["kind"] =
     mime === "application/pdf" || fromName.endsWith(".pdf")
@@ -203,20 +216,27 @@ export function contratoInfo(contrato: string | undefined, nome?: string): Contr
         ? "imagem"
         : "arquivo";
   const fallback =
-    kind === "pdf" ? "Contrato (PDF)" : kind === "imagem" ? "Contrato (imagem)" : "Contrato";
+    kind === "pdf" ? `${rotulo} (PDF)` : kind === "imagem" ? `${rotulo} (imagem)` : rotulo;
   return { present: true, name: nome?.trim() || fallback, kind };
 }
 
+type AtividadeFin = { action: string; area?: string; createdAt: string }[] | undefined;
+const attachedAt = (activity: AtividadeFin, re: RegExp): string | undefined =>
+  (activity ?? [])
+    .filter((a) => a.area === "financeiro" && re.test(a.action))
+    .map((a) => a.createdAt)
+    .sort()
+    .at(-1);
+
 /** Quando o contrato foi anexado (ou substituído) pela última vez, lido do histórico financeiro — o
  * contrato em si não guarda a data. `undefined` para contratos anteriores ao registro de atividade. */
-export function contractAttachedAt(
-  activity: { action: string; area?: string; createdAt: string }[] | undefined,
-): string | undefined {
-  const times = (activity ?? [])
-    .filter((a) => a.area === "financeiro" && /^(anexou|substituiu) o contrato\b/.test(a.action))
-    .map((a) => a.createdAt)
-    .sort();
-  return times.at(-1);
+export function contractAttachedAt(activity: AtividadeFin): string | undefined {
+  return attachedAt(activity, /^(anexou|substituiu) o contrato\b/);
+}
+
+/** Idem para a nota fiscal. */
+export function notaFiscalAttachedAt(activity: AtividadeFin): string | undefined {
+  return attachedAt(activity, /^(anexou|substituiu) a nota fiscal\b/);
 }
 
 /** `data:` URLs são bloqueadas ao abrir direto numa nova aba: converte em Blob antes. */

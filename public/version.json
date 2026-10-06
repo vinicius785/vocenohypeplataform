@@ -1,6 +1,30 @@
 {
-  "version": "1.360.0",
+  "version": "1.361.0",
   "releases": [
+    {
+      "version": "1.361.0",
+      "summary": "Financeiro do influenciador: nota fiscal e vencimento que confirma a gravação.",
+      "modules": [
+        {
+          "name": "INFLUENCIADORES",
+          "tagline": "Financeiro",
+          "items": [
+            {
+              "title": "Nota fiscal",
+              "description": "Novo documento ao lado do contrato: anexar, abrir, substituir e remover, no mesmo padrão. Não bloqueia o pagamento."
+            },
+            {
+              "title": "Vencimento",
+              "description": "“Vencimento 06/10/2026 · Editar” direto no Pagamento, com o seletor de data padrão. Só diz que salvou depois que o banco confirma; se falhar, volta à data anterior e avisa."
+            },
+            {
+              "title": "Sem “salvo” falso",
+              "description": "Quando uma gravação de influenciador falha, a tela não continua mostrando o valor que não foi salvo."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.360.0",
       "summary": "Todo o time agora cadastra dados bancários dos influenciadores.",

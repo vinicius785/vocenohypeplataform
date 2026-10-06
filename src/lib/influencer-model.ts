@@ -864,6 +864,9 @@ export type Influ = {
   contrato?: string;
   /** Nome do arquivo do contrato (aditivo: contratos antigos, em data URL, não têm). */
   contratoNome?: string;
+  /** Nota fiscal do pagamento (documento financeiro, mesmo padrão do contrato; aditivo). */
+  notaFiscal?: string;
+  notaFiscalNome?: string;
   status: InfluStatus;
   statusUpdatedAt?: string; // data em que o status atual foi definido (p/ SLA de aprovação)
   bank?: BankInfo;

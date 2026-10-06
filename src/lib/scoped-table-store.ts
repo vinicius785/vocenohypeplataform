@@ -156,10 +156,14 @@ export function createScopedArrayStore<T extends { id: string }>(
       listeners.add(l);
       return () => listeners.delete(l);
     },
-    set: (parentId: string, updater: (prev: T[]) => T[]) => {
+    /** Aplica a mudança na hora (optimistic) e grava no banco. Devolve `true` quando TODAS as
+     * gravações confirmaram; se alguma falhar, desfaz localmente aquele item (para a tela não
+     * continuar mostrando um valor que nunca foi salvo) e devolve `false`. */
+    set: (parentId: string, updater: (prev: T[]) => T[]): Promise<boolean> => {
       const prev = cache.get(parentId) ?? [];
       const next = updater(prev);
-      if (next === prev) return;
+      if (next === prev) return Promise.resolve(true);
+      const writes: Promise<boolean>[] = [];
       const prevById = new Map(prev.map((x) => [x.id, x]));
       const nextIds = new Set(next.map((x) => x.id));
       cache.set(parentId, next);
@@ -172,6 +176,20 @@ export function createScopedArrayStore<T extends { id: string }>(
           cache.set(pId, [...current, removed]);
           emit();
         }
+      };
+      // Falha de gravação: devolve o item ao valor anterior — mas só se ninguém editou o item de novo
+      // nesse meio-tempo (senão apagaria uma edição mais nova que ainda está pendente).
+      const rollbackUpsert = (pId: string, failed: T, before: T | undefined) => {
+        const current = cache.get(pId) ?? [];
+        const at = current.findIndex((x) => x.id === failed.id);
+        if (at < 0 || JSON.stringify(current[at]) !== JSON.stringify(failed)) return;
+        cache.set(
+          pId,
+          before
+            ? current.map((x, i) => (i === at ? before : x))
+            : current.filter((x) => x.id !== failed.id),
+        );
+        emit();
       };
       for (const item of next) {
         // Comparação por VALOR, não por referência: `normalizeInflus` (e
@@ -193,20 +211,25 @@ export function createScopedArrayStore<T extends { id: string }>(
           // enquanto a aba estava em segundo plano), isso força o refresh
           // ANTES da escrita, em vez de mandar a requisição com um JWT
           // vencido e RLS recusar silenciosamente (0 linhas, sem erro).
-          void supabase.auth.getSession().then(() =>
-            supabase
-              .from(table)
-              .upsert({
-                id: item.id,
-                [parentColumn]: parentId,
-                data: item,
-                updated_at: new Date().toISOString(),
-                ...(realColumn ? { [realColumn.name]: item[realColumn.itemKey] ?? null } : {}),
-              } as never)
-              .select("id")
+          writes.push(
+            supabase.auth
+              .getSession()
+              .then(() =>
+                supabase
+                  .from(table)
+                  .upsert({
+                    id: item.id,
+                    [parentColumn]: parentId,
+                    data: item,
+                    updated_at: new Date().toISOString(),
+                    ...(realColumn ? { [realColumn.name]: item[realColumn.itemKey] ?? null } : {}),
+                  } as never)
+                  .select("id"),
+              )
               .then(({ data, error }) => {
-                if (!error && (data?.length ?? 0) > 0) return;
+                if (!error && (data?.length ?? 0) > 0) return true;
                 console.warn(`[${table}] upsert failed`, error ?? "0 rows affected (RLS?)");
+                rollbackUpsert(parentId, item, prevItem);
                 void import("sonner").then(({ toast }) => {
                   toast.error("Não foi possível salvar", {
                     description:
@@ -214,6 +237,12 @@ export function createScopedArrayStore<T extends { id: string }>(
                       "Você pode não ter permissão pra essa ação, ou sua sessão expirou — atualize a página e tente de novo.",
                   });
                 });
+                return false;
+              })
+              .catch((e: unknown) => {
+                console.warn(`[${table}] upsert threw`, e);
+                rollbackUpsert(parentId, item, prevItem);
+                return false;
               }),
           );
         }
@@ -276,6 +305,7 @@ export function createScopedArrayStore<T extends { id: string }>(
             .finally(() => pendingDeletes.delete(id));
         }
       }
+      return Promise.all(writes).then((r) => r.every(Boolean));
     },
     init,
     subscribeRealtime,

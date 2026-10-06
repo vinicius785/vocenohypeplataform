@@ -149,9 +149,10 @@ const notifyDemoChanged = createDemoSignalSender({
   },
 });
 
-export function saveCampanhaInflus(campanhaId: string, list: Influ[]) {
-  influsStore.set(campanhaId, () => list);
+export function saveCampanhaInflus(campanhaId: string, list: Influ[]): Promise<boolean> {
+  const saved = influsStore.set(campanhaId, () => list);
   notifyDemoChanged(campanhaId);
+  return saved;
 }
 export function onCampanhaInflusChange(cb: () => void): () => void {
   return subscribeWithDemoIds(influsStore.subscribe, cb);

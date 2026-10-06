@@ -488,9 +488,9 @@ function CampanhaDetail({
   };
 
   const [influs, setInflus] = useState<Influ[]>(() => normalizeInflus(loadCampanhaInflus(c.id)));
-  const persistInflus = (next: Influ[]) => {
+  const persistInflus = (next: Influ[]): Promise<boolean> => {
     setInflus(next);
-    saveCampanhaInflus(c.id, next);
+    return saveCampanhaInflus(c.id, next);
   };
   useEffect(
     () => onCampanhaInflusChange(() => setInflus(normalizeInflus(loadCampanhaInflus(c.id)))),

@@ -1,5 +1,6 @@
 {
   "notes": [
+    "1.361.0: Influ.notaFiscal/notaFiscalNome (JSONB aditivo) + notaFiscalInfo/notaFiscalAttachedAt (influencer-finance); scoped-table-store.set agora devolve Promise<boolean> e desfaz o item local se o upsert falhar (antes mantinha o valor otimista); InfluencerBoard propaga a confirmação (onChange/onPatch) e re-sincroniza o detalhe com a lista; vencimento com linha própria + toast de sucesso só após confirmação.",
     "1.360.0: InfluencerBoard.has('bancario') deixa de exigir a permissão influenciadores:bancario (que sai da lista de permissões da UI). Era só gate de tela — nenhuma policy/RLS usava essa permissão.",
     "1.359.0: insightWindows passa a ser mês corrente (dia 1→hoje) vs mesmo trecho do mês passado (limitado ao último dia); teamPerformance, bundles, resposta e tarefas novas usam a mesma janela; textos e rótulos 'neste mês'.",
     "1.358.0: team-metrics.ts (insightWindows 30/30 sem sobreposição, newTaskCounts só tarefas raiz, memberIdResolver, buildMemberSignals, rangeLabel); use-time-data e team-v2 passam a usar a mesma janela; insights com campo window e % sobre tarefas distintas (newTasksTotal); docs/development/metricas-time.md.",

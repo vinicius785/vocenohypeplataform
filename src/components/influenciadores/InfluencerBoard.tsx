@@ -139,6 +139,8 @@ import {
   paymentState,
   remuneracaoSummary,
   contractAttachedAt,
+  notaFiscalAttachedAt,
+  notaFiscalInfo,
   formatIsoDate,
   paymentTone,
   financeNextAction,
@@ -656,7 +658,8 @@ export function InfluencerBoard({
   hideTitle = false,
 }: {
   influs: Influ[];
-  onChange: (next: Influ[]) => void;
+  /** Pode devolver a confirmação da gravação (`false` = não salvou e a tela já voltou ao valor anterior). */
+  onChange: (next: Influ[]) => void | Promise<boolean>;
   exportName: string;
   allowedFields?: InfluencerFieldKey[];
   /** NPS por influenciador aprovado (link de resposta + status) — só
@@ -715,7 +718,7 @@ export function InfluencerBoard({
   latestInflusRef.current = influs;
   const applyInflusChange = (next: Influ[]) => {
     latestInflusRef.current = next;
-    onChange(next);
+    return onChange(next);
   };
 
   const pushActivity = logInfluActivity;
@@ -970,9 +973,17 @@ export function InfluencerBoard({
   // segundo diálogo: cada mudança já salva na hora.
   const patchInflu = (influId: string, patch: Partial<Influ>) => {
     const next = latestInflusRef.current.map((x) => (x.id === influId ? { ...x, ...patch } : x));
-    applyInflusChange(next);
+    const saved = applyInflusChange(next);
     setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
+    return saved;
   };
+
+  // O detalhe aberto é uma cópia: se a gravação falhar (a lista volta ao valor anterior) ou chegar
+  // uma atualização de outra pessoa, ele acompanha a lista em vez de continuar mostrando um valor
+  // que não foi salvo.
+  useEffect(() => {
+    setViewing((v) => (v ? (influs.find((x) => x.id === v.id) ?? v) : v));
+  }, [influs]);
 
   const setInfluStatusFromResumo = (influId: string, status: InfluStatus) => {
     const current = latestInflusRef.current.find((x) => x.id === influId);
@@ -3126,7 +3137,7 @@ function InfluencerWorkspaceSheet({
   onSetChecklist: (checklist: ChecklistItem[]) => void;
   onApplyChecklistToAll: (checklist: ChecklistItem[]) => void;
   onComment: (text: string) => void;
-  onPatch: (patch: Partial<Influ>) => void;
+  onPatch: (patch: Partial<Influ>) => void | Promise<boolean>;
   onSendToClient: () => void;
 }) {
   const [view, setView] = useState<InfluWorkspaceView>("detail");
@@ -3462,7 +3473,7 @@ function WorkspaceDetailHeader({
   saveHeader: () => void;
   setEditingHeader: (v: boolean) => void;
   onSetStatus: (status: InfluStatus) => void;
-  onPatch: (patch: Partial<Influ>) => void;
+  onPatch: (patch: Partial<Influ>) => void | Promise<boolean>;
   fotoRef: React.RefObject<HTMLInputElement | null>;
   initials: string;
   activityCount: number;
@@ -4244,7 +4255,7 @@ function PerfilAudienciaView({
 }: {
   influ: Influ;
   has: (k: InfluencerFieldKey) => boolean;
-  onPatch: (patch: Partial<Influ>) => void;
+  onPatch: (patch: Partial<Influ>) => void | Promise<boolean>;
 }) {
   const redes = ensurePrimary(influ.redes);
   const [selId, setSelId] = useState<string | null>(null);
@@ -4371,7 +4382,7 @@ function FinanceiroContratoSection({
   has: (k: InfluencerFieldKey) => boolean;
   bank: BankInfo;
   campanhaId?: string;
-  onPatch: (patch: Partial<Influ>) => void;
+  onPatch: (patch: Partial<Influ>) => void | Promise<boolean>;
 }) {
   const navigate = useNavigate();
   const access = useMyAccess();
@@ -4383,6 +4394,9 @@ function FinanceiroContratoSection({
   const rem = remuneracaoSummary(pag);
   const contrato = contratoInfo(influ.contrato, influ.contratoNome);
   const contratoEm = contractAttachedAt(influ.activity);
+  const nota = notaFiscalInfo(influ.notaFiscal, influ.notaFiscalNome);
+  const notaEm = notaFiscalAttachedAt(influ.activity);
+  const notaRef = useRef<HTMLInputElement>(null);
   const bankItems = bankFields(bank);
   const temBanco = hasBankData(bank);
 
@@ -4460,6 +4474,32 @@ function FinanceiroContratoSection({
       setBusy(false);
     }
   };
+  const uploadNota = async (file: File) => {
+    setBusy(true);
+    setFileError("");
+    try {
+      const url = await uploadEntregaAnexo(file);
+      commit(
+        { notaFiscal: url, notaFiscalNome: file.name },
+        influ.notaFiscal ? "substituiu a nota fiscal" : "anexou a nota fiscal",
+      );
+    } catch (err) {
+      setFileError(err instanceof Error ? err.message : "Falha ao subir a nota fiscal.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  /** Vencimento: confirma a gravação antes de dizer que salvou; se falhar a tela já voltou ao valor
+   * anterior (ver `scoped-table-store`). */
+  const saveDue = async (v: string | undefined) => {
+    if (!pag) return;
+    setDueOpen(false);
+    const saved = await commit(
+      { pagamento: { ...pag, data: v } },
+      v ? `definiu o vencimento em ${formatIsoDate(v)}` : "removeu o vencimento",
+    );
+    if (saved !== false) toast.success(v ? "Vencimento atualizado." : "Vencimento removido.");
+  };
   const goToFinanceiro = () =>
     void navigate({ to: "/time", search: { section: "financeiro" as const } });
 
@@ -4500,13 +4540,7 @@ function FinanceiroContratoSection({
         : state.label;
   const payDetail = [
     state.amount > 0 ? money(state.amount) : "",
-    state.key === "pago"
-      ? state.paidOn
-        ? `pago em ${formatIsoDate(state.paidOn)}`
-        : ""
-      : state.due
-        ? `vence ${formatIsoDate(state.due)}`
-        : "",
+    state.key === "pago" ? (state.paidOn ? `pago em ${formatIsoDate(state.paidOn)}` : "") : "",
   ]
     .filter(Boolean)
     .join(" · ");
@@ -4568,12 +4602,6 @@ function FinanceiroContratoSection({
     }
     if ((state.key === "agendado" || state.key === "vencido") && canFinanceiro) {
       payMenu.push({ label: "Registrar pagamento", onSelect: goToFinanceiro });
-    }
-    if (state.key !== "recusado" && state.key !== "pago") {
-      payMenu.push({
-        label: pag.data ? "Alterar vencimento" : "Definir vencimento",
-        onSelect: () => setDueOpen(true),
-      });
     }
     if (pag.aprovacao === "aceito" && state.key !== "pago") {
       payMenu.push({
@@ -4651,6 +4679,17 @@ function FinanceiroContratoSection({
         }}
       />
 
+      <input
+        ref={notaRef}
+        type="file"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (notaRef.current) notaRef.current.value = "";
+          if (f) void uploadNota(f);
+        }}
+      />
+
       <FinanceSummary cells={cells} />
 
       {next && <FinanceNextCard next={next} busy={busy} onRun={runNext} />}
@@ -4724,19 +4763,29 @@ function FinanceiroContratoSection({
             requisitos={state.key === "pago" ? [] : requisitos}
             menu={payMenu}
           >
-            {dueOpen && pag && (
-              <div className="w-44">
-                <DateField
-                  value={pag.data ?? undefined}
-                  onChange={(v) => {
-                    setPagamento(
-                      { ...pag, data: v },
-                      v ? `definiu o vencimento em ${formatIsoDate(v)}` : "removeu o vencimento",
-                    );
-                    setDueOpen(false);
-                  }}
-                  className="text-xs"
-                />
+            {pag && state.key !== "recusado" && state.key !== "pago" && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                <span className="text-text-secondary">Vencimento</span>
+                {dueOpen ? (
+                  <div className="w-44">
+                    <DateField
+                      autoOpen
+                      value={pag.data ?? undefined}
+                      onChange={(v) => void saveDue(v)}
+                      ariaLabel="Vencimento do pagamento"
+                      className="text-xs"
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <span className="tabular-nums text-foreground">
+                      {pag.data ? formatIsoDate(pag.data) : "—"}
+                    </span>
+                    <QuietButton onClick={() => setDueOpen(true)}>
+                      {pag.data ? "Editar" : "Definir"}
+                    </QuietButton>
+                  </>
+                )}
               </div>
             )}
             {pag?.comprovanteUrl ? (
@@ -4850,6 +4899,37 @@ function FinanceiroContratoSection({
               {fileError && <p className="text-xs text-destructive">{fileError}</p>}
             </FinanceSection>
           )}
+
+          {showContrato && (
+            <FinanceSection title="Nota fiscal">
+              {nota.present ? (
+                <ArquivoMaterial
+                  nome={nota.name}
+                  url={influ.notaFiscal!}
+                  meta={`${nota.kind === "pdf" ? "PDF" : nota.kind === "imagem" ? "Imagem" : "Arquivo"}${notaEm ? ` · anexada em ${new Date(notaEm).toLocaleDateString("pt-BR")}` : " · versão atual"}`}
+                  onOpen={() => openFileUrl(influ.notaFiscal!)}
+                  onRemove={() =>
+                    commit(
+                      { notaFiscal: undefined, notaFiscalNome: undefined },
+                      "removeu a nota fiscal",
+                    )
+                  }
+                  renderUpload={(label) => (
+                    <QuietButton onClick={() => notaRef.current?.click()}>
+                      {busy ? "Enviando..." : label}
+                    </QuietButton>
+                  )}
+                />
+              ) : (
+                <div className="space-y-1.5">
+                  <p className="text-sm text-text-secondary">Nenhuma nota fiscal anexada.</p>
+                  <QuietButton onClick={() => notaRef.current?.click()}>
+                    {busy ? "Enviando..." : "Anexar nota fiscal"}
+                  </QuietButton>
+                </div>
+              )}
+            </FinanceSection>
+          )}
         </div>
       )}
 
@@ -4952,7 +5032,7 @@ function ContextoCampanhaView({
   onApplyChecklistToAll,
 }: {
   influ: Influ;
-  onPatch: (patch: Partial<Influ>) => void;
+  onPatch: (patch: Partial<Influ>) => void | Promise<boolean>;
   onSetChecklist: (checklist: ChecklistItem[]) => void;
   onApplyChecklistToAll: (checklist: ChecklistItem[]) => void;
 }) {
@@ -5075,7 +5155,7 @@ function WorkspaceResourceBody({
   bank: BankInfo;
   campanhaId?: string;
   nps?: InfluNpsBoardProp;
-  onPatch: (patch: Partial<Influ>) => void;
+  onPatch: (patch: Partial<Influ>) => void | Promise<boolean>;
   onSetChecklist: (checklist: ChecklistItem[]) => void;
   onApplyChecklistToAll: (checklist: ChecklistItem[]) => void;
 }) {

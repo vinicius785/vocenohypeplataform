@@ -4,6 +4,9 @@ import {
   bankFields,
   contractAttachedAt,
   contratoInfo,
+  formatIsoDate,
+  notaFiscalAttachedAt,
+  notaFiscalInfo,
   hasBankData,
   paymentState,
   paymentTone,
@@ -189,5 +192,55 @@ describe("maskTail", () => {
   it("mostra só o fim", () => {
     expect(maskTail("12345-6789")).toBe("••••6789");
     expect(maskTail("123")).toBe("••••••");
+  });
+});
+
+describe("nota fiscal (documento financeiro, mesmo padrão do contrato)", () => {
+  it("estado vazio e preenchido, com formato e nome", () => {
+    expect(notaFiscalInfo(undefined).present).toBe(false);
+    expect(notaFiscalInfo("https://x/nf.pdf", "NF-001.pdf")).toEqual({
+      present: true,
+      name: "NF-001.pdf",
+      kind: "pdf",
+    });
+    expect(notaFiscalInfo("data:image/png;base64,AA==").name).toBe("Nota fiscal (imagem)");
+    expect(notaFiscalInfo("https://x/nf.xml", "nf.xml").kind).toBe("arquivo");
+  });
+  it("data de anexação vem da atividade financeira (última anexação/substituição)", () => {
+    const at = (action: string, createdAt: string, area = "financeiro") => ({
+      action,
+      area,
+      createdAt,
+    });
+    expect(notaFiscalAttachedAt(undefined)).toBeUndefined();
+    expect(
+      notaFiscalAttachedAt([
+        at("anexou a nota fiscal", "2026-10-01T10:00:00Z"),
+        at("substituiu a nota fiscal", "2026-10-05T10:00:00Z"),
+        at("anexou o contrato", "2026-10-09T10:00:00Z"),
+        at("anexou a nota fiscal", "2026-10-09T10:00:00Z", "geral"),
+      ]),
+    ).toBe("2026-10-05T10:00:00Z");
+  });
+  it("não se confunde com o contrato", () => {
+    const act = [
+      { action: "anexou o contrato", area: "financeiro", createdAt: "2026-10-01T10:00:00Z" },
+    ];
+    expect(contractAttachedAt(act)).toBe("2026-10-01T10:00:00Z");
+    expect(notaFiscalAttachedAt(act)).toBeUndefined();
+  });
+});
+
+describe("vencimento: o dia salvo não muda com o fuso", () => {
+  it("formata a data ISO sem converter fuso", () => {
+    expect(formatIsoDate("2026-10-06")).toBe("06/10/2026");
+    expect(formatIsoDate("2026-01-01")).toBe("01/01/2026");
+  });
+  it("altera o vencimento sem mexer no resto do pagamento", () => {
+    const p = pag({ aprovacao: "aceito", data: "2026-10-06" });
+    const novo = { ...p, data: "2026-10-20" };
+    expect(paymentState(novo, undefined, "2026-10-05").due).toBe("2026-10-20");
+    expect(novo.config).toEqual(p.config);
+    expect(paymentState(novo, undefined, "2026-10-21").key).toBe("vencido");
   });
 });
