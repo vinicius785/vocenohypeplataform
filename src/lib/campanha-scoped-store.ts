@@ -22,12 +22,23 @@ export type CampaignDoc = {
  * recorrentes), o item se repete todo mês no dia-do-mês de `date` — ex: "dia
  * 5, envio do relatório de métricas" — em vez de precisar recriar o item
  * campanha a campanha/mês a mês. */
+export type CronogramaTipo = "cronograma" | "prazo" | "postagem" | "pagamento" | "outro";
 export type CronogramaItem = {
   id: string;
   date: string;
   title: string;
   description?: string;
   recurring?: boolean;
+  /** "HH:MM". */
+  hora?: string;
+  /** Ausente nos eventos antigos (contam como "cronograma"). */
+  tipo?: CronogramaTipo;
+  /** Mostrar no Portal do Cliente. Ausente = evento antigo, que sempre foi visível ao cliente;
+   * todo evento novo grava o valor explícito (padrão: interno). Só `false` esconde. */
+  visivelCliente?: boolean;
+  criadoPor?: string;
+  criadoEm?: string;
+  atualizadoEm?: string;
 };
 
 const influsStore = createScopedArrayStore<Influ>("campanha_influenciadores", "campanha_id", {

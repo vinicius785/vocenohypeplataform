@@ -1484,7 +1484,6 @@ function CampanhaDetail({
           open={openPanel === "calendario"}
           onOpenChange={(o) => !o && setOpenPanel(null)}
           campanha={c}
-          influs={visibleInflus}
           cronograma={cronograma}
           onCronogramaChange={persistCronograma}
           isRecorrente={isRecorrente}

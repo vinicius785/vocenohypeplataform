@@ -1,3 +1,5 @@
+import { cronogramaPublico } from "@/lib/campanha-calendario";
+import type { CronogramaItem } from "@/lib/campanha-scoped-store";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { throwSafeDbError } from "@/lib/portal-db-error";
@@ -617,6 +619,8 @@ const _CronogramaItemPublic = z.object({
   title: z.string(),
   description: z.string().optional(),
   recurring: z.boolean().optional(),
+  hora: z.string().optional(),
+  tipo: z.string().optional(),
 });
 
 /** Um ciclo/mês operacional real (`campaign_cycles`) de uma campanha
@@ -699,11 +703,11 @@ export async function buildClienteLinkData(clienteId: string, cliente: Cliente) 
         .select("data")
         .eq("campanha_id", c.id);
       if (cronogramaError) throwSafeDbError(cronogramaError);
-      const cronograma = (
-        (cronogramaRows ?? []) as { data: z.infer<typeof _CronogramaItemPublic> }[]
-      )
-        .map((r) => r.data)
-        .sort((a, b) => a.date.localeCompare(b.date));
+      // Só eventos marcados para o cliente e só os campos públicos (`cronogramaPublico`) — o
+      // servidor decide; esconder no front não bastaria.
+      const cronograma = cronogramaPublico(
+        ((cronogramaRows ?? []) as { data: CronogramaItem }[]).map((r) => r.data),
+      );
 
       // Relatórios mensais (PDF) — o bucket é privado, então a URL
       // assinada precisa ser gerada aqui (service-role), nunca no

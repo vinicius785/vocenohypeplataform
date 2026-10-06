@@ -1,21 +1,25 @@
 {
-  "version": "1.348.0",
+  "version": "1.349.0",
   "releases": [
     {
-      "version": "1.348.0",
-      "summary": "Ocultar influenciadores do portal do cliente (e mostrar de volta) pelo menu Visualização.",
+      "version": "1.349.0",
+      "summary": "Calendário da campanha V2: um calendário, um evento e a opção “Mostrar para o cliente”.",
       "modules": [
         {
           "name": "CAMPANHAS",
-          "tagline": "Influenciadores",
+          "tagline": "Recursos · Calendário",
           "items": [
             {
-              "title": "Visibilidade no portal do cliente",
-              "description": "Em Visualização, escolha influenciadores para ocultar do portal do cliente — eles continuam na plataforma do time — e mostre de volta quando quiser."
+              "title": "Visibilidade por evento",
+              "description": "Cada evento tem “Mostrar para o cliente” (padrão: interno). O cliente só vê os marcados, e o filtro é feito no servidor."
             },
             {
-              "title": "Filtrado no servidor",
-              "description": "O influenciador oculto não aparece nem pode ser acessado pelo cliente; a mudança fica registrada na Atividade."
+              "title": "Calendário mais simples",
+              "description": "Grade mensal com eventos compactos e “+N eventos”, agenda por dia no celular, busca e filtro Todos | Internos | Cliente."
+            },
+            {
+              "title": "Criar, editar, duplicar e excluir",
+              "description": "Formulário compacto com horário e tipo; detalhe do evento com Editar, Duplicar e Excluir. Os eventos antigos continuam visíveis ao cliente."
             }
           ]
         }

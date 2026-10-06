@@ -1,53 +1,86 @@
-import { useMemo, useRef, useState } from "react";
-import { CalendarClock, ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
+import { useMemo, useState } from "react";
+import {
+  CalendarClock,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  EyeOff,
+  MoreHorizontal,
+  Plus,
+  Search,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { IconButton } from "@/components/ui/icon-button";
 import { DateField } from "@/components/ui/date-field";
-import { fmtDate, type Influ } from "@/lib/influencer-model";
+import { NativeSelect } from "@/components/ui/native-select";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { useConfirm } from "@/hooks/use-confirm";
+import { fmtDate, getCurrentAuthor } from "@/lib/influencer-model";
 import type { Campaign } from "@/components/VincularCampanhaDialog";
-import type { CronogramaItem } from "@/lib/campanha-scoped-store";
-import { CampaignToolShell, ToolEmpty, ToolSectionTitle } from "./CampaignToolShell";
+import type { CronogramaItem, CronogramaTipo } from "@/lib/campanha-scoped-store";
+import {
+  EVENTO_TIPOS,
+  EVENTO_TIPO_LABEL,
+  agruparPorDia,
+  celulasDoMes,
+  duplicarEvento,
+  filtrarOcorrencias,
+  limitarDia,
+  novoEvento,
+  ocorrenciasDoMes,
+  tipoDe,
+  visivelAoCliente,
+  type FiltroVisibilidade,
+  type Ocorrencia,
+} from "@/lib/campanha-calendario";
+import { CampaignToolShell } from "./CampaignToolShell";
 import { CAMPAIGN_TOOLS } from "./campaign-tools";
 
 const DIAS_LABEL = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
+const FILTROS = [
+  { value: "todos", label: "Todos" },
+  { value: "internos", label: "Internos" },
+  { value: "cliente", label: "Cliente" },
+] as const;
 
-function toISODate(d: Date) {
+const todayIso = () => {
+  const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+/** Marcador discreto de visibilidade (olho = visível ao cliente). */
+function Visibilidade({ item, className }: { item: CronogramaItem; className?: string }) {
+  const cliente = visivelAoCliente(item);
+  const Icon = cliente ? Eye : EyeOff;
+  return (
+    <Icon
+      aria-label={cliente ? "Visível para o cliente" : "Interno"}
+      className={`h-3 w-3 shrink-0 ${cliente ? "text-foreground" : "text-text-secondary/50"} ${className ?? ""}`}
+    />
+  );
 }
 
-type CalendarEvent = {
-  label: string;
-  tone: "inicio" | "prazo" | "postagem" | "pagamento" | "manual";
-};
-
-const TONE_DOT: Record<CalendarEvent["tone"], string> = {
-  inicio: "bg-sky-500",
-  prazo: "bg-amber-500",
-  postagem: "bg-violet-500",
-  pagamento: "bg-emerald-500",
-  manual: "bg-rose-500",
-};
-const TONE_LABEL: Record<CalendarEvent["tone"], string> = {
-  inicio: "Início",
-  prazo: "Prazo",
-  postagem: "Postagem",
-  pagamento: "Pagamento",
-  manual: "Cronograma",
-};
-
 /**
- * Campanha → Ferramentas → Calendário. Mesma lógica de antes (marcos
- * derivados da campanha/entregas/pagamentos + cronograma manual persistido
- * via `onCronogramaChange` → `saveCampanhaCronograma`, com itens
- * recorrentes em cliente recorrente). Mudou só o container: drawer largo
- * (`size="large"`) com calendário à esquerda e cronograma à direita.
+ * Campanha → Recursos → Calendário (V2). UM calendário, UM evento, UMA fonte
+ * (`campanha_cronograma`) e UMA propriedade de visibilidade (`visivelCliente`): o time vê todos os
+ * eventos; o Portal do Cliente só os marcados para ele (filtrado no servidor). Só eventos
+ * adicionados à mão — nada é derivado de entregas ou pagamentos.
  */
 export function CalendarTool({
   open,
   onOpenChange,
   campanha: c,
-  influs,
   cronograma,
   onCronogramaChange,
   isRecorrente,
@@ -55,76 +88,74 @@ export function CalendarTool({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   campanha: Campaign;
-  influs: Influ[];
   cronograma: CronogramaItem[];
   onCronogramaChange: (next: CronogramaItem[]) => void;
   isRecorrente: boolean;
 }) {
   const meta = CAMPAIGN_TOOLS.calendario;
-  const titleInputRef = useRef<HTMLInputElement>(null);
-  const initialCursor = useMemo(() => {
+  const { confirm, confirmDialog } = useConfirm();
+  const [cursor, setCursor] = useState(() => {
     const first = c.dataInicio ?? c.prazo;
-    return first ? new Date(first + "T00:00:00") : new Date();
-  }, [c.dataInicio, c.prazo]);
-  const [cursor, setCursor] = useState(initialCursor);
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+    const d = first ? new Date(first + "T00:00:00") : new Date();
+    return { y: d.getFullYear(), m: d.getMonth() };
+  });
+  const [busca, setBusca] = useState("");
+  const [visibilidade, setVisibilidade] = useState<FiltroVisibilidade>("todos");
+  const [editor, setEditor] = useState<{ item?: CronogramaItem; date?: string } | null>(null);
+  const [detalhe, setDetalhe] = useState<Ocorrencia | null>(null);
+  const [diaAberto, setDiaAberto] = useState<string | null>(null);
 
-  const eventsByDate = useMemo(() => {
-    const map = new Map<string, CalendarEvent[]>();
-    const add = (date: string | undefined, ev: CalendarEvent) => {
-      if (!date) return;
-      const arr = map.get(date) ?? [];
-      arr.push(ev);
-      map.set(date, arr);
-    };
-    add(c.dataInicio, { label: "Início da campanha", tone: "inicio" });
-    add(c.prazo, { label: "Prazo da campanha", tone: "prazo" });
-    for (const i of influs) {
-      for (const e of i.entregas) {
-        add(e.dataPostagem, { label: `Postagem · ${i.nome} (${e.tipo})`, tone: "postagem" });
-      }
-      add(i.pagamento?.data, { label: `Pagamento · ${i.nome}`, tone: "pagamento" });
-    }
-    // Itens recorrentes repetem no mesmo dia-do-mês da data âncora, todo
-    // mês — a ocorrência mostrada é sempre a do mês visualizado (cursor).
-    for (const item of cronograma) {
-      if (item.recurring) {
-        const day = Number(item.date.slice(8, 10));
-        const daysInCursorMonth = new Date(
-          cursor.getFullYear(),
-          cursor.getMonth() + 1,
-          0,
-        ).getDate();
-        const occurrence = new Date(
-          cursor.getFullYear(),
-          cursor.getMonth(),
-          Math.min(day, daysInCursorMonth),
-        );
-        add(toISODate(occurrence), { label: item.title, tone: "manual" });
-      } else {
-        add(item.date, { label: item.title, tone: "manual" });
-      }
-    }
-    return map;
-  }, [c.dataInicio, c.prazo, influs, cronograma, cursor]);
-
-  const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
-  const startDate = new Date(first);
-  startDate.setDate(first.getDate() - first.getDay());
-  const cells: Date[] = [];
-  for (let i = 0; i < 42; i++) {
-    const d = new Date(startDate);
-    d.setDate(startDate.getDate() + i);
-    cells.push(d);
-  }
-  const today = toISODate(new Date());
-  const monthLabel = cursor.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-  const hasAnyEvent = eventsByDate.size > 0;
-
-  const focusAdd = () => {
-    titleInputRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
-    titleInputRef.current?.focus();
+  const ocorrencias = useMemo(
+    () =>
+      filtrarOcorrencias(ocorrenciasDoMes(cronograma, cursor.y, cursor.m), { busca, visibilidade }),
+    [cronograma, cursor, busca, visibilidade],
+  );
+  const porDia = useMemo(() => agruparPorDia(ocorrencias), [ocorrencias]);
+  const cells = useMemo(() => celulasDoMes(cursor.y, cursor.m), [cursor]);
+  const dias = useMemo(() => [...porDia.keys()].sort(), [porDia]);
+  const hoje = todayIso();
+  const monthLabel = new Date(cursor.y, cursor.m, 1).toLocaleDateString("pt-BR", {
+    month: "long",
+    year: "numeric",
+  });
+  const move = (delta: number) => {
+    const d = new Date(cursor.y, cursor.m + delta, 1);
+    setCursor({ y: d.getFullYear(), m: d.getMonth() });
   };
+  const goHoje = () => {
+    const d = new Date();
+    setCursor({ y: d.getFullYear(), m: d.getMonth() });
+  };
+
+  const salvar = (next: CronogramaItem[]) =>
+    onCronogramaChange([...next].sort((a, b) => a.date.localeCompare(b.date)));
+  const excluir = async (item: CronogramaItem) => {
+    const ok = await confirm(`Excluir “${item.title}”?`, {
+      title: "Excluir evento?",
+      confirmLabel: "Excluir",
+      destructive: true,
+    });
+    if (!ok) return;
+    salvar(cronograma.filter((x) => x.id !== item.id));
+    setDetalhe(null);
+  };
+
+  const EventoLinha = ({ o, compact }: { o: Ocorrencia; compact?: boolean }) => (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        setDetalhe(o);
+      }}
+      className={`flex w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${compact ? "text-[11px]" : "text-sm"}`}
+    >
+      {o.item.hora && (
+        <span className="shrink-0 tabular-nums text-text-secondary">{o.item.hora}</span>
+      )}
+      <span className="min-w-0 flex-1 truncate text-foreground">{o.item.title}</span>
+      <Visibilidade item={o.item} />
+    </button>
+  );
 
   return (
     <CampaignToolShell
@@ -134,294 +165,424 @@ export function CalendarTool({
       campanhaNome={c.nome}
       icon={meta.icon}
       title={meta.label}
-      description={meta.description}
+      description="Cronograma e datas da campanha."
       actions={
-        <Button variant="primary" size="sm" onClick={focusAdd}>
+        <Button variant="primary" size="sm" onClick={() => setEditor({})}>
           <Plus /> Adicionar evento
         </Button>
       }
     >
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-8">
-        {/* Calendário + dia selecionado */}
-        <section className="min-w-0 space-y-4" aria-label="Calendário mensal">
-          <div className="flex items-center justify-between gap-2">
-            <IconButton
-              label="Mês anterior"
-              onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}
-            >
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-1">
+            <IconButton label="Mês anterior" onClick={() => move(-1)}>
               <ChevronLeft />
             </IconButton>
-            <div className="flex items-center gap-2">
-              <p className="text-sm font-semibold capitalize text-foreground" aria-live="polite">
-                {monthLabel}
-              </p>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setCursor(new Date())}
-                className="h-7 px-2"
-              >
-                Hoje
-              </Button>
-            </div>
-            <IconButton
-              label="Próximo mês"
-              onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}
+            <p
+              className="min-w-[10rem] text-center text-sm font-semibold text-foreground first-letter:uppercase"
+              aria-live="polite"
             >
+              {monthLabel}
+            </p>
+            <IconButton label="Próximo mês" onClick={() => move(1)}>
               <ChevronRight />
             </IconButton>
+            <Button variant="ghost" size="sm" onClick={goHoje} className="h-7 px-2">
+              Hoje
+            </Button>
           </div>
-
-          <div className="overflow-hidden rounded-xl border border-border">
-            <div className="grid grid-cols-7 border-b border-border bg-muted/30">
-              {DIAS_LABEL.map((d) => (
-                <div
-                  key={d}
-                  className="px-1 py-1.5 text-center text-[11px] font-medium uppercase tracking-wider text-text-secondary"
-                >
-                  {d}
-                </div>
-              ))}
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-secondary" />
+              <Input
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Buscar evento..."
+                aria-label="Buscar evento"
+                className="h-8 w-44 pl-8 text-xs"
+              />
             </div>
-            <div className="grid grid-cols-7">
-              {cells.map((d, idx) => {
-                const iso = toISODate(d);
-                const inMonth = d.getMonth() === cursor.getMonth();
-                const isToday = iso === today;
-                const isSelected = iso === selectedDate;
-                const items = eventsByDate.get(iso) ?? [];
-                return (
-                  <button
-                    type="button"
-                    key={idx}
-                    onClick={() => setSelectedDate((prev) => (prev === iso ? null : iso))}
-                    aria-pressed={isSelected}
-                    aria-label={`${fmtDate(iso)}${items.length ? ` — ${items.length} evento${items.length === 1 ? "" : "s"}` : ""}`}
-                    className={`h-14 overflow-hidden border-b border-r border-border p-1 text-left align-top transition-colors hover:bg-muted/40 focus-visible:relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand sm:h-20 sm:p-1.5 ${
-                      inMonth ? "" : "bg-background/40 text-text-secondary"
-                    } ${isSelected ? "bg-muted/60" : ""}`}
-                  >
-                    <span
-                      className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] tabular-nums ${
-                        isToday ? "border border-foreground/40" : ""
-                      }`}
-                    >
-                      {d.getDate()}
-                    </span>
-                    {/* Mobile: só pontos; ≥sm: até 2 rótulos + contador. */}
-                    <div className="mt-0.5 flex flex-wrap gap-0.5 sm:hidden">
-                      {items.slice(0, 4).map((ev, i) => (
-                        <span key={i} className={`h-1.5 w-1.5 rounded-full ${TONE_DOT[ev.tone]}`} />
-                      ))}
-                    </div>
-                    <div className="mt-1 hidden space-y-0.5 sm:block">
-                      {items.slice(0, 2).map((ev, i) => (
-                        <div key={i} className="flex items-center gap-1 truncate text-[11px]">
-                          <span
-                            className={`h-1.5 w-1.5 shrink-0 rounded-full ${TONE_DOT[ev.tone]}`}
-                          />
-                          <span className="truncate text-text-secondary">{ev.label}</span>
-                        </div>
-                      ))}
-                      {items.length > 2 && (
-                        <div className="text-[11px] font-medium text-text-secondary">
-                          +{items.length - 2} evento{items.length - 2 === 1 ? "" : "s"}
-                        </div>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+            <SegmentedControl
+              aria-label="Visibilidade"
+              size="sm"
+              value={visibilidade}
+              onChange={setVisibilidade}
+              options={[...FILTROS]}
+            />
           </div>
+        </div>
 
-          <ul className="flex flex-wrap gap-x-4 gap-y-1" aria-label="Legenda">
-            {(Object.keys(TONE_DOT) as CalendarEvent["tone"][]).map((t) => (
-              <li key={t} className="flex items-center gap-1.5 text-[11px] text-text-secondary">
-                <span className={`h-1.5 w-1.5 rounded-full ${TONE_DOT[t]}`} /> {TONE_LABEL[t]}
-              </li>
+        {/* Desktop: grade mensal */}
+        <div className="hidden overflow-hidden rounded-xl border border-border sm:block">
+          <div className="grid grid-cols-7 border-b border-border bg-muted/30">
+            {DIAS_LABEL.map((d) => (
+              <div
+                key={d}
+                className="px-1 py-1.5 text-center text-[11px] font-medium uppercase tracking-wider text-text-secondary"
+              >
+                {d}
+              </div>
             ))}
-          </ul>
+          </div>
+          <div className="grid grid-cols-7">
+            {cells.map((cell) => {
+              const list = porDia.get(cell.date) ?? [];
+              const { shown, rest } = limitarDia(list, 3);
+              const day = Number(cell.date.slice(8, 10));
+              return (
+                <div
+                  key={cell.date}
+                  onClick={() => setEditor({ date: cell.date })}
+                  className={`group min-h-[7rem] cursor-pointer space-y-0.5 border-b border-r border-border p-1.5 transition-colors hover:bg-muted/30 ${cell.inMonth ? "" : "bg-background/40 text-text-secondary"}`}
+                >
+                  <span
+                    className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] tabular-nums ${cell.date === hoje ? "bg-foreground font-semibold text-background" : ""}`}
+                  >
+                    {day}
+                  </span>
+                  {shown.map((o) => (
+                    <EventoLinha key={`${o.item.id}-${o.date}`} o={o} compact />
+                  ))}
+                  {rest > 0 && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDiaAberto(cell.date);
+                      }}
+                      className="px-1 text-[11px] font-medium text-text-secondary hover:text-foreground"
+                    >
+                      +{rest} evento{rest === 1 ? "" : "s"}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
-          <div className="border-t border-border pt-4">
-            {selectedDate ? (
-              <div className="space-y-2">
-                <ToolSectionTitle>{fmtDate(selectedDate)}</ToolSectionTitle>
-                {(eventsByDate.get(selectedDate) ?? []).length === 0 ? (
-                  <p className="text-sm text-text-secondary">Nenhum evento neste dia.</p>
-                ) : (
-                  <ul className="max-h-56 space-y-1.5 overflow-y-auto">
-                    {(eventsByDate.get(selectedDate) ?? []).map((ev, i) => (
-                      <li key={i} className="flex items-center gap-1.5 text-sm">
-                        <span
-                          className={`h-1.5 w-1.5 shrink-0 rounded-full ${TONE_DOT[ev.tone]}`}
-                        />
-                        <span className="text-foreground">{ev.label}</span>
+        {/* Celular: agenda por dia */}
+        <div className="sm:hidden">
+          {dias.length === 0 ? null : (
+            <ul className="space-y-4">
+              {dias.map((d) => (
+                <li key={d}>
+                  <p className="border-b border-border pb-1 text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
+                    {new Date(d + "T00:00:00").toLocaleDateString("pt-BR", {
+                      day: "2-digit",
+                      month: "short",
+                      weekday: "short",
+                    })}
+                  </p>
+                  <ul className="mt-1 divide-y divide-border/40">
+                    {(porDia.get(d) ?? []).map((o) => (
+                      <li key={`${o.item.id}-${o.date}`}>
+                        <EventoLinha o={o} />
                       </li>
                     ))}
                   </ul>
-                )}
-              </div>
-            ) : hasAnyEvent ? (
-              <p className="text-xs text-text-secondary">
-                Clique num dia com eventos para ver os detalhes.
-              </p>
-            ) : (
-              <p className="text-sm text-text-secondary">Nenhuma data cadastrada ainda.</p>
-            )}
-          </div>
-        </section>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
 
-        {/* Cronograma manual */}
-        <CronogramaPanel
-          cronograma={cronograma}
-          onChange={onCronogramaChange}
-          isRecorrente={isRecorrente}
-          titleInputRef={titleInputRef}
-        />
+        {dias.length === 0 && (
+          <EmptyState
+            compact
+            icon={<CalendarClock className="h-4 w-4" aria-hidden />}
+            title={
+              cronograma.length === 0
+                ? "Nenhum evento ainda"
+                : busca || visibilidade !== "todos"
+                  ? "Nenhum evento com esses filtros"
+                  : "Nenhum evento neste mês"
+            }
+            description={
+              cronograma.length === 0
+                ? "Adicione datas importantes. Marque as que o cliente deve ver."
+                : undefined
+            }
+          />
+        )}
+        <p className="flex items-center gap-1.5 text-[11px] text-text-secondary">
+          <Eye className="h-3 w-3" /> visível para o cliente · <EyeOff className="h-3 w-3" />{" "}
+          interno
+        </p>
       </div>
+
+      {/* Dia com muitos eventos */}
+      <Dialog open={!!diaAberto} onOpenChange={(o) => !o && setDiaAberto(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogTitle className="text-base font-semibold">
+            {diaAberto ? fmtDate(diaAberto) : ""}
+          </DialogTitle>
+          <DialogDescription className="sr-only">Eventos do dia.</DialogDescription>
+          <ul className="divide-y divide-border/40">
+            {(diaAberto ? (porDia.get(diaAberto) ?? []) : []).map((o) => (
+              <li key={o.item.id}>
+                <EventoLinha o={o} />
+              </li>
+            ))}
+          </ul>
+        </DialogContent>
+      </Dialog>
+
+      {/* Detalhe */}
+      <Dialog open={!!detalhe} onOpenChange={(o) => !o && setDetalhe(null)}>
+        <DialogContent className="max-w-md">
+          {detalhe && (
+            <div className="space-y-4">
+              <div className="flex items-start justify-between gap-3 pr-6">
+                <div className="min-w-0">
+                  <DialogTitle className="text-base font-semibold leading-snug">
+                    {detalhe.item.title}
+                  </DialogTitle>
+                  <DialogDescription className="text-sm text-text-secondary">
+                    {detalhe.item.recurring
+                      ? `Todo dia ${Number(detalhe.item.date.slice(8, 10))}`
+                      : fmtDate(detalhe.date)}
+                    {detalhe.item.hora ? ` · ${detalhe.item.hora}` : ""} ·{" "}
+                    {EVENTO_TIPO_LABEL[tipoDe(detalhe.item)]}
+                  </DialogDescription>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setEditor({ item: detalhe.item });
+                      setDetalhe(null);
+                    }}
+                  >
+                    Editar
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <IconButton label="Mais ações">
+                        <MoreHorizontal />
+                      </IconButton>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onSelect={() => {
+                          salvar([
+                            ...cronograma,
+                            duplicarEvento(detalhe.item, getCurrentAuthor().name),
+                          ]);
+                          setDetalhe(null);
+                        }}
+                      >
+                        Duplicar
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onSelect={() => void excluir(detalhe.item)}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        Excluir
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+              <p className="flex items-center gap-1.5 text-sm text-foreground">
+                <Visibilidade item={detalhe.item} className="h-3.5 w-3.5" />
+                {visivelAoCliente(detalhe.item)
+                  ? "Visível no Portal do Cliente"
+                  : "Interno — não visível para o cliente"}
+              </p>
+              {detalhe.item.description && (
+                <p className="whitespace-pre-wrap text-sm text-foreground">
+                  {detalhe.item.description}
+                </p>
+              )}
+              {(detalhe.item.criadoPor || detalhe.item.atualizadoEm) && (
+                <p className="text-xs text-text-secondary">
+                  {detalhe.item.criadoPor ? `Criado por ${detalhe.item.criadoPor}` : ""}
+                  {detalhe.item.atualizadoEm
+                    ? `${detalhe.item.criadoPor ? " · " : ""}atualizado em ${new Date(detalhe.item.atualizadoEm).toLocaleDateString("pt-BR")}`
+                    : ""}
+                </p>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Criar / editar */}
+      <Dialog open={!!editor} onOpenChange={(o) => !o && setEditor(null)}>
+        <DialogContent className="max-w-md">
+          {editor && (
+            <EventoForm
+              key={editor.item?.id ?? `novo-${editor.date ?? ""}`}
+              item={editor.item}
+              dateInicial={editor.date}
+              isRecorrente={isRecorrente}
+              onCancel={() => setEditor(null)}
+              onSave={(values) => {
+                const autor = getCurrentAuthor().name;
+                if (editor.item) {
+                  const agora = new Date().toISOString();
+                  salvar(
+                    cronograma.map((x) =>
+                      x.id === editor.item!.id
+                        ? {
+                            ...x,
+                            ...values,
+                            description: values.description.trim() || undefined,
+                            hora: values.hora || undefined,
+                            recurring: values.recurring ? true : undefined,
+                            atualizadoEm: agora,
+                          }
+                        : x,
+                    ),
+                  );
+                } else {
+                  salvar([...cronograma, novoEvento(values, autor)]);
+                }
+                setEditor(null);
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+      {confirmDialog}
     </CampaignToolShell>
   );
 }
 
-/** Cronograma manual — setado pelo time (data + título + descrição livre),
- * em vez de derivado das entregas dos influenciadores. Mostrado aqui e no
- * portal do cliente. */
-function CronogramaPanel({
-  cronograma,
-  onChange,
+type Valores = {
+  title: string;
+  date: string;
+  hora: string;
+  tipo: CronogramaTipo;
+  description: string;
+  visivelCliente: boolean;
+  recurring: boolean;
+};
+
+function EventoForm({
+  item,
+  dateInicial,
   isRecorrente,
-  titleInputRef,
+  onCancel,
+  onSave,
 }: {
-  cronograma: CronogramaItem[];
-  onChange: (next: CronogramaItem[]) => void;
+  item?: CronogramaItem;
+  dateInicial?: string;
   isRecorrente: boolean;
-  titleInputRef: React.RefObject<HTMLInputElement | null>;
+  onCancel: () => void;
+  onSave: (v: Valores) => void;
 }) {
-  const [date, setDate] = useState("");
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [recurring, setRecurring] = useState(false);
-
-  const add = () => {
-    const t = title.trim();
-    if (!date || !t) return;
-    onChange(
-      [
-        ...cronograma,
-        {
-          id: crypto.randomUUID(),
-          date,
-          title: t,
-          description: description.trim() || undefined,
-          recurring: isRecorrente && recurring ? true : undefined,
-        },
-      ].sort((a, b) => a.date.localeCompare(b.date)),
-    );
-    setDate("");
-    setTitle("");
-    setDescription("");
-    setRecurring(false);
-  };
-
-  const remove = (id: string) => onChange(cronograma.filter((i) => i.id !== id));
-
+  const [v, setV] = useState<Valores>({
+    title: item?.title ?? "",
+    date: item?.date ?? dateInicial ?? "",
+    hora: item?.hora ?? "",
+    tipo: tipoDe(item ?? {}),
+    description: item?.description ?? "",
+    visivelCliente: item ? visivelAoCliente(item) : false,
+    recurring: !!item?.recurring,
+  });
+  const ok = v.title.trim() !== "" && v.date !== "";
   return (
-    <section
-      className="min-w-0 space-y-4 border-t border-border pt-6 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0"
-      aria-label="Cronograma"
+    <form
+      className="space-y-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (ok) onSave(v);
+      }}
     >
-      <ToolSectionTitle>Cronograma</ToolSectionTitle>
-
-      <form
-        className="space-y-2.5"
-        onSubmit={(e) => {
-          e.preventDefault();
-          add();
-        }}
-      >
-        <div className="space-y-1">
-          <label htmlFor="cron-title" className="text-xs font-medium text-text-secondary">
-            Título
-          </label>
-          <Input
-            id="cron-title"
-            ref={titleInputRef}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Ex: Gravação do vídeo"
-          />
-        </div>
-        <div className="space-y-1">
-          <span className="text-xs font-medium text-text-secondary">Data</span>
-          <DateField value={date || undefined} onChange={(v) => setDate(v ?? "")} className="h-9" />
-        </div>
-        <div className="space-y-1">
-          <label htmlFor="cron-desc" className="text-xs font-medium text-text-secondary">
-            Descrição (opcional)
-          </label>
-          <Input
-            id="cron-desc"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Detalhes adicionais"
-          />
-        </div>
-        {isRecorrente && (
-          <label className="flex items-center gap-1.5 text-xs text-text-secondary">
-            <input
-              type="checkbox"
-              checked={recurring}
-              onChange={(e) => setRecurring(e.target.checked)}
-              className="h-3.5 w-3.5 rounded border-border"
-            />
-            Repete todo mês (dia {date ? Number(date.slice(8, 10)) : "—"})
-          </label>
-        )}
-        <Button
-          type="submit"
-          variant="primary"
-          size="sm"
-          disabled={!date || !title.trim()}
-          className="w-full"
-        >
-          <Plus /> Adicionar ao cronograma
-        </Button>
-      </form>
-
-      {cronograma.length === 0 ? (
-        <ToolEmpty
-          icon={CalendarClock}
-          title="Nenhum item de cronograma."
-          description="Adicione marcos com data, título e descrição. Eles aparecem no calendário e no portal do cliente."
+      <DialogTitle className="text-base font-semibold">
+        {item ? "Editar evento" : "Novo evento"}
+      </DialogTitle>
+      <DialogDescription className="sr-only">
+        Dados do evento do calendário da campanha.
+      </DialogDescription>
+      <label className="block space-y-1">
+        <span className="text-xs font-medium text-text-secondary">Título *</span>
+        <Input
+          autoFocus
+          value={v.title}
+          onChange={(e) => setV({ ...v, title: e.target.value })}
+          placeholder="Ex.: Gravação do vídeo"
         />
-      ) : (
-        <ul className="divide-y divide-border border-t border-border">
-          {cronograma.map((item) => (
-            <li key={item.id} className="flex items-start gap-3 py-2.5">
-              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium text-text-secondary">
-                  {item.recurring
-                    ? `Todo dia ${Number(item.date.slice(8, 10))}`
-                    : fmtDate(item.date)}
-                </p>
-                <p className="truncate text-sm text-foreground">{item.title}</p>
-                {item.description && (
-                  <p className="mt-0.5 text-xs text-text-secondary">{item.description}</p>
-                )}
-              </div>
-              <IconButton
-                label={`Remover ${item.title}`}
-                onClick={() => remove(item.id)}
-                className="h-8 w-8 hover:text-destructive"
-              >
-                <X />
-              </IconButton>
-            </li>
+      </label>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <span className="text-xs font-medium text-text-secondary">Data *</span>
+          <DateField
+            value={v.date || undefined}
+            onChange={(d) => setV({ ...v, date: d ?? "" })}
+            className="h-9"
+          />
+        </div>
+        <label className="block space-y-1">
+          <span className="text-xs font-medium text-text-secondary">Horário</span>
+          <Input
+            type="time"
+            value={v.hora}
+            onChange={(e) => setV({ ...v, hora: e.target.value })}
+          />
+        </label>
+      </div>
+      <label className="block space-y-1">
+        <span className="text-xs font-medium text-text-secondary">Tipo</span>
+        <NativeSelect
+          value={v.tipo}
+          onChange={(e) => setV({ ...v, tipo: e.target.value as CronogramaTipo })}
+        >
+          {EVENTO_TIPOS.map((t) => (
+            <option key={t} value={t}>
+              {EVENTO_TIPO_LABEL[t]}
+            </option>
           ))}
-        </ul>
+        </NativeSelect>
+      </label>
+      <label className="block space-y-1">
+        <span className="text-xs font-medium text-text-secondary">Descrição</span>
+        <Textarea
+          rows={3}
+          value={v.description}
+          onChange={(e) => setV({ ...v, description: e.target.value })}
+          placeholder="Detalhes adicionais"
+        />
+      </label>
+      {isRecorrente && (
+        <label className="flex items-center gap-2 text-sm text-foreground">
+          <input
+            type="checkbox"
+            checked={v.recurring}
+            onChange={(e) => setV({ ...v, recurring: e.target.checked })}
+            className="h-4 w-4 accent-foreground"
+          />
+          Repete todo mês{v.date ? ` (dia ${Number(v.date.slice(8, 10))})` : ""}
+        </label>
       )}
-    </section>
+      <div className="space-y-0.5">
+        <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+          <input
+            type="checkbox"
+            checked={v.visivelCliente}
+            onChange={(e) => setV({ ...v, visivelCliente: e.target.checked })}
+            className="h-4 w-4 accent-foreground"
+          />
+          Mostrar para o cliente
+        </label>
+        {v.visivelCliente && (
+          <p className="pl-6 text-xs text-text-secondary">
+            Este evento aparecerá no calendário do Portal do Cliente.
+          </p>
+        )}
+      </div>
+      <div className="flex justify-end gap-2 pt-1">
+        <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+          Cancelar
+        </Button>
+        <Button type="submit" variant="primary" size="sm" disabled={!ok}>
+          {item ? "Salvar" : "Criar evento"}
+        </Button>
+      </div>
+    </form>
   );
 }

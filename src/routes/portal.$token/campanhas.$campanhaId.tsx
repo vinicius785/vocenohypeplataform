@@ -480,6 +480,7 @@ function PortalCampanhaPage() {
                               day: String(Number(item.date.slice(8, 10))),
                             })
                           : fmtDate(item.date)}
+                        {item.hora ? ` · ${item.hora}` : ""}
                       </p>
                       {proximo && <Badge variant="brand">Próximo</Badge>}
                       {concluido && !proximo && <Badge variant="secondary">Concluído</Badge>}
