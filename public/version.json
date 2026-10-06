@@ -1,6 +1,26 @@
 {
-  "version": "1.352.0",
+  "version": "1.353.0",
   "releases": [
+    {
+      "version": "1.353.0",
+      "summary": "Detalhe do marco do calendário mais simples: título, quem vê, descrição, quando e última atualização.",
+      "modules": [
+        {
+          "name": "CAMPANHAS",
+          "tagline": "Recursos · Calendário",
+          "items": [
+            {
+              "title": "Detalhe minimalista",
+              "description": "Título em destaque com “Interno” ou “Visível para o cliente” ao lado, descrição como conteúdo principal e, embaixo, “18 nov. 2026 · 15:00” com “Atualizado há 12 min”."
+            },
+            {
+              "title": "Alterar visibilidade no menu",
+              "description": "O menu “...” ganhou “Tornar interno” / “Mostrar para o cliente”."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.352.0",
       "summary": "Calendário da campanha: eventos dos dias de outro mês aparecem na grade e os marcos ficaram mais claros.",

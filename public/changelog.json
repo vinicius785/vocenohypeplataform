@@ -1,5 +1,6 @@
 {
   "notes": [
+    "1.353.0: detalhe do marco reorganizado (sem 'criado por', sem tipo, data+hora numa linha, atualização relativa); menu ganhou alternar visibilidade (atualiza atualizadoEm). Sem mudança de dados.",
     "1.352.0: calendário — ocorrenciasDaGrade (todas as 42 datas visíveis, sem duplicar; data real preservada), marcos com ponto por tipo/título/hora, número dos dias adjacentes mais discreto e mês abreviado no dia 1.",
     "1.351.0: detalhe do evento do calendário — só apresentação (data curta, horário, dia da semana e tipo em hierarquia). Sem mudança de dados.",
     "1.350.0: EventoForm refinado — TimeField ganhou layout=\"colunas\" (horas/minutos 5 em 5, valor HH:MM inalterado), Tipo em Popover próprio, Checkbox Radix, validação inline e toast ao salvar. Sem mudança de dados.",

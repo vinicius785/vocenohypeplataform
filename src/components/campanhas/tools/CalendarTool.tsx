@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import {
   CalendarClock,
-  Clock,
   ChevronLeft,
   ChevronRight,
   Check,
@@ -56,10 +55,11 @@ import { CAMPAIGN_TOOLS } from "./campaign-tools";
 
 const parseDia = (iso: string) => new Date(`${iso.slice(0, 10)}T12:00:00`);
 /** "13 out. 2026" */
-const dataCurta = (iso: string) =>
-  parseDia(iso).toLocaleDateString("pt-BR", { day: "numeric", month: "short", year: "numeric" });
-/** "terça-feira" */
-const diaSemana = (iso: string) => parseDia(iso).toLocaleDateString("pt-BR", { weekday: "long" });
+const dataCurta = (iso: string) => {
+  const d = parseDia(iso);
+  const mes = d.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "");
+  return `${d.getDate()} ${mes}. ${d.getFullYear()}`;
+};
 
 /** Indicador discreto por tipo (só um pontinho — a cor é apoio, não o componente). */
 const TIPO_DOT: Record<CronogramaTipo, string> = {
@@ -69,6 +69,18 @@ const TIPO_DOT: Record<CronogramaTipo, string> = {
   pagamento: "bg-success",
   outro: "bg-border",
 };
+
+/** "Atualizado há 12 min" (até 7 dias) ou "Atualizado em 06/10/2026". */
+function atualizadoHa(iso: string, agora = Date.now()) {
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return "";
+  const min = Math.max(0, Math.round((agora - t) / 60000));
+  if (min < 1) return "Atualizado agora";
+  if (min < 60) return `Atualizado há ${min} min`;
+  if (min < 1440) return `Atualizado há ${Math.floor(min / 60)} h`;
+  if (min < 7 * 1440) return `Atualizado há ${Math.floor(min / 1440)} d`;
+  return `Atualizado em ${new Date(t).toLocaleDateString("pt-BR")}`;
+}
 
 const DIAS_LABEL = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
 const FILTROS = [
@@ -368,38 +380,18 @@ export function CalendarTool({
       <Dialog open={!!detalhe} onOpenChange={(o) => !o && setDetalhe(null)}>
         <DialogContent className="max-w-md">
           {detalhe && (
-            <div className="space-y-4">
-              <div className="flex items-start justify-between gap-3 pr-6">
-                <div className="min-w-0">
-                  <DialogTitle className="text-base font-semibold leading-snug">
-                    {detalhe.item.title}
-                  </DialogTitle>
-                  <DialogDescription asChild>
-                    <div className="mt-1.5 space-y-0.5">
-                      <p className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm font-semibold text-foreground">
-                        <span className="inline-flex items-center gap-1.5">
-                          <CalendarClock className="h-3.5 w-3.5 text-text-secondary" aria-hidden />
-                          {detalhe.item.recurring
-                            ? `Todo dia ${Number(detalhe.item.date.slice(8, 10))}`
-                            : dataCurta(detalhe.date)}
-                        </span>
-                        {detalhe.item.hora && (
-                          <span className="inline-flex items-center gap-1.5 tabular-nums">
-                            <Clock className="h-3.5 w-3.5 text-text-secondary" aria-hidden />
-                            {detalhe.item.hora}
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-xs text-text-secondary">
-                        {detalhe.item.recurring ? "" : `${diaSemana(detalhe.date)} · `}
-                        {EVENTO_TIPO_LABEL[tipoDe(detalhe.item)]}
-                      </p>
-                    </div>
-                  </DialogDescription>
-                </div>
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1 pr-6">
+                <DialogTitle className="min-w-0 flex-1 basis-40 break-words text-lg font-semibold leading-snug">
+                  {detalhe.item.title}
+                </DialogTitle>
                 <div className="flex shrink-0 items-center gap-1">
+                  <span className="mr-1 inline-flex items-center gap-1 text-xs text-text-secondary">
+                    <Visibilidade item={detalhe.item} />
+                    {visivelAoCliente(detalhe.item) ? "Visível para o cliente" : "Interno"}
+                  </span>
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
                     onClick={() => {
                       setEditor({ item: detalhe.item });
@@ -415,6 +407,21 @@ export function CalendarTool({
                       </IconButton>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onSelect={() => {
+                          const novo = {
+                            ...detalhe.item,
+                            visivelCliente: !visivelAoCliente(detalhe.item),
+                            atualizadoEm: new Date().toISOString(),
+                          };
+                          salvar(cronograma.map((x) => (x.id === novo.id ? novo : x)));
+                          setDetalhe({ ...detalhe, item: novo });
+                        }}
+                      >
+                        {visivelAoCliente(detalhe.item)
+                          ? "Tornar interno"
+                          : "Mostrar para o cliente"}
+                      </DropdownMenuItem>
                       <DropdownMenuItem
                         onSelect={() => {
                           salvar([
@@ -437,25 +444,22 @@ export function CalendarTool({
                   </DropdownMenu>
                 </div>
               </div>
-              <p className="flex items-center gap-1.5 text-sm text-foreground">
-                <Visibilidade item={detalhe.item} className="h-3.5 w-3.5" />
-                {visivelAoCliente(detalhe.item)
-                  ? "Visível no Portal do Cliente"
-                  : "Interno — não visível para o cliente"}
-              </p>
-              {detalhe.item.description && (
-                <p className="whitespace-pre-wrap text-sm text-foreground">
-                  {detalhe.item.description}
+              <DialogDescription
+                className={`whitespace-pre-wrap text-sm ${detalhe.item.description ? "text-foreground" : "text-text-secondary/70"}`}
+              >
+                {detalhe.item.description || "Nenhuma descrição adicionada."}
+              </DialogDescription>
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 border-t border-border pt-3 text-xs">
+                <p className="text-sm font-medium tabular-nums text-foreground">
+                  {detalhe.item.recurring
+                    ? `Todo dia ${Number(detalhe.item.date.slice(8, 10))}`
+                    : dataCurta(detalhe.date)}
+                  {detalhe.item.hora ? ` · ${detalhe.item.hora}` : ""}
                 </p>
-              )}
-              {(detalhe.item.criadoPor || detalhe.item.atualizadoEm) && (
-                <p className="text-xs text-text-secondary">
-                  {detalhe.item.criadoPor ? `Criado por ${detalhe.item.criadoPor}` : ""}
-                  {detalhe.item.atualizadoEm
-                    ? `${detalhe.item.criadoPor ? " · " : ""}atualizado em ${new Date(detalhe.item.atualizadoEm).toLocaleDateString("pt-BR")}`
-                    : ""}
-                </p>
-              )}
+                {detalhe.item.atualizadoEm && (
+                  <p className="text-text-secondary">{atualizadoHa(detalhe.item.atualizadoEm)}</p>
+                )}
+              </div>
             </div>
           )}
         </DialogContent>
