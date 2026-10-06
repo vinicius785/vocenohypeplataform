@@ -38,6 +38,7 @@ import {
   Eye,
   Image as ImageIcon,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { DateField } from "@/components/ui/date-field";
@@ -52,33 +53,34 @@ import { supabase } from "@/integrations/supabase/client";
 import { loadBank, saveBank, type BankInflu } from "@/lib/banco-influs-store";
 import { findExistingBankInfluMatch } from "@/lib/bank-influ-match";
 import { useConfirm } from "@/hooks/use-confirm";
-import { EditorialCaption } from "@/components/marketing/editorial/EditorialCaption";
-import { entregaAjusteView, entregaStatusLabel, historyActionText } from "@/lib/entrega-ajustes";
+import { entregaAjusteView, historyActionText } from "@/lib/entrega-ajustes";
 import {
   ARQUIVO_CATEGORIA_LABEL,
   ENTREGA_FASE_COLUNA_ENTRY_STAGE,
   ENTREGA_FASE_COLUNA_LABEL,
+  PRAZO_LABEL,
   agruparAnexos,
-  categoriaEsperada,
   entregaFaseColuna,
   entregaFocus,
   entregaStepper,
   entregaUnidadesLabel,
-  historicoDaEntrega,
   legendaCanal,
-  linkDoPost,
-  metricasResumo,
   publicacaoAtrasoDias,
+  removerVersao,
+  substituirArquivo,
+  versaoDoAnexo,
+  type ArquivoTile,
   type EntregaFaseColuna,
+  type PrazoCampo,
 } from "@/lib/entrega-detail";
+import { entregaLog, historicoEventos } from "@/lib/entrega-historico";
 import {
-  EntregaActionSurface,
   EntregaArquivos,
   EntregaEditorInline,
   EntregaHeader,
   EntregaHistorico,
   EntregaMenu,
-  EntregaPublicacao,
+  EntregaProximaAcao,
   EntregaStepper,
 } from "./EntregaV2";
 import { linkifyText } from "@/lib/linkify";
@@ -102,7 +104,7 @@ import {
 } from "@/lib/social-profiles";
 import type { CustomQuestionType } from "@/lib/inscricao-page";
 import { HeaderContact } from "./InfluencerContact";
-import { EntregasRows, FeedbackNote, SelectionFeedback } from "./InfluencerPanels";
+import { EntregasRows, SelectionFeedback } from "./InfluencerPanels";
 import { RecursosMenu } from "./InfluencerResources";
 import {
   availableResources,
@@ -112,9 +114,7 @@ import {
 } from "@/lib/influencer-resources";
 import {
   clientFeedbacks,
-  entregaFeedback,
   entregaNome,
-  entregaTone,
   nextBestAction,
   type NextAction,
 } from "@/lib/influencer-next-action";
@@ -193,6 +193,7 @@ import {
   fmtDate,
   formatPhoneBR,
   getCurrentAuthor,
+  legacyAnexoCategoria,
   logInfluActivity,
   normalizePagamento,
   pagamentoResumo,
@@ -2393,10 +2394,10 @@ function nextPrazoData(entrega: Entrega): { label: string; data: string } | null
  * embutido no MESMO workspace lateral do influenciador (sem empilhar um segundo overlay).
  *
  * Aqui mora só a LÓGICA (upload, motor de ações, confirmação, persistência via `onChange`); o que
- * mostrar vem de `lib/entrega-detail.ts` e o desenho de `EntregaV2.tsx`. Ordem: cabeçalho → próxima
- * ação → feedback do cliente (só se houver) → progresso+prazos → publicação (só publicada) →
- * arquivos → legenda → histórico. `onChange` aceita um texto de log opcional, gravado na Atividade
- * no MESMO patch (nunca em dois patches separados, para um não sobrescrever o outro). */
+ * mostrar vem de `lib/entrega-detail.ts` / `lib/entrega-historico.ts` e o desenho de `EntregaV2.tsx`.
+ * Cinco blocos: cabeçalho → progresso → próxima ação → arquivos → histórico (o feedback do cliente é
+ * um evento do histórico, não uma seção). `onChange` aceita um texto de log opcional, gravado na
+ * Atividade no MESMO patch (nunca em dois patches separados, para um não sobrescrever o outro). */
 function EntregaDetailBody({
   influNome,
   influFoto,
@@ -2437,66 +2438,98 @@ function EntregaDetailBody({
 }) {
   const stage = entrega.stage ?? "ROTEIRO_PRODUCAO";
   const publicada = stage === "PUBLICADA";
+  const nome = entregaNome(entrega);
   const focus = entregaFocus(entrega);
-  const feedback = entregaFeedback(entrega);
   const stepper = entregaStepper(entrega);
   const atrasoDias = publicacaoAtrasoDias(entrega, todayISO());
-  const historico = historicoDaEntrega(influActivity, entrega);
+  const eventos = historicoEventos(influActivity, entrega);
   const ajuste = entregaAjusteView(entrega);
+
+  // Os uploads são assíncronos: quando terminam, o painel já pode ter mudado. Tudo que grava depois
+  // de um `await` parte da entrega e do `onChange` MAIS RECENTES, não dos capturados no clique.
+  const entregaRef = useRef(entrega);
+  entregaRef.current = entrega;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
   const fileRef = useRef<HTMLInputElement>(null);
   const arquivosInputRef = useRef<HTMLInputElement>(null);
+  const substituirInputRef = useRef<HTMLInputElement>(null);
   const pendingCategoria = useRef<EntregaAnexoCategoria>("Roteiro");
-  const arquivosRef = useRef<HTMLElement>(null);
+  const pendingSubstituir = useRef<EntregaAnexo | null>(null);
+  const historicoRef = useRef<HTMLElement>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [enviandoCategoria, setEnviandoCategoria] = useState<EntregaAnexoCategoria | null>(null);
   const [arquivosError, setArquivosError] = useState("");
   const [editando, setEditando] = useState(false);
   const [editandoPrazos, setEditandoPrazos] = useState(false);
-  const [editandoPublicacao, setEditandoPublicacao] = useState(false);
+  const [publicacaoAberta, setPublicacaoAberta] = useState(false);
   const [verTodoHistorico, setVerTodoHistorico] = useState(false);
+  const [feedbackAberto, setFeedbackAberto] = useState<string | null>(null);
   const { confirm: confirmAction, confirmDialog: entregaConfirmDialog } = useConfirm();
 
-  const scrollToArquivos = () =>
-    window.setTimeout(
-      () => arquivosRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }),
-      150,
-    );
+  const revelarFeedback = (id: string) => {
+    setFeedbackAberto(id);
+    window.setTimeout(() => {
+      historicoRef.current
+        ?.querySelector(`[data-evento-id="${CSS.escape(id)}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 120);
+  };
 
-  // Ação principal contextual — o motor já disse qual é a única válida agora (`focus.primary`).
-  // "Adicionar roteiro"/"conteúdo final" abrem o seletor de arquivo antes de chamar o motor; o passo
-  // do ciclo de ajustes e as demais chamam direto.
-  const handlePrimary = async () => {
-    const p = focus?.primary;
+  // Ação principal — o motor já disse qual é a única válida agora (`focus.primary`). "Adicionar
+  // roteiro"/"conteúdo final" abrem o seletor antes de chamar o motor; o resto chama direto.
+  const handlePrimary = () => {
+    const p = focus.primary;
     if (!p) return;
-    if (p.kind === "upload") {
-      fileRef.current?.click();
-      return;
-    }
-    if (p.kind === "ajuste") {
-      if (p.step === "editar") {
-        // Reconhece o ajuste (stage → "Em ajustes") e leva a pessoa até o arquivo a atualizar.
+    switch (p.kind) {
+      case "upload":
+        fileRef.current?.click();
+        return;
+      case "nova_versao":
+        pickArquivo(p.categoria);
+        return;
+      case "publicacao":
+        setPublicacaoAberta(true);
+        return;
+      case "post":
+        window.open(p.url, "_blank", "noopener,noreferrer");
+        return;
+      case "ajuste": {
+        if (p.step === "reconhecer") {
+          // "Ver feedback" é o reconhecimento dos ajustes no motor; o texto abre no histórico.
+          const pendente = eventos.find((e) => e.kind === "feedback" && e.pendente);
+          onRunAction(p.action);
+          if (pendente) revelarFeedback(pendente.id);
+          return;
+        }
         onRunAction(p.action);
-        scrollToArquivos();
         return;
       }
-      if (focus?.semArquivoNovo) {
-        const yes = await confirmAction(
-          `Você ainda não anexou uma nova versão do ${ajuste?.etapa === "conteudo" ? "conteúdo final" : "roteiro"} desde o feedback do cliente. Enviar mesmo assim?`,
-          { title: "Enviar sem arquivo novo?", confirmLabel: "Enviar mesmo assim" },
-        );
-        if (!yes) return;
-      }
+      case "engine":
+        onRunAction(p.action);
+        return;
     }
-    onRunAction(p.action);
+  };
+
+  // Alternativa discreta: reenviar SEM arquivo novo — sempre com confirmação.
+  const handleSecondary = async () => {
+    const s = focus.secondary;
+    if (!s) return;
+    const etapa = ajuste?.etapa === "conteudo" ? "conteúdo final" : "roteiro";
+    const yes = await confirmAction(
+      `Você ainda não adicionou uma nova versão do ${etapa} desde o feedback do cliente. Reenviar para aprovação mesmo assim?`,
+      { title: "Reenviar sem arquivo novo?", confirmLabel: "Reenviar mesmo assim" },
+    );
+    if (yes) onRunAction(s.action);
   };
 
   // Aceita vários arquivos de uma vez (ex: Story de 3 unidades = 3 arquivos) — sobe todos e anexa
   // numa ÚNICA chamada de `onRunAction` (`opts.anexos`, plural), pra virarem IRMÃOS na mesma versão
   // em vez de 3 versões sequenciais um "substituindo" o outro.
   const handleFilesForAction = async (files: File[]) => {
-    const p = focus?.primary;
+    const p = focus.primary;
     if (p?.kind !== "upload" || files.length === 0) return;
     setUploading(true);
     setUploadError("");
@@ -2528,8 +2561,8 @@ function EntregaDetailBody({
     }
   };
 
-  // "+ Adicionar" e "Substituir" da área de Arquivos: arquivos da mesma seleção são IRMÃOS (mesma
-  // versão); "Substituir" envia uma nova versão (a anterior continua em "versões anteriores").
+  // Quadrado vazio, "+ Adicionar" e "Adicionar nova versão": arquivos da mesma seleção são IRMÃOS
+  // (mesma versão); cada nova seleção vira a versão seguinte e a anterior continua em "Ver versões".
   const pickArquivo = (c: EntregaAnexoCategoria) => {
     pendingCategoria.current = c;
     arquivosInputRef.current?.click();
@@ -2549,10 +2582,17 @@ function EntregaDetailBody({
       }
     }
     if (novos.length > 0) {
-      const o = novos.length === 1 ? `o arquivo "${novos[0].nome}"` : `${novos.length} arquivos`;
-      onChange(
-        { anexos: addAnexosComVersao(entrega.anexos ?? [], categoria, novos) },
-        `adicionou ${o} em ${ARQUIVO_CATEGORIA_LABEL[categoria]} — "${entregaNome(entrega)}"`,
+      const atual = entregaRef.current;
+      const anexos = addAnexosComVersao(atual.anexos ?? [], categoria, novos);
+      const versao = anexos[anexos.length - 1]?.versao ?? 1;
+      onChangeRef.current(
+        { anexos },
+        entregaLog.arquivosAdicionados(
+          categoria,
+          novos.map((n) => n.nome),
+          versao,
+          entregaNome(atual),
+        ),
       );
     }
     if (falhas.length > 0) {
@@ -2564,21 +2604,115 @@ function EntregaDetailBody({
     }
     setEnviandoCategoria(null);
   };
-  const removerArquivo = (a: EntregaAnexo) =>
-    onChange(
-      { anexos: (entrega.anexos ?? []).filter((x) => x.id !== a.id) },
-      `removeu o arquivo "${a.nome}" — "${entregaNome(entrega)}"`,
+
+  // "Substituir arquivo": troca NO LUGAR (mesma versão) — escolhe o arquivo primeiro, confirma e só
+  // então sobe. Para guardar o histórico, o caminho é "Adicionar nova versão".
+  const pickSubstituir = (tile: ArquivoTile) => {
+    const alvo = tile.atual[0];
+    if (!alvo) return;
+    pendingSubstituir.current = alvo;
+    substituirInputRef.current?.click();
+  };
+  const handleSubstituirFile = async (file: File) => {
+    const alvo = pendingSubstituir.current;
+    pendingSubstituir.current = null;
+    if (!alvo) return;
+    const categoria = legacyAnexoCategoria(alvo.categoria);
+    const versao = versaoDoAnexo(alvo);
+    const yes = await confirmAction(
+      `Trocar "${alvo.nome}" por "${file.name}"? Continua sendo a V${versao}: o arquivo antigo deixa de aparecer aqui e nenhuma versão nova é criada.`,
+      { title: "Substituir arquivo?", confirmLabel: "Substituir" },
     );
+    if (!yes) return;
+    setArquivosError("");
+    setEnviandoCategoria(categoria);
+    try {
+      const url = await uploadEntregaAnexo(file);
+      const atual = entregaRef.current;
+      if (!(atual.anexos ?? []).some((a) => a.id === alvo.id)) return;
+      onChangeRef.current(
+        { anexos: substituirArquivo(atual.anexos ?? [], alvo.id, { nome: file.name, url }) },
+        entregaLog.arquivoSubstituido(categoria, versao, alvo.nome, file.name, entregaNome(atual)),
+      );
+    } catch (err) {
+      setArquivosError(
+        `Falha ao subir. ${file.name}: ${err instanceof Error ? err.message : "falha desconhecida"}`,
+      );
+    } finally {
+      setEnviandoCategoria(null);
+    }
+  };
+
+  // "Remover" do quadrado = remove a versão ATUAL (a anterior passa a ser a atual).
+  const removerVersaoAtual = async (tile: ArquivoTile) => {
+    if (tile.tipo !== "arquivo" || tile.versaoAtual == null) return;
+    const categoria = tile.key as EntregaAnexoCategoria;
+    const versao = tile.versaoAtual;
+    const anterior = agruparAnexos(entrega.anexos).find((g) => g.categoria === categoria)
+      ?.anteriores[0]?.versao;
+    const rotulo = ARQUIVO_CATEGORIA_LABEL[categoria];
+    const yes = await confirmAction(
+      anterior != null
+        ? `Remover a V${versao} de ${rotulo}? A V${anterior} volta a ser a versão atual.`
+        : `Remover a V${versao} de ${rotulo}? Não há versão anterior — o material fica vazio.`,
+      { title: `Remover a V${versao}?`, confirmLabel: "Remover", destructive: true },
+    );
+    if (!yes) return;
+    const atual = entregaRef.current;
+    onChangeRef.current(
+      { anexos: removerVersao(atual.anexos ?? [], categoria, versao) },
+      entregaLog.versaoRemovida(categoria, versao, entregaNome(atual)),
+    );
+  };
+  const removerArquivo = async (a: EntregaAnexo) => {
+    const yes = await confirmAction(`Remover "${a.nome}"?`, {
+      title: "Remover arquivo?",
+      confirmLabel: "Remover",
+      destructive: true,
+    });
+    if (!yes) return;
+    const atual = entregaRef.current;
+    onChangeRef.current(
+      { anexos: (atual.anexos ?? []).filter((x) => x.id !== a.id) },
+      entregaLog.arquivoRemovido(a.nome, entregaNome(atual)),
+    );
+  };
+
+  // Legenda: texto interno da entrega, editado no popover do quadrado.
+  const salvarLegenda = async (texto: string | null) => {
+    onChange({ legenda: texto ?? undefined }, entregaLog.legenda(!!texto, nome));
+    return true;
+  };
+  const copiarLegenda = () =>
+    void navigator.clipboard.writeText(entrega.legenda ?? "").then(
+      () => toast.success("Legenda copiada."),
+      () => toast.error("Não foi possível copiar."),
+    );
+  const removerLegenda = async () => {
+    const yes = await confirmAction("Remover a legenda desta entrega?", {
+      title: "Remover legenda?",
+      confirmLabel: "Remover",
+      destructive: true,
+    });
+    if (yes) onChange({ legenda: undefined }, entregaLog.legenda(false, nome));
+  };
+
+  const alterarPrazo = (campo: PrazoCampo, valor: string | undefined) =>
+    onChange({ [campo]: valor }, entregaLog.prazo(PRAZO_LABEL[campo], valor, nome));
+
+  const salvarPublicacao = (url: string, metrics: PostMetrics | undefined) => {
+    if (url === (entrega.url ?? "") && JSON.stringify(metrics) === JSON.stringify(entrega.metrics))
+      return;
+    onChange({ url, metrics }, entregaLog.publicacao(nome));
+  };
 
   // Abre o arquivo que o cliente está analisando (a versão mais recente da categoria).
   const abrirEmAnalise = () => {
-    const grupo = agruparAnexos(entrega.anexos).find((g) => g.categoria === focus?.openCategoria);
+    const grupo = agruparAnexos(entrega.anexos).find((g) => g.categoria === focus.openCategoria);
     const url = grupo?.atual.anexos[0]?.url;
     if (url) window.open(url, "_blank", "noopener,noreferrer");
   };
 
-  const link = linkDoPost(entrega.url);
-  const canal = legendaCanal(influRede?.plataforma);
   const contexto = influRede
     ? [influRede.handle ? `@${influRede.handle}` : null, influRede.plataforma]
         .filter(Boolean)
@@ -2609,14 +2743,21 @@ function EntregaDetailBody({
           if (files.length > 0) void handleArquivosFiles(files);
         }}
       />
+      <input
+        ref={substituirInputRef}
+        type="file"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (substituirInputRef.current) substituirInputRef.current.value = "";
+          if (file) void handleSubstituirFile(file);
+        }}
+      />
 
       <EntregaHeader
-        tipo={entrega.tipo}
-        titulo={entrega.titulo}
+        titulo={nome}
         unidades={entregaUnidadesLabel(entrega)}
         grupo={!!entrega.grupoId}
-        statusLabel={entregaStatusLabel(entrega)}
-        tone={entregaTone(entrega)}
         influNome={influNome}
         influFoto={influFoto}
         influContexto={contexto}
@@ -2637,8 +2778,10 @@ function EntregaDetailBody({
           <EntregaMenu
             colunaAtual={entregaFaseColuna(stage)}
             grupo={!!entrega.grupoId}
+            publicada={publicada}
             podeSepararArquivos={!entrega.grupoId && !!splitEntregaExistente(entrega)}
             onEditar={() => setEditando(true)}
+            onEditarPublicacao={() => setPublicacaoAberta(true)}
             onMover={onSetStage}
             onSplitUnidade={onSplitUnidade}
             onSplitExistente={onSplitExistente}
@@ -2647,19 +2790,7 @@ function EntregaDetailBody({
         }
       />
 
-      <div className="space-y-4 px-5 py-4">
-        {focus && (
-          <EntregaActionSurface
-            focus={focus}
-            busy={uploading}
-            error={uploadError}
-            onPrimary={() => void handlePrimary()}
-            onOpenArquivo={focus.openCategoria ? abrirEmAnalise : undefined}
-          />
-        )}
-
-        {feedback && <FeedbackNote f={feedback} expandable />}
-
+      <div className="space-y-3.5 px-4 py-3 sm:px-5">
         <EntregaStepper
           steps={stepper.steps}
           tone={stepper.tone}
@@ -2671,69 +2802,138 @@ function EntregaDetailBody({
           }}
           editing={editandoPrazos}
           onToggleEdit={() => setEditandoPrazos((v) => !v)}
-          onChangeData={(campo, valor) => onChange({ [campo]: valor })}
+          onChangeData={alterarPrazo}
         />
 
-        {publicada && (
-          <EntregaPublicacao
-            publicadoEm={entrega.publicadoEm}
-            link={link}
-            urlTexto={link ? undefined : entrega.url}
-            metricas={metricasResumo(entrega.metrics)}
-            editing={editandoPublicacao}
-            onToggleEdit={() => setEditandoPublicacao((v) => !v)}
-            editor={
-              <div className="space-y-2">
-                <AutoSaveInput
-                  key={entrega.id}
-                  value={entrega.url ?? ""}
-                  onSave={(v) => onChange({ url: v })}
-                  placeholder="Link do conteúdo publicado"
-                />
-                <MetricsEditor value={entrega.metrics} onChange={(m) => onChange({ metrics: m })} />
-              </div>
-            }
-          />
-        )}
+        <EntregaProximaAcao
+          focus={focus}
+          busy={uploading}
+          error={uploadError}
+          onPrimary={handlePrimary}
+          onSecondary={() => void handleSecondary()}
+          onOpenArquivo={focus.openCategoria ? abrirEmAnalise : undefined}
+        />
 
         <EntregaArquivos
           anexos={entrega.anexos}
-          esperada={categoriaEsperada(entrega)}
+          legenda={entrega.legenda}
+          canal={legendaCanal(influRede?.plataforma)}
           ajusteCategoria={ajuste && ajuste.phase !== "reenviado" ? ajuste.categoria : undefined}
           enviando={enviandoCategoria}
           error={arquivosError}
           onPick={pickArquivo}
-          onRemove={removerArquivo}
-          sectionRef={arquivosRef}
+          onNovaVersao={pickArquivo}
+          onSubstituir={pickSubstituir}
+          onRemoverVersao={(tile) => void removerVersaoAtual(tile)}
+          onRemoverArquivo={(a) => void removerArquivo(a)}
+          onSalvarLegenda={salvarLegenda}
+          onCopiarLegenda={copiarLegenda}
+          onRemoverLegenda={() => void removerLegenda()}
         />
 
-        <EditorialCaption
-          key={entrega.id}
-          value={entrega.legenda ?? null}
-          canal={canal}
-          saving={false}
-          rows={4}
-          quiet
-          emptyText="Nenhuma legenda adicionada."
-          onSave={async (text) => {
-            onChange(
-              { legenda: text ?? undefined },
-              `${text ? "atualizou a legenda" : "removeu a legenda"} — "${entregaNome(entrega)}"`,
-            );
-            return true;
-          }}
+        <EntregaHistorico
+          eventos={eventos}
+          showAll={verTodoHistorico}
+          onToggleAll={() => setVerTodoHistorico((v) => !v)}
+          feedbackAberto={feedbackAberto}
+          onToggleFeedback={(id) => setFeedbackAberto((atual) => (atual === id ? null : id))}
+          sectionRef={historicoRef}
         />
-
-        <div className="border-t border-border/60 pt-4">
-          <EntregaHistorico
-            items={historico}
-            showAll={verTodoHistorico}
-            onToggleAll={() => setVerTodoHistorico((v) => !v)}
-          />
-        </div>
       </div>
+
+      <PublicacaoDialog
+        open={publicacaoAberta}
+        onOpenChange={setPublicacaoAberta}
+        url={entrega.url}
+        metrics={entrega.metrics}
+        onSave={salvarPublicacao}
+      />
       {entregaConfirmDialog}
     </>
+  );
+}
+
+/** Link do post e métricas: um modal pequeno, com rascunho e UM "Salvar" (uma só linha no histórico). */
+function PublicacaoDialog({
+  open,
+  onOpenChange,
+  url,
+  metrics,
+  onSave,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  url?: string;
+  metrics?: PostMetrics;
+  onSave: (url: string, metrics: PostMetrics | undefined) => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <PublicacaoForm
+          url={url}
+          metrics={metrics}
+          onCancel={() => onOpenChange(false)}
+          onSave={(u, m) => {
+            onSave(u, m);
+            onOpenChange(false);
+          }}
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PublicacaoForm({
+  url,
+  metrics,
+  onCancel,
+  onSave,
+}: {
+  url?: string;
+  metrics?: PostMetrics;
+  onCancel: () => void;
+  onSave: (url: string, metrics: PostMetrics | undefined) => void;
+}) {
+  const [draftUrl, setDraftUrl] = useState(url ?? "");
+  const [draftMetrics, setDraftMetrics] = useState<PostMetrics | undefined>(metrics);
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSave(draftUrl.trim(), draftMetrics);
+      }}
+      className="space-y-4"
+    >
+      <div className="space-y-1">
+        <DialogTitle className="text-base font-semibold">Link do post e métricas</DialogTitle>
+        <DialogDescription className="text-sm text-text-secondary">
+          Aparecem na entrega publicada.
+        </DialogDescription>
+      </div>
+      <label className="block space-y-1">
+        <span className="text-xs font-medium text-text-secondary">Link do post</span>
+        <input
+          autoFocus
+          value={draftUrl}
+          onChange={(e) => setDraftUrl(e.target.value)}
+          placeholder="https://www.instagram.com/reel/…"
+          className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+        />
+      </label>
+      <div className="space-y-1">
+        <span className="text-xs font-medium text-text-secondary">Métricas</span>
+        <MetricsEditor value={draftMetrics} onChange={setDraftMetrics} />
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+          Cancelar
+        </Button>
+        <Button type="submit" size="sm">
+          Salvar
+        </Button>
+      </div>
+    </form>
   );
 }
 
@@ -2780,7 +2980,7 @@ function EntregaDetailSheet({
       >
         <SheetTitle className="sr-only">Entrega · {label}</SheetTitle>
         <SheetDescription className="sr-only">
-          Próxima ação, progresso, prazos, arquivos, legenda e histórico desta entrega.
+          Progresso, próxima ação, arquivos e histórico desta entrega.
         </SheetDescription>
         <div className="flex-1 overflow-y-auto">
           <EntregaDetailBody
@@ -5389,41 +5589,6 @@ function InfluenciadorDialog({
         </div>
       </DialogContent>
     </Dialog>
-  );
-}
-
-/** Input de linha única com o mesmo padrão da AutoSaveTextarea abaixo —
- * estado local, salva só ao sair do campo. Sem isso, cada tecla digitada
- * (ex: colando/editando um link) disparava um upsert próprio no Supabase;
- * várias escritas concorrentes para o mesmo campo podiam se atropelar e
- * fazer a edição "não salvar" (o toast de erro aparecia, ou uma escrita
- * mais rápida sobrescrevia uma mais lenta com um valor antigo). */
-function AutoSaveInput({
-  value,
-  onSave,
-  placeholder,
-  className,
-}: {
-  value: string;
-  onSave: (v: string) => void;
-  placeholder?: string;
-  className?: string;
-}) {
-  const [draft, setDraft] = useState(value);
-  useEffect(() => setDraft(value), [value]);
-  return (
-    <input
-      value={draft}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => {
-        if (draft !== value) onSave(draft);
-      }}
-      placeholder={placeholder}
-      className={
-        className ??
-        "w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-ring"
-      }
-    />
   );
 }
 

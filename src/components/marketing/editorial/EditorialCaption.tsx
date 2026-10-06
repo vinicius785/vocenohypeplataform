@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Copy } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ export function EditorialCaption({
   rows = 8,
   emptyText = "Nenhuma legenda ainda.",
   quiet = false,
+  defaultEditing = false,
 }: {
   value: string | null;
   canal: EditorialChannel;
@@ -30,12 +31,19 @@ export function EditorialCaption({
   emptyText?: string;
   /** Versão discreta para painéis densos: ações como texto e, sem legenda, tudo numa linha só. */
   quiet?: boolean;
+  /** Já abre no campo de edição (ex.: dentro de um popover aberto só para escrever a legenda). */
+  defaultEditing?: boolean;
 }) {
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(defaultEditing);
   const [draft, setDraft] = useState(value ?? "");
   const limit = captionLimit(canal);
 
+  // Só reage a uma MUDANÇA de `value` (salvou, ou veio de fora) — na montagem não mexe, para o
+  // `defaultEditing` valer.
+  const lastValue = useRef(value);
   useEffect(() => {
+    if (lastValue.current === value) return;
+    lastValue.current = value;
     setDraft(value ?? "");
     setEditing(false);
   }, [value]);

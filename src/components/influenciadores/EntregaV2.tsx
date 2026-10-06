@@ -1,18 +1,18 @@
 import { useState, type ReactNode, type Ref } from "react";
 import {
+  AlignLeft,
   ArrowLeft,
-  ExternalLink,
+  Check,
+  Clapperboard,
   FileText,
-  Film,
   Loader2,
   MoreVertical,
   Paperclip,
   Pencil,
   Plus,
-  RefreshCw,
   Trash2,
-  Upload,
   User,
+  Video,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -27,30 +27,32 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
+import { EditorialCaption } from "@/components/marketing/editorial/EditorialCaption";
 import { overdueLabel } from "@/components/tasks/task-ui";
 import { formatActivityWhen } from "@/lib/activity-time";
+import { feedbackExcerpt } from "@/lib/entrega-ajustes";
 import {
-  ARQUIVO_CATEGORIAS_ORDEM,
   ARQUIVO_CATEGORIA_LABEL,
-  ARQUIVO_TIPO_LABEL,
   ENTREGA_FASE_COLUNAS,
   ENTREGA_FASE_COLUNA_LABEL,
+  PRAZO_CAMPOS,
   agruparAnexos,
   arquivoTipo,
   formatDiaMes,
-  historicoTexto,
+  tilesDaEntrega,
   type ArquivoGrupo,
+  type ArquivoTile,
+  type ArquivoTileKey,
   type EntregaFaseColuna,
   type EntregaFocus,
+  type PrazoCampo,
   type StepperStep,
 } from "@/lib/entrega-detail";
-import type {
-  Entrega,
-  EntregaAnexo,
-  EntregaAnexoCategoria,
-  InfluActivity,
-} from "@/lib/influencer-model";
+import { HISTORICO_ETAPA_LABEL, type HistoricoEvento } from "@/lib/entrega-historico";
+import type { Entrega, EntregaAnexo, EntregaAnexoCategoria } from "@/lib/influencer-model";
 import type { EntregaTone } from "@/lib/influencer-next-action";
+import type { EditorialChannel } from "@/lib/marketing-editorial";
 import { cn } from "@/lib/utils";
 import { CockpitTitle, QuietButton } from "./InfluencerCockpit";
 import { ENTREGA_TONE_DOT } from "./entrega-tone";
@@ -58,22 +60,26 @@ import { ENTREGA_TONE_DOT } from "./entrega-tone";
 /**
  * Peças de apresentação do detalhe da ENTREGA (V2). Só layout: a máquina de estados, o motor de
  * ações, o ciclo de ajustes e a persistência continuam onde sempre estiveram (ver
- * `lib/entrega-detail.ts` para o que mostrar e `EntregaDetailBody` no board para o que fazer).
- * Linguagem: títulos em caixa-alta pequena (`CockpitTitle`), cor só como sinal de estado, poucas
- * bordas, uma superfície só (a próxima ação) e listas simples para o resto.
+ * `lib/entrega-detail.ts` e `lib/entrega-historico.ts` para o que mostrar e `EntregaDetailBody` no
+ * board para o que fazer).
+ *
+ * Cinco blocos, nesta ordem: cabeçalho, progresso, próxima ação, arquivos e histórico. Cor só como
+ * sinal de estado; o feedback do cliente vive DENTRO do histórico (não há seção própria).
  */
 
+const abrirUrl = (url: string) => window.open(url, "_blank", "noopener,noreferrer");
+
+const ICONE_BOTAO =
+  "flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-text-secondary hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand";
+
 /* ============================================================
- * Cabeçalho: voltar + entrega (título) + status + influenciador + Editar / ⋮
+ * Cabeçalho: [←] [foto] influenciador / entrega · unidades / @handle · rede   Editar ⋮ ×
  * ============================================================ */
 
 export function EntregaHeader({
-  tipo,
   titulo,
   unidades,
   grupo,
-  statusLabel,
-  tone,
   influNome,
   influFoto,
   influContexto,
@@ -84,13 +90,12 @@ export function EntregaHeader({
   menu,
   editor,
 }: {
-  tipo: string;
-  titulo?: string;
+  /** Nome da entrega ("Reels", "Reels · Verão"). */
+  titulo: string;
+  /** "1 unidade" — secundário, nunca o título. */
   unidades: string | null;
   /** Unidade independente de um grupo (aprovada separadamente das demais). */
   grupo: boolean;
-  statusLabel: string;
-  tone: EntregaTone;
   influNome?: string;
   influFoto?: string;
   /** "@handle · Instagram". */
@@ -104,22 +109,23 @@ export function EntregaHeader({
   menu: ReactNode;
   editor?: ReactNode;
 }) {
+  const aviso = grupo ? "Unidade independente — aprovada separadamente das demais." : undefined;
   return (
-    <header className="sticky top-0 z-10 border-b border-border bg-background px-5 py-3">
-      <div className="flex items-start gap-2.5">
+    <header className="sticky top-0 z-10 border-b border-border bg-background px-4 py-2.5 sm:px-5">
+      <div className="flex items-center gap-2.5">
         {onBack && (
           <button
             type="button"
             onClick={onBack}
             aria-label="Voltar ao influenciador"
             title="Voltar ao influenciador"
-            className="-ml-1.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-text-secondary hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            className={cn(ICONE_BOTAO, "-ml-1.5")}
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
         )}
         {influNome !== undefined && (
-          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
             {influFoto ? (
               <img src={influFoto} alt="" className="h-full w-full object-cover" />
             ) : (
@@ -128,29 +134,29 @@ export function EntregaHeader({
           </span>
         )}
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
+          {influNome ? (
+            <>
+              <h2 className="truncate text-base font-semibold leading-tight tracking-tight text-foreground">
+                {influNome}
+              </h2>
+              <p className="truncate text-sm leading-tight text-foreground" title={aviso}>
+                <span className="font-medium">{titulo || "Sem tipo"}</span>
+                {unidades && <span className="text-text-secondary"> · {unidades}</span>}
+              </p>
+              {influContexto && (
+                <p className="truncate text-xs leading-tight text-text-secondary">
+                  {influContexto}
+                </p>
+              )}
+            </>
+          ) : (
             <h2
-              className="min-w-0 truncate text-lg font-semibold leading-tight tracking-tight text-foreground"
-              title={
-                grupo ? "Unidade independente — aprovada separadamente das demais." : undefined
-              }
+              className="truncate text-base font-semibold leading-tight tracking-tight text-foreground"
+              title={aviso}
             >
-              {tipo || "Sem tipo"}
-              {titulo && <span className="font-normal text-text-secondary"> · {titulo}</span>}
+              {titulo || "Sem tipo"}
               {unidades && <span className="font-normal text-text-secondary"> · {unidades}</span>}
             </h2>
-            <span className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-foreground">
-              <span
-                aria-hidden
-                className={cn("h-1.5 w-1.5 shrink-0 rounded-full", ENTREGA_TONE_DOT[tone])}
-              />
-              {statusLabel}
-            </span>
-          </div>
-          {(influNome || influContexto) && (
-            <p className="mt-0.5 truncate text-xs text-text-secondary">
-              {[influNome, influContexto].filter(Boolean).join(" · ")}
-            </p>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
@@ -165,18 +171,13 @@ export function EntregaHeader({
           </button>
           {menu}
           {onClose && (
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Fechar"
-              className="flex h-8 w-8 items-center justify-center rounded-md text-text-secondary hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-            >
+            <button type="button" onClick={onClose} aria-label="Fechar" className={ICONE_BOTAO}>
               <X className="h-4 w-4" />
             </button>
           )}
         </div>
       </div>
-      {editing && editor && <div className="mt-3">{editor}</div>}
+      {editing && editor && <div className="mt-2.5">{editor}</div>}
     </header>
   );
 }
@@ -243,8 +244,10 @@ export function EntregaEditorInline({
 export function EntregaMenu({
   colunaAtual,
   grupo,
+  publicada,
   podeSepararArquivos,
   onEditar,
+  onEditarPublicacao,
   onMover,
   onSplitUnidade,
   onSplitExistente,
@@ -252,9 +255,11 @@ export function EntregaMenu({
 }: {
   colunaAtual: EntregaFaseColuna;
   grupo: boolean;
+  publicada: boolean;
   /** Há arquivos irmãos já enviados que podem virar uma unidade cada. */
   podeSepararArquivos: boolean;
   onEditar: () => void;
+  onEditarPublicacao: () => void;
   onMover: (coluna: EntregaFaseColuna) => void;
   onSplitUnidade: (delta: 1 | -1) => void;
   onSplitExistente: () => void;
@@ -263,11 +268,7 @@ export function EntregaMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          aria-label="Mais ações da entrega"
-          className="flex h-8 w-8 items-center justify-center rounded-md text-text-secondary hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-        >
+        <button type="button" aria-label="Mais ações da entrega" className={ICONE_BOTAO}>
           <MoreVertical className="h-4 w-4" />
         </button>
       </DropdownMenuTrigger>
@@ -275,6 +276,9 @@ export function EntregaMenu({
         <DropdownMenuItem className="sm:hidden" onSelect={onEditar}>
           <Pencil className="h-3.5 w-3.5" /> Editar entrega
         </DropdownMenuItem>
+        {publicada && (
+          <DropdownMenuItem onSelect={onEditarPublicacao}>Link do post e métricas</DropdownMenuItem>
+        )}
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>Mover para</DropdownMenuSubTrigger>
           <DropdownMenuSubContent>
@@ -315,54 +319,7 @@ export function EntregaMenu({
 }
 
 /* ============================================================
- * Próxima ação — a única superfície destacada; uma ação principal
- * ============================================================ */
-
-export function EntregaActionSurface({
-  focus,
-  busy,
-  error,
-  onPrimary,
-  onOpenArquivo,
-}: {
-  focus: EntregaFocus;
-  busy: boolean;
-  error?: string;
-  onPrimary: () => void;
-  /** Abre o arquivo que o cliente está analisando (estados de espera). */
-  onOpenArquivo?: () => void;
-}) {
-  const p = focus.primary;
-  const abrir = focus.openCategoria === "Conteúdo final" ? "conteúdo" : "roteiro";
-  return (
-    <section
-      aria-label="Próxima ação"
-      className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm"
-    >
-      <CockpitTitle>Próxima ação</CockpitTitle>
-      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5">
-        <div className="min-w-0 flex-1 basis-56">
-          <p className="text-base font-semibold leading-tight text-foreground">{focus.title}</p>
-          {focus.hint && <p className="mt-0.5 text-sm text-text-secondary">{focus.hint}</p>}
-          {focus.note && (
-            <p className="mt-0.5 text-xs text-warning-soft-foreground">{focus.note}</p>
-          )}
-        </div>
-        {p ? (
-          <Button onClick={onPrimary} disabled={busy} className="rounded-lg font-semibold">
-            {busy ? "Enviando..." : p.label}
-          </Button>
-        ) : (
-          onOpenArquivo && <QuietButton onClick={onOpenArquivo}>Abrir {abrir} →</QuietButton>
-        )}
-      </div>
-      {error && <p className="mt-1.5 text-xs text-destructive">{error}</p>}
-    </section>
-  );
-}
-
-/* ============================================================
- * Progresso + prazos (um bloco só: as datas ficam sob cada etapa)
+ * Progresso (fino) + prazos sob cada etapa
  * ============================================================ */
 
 function StepDot({ step, tone }: { step: StepperStep; tone: EntregaTone }) {
@@ -392,13 +349,6 @@ function StepDot({ step, tone }: { step: StepperStep; tone: EntregaTone }) {
   );
 }
 
-const PRAZO_CAMPOS = [
-  ["dataRecebimentoRoteiro", "Roteiro"],
-  ["dataRecebimentoConteudo", "Conteúdo"],
-  ["dataPostagem", "Publicação"],
-] as const;
-export type PrazoCampo = (typeof PRAZO_CAMPOS)[number][0];
-
 export function EntregaStepper({
   steps,
   tone,
@@ -418,7 +368,7 @@ export function EntregaStepper({
   onChangeData: (campo: PrazoCampo, valor: string | undefined) => void;
 }) {
   return (
-    <section aria-label="Progresso" className="space-y-2.5">
+    <section aria-label="Progresso" className="space-y-1.5">
       <CockpitTitle
         action={
           <QuietButton onClick={onToggleEdit}>{editing ? "Concluir" : "Editar prazos"}</QuietButton>
@@ -449,15 +399,17 @@ export function EntregaStepper({
               </div>
               <p
                 className={cn(
-                  "mt-1.5 truncate text-[11px] font-medium uppercase tracking-wide",
-                  s.state === "current" ? "text-foreground" : "text-text-secondary",
+                  "mt-1 truncate text-xs",
+                  s.state === "current"
+                    ? "font-semibold text-foreground"
+                    : "font-medium text-text-secondary",
                 )}
               >
                 {s.label}
               </p>
               <p
                 className={cn(
-                  "truncate text-xs tabular-nums",
+                  "truncate text-[11px] tabular-nums",
                   atrasada ? "font-medium text-red-700 dark:text-red-400" : "text-text-secondary",
                 )}
               >
@@ -473,7 +425,7 @@ export function EntregaStepper({
         })}
       </ol>
       {editing && (
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-3">
           {PRAZO_CAMPOS.map(([campo, label]) => (
             <label key={campo} className="flex min-w-0 flex-col gap-1">
               <span className="truncate text-[11px] font-medium text-text-secondary">{label}</span>
@@ -491,257 +443,285 @@ export function EntregaStepper({
 }
 
 /* ============================================================
- * Arquivos — por categoria, versão atual aberta, anteriores recolhidas
+ * Próxima ação — a única superfície destacada; uma ação principal
  * ============================================================ */
 
-const CATEGORIA_ICON: Record<EntregaAnexoCategoria, typeof FileText> = {
+export function EntregaProximaAcao({
+  focus,
+  busy,
+  error,
+  onPrimary,
+  onSecondary,
+  onOpenArquivo,
+}: {
+  focus: EntregaFocus;
+  busy: boolean;
+  error?: string;
+  onPrimary: () => void;
+  onSecondary: () => void;
+  /** Abre o arquivo que o cliente está analisando (estados de espera). */
+  onOpenArquivo?: () => void;
+}) {
+  const p = focus.primary;
+  const abrir = focus.openCategoria === "Conteúdo final" ? "conteúdo" : "roteiro";
+  return (
+    <section
+      aria-label={focus.rotulo}
+      className="rounded-lg border border-border bg-card px-3.5 py-2.5"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <div className="min-w-0 flex-1 basis-52">
+          <div className="flex items-center gap-1.5">
+            <span
+              aria-hidden
+              className={cn("h-1.5 w-1.5 shrink-0 rounded-full", ENTREGA_TONE_DOT[focus.tone])}
+            />
+            <h3 className="text-[11px] font-semibold uppercase leading-4 tracking-wide text-text-secondary">
+              {focus.rotulo}
+            </h3>
+          </div>
+          <p className="mt-0.5 text-sm font-semibold leading-snug text-foreground">{focus.title}</p>
+          {focus.hint && (
+            <p className="mt-0.5 text-xs leading-snug text-text-secondary">{focus.hint}</p>
+          )}
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1">
+          {focus.secondary && (
+            <QuietButton onClick={onSecondary}>{focus.secondary.label}</QuietButton>
+          )}
+          {p?.kind === "post" ? (
+            <Button asChild size="sm" variant="outline">
+              <a href={p.url} target="_blank" rel="noreferrer">
+                {p.label}
+              </a>
+            </Button>
+          ) : p ? (
+            <Button
+              size="sm"
+              variant={p.kind === "publicacao" ? "outline" : "default"}
+              onClick={onPrimary}
+              isLoading={busy}
+            >
+              {p.label}
+            </Button>
+          ) : (
+            onOpenArquivo && <QuietButton onClick={onOpenArquivo}>Abrir {abrir} →</QuietButton>
+          )}
+        </div>
+      </div>
+      {error && <p className="mt-1.5 text-xs text-destructive">{error}</p>}
+    </section>
+  );
+}
+
+/* ============================================================
+ * Arquivos — pequenos quadrados lado a lado (Roteiro, Gravação, Conteúdo final, Legenda)
+ * ============================================================ */
+
+const TILE_ICON: Record<ArquivoTileKey, typeof FileText> = {
   Roteiro: FileText,
-  "Conteúdo final": Upload,
-  Gravação: Film,
+  Gravação: Video,
+  "Conteúdo final": Clapperboard,
+  Legenda: AlignLeft,
   Outro: Paperclip,
 };
-const CATEGORIA_VAZIO: Partial<Record<EntregaAnexoCategoria, string>> = {
-  Roteiro: "roteiro",
-  "Conteúdo final": "conteúdo final",
-};
 
-function FileThumb({ nome, url }: { nome: string; url: string }) {
-  const tipo = arquivoTipo(nome);
-  if (tipo === "imagem") {
+/** Ordem do menu "+ Adicionar" (todas as categorias, inclusive "Outros arquivos"). */
+const ADICIONAR_ORDEM: EntregaAnexoCategoria[] = ["Roteiro", "Gravação", "Conteúdo final", "Outro"];
+
+function TileGlyph({ tile, enviando }: { tile: ArquivoTile; enviando: boolean }) {
+  const Icon = TILE_ICON[tile.key];
+  const primeiro = tile.atual[0];
+  if (enviando) {
+    return <Loader2 className="h-5 w-5 animate-spin text-text-secondary" aria-label="Enviando" />;
+  }
+  if (primeiro && arquivoTipo(primeiro.nome) === "imagem") {
     return (
       <img
-        src={url}
+        src={primeiro.url}
         alt=""
-        className="h-8 w-8 shrink-0 rounded-md object-cover ring-1 ring-border"
+        className="h-7 w-7 shrink-0 rounded object-cover ring-1 ring-border"
       />
     );
   }
-  const Icon = tipo === "video" ? Film : tipo === "outro" ? Paperclip : FileText;
+  return <Icon className="h-5 w-5 text-text-secondary" strokeWidth={1.5} />;
+}
+
+/** Linha de estado do quadrado: curta no celular ("3 arq. · V1"), completa a partir de `sm`. */
+function TileEstado({ tile, enviando }: { tile: ArquivoTile; enviando: boolean }) {
+  if (enviando) return <>Enviando…</>;
+  if (tile.estado === tile.estadoCurto) return <>{tile.estado}</>;
   return (
-    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-muted text-text-secondary">
-      <Icon className="h-4 w-4" />
+    <>
+      <span className="sm:hidden">{tile.estadoCurto}</span>
+      <span className="hidden sm:inline">{tile.estado}</span>
+    </>
+  );
+}
+
+/** Ponto laranja: o cliente pediu ajuste neste material. */
+function TileAtencao() {
+  return (
+    <span
+      aria-hidden
+      title="Ajuste pedido pelo cliente"
+      className="h-1.5 w-1.5 shrink-0 rounded-full bg-orange-500"
+    />
+  );
+}
+
+/** Nome do material: até duas linhas (no celular "Conteúdo final" não cabe numa). */
+function TileLabel({ tile, className }: { tile: ArquivoTile; className?: string }) {
+  return (
+    <span
+      className={cn(
+        "line-clamp-2 max-w-full break-words text-xs font-medium leading-tight text-foreground",
+        className,
+      )}
+    >
+      {tile.label}
     </span>
   );
 }
 
-function FileRow({
-  anexo,
-  versao,
-  mostrarVersao,
-  onReplace,
-  onRemove,
-}: {
-  anexo: EntregaAnexo;
-  versao: number;
-  mostrarVersao: boolean;
-  onReplace?: () => void;
-  onRemove: () => void;
-}) {
-  const meta = [
-    ARQUIVO_TIPO_LABEL[arquivoTipo(anexo.nome)],
-    mostrarVersao ? `v${versao}` : null,
-    anexo.criadoEm ? formatDiaMes(anexo.criadoEm) : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-  const acao =
-    "rounded px-1.5 py-1 text-xs font-medium text-text-secondary hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand";
-  const icone =
-    "flex h-8 w-8 items-center justify-center rounded text-text-secondary hover:bg-muted hover:text-foreground";
-  return (
-    <li className="flex items-center gap-3 py-1.5">
-      <FileThumb nome={anexo.nome} url={anexo.url} />
-      <div className="min-w-0 flex-1">
-        <a
-          href={anexo.url}
-          target="_blank"
-          rel="noreferrer"
-          title={anexo.nome}
-          className="block truncate text-sm font-medium text-foreground hover:underline"
-        >
-          {anexo.nome}
-        </a>
-        <p className="truncate text-xs text-text-secondary">{meta}</p>
-      </div>
-      <div className="flex shrink-0 items-center">
-        <a
-          href={anexo.url}
-          target="_blank"
-          rel="noreferrer"
-          className={cn(acao, "hidden sm:inline-flex")}
-        >
-          Abrir
-        </a>
-        {onReplace && (
-          <button
-            type="button"
-            onClick={onReplace}
-            title="Envia uma nova versão (a anterior continua em versões anteriores)"
-            className={cn(acao, "hidden sm:inline-flex")}
-          >
-            Substituir
-          </button>
-        )}
-        <a
-          href={anexo.url}
-          target="_blank"
-          rel="noreferrer"
-          aria-label={`Abrir ${anexo.nome}`}
-          className={cn(icone, "sm:hidden")}
-        >
-          <ExternalLink className="h-4 w-4" />
-        </a>
-        {onReplace && (
-          <button
-            type="button"
-            onClick={onReplace}
-            aria-label={`Substituir ${anexo.nome}`}
-            className={cn(icone, "sm:hidden")}
-          >
-            <RefreshCw className="h-4 w-4" />
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={onRemove}
-          aria-label={`Remover ${anexo.nome}`}
-          className="flex h-8 w-8 items-center justify-center rounded text-text-secondary hover:bg-muted hover:text-destructive sm:h-7 sm:w-7"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      </div>
-    </li>
-  );
-}
-
-function ArquivoGrupoView({
-  categoria,
+function VersoesLista({
+  titulo,
   grupo,
-  ajuste,
-  enviando,
-  onPick,
-  onRemove,
+  onRemoverArquivo,
 }: {
-  categoria: EntregaAnexoCategoria;
-  grupo: ArquivoGrupo | undefined;
-  /** Esta categoria é a do ajuste pedido pelo cliente. */
-  ajuste: boolean;
-  enviando: boolean;
-  onPick: (c: EntregaAnexoCategoria) => void;
-  onRemove: (a: EntregaAnexo) => void;
+  titulo: string;
+  grupo: ArquivoGrupo;
+  onRemoverArquivo: (a: EntregaAnexo) => void;
 }) {
-  const [verAnteriores, setVerAnteriores] = useState(false);
-  const vazio = CATEGORIA_VAZIO[categoria];
-  const multi = grupo ? grupo.anteriores.length > 0 : false;
+  const versoes = [grupo.atual, ...grupo.anteriores];
   return (
-    <div>
-      <p className="flex items-center gap-1.5 text-xs font-medium text-text-secondary">
-        {ARQUIVO_CATEGORIA_LABEL[categoria]}
-        {ajuste && (
-          <span className="inline-flex items-center gap-1 font-normal">
-            <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-orange-500" />
-            ajuste pedido
-          </span>
-        )}
-        {enviando && <Loader2 className="h-3 w-3 animate-spin" aria-label="Enviando" />}
-      </p>
-      {grupo ? (
-        <>
-          <ul className="divide-y divide-border/40">
-            {grupo.atual.anexos.map((a) => (
-              <FileRow
-                key={a.id}
-                anexo={a}
-                versao={grupo.atual.versao}
-                mostrarVersao={multi}
-                onReplace={() => onPick(categoria)}
-                onRemove={() => onRemove(a)}
-              />
-            ))}
-          </ul>
-          {multi && (
-            <div className="mt-0.5">
-              <QuietButton onClick={() => setVerAnteriores((v) => !v)}>
-                {verAnteriores
-                  ? "Ocultar versões anteriores"
-                  : `${grupo.anteriores.length} ${grupo.anteriores.length === 1 ? "versão anterior" : "versões anteriores"}`}
-              </QuietButton>
-              {verAnteriores && (
-                <ul className="divide-y divide-border/40">
-                  {grupo.anteriores.flatMap((v) =>
-                    v.anexos.map((a) => (
-                      <FileRow
-                        key={a.id}
-                        anexo={a}
-                        versao={v.versao}
-                        mostrarVersao
-                        onRemove={() => onRemove(a)}
-                      />
-                    )),
-                  )}
-                </ul>
-              )}
-            </div>
-          )}
-        </>
-      ) : (
-        <p className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-1.5 text-sm text-text-secondary">
-          <span>Nenhum {vazio ?? "arquivo"} anexado ainda.</span>
-          <QuietButton onClick={() => onPick(categoria)}>
-            Adicionar {vazio ?? "arquivo"}
-          </QuietButton>
-        </p>
-      )}
+    <div className="space-y-2.5">
+      <CockpitTitle>{titulo} · versões</CockpitTitle>
+      <ul className="space-y-2.5">
+        {versoes.map((v, i) => {
+          const data = v.anexos.find((a) => a.criadoEm)?.criadoEm;
+          return (
+            <li key={v.versao}>
+              <p className="flex items-baseline justify-between gap-2 text-xs">
+                <span className={cn("font-semibold", i > 0 && "text-text-secondary")}>
+                  V{v.versao}
+                  {i === 0 && " · atual"}
+                </span>
+                {data && (
+                  <span className="tabular-nums text-text-secondary">{formatDiaMes(data)}</span>
+                )}
+              </p>
+              <ul className="mt-0.5 divide-y divide-border/40">
+                {v.anexos.map((a) => (
+                  <li key={a.id} className="flex items-center gap-2 py-1">
+                    <span
+                      className="min-w-0 flex-1 truncate text-sm text-foreground"
+                      title={a.nome}
+                    >
+                      {a.nome}
+                    </span>
+                    <a
+                      href={a.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="shrink-0 text-xs font-medium text-text-secondary underline-offset-2 hover:text-foreground hover:underline"
+                    >
+                      Abrir
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => onRemoverArquivo(a)}
+                      aria-label={`Remover ${a.nome}`}
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-text-secondary hover:bg-muted hover:text-destructive"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
 
 export function EntregaArquivos({
   anexos,
-  esperada,
+  legenda,
+  canal,
   ajusteCategoria,
   enviando,
   error,
   onPick,
-  onRemove,
-  sectionRef,
+  onNovaVersao,
+  onSubstituir,
+  onRemoverVersao,
+  onRemoverArquivo,
+  onSalvarLegenda,
+  onCopiarLegenda,
+  onRemoverLegenda,
 }: {
   anexos: EntregaAnexo[] | undefined;
-  /** Categoria que a entrega espera agora (mostra o espaço "Adicionar" mesmo vazio). */
-  esperada: EntregaAnexoCategoria | null;
+  legenda: string | undefined;
+  canal: EditorialChannel;
+  /** Material com pedido de ajuste do cliente em aberto. */
   ajusteCategoria?: EntregaAnexoCategoria;
   enviando: EntregaAnexoCategoria | null;
   error?: string;
+  /** Quadrado vazio ou "+ Adicionar": abre o seletor de arquivos desta categoria. */
   onPick: (c: EntregaAnexoCategoria) => void;
-  onRemove: (a: EntregaAnexo) => void;
-  sectionRef?: Ref<HTMLElement>;
+  onNovaVersao: (c: EntregaAnexoCategoria) => void;
+  onSubstituir: (tile: ArquivoTile) => void;
+  onRemoverVersao: (tile: ArquivoTile) => void;
+  onRemoverArquivo: (a: EntregaAnexo) => void;
+  onSalvarLegenda: (texto: string | null) => Promise<boolean>;
+  onCopiarLegenda: () => void;
+  onRemoverLegenda: () => void;
 }) {
+  const [popover, setPopover] = useState<ArquivoTileKey | null>(null);
+  /** O popover da legenda abre direto no campo (legenda vazia ou "Editar" do menu). */
+  const [legendaEmEdicao, setLegendaEmEdicao] = useState(false);
+  const tiles = tilesDaEntrega({ anexos, legenda }, ajusteCategoria);
   const grupos = agruparAnexos(anexos);
-  const visiveis = ARQUIVO_CATEGORIAS_ORDEM.filter(
-    (c) => grupos.some((g) => g.categoria === c) || c === esperada || c === ajusteCategoria,
-  );
+  const ocupado = enviando !== null;
+
+  // Abrir o popover a partir de um item do menu: o menu é não-modal (um menu modal segura o foco
+  // enquanto some e o popover fecharia por "foco fora"), fecha sem devolver o foco ao botão ⋮
+  // (`onCloseAutoFocus`) e o popover abre um tick depois.
+  const abrirPopover = (key: ArquivoTileKey) => window.setTimeout(() => setPopover(key), 0);
+
+  const alternarPopover = (key: ArquivoTileKey) =>
+    setPopover((atual) => (atual === key ? null : key));
+  const clicar = (tile: ArquivoTile) => {
+    if (tile.tipo === "legenda") {
+      setLegendaEmEdicao(false);
+      return alternarPopover("Legenda");
+    }
+    if (tile.vazio) return onPick(tile.key as EntregaAnexoCategoria);
+    if (tile.atual.length === 1) return abrirUrl(tile.atual[0].url);
+    alternarPopover(tile.key);
+  };
+
   return (
-    <section aria-label="Arquivos" ref={sectionRef} className="scroll-mt-16 space-y-2">
+    <section aria-label="Arquivos" className="space-y-1.5">
       <CockpitTitle
         action={
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                disabled={enviando !== null}
+                disabled={ocupado}
                 className="inline-flex items-center gap-1 text-xs font-medium text-text-secondary hover:text-foreground disabled:opacity-60"
               >
-                {enviando ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Plus className="h-3.5 w-3.5" />
-                )}
+                <Plus className="h-3.5 w-3.5" />
                 Adicionar
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {ARQUIVO_CATEGORIAS_ORDEM.map((c) => {
-                const Icon = CATEGORIA_ICON[c];
+              {ADICIONAR_ORDEM.map((c) => {
+                const Icon = TILE_ICON[c];
                 return (
                   <DropdownMenuItem key={c} onSelect={() => onPick(c)}>
                     <Icon className="h-3.5 w-3.5" />
@@ -756,123 +736,302 @@ export function EntregaArquivos({
         Arquivos
       </CockpitTitle>
       {error && <p className="text-xs text-destructive">{error}</p>}
-      {visiveis.length === 0 ? (
-        <p className="text-sm text-text-secondary">Nenhum arquivo anexado.</p>
-      ) : (
-        <div className="space-y-3">
-          {visiveis.map((c) => (
-            <ArquivoGrupoView
-              key={c}
-              categoria={c}
-              grupo={grupos.find((g) => g.categoria === c)}
-              ajuste={c === ajusteCategoria}
-              enviando={enviando === c}
-              onPick={onPick}
-              onRemove={onRemove}
-            />
-          ))}
-        </div>
-      )}
+      <ul className="grid auto-rows-fr grid-cols-4 gap-2">
+        {tiles.map((tile) => {
+          const arquivo = tile.tipo === "arquivo" ? (tile.key as EntregaAnexoCategoria) : null;
+          const multi = tile.atual.length > 1;
+          const unico = tile.atual.length === 1;
+          const grupo = arquivo ? grupos.find((g) => g.categoria === arquivo) : undefined;
+          const estaEnviando = arquivo != null && enviando === arquivo;
+          const aria = [tile.label, tile.estado, tile.atencao ? "ajuste pedido" : null]
+            .filter(Boolean)
+            .join(", ");
+          return (
+            <li key={tile.key} className="relative min-w-0">
+              <Popover
+                open={popover === tile.key}
+                onOpenChange={(o) => setPopover(o ? tile.key : null)}
+              >
+                <PopoverAnchor asChild>
+                  <button
+                    type="button"
+                    data-tile={tile.key}
+                    onClick={() => clicar(tile)}
+                    disabled={estaEnviando}
+                    aria-label={aria}
+                    className={cn(
+                      "flex h-full min-h-[88px] w-full min-w-0 flex-col rounded-lg border p-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
+                      tile.vazio
+                        ? "items-center justify-center border-dashed border-border text-center hover:bg-muted/40"
+                        : "justify-between border-border bg-card hover:bg-muted/40",
+                    )}
+                  >
+                    {tile.vazio ? (
+                      <>
+                        <span className="flex items-center gap-1.5">
+                          <Plus className="h-4 w-4 text-text-secondary" aria-hidden />
+                          {tile.atencao && <TileAtencao />}
+                        </span>
+                        <TileLabel tile={tile} className="mt-1 justify-center" />
+                        <span className="max-w-full truncate text-[11px] text-text-secondary">
+                          <TileEstado tile={tile} enviando={estaEnviando} />
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="flex h-7 items-center gap-1.5">
+                          <TileGlyph tile={tile} enviando={estaEnviando} />
+                          {tile.atencao && <TileAtencao />}
+                        </span>
+                        <span className="block min-w-0">
+                          <TileLabel tile={tile} />
+                          <span className="block truncate text-[11px] text-text-secondary">
+                            <TileEstado tile={tile} enviando={estaEnviando} />
+                          </span>
+                        </span>
+                      </>
+                    )}
+                  </button>
+                </PopoverAnchor>
+
+                {!tile.vazio && (
+                  <DropdownMenu modal={false}>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        aria-label={`Mais ações de ${tile.label}`}
+                        disabled={estaEnviando}
+                        className="absolute right-0.5 top-0.5 flex h-7 w-7 items-center justify-center rounded-md text-text-secondary hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                      >
+                        <MoreVertical className="h-3.5 w-3.5" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="end"
+                      className="w-52 data-[state=closed]:animate-none!"
+                      onCloseAutoFocus={(e) => e.preventDefault()}
+                    >
+                      {tile.tipo === "legenda" ? (
+                        <>
+                          <DropdownMenuItem
+                            onSelect={() => {
+                              setLegendaEmEdicao(true);
+                              abrirPopover("Legenda");
+                            }}
+                          >
+                            Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onSelect={onCopiarLegenda}>Copiar</DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onSelect={onRemoverLegenda}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            Remover
+                          </DropdownMenuItem>
+                        </>
+                      ) : (
+                        <>
+                          {unico && (
+                            <DropdownMenuItem onSelect={() => abrirUrl(tile.atual[0].url)}>
+                              Abrir
+                            </DropdownMenuItem>
+                          )}
+                          {multi && (
+                            <DropdownMenuItem onSelect={() => abrirPopover(tile.key)}>
+                              Ver arquivos
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem onSelect={() => onNovaVersao(arquivo!)}>
+                            Adicionar nova versão
+                          </DropdownMenuItem>
+                          {unico && (
+                            <DropdownMenuItem onSelect={() => onSubstituir(tile)}>
+                              Substituir arquivo
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem onSelect={() => abrirPopover(tile.key)}>
+                            Ver versões
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onSelect={() => onRemoverVersao(tile)}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            Remover
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+
+                <PopoverContent
+                  align="start"
+                  className={cn("p-3", tile.tipo === "legenda" ? "w-80" : "w-72")}
+                  // Clicar no próprio quadrado alterna (fecha) em vez de fechar e reabrir.
+                  onInteractOutside={(e) => {
+                    if ((e.target as HTMLElement | null)?.closest?.(`[data-tile="${tile.key}"]`)) {
+                      e.preventDefault();
+                    }
+                  }}
+                >
+                  {tile.tipo === "legenda" ? (
+                    <EditorialCaption
+                      value={legenda ?? null}
+                      canal={canal}
+                      saving={false}
+                      rows={5}
+                      quiet
+                      defaultEditing={!legenda || legendaEmEdicao}
+                      emptyText="Nenhuma legenda adicionada."
+                      onSave={async (texto) => {
+                        const ok = await onSalvarLegenda(texto);
+                        if (ok) setPopover(null);
+                        return ok;
+                      }}
+                    />
+                  ) : grupo ? (
+                    <VersoesLista
+                      titulo={tile.label}
+                      grupo={grupo}
+                      onRemoverArquivo={(a) => {
+                        setPopover(null);
+                        onRemoverArquivo(a);
+                      }}
+                    />
+                  ) : null}
+                </PopoverContent>
+              </Popover>
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }
 
 /* ============================================================
- * Publicação (só publicada) e Histórico
+ * Histórico — tudo o que aconteceu, inclusive o feedback do cliente (versionado)
  * ============================================================ */
 
-export function EntregaPublicacao({
-  publicadoEm,
-  link,
-  urlTexto,
-  metricas,
-  editing,
-  onToggleEdit,
-  editor,
+function EventoFeedback({
+  evento,
+  expandido,
+  onToggle,
 }: {
-  publicadoEm?: string;
-  /** Link já validado (http/https) ou `null`. */
-  link: string | null;
-  /** Texto salvo em `url` quando não é um link utilizável. */
-  urlTexto?: string;
-  metricas: string[];
-  editing: boolean;
-  onToggleEdit: () => void;
-  editor: ReactNode;
+  evento: HistoricoEvento;
+  expandido: boolean;
+  onToggle: () => void;
 }) {
+  const etapa = evento.etapa ? HISTORICO_ETAPA_LABEL[evento.etapa] : "";
+  const motivo = evento.motivo?.trim() ?? "";
+  const resumo = feedbackExcerpt(motivo, 140);
   return (
-    <section aria-label="Publicação" className="space-y-2">
-      <CockpitTitle
-        action={<QuietButton onClick={onToggleEdit}>{editing ? "Concluir" : "Editar"}</QuietButton>}
-      >
-        Publicação
-      </CockpitTitle>
-      {editing ? (
-        editor
-      ) : (
-        <div className="space-y-1">
-          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-foreground">
-            <span>{publicadoEm ? `Publicada em ${formatDiaMes(publicadoEm)}` : "Publicada"}</span>
-            {link ? (
-              <a
-                href={link}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 text-xs font-medium text-foreground underline underline-offset-2"
-              >
-                Abrir post <ExternalLink className="h-3 w-3" />
-              </a>
-            ) : (
-              <span className="text-text-secondary">{urlTexto || "Sem link do post"}</span>
-            )}
-          </p>
-          <p className="text-sm text-text-secondary">
-            {metricas.length > 0 ? metricas.join(" · ") : "Sem métricas ainda."}
-          </p>
-        </div>
+    <li
+      data-evento-id={evento.id}
+      className={cn(
+        "border-l-2 py-0.5 pl-3",
+        evento.pendente ? "border-orange-500" : "border-border",
       )}
-    </section>
+    >
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground">
+          Feedback V{evento.versao ?? 1}
+          {etapa && ` · ${etapa}`}
+        </p>
+        <span className="shrink-0 text-xs tabular-nums text-text-secondary">
+          {formatActivityWhen(evento.at)}
+        </span>
+      </div>
+      {motivo ? (
+        <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-snug text-foreground">
+          “{expandido ? motivo : resumo.text}”
+        </p>
+      ) : (
+        <p className="mt-1 text-sm text-text-secondary">Sem comentário do cliente.</p>
+      )}
+      <div className="mt-1 flex items-center justify-between gap-3">
+        <span className="min-w-0 truncate text-xs text-text-secondary">
+          {evento.autor}
+          {evento.pendente && " · pendente"}
+        </span>
+        {(resumo.truncated || expandido) && (
+          <QuietButton onClick={onToggle}>
+            {expandido ? "Ocultar feedback" : "Ver feedback completo →"}
+          </QuietButton>
+        )}
+      </div>
+    </li>
   );
 }
 
 export function EntregaHistorico({
-  items,
+  eventos,
   showAll,
   onToggleAll,
+  feedbackAberto,
+  onToggleFeedback,
   limit = 3,
+  sectionRef,
 }: {
-  items: InfluActivity[];
+  eventos: HistoricoEvento[];
   showAll: boolean;
   onToggleAll: () => void;
+  /** Id do feedback exibido por inteiro. */
+  feedbackAberto: string | null;
+  onToggleFeedback: (id: string) => void;
   limit?: number;
+  sectionRef?: Ref<HTMLElement>;
 }) {
-  const visible = showAll ? items : items.slice(0, limit);
+  // O ajuste que ainda espera a equipe nunca fica escondido atrás do "Ver tudo".
+  const corte = Math.max(limit, eventos.findIndex((e) => e.pendente) + 1);
+  const visiveis = showAll ? eventos : eventos.slice(0, corte);
+  const temMais = eventos.length > corte;
   return (
-    <section aria-label="Histórico" className="space-y-2">
+    <section aria-label="Histórico" ref={sectionRef} className="scroll-mt-16 space-y-1.5">
       <CockpitTitle
         action={
-          items.length > limit ? (
+          eventos.length === 0 ? (
+            <span className="text-xs text-text-secondary">Nenhum evento registrado ainda.</span>
+          ) : temMais ? (
             <QuietButton onClick={onToggleAll}>
-              {showAll ? "Ver menos" : `Ver tudo (${items.length})`}
+              {showAll ? "Ver menos" : `Ver tudo (${eventos.length})`}
             </QuietButton>
           ) : undefined
         }
       >
         Histórico
       </CockpitTitle>
-      {items.length === 0 ? (
-        <p className="text-sm text-text-secondary">Nenhum evento registrado ainda.</p>
-      ) : (
-        <ul className="space-y-1.5 text-sm">
-          {visible.map((a) => (
-            <li key={a.id}>
-              <span className="mr-2 text-xs tabular-nums text-text-secondary">
-                {formatActivityWhen(a.createdAt)}
-              </span>
-              <span className="font-medium text-foreground">{a.author}</span>{" "}
-              <span className="text-text-secondary">{historicoTexto(a.action)}</span>
-            </li>
-          ))}
+      {eventos.length > 0 && (
+        <ul className="space-y-1.5">
+          {visiveis.map((e) =>
+            e.kind === "feedback" ? (
+              <EventoFeedback
+                key={e.id}
+                evento={e}
+                expandido={feedbackAberto === e.id}
+                onToggle={() => onToggleFeedback(e.id)}
+              />
+            ) : (
+              <li key={e.id} data-evento-id={e.id} className="text-sm leading-snug">
+                <span className="mr-2 text-xs tabular-nums text-text-secondary">
+                  {formatActivityWhen(e.at)}
+                </span>
+                {(e.kind === "aprovado" || e.kind === "publicado") && (
+                  <Check
+                    aria-hidden
+                    className="mr-1 inline h-3 w-3 -translate-y-px text-emerald-600 dark:text-emerald-400"
+                  />
+                )}
+                <span className="font-medium text-foreground">{e.autor}</span>{" "}
+                <span className="text-text-secondary">
+                  {e.texto}
+                  {e.kind === "aprovado" && e.versao ? ` · V${e.versao}` : ""}
+                </span>
+              </li>
+            ),
+          )}
         </ul>
       )}
     </section>

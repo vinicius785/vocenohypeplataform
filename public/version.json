@@ -1,33 +1,37 @@
 {
-  "version": "1.336.0",
+  "version": "1.337.0",
   "releases": [
     {
-      "version": "1.336.0",
-      "summary": "Detalhe da entrega refeito: próxima ação, feedback, progresso com prazos, arquivos, legenda e histórico em um painel mais compacto.",
+      "version": "1.337.0",
+      "summary": "Detalhe da entrega refeito, bem mais simples: cabeçalho, progresso, próxima ação, arquivos e histórico — com o feedback do cliente dentro do histórico.",
       "modules": [
         {
           "name": "CAMPANHAS",
           "tagline": "Detalhe da entrega",
           "items": [
             {
-              "title": "Cabeçalho único e próxima ação",
-              "description": "Seta de voltar, entrega, status e influenciador num cabeçalho só; uma superfície com a única ação do momento (ou a espera pelo cliente)."
+              "title": "Cabeçalho e próxima ação mais enxutos",
+              "description": "O influenciador aparece primeiro; a entrega e “1 unidade” ficam em segundo plano. Uma única caixa diz o que fazer agora (ou que o cliente está analisando), com o botão da ação."
             },
             {
-              "title": "Feedback do cliente em destaque sutil",
-              "description": "O pedido de ajuste vem logo depois da ação, com filete lateral, autor e horário; 'Ver feedback completo' expande no próprio painel."
+              "title": "Arquivos em quadradinhos, com versões",
+              "description": "Roteiro, gravação, conteúdo final e legenda lado a lado. No menu de cada um: abrir, adicionar nova versão (V1, V2, V3…), substituir o arquivo, ver as versões e remover — nada é sobrescrito sem aviso."
             },
             {
-              "title": "Progresso e prazos juntos",
-              "description": "Quatro etapas com a data de cada uma e aviso de atraso na publicação; edição dos prazos sob demanda."
+              "title": "Feedback do cliente dentro do histórico",
+              "description": "Cada pedido de ajuste vira “Feedback V1 · Roteiro”, “V2”… com o texto e “Ver feedback completo”; as aprovações também entram na contagem. Não há mais uma seção separada de feedback."
             },
             {
-              "title": "Arquivos por categoria e legenda",
-              "description": "Roteiro, conteúdo final, gravação e outros, com versão atual aberta e anteriores recolhidas; a legenda agora é um campo próprio da entrega."
+              "title": "Progresso fino e prazos editáveis",
+              "description": "As quatro etapas com a data de cada uma e aviso de atraso na publicação; “Editar prazos” registra a mudança no histórico."
             },
             {
-              "title": "Histórico enxuto",
-              "description": "Três eventos recentes com 'Ver tudo'; envio e remoção de arquivos e edição da legenda passam a ser registrados."
+              "title": "Publicação sem ocupar espaço",
+              "description": "Depois de publicada, a mesma caixa mostra a data e as métricas e abre o post; o link e as métricas se editam num modal pequeno, pelo menu ⋮."
+            },
+            {
+              "title": "Painel bem menor",
+              "description": "Entre 17% e 36% mais curto que a versão anterior, sem rolagem horizontal; no celular os quadrados quebram de linha."
             }
           ]
         }

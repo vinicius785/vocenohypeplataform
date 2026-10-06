@@ -1,11 +1,6 @@
 import { entregaFaseConceitual, type EntregaStage } from "@/lib/campanha-status";
 import { deriveEntregaNextStep, type EntregaEngineActionKind } from "@/lib/entrega-engine";
-import {
-  ajusteNextStep,
-  anexoAtualizadoDesde,
-  entregaAjusteView,
-  historyActionText,
-} from "@/lib/entrega-ajustes";
+import { anexoAtualizadoDesde, entregaAjusteView, historyActionText } from "@/lib/entrega-ajustes";
 import { formatCompactNumber } from "@/lib/format";
 import {
   legacyAnexoCategoria,
@@ -17,6 +12,7 @@ import {
 } from "@/lib/influencer-model";
 import { entregaTone, type EntregaTone } from "@/lib/influencer-next-action";
 import type { EditorialChannel } from "@/lib/marketing-editorial";
+import { formatDateToIso } from "@/lib/utils";
 
 /**
  * Regras PURAS de apresentação do detalhe da entrega (V2). Nada aqui escreve estado nem decide
@@ -77,70 +73,129 @@ export type EntregaFocusPrimary =
       action: "anexar_roteiro" | "anexar_conteudo";
       categoria: EntregaAnexoCategoria;
     }
-  /** Ação do motor direta (enviar, marcar como publicado…). */
+  /** Ação do motor direta (enviar para aprovação, marcar como publicado…). */
   | { kind: "engine"; label: string; action: EntregaEngineActionKind }
-  /** Passo do ciclo de ajustes: "editar" reconhece o ajuste; "reenviar" manda de novo ao cliente. */
-  | { kind: "ajuste"; label: string; action: EntregaEngineActionKind; step: "editar" | "reenviar" };
+  /** Ciclo de ajustes: "reconhecer" abre o feedback e marca os ajustes como vistos (é a ação que o
+   * motor já chama de "Ver feedback do …"); "reenviar" manda a nova versão de volta ao cliente. */
+  | {
+      kind: "ajuste";
+      label: string;
+      action: EntregaEngineActionKind;
+      step: "reconhecer" | "reenviar";
+    }
+  /** Abre o seletor de arquivo para acrescentar uma NOVA versão (não passa pelo motor). */
+  | { kind: "nova_versao"; label: string; categoria: EntregaAnexoCategoria }
+  /** Publicada com link: abre o post. */
+  | { kind: "post"; label: string; url: string }
+  /** Publicada sem link: abre o editor de link e métricas. */
+  | { kind: "publicacao"; label: string };
 
 export type EntregaFocus = {
+  /** Rótulo da superfície: "Próxima ação", ou "Publicação" quando a entrega já foi ao ar. */
+  rotulo: string;
   tone: EntregaTone;
   /** Uma frase curta: o que está acontecendo / o que precisa acontecer. */
   title: string;
   hint?: string;
-  /** Aviso discreto (ex.: o roteiro ainda não foi atualizado desde o feedback). */
-  note?: string;
   /** A única ação principal — ausente quando só resta esperar o cliente. */
   primary?: EntregaFocusPrimary;
+  /** Alternativa discreta (ex.: "Reenviar sem arquivo novo"); o board pede confirmação. */
+  secondary?: { label: string; action: EntregaEngineActionKind };
   /** Em espera do cliente: categoria do arquivo em análise, para um link "Abrir …". */
   openCategoria?: EntregaAnexoCategoria;
   /** Ciclo de ajustes: a etapa ainda não recebeu arquivo novo depois do feedback. */
   semArquivoNovo?: boolean;
 };
 
+const ROTULO_ACAO = "Próxima ação";
+
 /**
  * O que a pessoa precisa saber/fazer AGORA numa entrega, derivado do estado real (motor +
- * ciclo de ajustes). `null` quando não há nada a fazer nem a esperar (publicada).
+ * ciclo de ajustes). Entrega publicada não tem próxima ação: a mesma superfície mostra a publicação.
  */
-export function entregaFocus(e: Entrega): EntregaFocus | null {
+export function entregaFocus(e: Entrega): EntregaFocus {
   const stage: EntregaStage = e.stage ?? "ROTEIRO_PRODUCAO";
-  if (stage === "PUBLICADA") return null;
+  const tone = entregaTone(e);
+
+  if (stage === "PUBLICADA") {
+    const link = linkDoPost(e.url);
+    const metricas = metricasResumo(e.metrics);
+    return {
+      rotulo: "Publicação",
+      tone,
+      title: e.publicadoEm ? `Publicada em ${formatDiaMes(e.publicadoEm)}` : "Publicada",
+      hint: metricas.length > 0 ? metricas.slice(0, 3).join(" · ") : "Sem métricas ainda.",
+      primary: link
+        ? { kind: "post", label: "Abrir post →", url: link }
+        : { kind: "publicacao", label: "Adicionar link do post" },
+    };
+  }
+
   const step = deriveEntregaNextStep(e);
   const ajuste = entregaAjusteView(e);
-  const tone = entregaTone(e);
 
   if (ajuste) {
     const nome = ajuste.etapa === "roteiro" ? "roteiro" : "conteúdo final";
     const Nome = ajuste.etapa === "roteiro" ? "Roteiro" : "Conteúdo final";
+    const reconhecer: EntregaEngineActionKind =
+      ajuste.etapa === "roteiro" ? "reconhecer_ajustes_roteiro" : "reconhecer_ajustes_conteudo";
+    const enviar: EntregaEngineActionKind =
+      ajuste.etapa === "roteiro" ? "enviar_roteiro" : "enviar_conteudo";
+
     if (ajuste.phase === "reenviado") {
       return {
+        rotulo: ROTULO_ACAO,
         tone,
         title: `${Nome} reenviado — aguardando aprovação do cliente`,
         openCategoria: ajuste.categoria,
       };
     }
-    const next = ajusteNextStep(ajuste, step.action);
-    if (next && ajuste.phase === "solicitados") {
+    if (ajuste.phase === "solicitados" && step.action === reconhecer) {
       return {
+        rotulo: ROTULO_ACAO,
         tone,
-        title: `Ajustes solicitados no ${nome}`,
-        hint: "Ao começar, a entrega passa para “Em ajustes”.",
-        primary: { kind: "ajuste", label: next.label, action: next.action, step: "editar" },
+        title: "Ajustes solicitados pelo cliente",
+        primary: {
+          kind: "ajuste",
+          label: "Ver feedback →",
+          action: reconhecer,
+          step: "reconhecer",
+        },
       };
     }
-    if (next && ajuste.phase === "em_ajustes") {
+    if (ajuste.phase === "em_ajustes" && step.action === enviar) {
       const semArquivoNovo = !anexoAtualizadoDesde(
         e,
         ajuste.categoria,
         ajuste.veredito.respondedAt,
       );
-      return {
-        tone,
-        title: `${Nome} em ajustes`,
-        hint: semArquivoNovo ? undefined : "Nova versão anexada — pronto para reenviar.",
-        note: semArquivoNovo ? `O ${nome} ainda não foi atualizado desde o feedback.` : undefined,
-        semArquivoNovo,
-        primary: { kind: "ajuste", label: next.label, action: next.action, step: "reenviar" },
-      };
+      return semArquivoNovo
+        ? {
+            rotulo: ROTULO_ACAO,
+            tone,
+            title: `${Nome} em ajustes`,
+            hint: `Falta anexar a nova versão do ${nome}.`,
+            semArquivoNovo: true,
+            primary: {
+              kind: "nova_versao",
+              label: "Adicionar nova versão",
+              categoria: ajuste.categoria,
+            },
+            secondary: { label: "Reenviar sem arquivo novo", action: enviar },
+          }
+        : {
+            rotulo: ROTULO_ACAO,
+            tone,
+            title: `${Nome} em ajustes`,
+            hint: "Nova versão anexada — pronta para reenviar.",
+            semArquivoNovo: false,
+            primary: {
+              kind: "ajuste",
+              label: "Enviar para aprovação",
+              action: enviar,
+              step: "reenviar",
+            },
+          };
     }
     // Sem passo de ajuste válido (ex.: arquivo removido): cai no fluxo normal do motor abaixo.
   }
@@ -149,19 +204,21 @@ export function entregaFocus(e: Entrega): EntregaFocus | null {
   switch (step.action) {
     case "anexar_roteiro":
       return {
+        rotulo: ROTULO_ACAO,
         tone,
         title: "Roteiro pendente",
         primary: { kind: "upload", label, action: "anexar_roteiro", categoria: "Roteiro" },
       };
     case "enviar_roteiro":
       return {
+        rotulo: ROTULO_ACAO,
         tone,
         title: "Roteiro pronto para envio",
-        hint: "Roteiro anexado — envie para aprovação do cliente.",
-        primary: { kind: "engine", label, action: "enviar_roteiro" },
+        primary: { kind: "engine", label: "Enviar para aprovação", action: "enviar_roteiro" },
       };
     case "anexar_conteudo":
       return {
+        rotulo: ROTULO_ACAO,
         tone,
         title: "Conteúdo final pendente",
         primary: {
@@ -173,25 +230,28 @@ export function entregaFocus(e: Entrega): EntregaFocus | null {
       };
     case "enviar_conteudo":
       return {
+        rotulo: ROTULO_ACAO,
         tone,
         title: "Conteúdo final pronto para envio",
-        hint: "Conteúdo anexado — envie para aprovação do cliente.",
-        primary: { kind: "engine", label, action: "enviar_conteudo" },
+        primary: { kind: "engine", label: "Enviar para aprovação", action: "enviar_conteudo" },
       };
     case "reconhecer_ajustes_roteiro":
       return {
+        rotulo: ROTULO_ACAO,
         tone,
         title: "Ajustes solicitados no roteiro",
         primary: { kind: "engine", label, action: "reconhecer_ajustes_roteiro" },
       };
     case "reconhecer_ajustes_conteudo":
       return {
+        rotulo: ROTULO_ACAO,
         tone,
         title: "Ajustes solicitados no conteúdo final",
         primary: { kind: "engine", label, action: "reconhecer_ajustes_conteudo" },
       };
     case "marcar_publicado":
       return {
+        rotulo: ROTULO_ACAO,
         tone,
         title: "Pronto para publicação",
         hint: "Aprovado pelo cliente.",
@@ -200,11 +260,17 @@ export function entregaFocus(e: Entrega): EntregaFocus | null {
     default:
       return stage === "CONTEUDO_APROVACAO"
         ? {
+            rotulo: ROTULO_ACAO,
             tone,
             title: "Conteúdo final aguardando aprovação do cliente",
             openCategoria: "Conteúdo final",
           }
-        : { tone, title: "Roteiro aguardando aprovação do cliente", openCategoria: "Roteiro" };
+        : {
+            rotulo: ROTULO_ACAO,
+            tone,
+            title: "Roteiro aguardando aprovação do cliente",
+            openCategoria: "Roteiro",
+          };
   }
 }
 
@@ -239,6 +305,20 @@ export function entregaStepper(e: Entrega): { steps: StepperStep[]; tone: Entreg
     })),
   };
 }
+
+/** Datas editáveis do progresso. Só `dataPostagem` é prazo de verdade; as outras duas são carimbos de
+ * recebimento que a pessoa pode ajustar à mão. */
+export const PRAZO_CAMPOS = [
+  ["dataRecebimentoRoteiro", "Roteiro"],
+  ["dataRecebimentoConteudo", "Conteúdo"],
+  ["dataPostagem", "Publicação"],
+] as const;
+export type PrazoCampo = (typeof PRAZO_CAMPOS)[number][0];
+export const PRAZO_LABEL: Record<PrazoCampo, string> = {
+  dataRecebimentoRoteiro: "Roteiro",
+  dataRecebimentoConteudo: "Conteúdo",
+  dataPostagem: "Publicação",
+};
 
 /** Dias de atraso da PUBLICAÇÃO (data planejada já passou e a entrega não foi publicada), ou `null`.
  * Só a data de publicação é prazo de verdade: as de roteiro/conteúdo são carimbos de recebimento. */
@@ -300,20 +380,127 @@ export function agruparAnexos(anexos: EntregaAnexo[] | undefined): ArquivoGrupo[
   return out;
 }
 
-/** Categoria cujo arquivo a entrega espera AGORA (mostra um espaço "Adicionar" mesmo vazio). */
-export function categoriaEsperada(e: Pick<Entrega, "stage">): EntregaAnexoCategoria | null {
-  switch (e.stage ?? "ROTEIRO_PRODUCAO") {
-    case "ROTEIRO_PRODUCAO":
-    case "ROTEIRO_APROVACAO":
-    case "ROTEIRO_AJUSTES":
-      return "Roteiro";
-    case "PRODUCAO":
-    case "CONTEUDO_APROVACAO":
-    case "CONTEUDO_AJUSTES":
-      return "Conteúdo final";
-    default:
-      return null;
-  }
+/* ---- Quadrados de material ("tiles") ---- */
+
+export type ArquivoTileKey = "Roteiro" | "Gravação" | "Conteúdo final" | "Legenda" | "Outro";
+export type ArquivoTile = {
+  key: ArquivoTileKey;
+  label: string;
+  /** "arquivo" tem versões; "legenda" é um texto próprio da entrega. */
+  tipo: "arquivo" | "legenda";
+  vazio: boolean;
+  /** Linha pequena sob o nome: "V2 · atual", "3 arquivos · V1", "Adicionar". */
+  estado: string;
+  /** Mesma linha para quadrados estreitos (celular): "3 arq. · V1". */
+  estadoCurto: string;
+  /** Versão atual (maior) — `null` quando vazio ou legenda. */
+  versaoAtual: number | null;
+  totalVersoes: number;
+  /** Arquivos da versão atual (irmãos enviados juntos). */
+  atual: EntregaAnexo[];
+  /** Há pedido de ajuste do cliente aberto sobre este material. */
+  atencao: boolean;
+};
+
+const TILE_ARQUIVO: { key: Exclude<ArquivoTileKey, "Legenda">; label: string }[] = [
+  { key: "Roteiro", label: "Roteiro" },
+  { key: "Gravação", label: "Gravação" },
+  { key: "Conteúdo final", label: "Conteúdo final" },
+];
+
+/**
+ * Os materiais da entrega como quadrados, sempre na mesma ordem: Roteiro, Gravação, Conteúdo final e
+ * Legenda; "Outros arquivos" só aparece quando existe algum arquivo dessa categoria. Um material sem
+ * nada vira o quadrado vazio ("Adicionar").
+ */
+export function tilesDaEntrega(
+  e: Pick<Entrega, "anexos" | "legenda">,
+  ajusteCategoria?: EntregaAnexoCategoria,
+): ArquivoTile[] {
+  const grupos = agruparAnexos(e.anexos);
+  const doArquivo = (key: Exclude<ArquivoTileKey, "Legenda">, label: string): ArquivoTile => {
+    const g = grupos.find((x) => x.categoria === key);
+    if (!g) {
+      return {
+        key,
+        label,
+        tipo: "arquivo",
+        vazio: true,
+        estado: "Adicionar",
+        estadoCurto: "Adicionar",
+        versaoAtual: null,
+        totalVersoes: 0,
+        atual: [],
+        atencao: key === ajusteCategoria,
+      };
+    }
+    const n = g.atual.anexos.length;
+    return {
+      key,
+      label,
+      tipo: "arquivo",
+      vazio: false,
+      estado: n > 1 ? `${n} arquivos · V${g.atual.versao}` : `V${g.atual.versao} · atual`,
+      estadoCurto: n > 1 ? `${n} arq. · V${g.atual.versao}` : `V${g.atual.versao} · atual`,
+      versaoAtual: g.atual.versao,
+      totalVersoes: 1 + g.anteriores.length,
+      atual: g.atual.anexos,
+      atencao: key === ajusteCategoria,
+    };
+  };
+  const tiles: ArquivoTile[] = TILE_ARQUIVO.map((t) => doArquivo(t.key, t.label));
+  const temLegenda = !!e.legenda?.trim();
+  tiles.push({
+    key: "Legenda",
+    label: "Legenda",
+    tipo: "legenda",
+    vazio: !temLegenda,
+    estado: temLegenda ? "Adicionada" : "Adicionar",
+    estadoCurto: temLegenda ? "Adicionada" : "Adicionar",
+    versaoAtual: null,
+    totalVersoes: 0,
+    atual: [],
+    atencao: false,
+  });
+  if (grupos.some((g) => g.categoria === "Outro"))
+    tiles.push(doArquivo("Outro", "Outros arquivos"));
+  return tiles;
+}
+
+export const versaoDoAnexo = (a: Pick<EntregaAnexo, "versao">): number => a.versao ?? 1;
+
+/** Troca, NO LUGAR, o arquivo de um anexo (mesma categoria, mesma versão, mesma posição): é a
+ * correção de um arquivo errado, não uma nova versão. Para guardar o histórico, use
+ * `addAnexosComVersao`. */
+export function substituirArquivo(
+  anexos: EntregaAnexo[],
+  anexoId: string,
+  novo: { nome: string; url: string },
+  now: Date = new Date(),
+): EntregaAnexo[] {
+  return anexos.map((a) =>
+    a.id !== anexoId
+      ? a
+      : {
+          ...a,
+          id: crypto.randomUUID(),
+          nome: novo.nome,
+          url: novo.url,
+          criadoEm: formatDateToIso(now),
+          criadoEmTs: now.toISOString(),
+        },
+  );
+}
+
+/** Remove todos os arquivos de UMA versão de uma categoria (a anterior passa a ser a atual). */
+export function removerVersao(
+  anexos: EntregaAnexo[],
+  categoria: EntregaAnexoCategoria,
+  versao: number,
+): EntregaAnexo[] {
+  return anexos.filter(
+    (a) => !(legacyAnexoCategoria(a.categoria) === categoria && versaoDoAnexo(a) === versao),
+  );
 }
 
 export type ArquivoTipo = "imagem" | "video" | "pdf" | "texto" | "outro";

@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { ChevronRight, MoreVertical, Plus, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
@@ -173,19 +172,15 @@ export function EntregasRows({
 export function FeedbackNote({
   f,
   onOpen,
-  expandable,
   className,
 }: {
   f: ClientFeedback;
   /** Abre a entrega (usado na lista de entregas do influenciador). */
   onOpen?: (entregaId: string) => void;
-  /** Dentro da própria entrega: "Ver feedback completo" expande o texto aqui mesmo, sem janela. */
-  expandable?: boolean;
   className?: string;
 }) {
-  const [open, setOpen] = useState(false);
   const excerpt = feedbackExcerpt(f.motivo, 150);
-  const text = expandable && open ? f.motivo.trim() : excerpt.text;
+  const text = excerpt.text;
   const when = formatFeedbackWhen(f.respondedAt);
   return (
     <div className={cn("space-y-1 border-l-2 pl-3", FEEDBACK_BAR[f.tone], className)}>
@@ -209,11 +204,6 @@ export function FeedbackNote({
         </p>
         {f.entregaId && onOpen && (
           <QuietButton onClick={() => onOpen(f.entregaId!)}>Ver feedback completo →</QuietButton>
-        )}
-        {expandable && excerpt.truncated && (
-          <QuietButton onClick={() => setOpen((v) => !v)}>
-            {open ? "Ver menos" : "Ver feedback completo →"}
-          </QuietButton>
         )}
       </div>
     </div>
