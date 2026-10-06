@@ -984,7 +984,7 @@ function EventoLinha({
             <span className="text-foreground">{evento.texto}</span>
           </p>
           <span className="shrink-0 text-[11px] tabular-nums text-text-secondary">
-            {horaDe(evento.at)}
+            {evento.semHora ? "" : horaDe(evento.at)}
           </span>
         </div>
         {meta && <p className="text-[11px] leading-snug text-text-secondary">{meta}</p>}

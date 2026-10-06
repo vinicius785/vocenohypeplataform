@@ -60,6 +60,8 @@ export type HistoricoEvento = {
   arquivoVersao?: number;
   /** Evento de rotina (prazo, legenda, arquivo avulso…): só aparece em "Ver tudo". */
   menor?: boolean;
+  /** O registro só tem a DATA (sem horário): a linha não mostra hora inventada. */
+  semHora?: boolean;
   /** Feedback que ainda pede trabalho da equipe (ajuste aberto, não reenviado). */
   pendente?: boolean;
 };

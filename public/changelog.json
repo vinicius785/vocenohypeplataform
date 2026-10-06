@@ -1,5 +1,6 @@
 {
   "notes": [
+    "1.363.0: EntryDetailsDialog reescrito (drawer) + financeiro/entry-detail.ts (statusLine, canMarkPaid, docGroups, entryHistorico); updateEntryAnexos grava anexos de lançamentos manuais e gerados (override); HistoricoEvento.semHora; ArquivoMaterial.onRemove opcional. Sem mudança de regra/cálculo.",
     "1.362.0: só apresentação — FinanceSection ganhou `sub`; Documentos agrupa banco+contrato+NF; PaymentFlow.detail aceita ReactNode (valor + vencimento + editar); remuneração não repete o valor; links do Financeiro com mais contraste. Sem mudança de regra/dados.",
     "1.361.0: Influ.notaFiscal/notaFiscalNome (JSONB aditivo) + notaFiscalInfo/notaFiscalAttachedAt (influencer-finance); scoped-table-store.set agora devolve Promise<boolean> e desfaz o item local se o upsert falhar (antes mantinha o valor otimista); InfluencerBoard propaga a confirmação (onChange/onPatch) e re-sincroniza o detalhe com a lista; vencimento com linha própria + toast de sucesso só após confirmação.",
     "1.360.0: InfluencerBoard.has('bancario') deixa de exigir a permissão influenciadores:bancario (que sai da lista de permissões da UI). Era só gate de tela — nenhuma policy/RLS usava essa permissão.",

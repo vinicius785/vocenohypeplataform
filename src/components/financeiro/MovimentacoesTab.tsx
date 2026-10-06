@@ -13,6 +13,7 @@ import {
   loadManual,
   createManualEntry,
   updateManualEntry,
+  updateEntryAnexos,
   deleteManualEntry,
 } from "@/lib/financeiro-entries";
 import type { useFinanceiroFilteredEntries } from "./useFinanceiroFilteredEntries";
@@ -380,23 +381,16 @@ export function MovimentacoesTab({
                 }
               : undefined
           }
-          onAnexosChange={
-            viewing.editable
-              ? async (anexos) => {
-                  const m = findManual(viewing.id);
-                  if (!m) return;
-                  const next = { ...m, anexos };
-                  try {
-                    await updateManualEntry(next);
-                    setViewing((v) => (v ? { ...v, anexos } : v));
-                  } catch (err) {
-                    onSyncError(
-                      `Não foi possível salvar o anexo: ${err instanceof Error ? err.message : "erro desconhecido"}.`,
-                    );
-                  }
-                }
-              : undefined
-          }
+          onAnexosChange={async (anexos) => {
+            try {
+              await updateEntryAnexos(viewing, anexos);
+              setViewing((v) => (v ? { ...v, anexos } : v));
+            } catch (err) {
+              onSyncError(
+                `Não foi possível salvar o anexo: ${err instanceof Error ? err.message : "erro desconhecido"}.`,
+              );
+            }
+          }}
         />
       )}
 

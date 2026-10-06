@@ -1,24 +1,31 @@
-import { X, FileText, Download, Pencil, Check } from "lucide-react";
-import { Separator } from "@/components/ui/separator";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, X } from "lucide-react";
+import { ArquivoMaterial } from "@/components/influenciadores/ContextoCampanha";
+import { StateDot } from "@/components/influenciadores/InfluencerFinanceiro";
+import { EntregaHistorico } from "@/components/influenciadores/EntregaV2";
 import {
   type Entry,
   type FinanceiroAnexo,
+  type FinanceiroAnexoCategoria,
   type Source,
-  entryAnexos,
   fmtBRL,
   formatIsoDate,
-  isPartiallyPaid,
   loadFinanceiroMembers,
-  remainingBalance,
+  todayISO,
+  uploadFinanceiroAnexo,
 } from "@/lib/financeiro-entries";
+import { loadCampanhaInflus } from "@/lib/campanha-scoped-store";
+import { maskTail, type PaymentTone } from "@/lib/influencer-finance";
+import { cn } from "@/lib/utils";
+import { CopyPixButton, STATUS_LABEL, openFinanceiroAnexo } from "./shared";
 import {
-  DetailRow,
-  CopyPixButton,
-  FinanceiroAnexoBox,
-  STATUS_LABEL,
-  statusTone,
-  openFinanceiroAnexo,
-} from "./shared";
+  canMarkPaid,
+  docGroups,
+  entryHistorico,
+  entryPhase,
+  partialSummary,
+  statusLine,
+} from "./entry-detail";
 
 const SOURCE_LABEL: Record<Source, string> = {
   manual: "Lançamento manual",
@@ -26,6 +33,165 @@ const SOURCE_LABEL: Record<Source, string> = {
   salario: "Salário (recorrência dia 15)",
   campanha: "Receita de campanha",
 };
+
+const PHASE_TONE: Record<ReturnType<typeof entryPhase>, PaymentTone> = {
+  aberto: "info",
+  vencido: "alert",
+  quitado: "ok",
+  cancelado: "neutral",
+};
+
+/** Grupo com título pequeno e conteúdo — sem moldura. */
+function Group({
+  title,
+  action,
+  children,
+}: {
+  title: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section aria-label={title} className="space-y-2.5">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
+          {title}
+        </h3>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/** Linha rótulo → valor (rótulo secundário, valor em destaque). */
+function Fact({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[11px] text-text-secondary">{label}</dt>
+      <dd className="mt-0.5 truncate text-sm text-foreground">{children}</dd>
+    </div>
+  );
+}
+
+const linkBtn =
+  "text-xs font-medium text-foreground/80 underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand";
+
+/** Um documento financeiro (nota fiscal / comprovante): cartão padrão do sistema quando existe,
+ * estado vazio com a ação quando não. */
+function DocumentoFinanceiro({
+  categoria,
+  rotuloVazio,
+  anexos,
+  onChange,
+}: {
+  categoria: FinanceiroAnexoCategoria;
+  rotuloVazio: string;
+  anexos: FinanceiroAnexo[];
+  /** Recebe a lista COMPLETA de anexos já atualizada. */
+  onChange: (next: FinanceiroAnexo[]) => Promise<void> | void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [replacing, setReplacing] = useState<string | null>(null);
+
+  const pick = async (file: File | null) => {
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      setError("Máximo de 10 MB.");
+      return;
+    }
+    setError("");
+    setBusy(true);
+    try {
+      const url = await uploadFinanceiroAnexo(file);
+      if (!url) {
+        setError("Não foi possível enviar o arquivo.");
+        return;
+      }
+      const novo: FinanceiroAnexo = {
+        id: crypto.randomUUID(),
+        categoria,
+        nome: file.name,
+        url,
+        criadoEm: todayISO(),
+      };
+      const sem = replacing ? anexos.filter((a) => a.id !== replacing) : anexos;
+      await onChange([...sem, novo]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao salvar o arquivo.");
+    } finally {
+      setBusy(false);
+      setReplacing(null);
+    }
+  };
+  const abrir = (id: string | null) => {
+    setReplacing(id);
+    inputRef.current?.click();
+  };
+
+  return (
+    <div className="min-w-0 space-y-2">
+      <input
+        ref={inputRef}
+        type="file"
+        accept="application/pdf,image/*"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0] ?? null;
+          if (inputRef.current) inputRef.current.value = "";
+          void pick(f);
+        }}
+      />
+      <p className="text-sm font-medium text-foreground">{categoria}</p>
+      {anexos.length > 0 ? (
+        <div className="space-y-2">
+          {anexos.map((a) => (
+            <ArquivoMaterial
+              key={a.id}
+              nome={a.nome}
+              url={a.url}
+              meta={`${/\.pdf$/i.test(a.nome) ? "PDF" : /\.(png|jpe?g|webp)$/i.test(a.nome) ? "Imagem" : "Arquivo"}${a.criadoEm ? ` · anexado em ${formatIsoDate(a.criadoEm)}` : ""}`}
+              onOpen={() => openFinanceiroAnexo(a.url, a.nome)}
+              onRemove={
+                a.id === "legacy-invoice"
+                  ? undefined
+                  : () => void onChange(anexos.filter((x) => x.id !== a.id))
+              }
+              renderUpload={(label) =>
+                a.id === "legacy-invoice" ? null : (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => abrir(a.id)}
+                    className={linkBtn}
+                  >
+                    {busy && replacing === a.id ? "Enviando..." : label}
+                  </button>
+                )
+              }
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          <p className="text-sm text-text-secondary">{rotuloVazio}</p>
+          <button type="button" disabled={busy} onClick={() => abrir(null)} className={linkBtn}>
+            {busy ? (
+              <span className="inline-flex items-center gap-1">
+                <Loader2 className="h-3 w-3 animate-spin" /> Enviando...
+              </span>
+            ) : (
+              `Anexar ${categoria.toLowerCase()}`
+            )}
+          </button>
+        </div>
+      )}
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
+  );
+}
 
 export function EntryDetailsDialog({
   entry,
@@ -37,262 +203,287 @@ export function EntryDetailsDialog({
   entry: Entry;
   onClose: () => void;
   onEdit?: () => void;
-  /** Ausente quando o status já é terminal (recebido/pago/cancelado) —
-   * não faz sentido oferecer "marcar como pago" de novo. */
+  /** Ausente quando o status já é terminal (recebido/pago/cancelado). */
   onMarkPaid?: () => void;
-  /** Só passado pra lançamentos manuais (editáveis) — permite anexar ou
-   * remover comprovante/nota fiscal direto daqui, sem precisar clicar em
-   * "Editar" primeiro. */
-  onAnexosChange?: (anexos: FinanceiroAnexo[]) => void;
+  /** Anexar/substituir/remover nota fiscal e comprovante (qualquer lançamento, inclusive gerados). */
+  onAnexosChange?: (anexos: FinanceiroAnexo[]) => Promise<void> | void;
 }) {
-  const bankFilled =
-    entry.bank && Object.values(entry.bank).some((v) => v && String(v).trim() !== "");
+  const [showBank, setShowBank] = useState(false);
+  const [showAllHistory, setShowAllHistory] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const phase = entryPhase(entry);
+  const quitado = phase === "quitado";
+  const bank = entry.bank;
+  const bankFilled = !!bank && Object.values(bank).some((v) => v && String(v).trim() !== "");
   const responsavelNome = entry.responsavelId
     ? loadFinanceiroMembers().find((m) => m.id === entry.responsavelId)?.name
     : undefined;
-  const anexos = entryAnexos(entry);
+  const docs = docGroups(entry);
+  const partial = partialSummary(entry);
+  const receita = entry.kind === "receita";
+
+  // Para pagamento a influenciador, a atividade financeira dele (vencimento, remuneração, dados…).
+  const influActivity = useMemo(() => {
+    if (entry.source !== "influenciador" || !entry.campanhaId || !entry.influenciadorId) return [];
+    const influ = loadCampanhaInflus(entry.campanhaId).find((i) => i.id === entry.influenciadorId);
+    return (influ?.activity ?? [])
+      .filter((a) => a.area === "financeiro")
+      .map((a) => ({ id: a.id, action: a.action, author: a.author, createdAt: a.createdAt }));
+  }, [entry.source, entry.campanhaId, entry.influenciadorId]);
+  const eventos = useMemo(() => entryHistorico(entry, influActivity), [entry, influActivity]);
+
+  const detalhes: [string, React.ReactNode][] = [
+    ["Competência", formatIsoDate(entry.competencia)],
+    ["Vencimento", formatIsoDate(entry.vencimento)],
+    ["Categoria", entry.category],
+    ["Tipo", receita ? "Receita" : "Despesa"],
+    ["Origem", SOURCE_LABEL[entry.source]],
+  ];
+  if (entry.formaPagamento) detalhes.push(["Forma de pagamento prevista", entry.formaPagamento]);
+  if (entry.recurrence)
+    detalhes.push([
+      "Recorrência",
+      `${entry.recurrence.frequency} · ocorrência ${entry.recurrence.occurrenceIndex + 1}`,
+    ]);
+  const contexto: [string, string][] = [];
+  if (entry.clienteNome) contexto.push(["Cliente", entry.clienteNome]);
+  if (entry.campanhaNome) contexto.push(["Campanha", entry.campanhaNome]);
+  if (entry.influencerName) contexto.push(["Influenciador", entry.influencerName]);
+  if (entry.memberName) contexto.push(["Membro", entry.memberName]);
+  if (responsavelNome) contexto.push(["Responsável", responsavelNome]);
+
+  const mask = (v: string) => (showBank ? v : maskTail(v));
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 max-sm:items-stretch max-sm:p-0"
-      onClick={onClose}
-    >
-      <div
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/40" onClick={onClose}>
+      <aside
+        role="dialog"
+        aria-modal="true"
+        aria-label="Detalhes do lançamento"
         onClick={(ev) => ev.stopPropagation()}
-        className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-lg max-sm:!h-dvh max-sm:!max-h-dvh max-sm:!max-w-none max-sm:!rounded-none max-sm:!border-0"
+        className="flex h-full w-full max-w-xl flex-col border-l border-border bg-background shadow-xl"
       >
-        <div className="flex items-center justify-between border-b border-border px-6 py-3.5">
-          <p role="heading" aria-level={2} className="text-sm font-semibold text-foreground">
-            Detalhes do lançamento
-          </p>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Fechar"
-            className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
-          {/* Cabeçalho: descrição + valor + status — sem card, hierarquia
-              tipográfica só. */}
-          <div>
-            <p className="text-base font-semibold text-foreground">{entry.description}</p>
-            <div className="mt-1 flex items-center gap-2">
-              <span
-                className={`text-2xl font-semibold tabular-nums ${entry.kind === "receita" ? "text-emerald-600" : "text-rose-600"}`}
-              >
-                {entry.kind === "receita" ? "+" : "−"} {fmtBRL(entry.amount)}
-              </span>
-              <span
-                className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusTone(entry.status)}`}
-              >
-                {STATUS_LABEL[entry.status]}
-              </span>
-            </div>
+        {/* Cabeçalho fixo: o que é, quanto, situação e a data que importa. */}
+        <header className="shrink-0 border-b border-border px-6 pb-4 pt-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
+              {receita ? "Receita" : "Despesa"} · {SOURCE_LABEL[entry.source]}
+            </p>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Fechar"
+              className="-mr-1.5 cursor-pointer rounded-md p-1.5 text-text-secondary hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
+          <h2 className="mt-2 text-base font-semibold leading-snug text-foreground">
+            {entry.description}
+          </h2>
+          <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <span className="text-[28px] font-semibold leading-9 tabular-nums text-foreground">
+              {receita ? "+" : "−"} {fmtBRL(entry.amount)}
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground">
+              <StateDot tone={PHASE_TONE[phase]} />
+              {STATUS_LABEL[entry.status]}
+            </span>
+          </div>
+          <p className="mt-0.5 text-sm text-text-secondary">{statusLine(entry)}</p>
+        </header>
 
-          {isPartiallyPaid(entry) && (
-            <div className="grid grid-cols-3 gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[11px]">
-              <div>
-                <p className="text-muted-foreground">Valor original</p>
-                <p className="font-medium tabular-nums text-foreground">{fmtBRL(entry.amount)}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">
-                  {entry.kind === "receita" ? "Já recebido" : "Já pago"}
+        <div className="min-h-0 flex-1 space-y-8 overflow-y-auto px-6 py-6">
+          {/* PRÓXIMA AÇÃO (só se existir) — a única ação preenchida da tela. */}
+          {onMarkPaid && canMarkPaid(entry) && (
+            <section
+              aria-label="Próxima ação"
+              className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 rounded-lg border border-border bg-card px-4 py-3"
+            >
+              <div className="min-w-0 flex-1 basis-48">
+                <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
+                  <StateDot tone={phase === "vencido" ? "alert" : "pending"} />
+                  Próxima ação
                 </p>
-                <p className="font-medium tabular-nums text-foreground">
-                  {fmtBRL(entry.payment?.paidAmount ?? 0)}
+                <p className="mt-0.5 text-sm font-semibold text-foreground">
+                  {receita ? "Marcar como recebido" : "Marcar como pago"}
+                </p>
+                <p className="text-xs text-text-secondary">
+                  {partial
+                    ? `Saldo restante de ${fmtBRL(partial.remaining)} (já ${receita ? "recebido" : "pago"}: ${fmtBRL(partial.paid)}).`
+                    : phase === "vencido"
+                      ? `Venceu em ${formatIsoDate(entry.vencimento)}.`
+                      : `${receita ? "Recebimento" : "Pagamento"} vence em ${formatIsoDate(entry.vencimento)}.`}
                 </p>
               </div>
-              <div>
-                <p className="text-muted-foreground">Saldo restante</p>
-                <p className="font-medium tabular-nums text-amber-600">
-                  {fmtBRL(remainingBalance(entry))}
-                </p>
-              </div>
-            </div>
+              <button
+                type="button"
+                onClick={onMarkPaid}
+                className="shrink-0 cursor-pointer rounded-md bg-foreground px-3.5 py-2 text-xs font-semibold text-background hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              >
+                {receita ? "Marcar como recebido" : "Marcar como pago"}
+              </button>
+            </section>
           )}
 
-          <Separator />
+          {/* PAGAMENTO — só quando já houve (total ou parcial). */}
+          {entry.payment && (
+            <Group title={receita ? "Recebimento" : "Pagamento"}>
+              <dl className="grid grid-cols-2 gap-x-6 gap-y-3">
+                <Fact label={receita ? "Recebido em" : "Pago em"}>
+                  {formatIsoDate(entry.payment.pagamento)}
+                </Fact>
+                <Fact label="Valor confirmado">{fmtBRL(entry.payment.paidAmount)}</Fact>
+                {entry.payment.paymentMethod && (
+                  <Fact label="Forma">{entry.payment.paymentMethod}</Fact>
+                )}
+                {partial && <Fact label="Saldo restante">{fmtBRL(partial.remaining)}</Fact>}
+              </dl>
+              {entry.payment.paymentNote && (
+                <p className="text-xs text-text-secondary">{entry.payment.paymentNote}</p>
+              )}
+            </Group>
+          )}
 
-          {/* Três datas lado a lado — nunca confunde vencimento com
-              pagamento real. */}
-          <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-3">
-            <DetailRow label="Competência" value={formatIsoDate(entry.competencia)} />
-            <DetailRow label="Vencimento" value={formatIsoDate(entry.vencimento)} />
-            <DetailRow
-              label={entry.kind === "receita" ? "Recebimento" : "Pagamento"}
-              value={entry.payment?.pagamento ? formatIsoDate(entry.payment.pagamento) : "—"}
-            />
-          </div>
+          <Group title="Detalhes">
+            <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+              {detalhes.map(([k, v]) => (
+                <Fact key={k} label={k}>
+                  {v}
+                </Fact>
+              ))}
+            </dl>
+            {entry.observacoes && (
+              <p className="text-sm text-text-secondary">{entry.observacoes}</p>
+            )}
+          </Group>
 
-          <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
-            <DetailRow label="Categoria" value={entry.category} />
-            <DetailRow label="Tipo" value={entry.kind === "receita" ? "Receita" : "Despesa"} />
-            <DetailRow label="Origem" value={SOURCE_LABEL[entry.source]} />
-            {entry.clienteNome && <DetailRow label="Cliente" value={entry.clienteNome} />}
-            {entry.campanhaNome && <DetailRow label="Campanha" value={entry.campanhaNome} />}
-            {entry.influencerName && (
-              <DetailRow label="Influenciador" value={entry.influencerName} />
-            )}
-            {entry.memberName && <DetailRow label="Membro" value={entry.memberName} />}
-            {responsavelNome && <DetailRow label="Responsável" value={responsavelNome} />}
-            {entry.formaPagamento && (
-              <DetailRow label="Forma de pagamento prevista" value={entry.formaPagamento} />
-            )}
-            {entry.recurrence && (
-              <DetailRow
-                label="Recorrência"
-                value={`${entry.recurrence.frequency} · ocorrência ${entry.recurrence.occurrenceIndex + 1}`}
-              />
-            )}
-          </div>
-
-          {entry.observacoes && (
-            <p className="text-xs text-muted-foreground">{entry.observacoes}</p>
+          {contexto.length > 0 && (
+            <Group title="Contexto">
+              <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+                {contexto.map(([k, v]) => (
+                  <Fact key={k} label={k}>
+                    {v}
+                  </Fact>
+                ))}
+              </dl>
+            </Group>
           )}
 
           {(entry.cobrancaHistorico?.length || entry.proximaCobranca) && (
-            <>
-              <Separator />
-              <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+            <Group title="Cobrança">
+              <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
                 {entry.cobrancaHistorico && entry.cobrancaHistorico.length > 0 && (
-                  <DetailRow
-                    label="Último contato de cobrança"
-                    value={formatIsoDate(
+                  <Fact label="Último contato">
+                    {formatIsoDate(
                       entry.cobrancaHistorico[entry.cobrancaHistorico.length - 1].data,
                     )}
-                  />
+                  </Fact>
                 )}
                 {entry.proximaCobranca && (
-                  <DetailRow
-                    label="Próxima cobrança agendada"
-                    value={formatIsoDate(entry.proximaCobranca)}
+                  <Fact label="Próxima cobrança">{formatIsoDate(entry.proximaCobranca)}</Fact>
+                )}
+              </dl>
+            </Group>
+          )}
+
+          {bankFilled && bank && (
+            <Group
+              title="Dados bancários"
+              action={
+                <button type="button" onClick={() => setShowBank((v) => !v)} className={linkBtn}>
+                  {showBank ? "Ocultar dados" : "Mostrar dados"}
+                </button>
+              }
+            >
+              <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+                {bank.titular && <Fact label="Titular">{bank.titular}</Fact>}
+                {bank.cpfCnpj && <Fact label="CPF/CNPJ">{mask(bank.cpfCnpj)}</Fact>}
+                {bank.banco && <Fact label="Banco">{bank.banco}</Fact>}
+                {bank.agencia && <Fact label="Agência">{mask(bank.agencia)}</Fact>}
+                {bank.conta && (
+                  <Fact label={bank.tipoConta ? `Conta (${bank.tipoConta})` : "Conta"}>
+                    {mask(bank.conta)}
+                  </Fact>
+                )}
+                {bank.pixChave && (
+                  <Fact label={bank.pixTipo ? `PIX (${bank.pixTipo})` : "PIX"}>
+                    {showBank ? <CopyPixButton value={bank.pixChave} /> : maskTail(bank.pixChave)}
+                  </Fact>
+                )}
+              </dl>
+            </Group>
+          )}
+
+          {/* DOCUMENTOS: nota fiscal sempre visível; comprovante quando já pago ou já existe. */}
+          {(onAnexosChange || docs.notaFiscal.length > 0 || docs.comprovante.length > 0) && (
+            <Group title="Documentos">
+              <div
+                className={cn(
+                  "grid grid-cols-1 gap-x-6 gap-y-5",
+                  (quitado || docs.comprovante.length > 0) && "md:grid-cols-2",
+                )}
+              >
+                <DocumentoFinanceiro
+                  categoria="Nota fiscal"
+                  rotuloVazio="Nenhuma nota fiscal anexada."
+                  anexos={docs.notaFiscal}
+                  onChange={(next) =>
+                    onAnexosChange?.([
+                      ...(entry.anexos ?? []).filter((a) => a.categoria !== "Nota fiscal"),
+                      ...next.filter((a) => a.categoria === "Nota fiscal"),
+                    ])
+                  }
+                />
+                {(quitado || docs.comprovante.length > 0) && (
+                  <DocumentoFinanceiro
+                    categoria="Comprovante"
+                    rotuloVazio="Nenhum comprovante anexado."
+                    anexos={docs.comprovante}
+                    onChange={(next) =>
+                      onAnexosChange?.([
+                        ...(entry.anexos ?? []).filter((a) => a.categoria !== "Comprovante"),
+                        ...next.filter((a) => a.categoria === "Comprovante"),
+                      ])
+                    }
                   />
                 )}
               </div>
-            </>
+            </Group>
           )}
 
-          {onMarkPaid && (
-            <button
-              type="button"
-              onClick={onMarkPaid}
-              className="inline-flex w-fit cursor-pointer items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
-            >
-              <Check className="h-3.5 w-3.5" />
-              {entry.kind === "receita" ? "Marcar como recebido" : "Marcar como pago"}
-            </button>
-          )}
-          {entry.payment?.paymentMethod && (
-            <p className="text-[11px] text-muted-foreground">
-              {entry.kind === "receita" ? "Recebido" : "Pago"} via {entry.payment.paymentMethod}
-              {entry.payment.paymentNote && ` · ${entry.payment.paymentNote}`}
-            </p>
-          )}
-
-          {bankFilled && entry.bank && (
-            <>
-              <Separator />
-              <div>
-                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Dados bancários
-                </p>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
-                  {entry.bank.titular && <DetailRow label="Titular" value={entry.bank.titular} />}
-                  {entry.bank.cpfCnpj && <DetailRow label="CPF/CNPJ" value={entry.bank.cpfCnpj} />}
-                  {entry.bank.banco && <DetailRow label="Banco" value={entry.bank.banco} />}
-                  {entry.bank.agencia && <DetailRow label="Agência" value={entry.bank.agencia} />}
-                  {entry.bank.conta && <DetailRow label="Conta" value={entry.bank.conta} />}
-                  {entry.bank.tipoConta && <DetailRow label="Tipo" value={entry.bank.tipoConta} />}
-                  {entry.bank.pixTipo && (
-                    <DetailRow label="PIX (tipo)" value={entry.bank.pixTipo} />
-                  )}
-                  {entry.bank.pixChave && (
-                    <DetailRow
-                      label="PIX (chave)"
-                      value={<CopyPixButton value={entry.bank.pixChave} />}
-                    />
-                  )}
-                </div>
-              </div>
-            </>
-          )}
-
-          {(onAnexosChange || anexos.length > 0) && (
-            <>
-              <Separator />
-              <div>
-                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Documentos
-                </p>
-                {onAnexosChange ? (
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <FinanceiroAnexoBox
-                      categoria="Comprovante"
-                      anexos={entry.anexos ?? []}
-                      onChange={onAnexosChange}
-                    />
-                    <FinanceiroAnexoBox
-                      categoria="Nota fiscal"
-                      anexos={entry.anexos ?? []}
-                      onChange={onAnexosChange}
-                    />
-                  </div>
-                ) : (
-                  <ul className="space-y-1">
-                    {anexos.map((a) => (
-                      <li key={a.id} className="flex items-center justify-between gap-2 text-xs">
-                        <span className="inline-flex min-w-0 items-center gap-1.5 text-foreground">
-                          <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                          <span className="truncate">{a.nome}</span>
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => openFinanceiroAnexo(a.url, a.nome)}
-                          className="inline-flex shrink-0 cursor-pointer items-center gap-1 text-muted-foreground hover:text-foreground hover:underline"
-                        >
-                          <Download className="h-3 w-3" /> Baixar
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </>
-          )}
+          <EntregaHistorico
+            eventos={eventos}
+            showAll={showAllHistory}
+            onToggleAll={() => setShowAllHistory((v) => !v)}
+            feedbackAberto={null}
+            onToggleFeedback={() => {}}
+            limit={4}
+            titulo="Histórico"
+          />
 
           {!entry.editable && (
-            <p className="text-[11px] text-muted-foreground">
-              Este lançamento é gerado automaticamente e não pode ser editado aqui — ajuste na
-              origem (campanha, influenciador ou salário do membro).
+            <p className="text-xs text-text-secondary">
+              Lançamento gerado automaticamente: ajuste valor e vencimento na origem (campanha,
+              influenciador ou salário do membro).
             </p>
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-border px-6 py-3.5">
-          <button
-            type="button"
-            onClick={onClose}
-            className="cursor-pointer rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
-          >
-            Fechar
-          </button>
-          {onEdit && (
-            <button
-              type="button"
-              onClick={onEdit}
-              className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
-            >
-              <Pencil className="h-3 w-3" /> Editar
+        {onEdit && (
+          <footer className="flex shrink-0 items-center justify-end border-t border-border px-6 py-3">
+            <button type="button" onClick={onEdit} className={linkBtn}>
+              Editar lançamento
             </button>
-          )}
-        </div>
-      </div>
+          </footer>
+        )}
+      </aside>
     </div>
   );
 }

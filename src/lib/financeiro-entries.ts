@@ -1004,6 +1004,24 @@ export async function markEntryPaid(
   }
 }
 
+/** Grava os anexos (nota fiscal, comprovante…) de QUALQUER lançamento — manual (no próprio
+ * lançamento) ou gerado (no override de status, junto do que já existe nele). */
+export async function updateEntryAnexos(entry: Entry, anexos: FinanceiroAnexo[]): Promise<void> {
+  if (entry.editable) {
+    const manual = manualCache.find((e) => e.id === entry.id);
+    if (!manual) throw new Error("Lançamento não encontrado.");
+    await updateManualEntry({ ...manual, anexos });
+  } else {
+    await upsertStatusOverride(entry.id, {
+      status: entry.status,
+      ...(entry.payment ?? {}),
+      anexos,
+      cobrancaHistorico: entry.cobrancaHistorico,
+      proximaCobranca: entry.proximaCobranca,
+    });
+  }
+}
+
 /** Registra uma ação de cobrança (contato feito) e, opcionalmente, agenda a
  * próxima — histórico simples por lançamento, sem lembretes/notificações
  * (essa infraestrutura não existe hoje, ver limitação registrada no plano). */

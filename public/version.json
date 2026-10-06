@@ -1,6 +1,30 @@
 {
-  "version": "1.362.0",
+  "version": "1.363.0",
   "releases": [
+    {
+      "version": "1.363.0",
+      "summary": "Detalhe da despesa/receita no Financeiro refeito como painel, com nota fiscal e histórico.",
+      "modules": [
+        {
+          "name": "FINANCEIRO",
+          "tagline": "Detalhe do lançamento",
+          "items": [
+            {
+              "title": "Painel com hierarquia",
+              "description": "Painel lateral com cabeçalho fixo (o quê, quanto, situação e data), próxima ação única, Detalhes, Contexto, Dados bancários mascarados, Documentos e Histórico."
+            },
+            {
+              "title": "Nota fiscal em qualquer lançamento",
+              "description": "Anexar, abrir, substituir e remover a nota fiscal (e o comprovante quando pago), inclusive nos lançamentos gerados automaticamente, como pagamento a influenciador."
+            },
+            {
+              "title": "Histórico",
+              "description": "Linha do tempo com pagamento, cobranças, anexos e, para influenciadores, a atividade financeira dele."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.362.0",
       "summary": "Aba Financeiro do influenciador mais limpa: menos repetição, pagamento e vencimento juntos, documentos agrupados.",

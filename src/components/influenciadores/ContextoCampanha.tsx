@@ -160,7 +160,8 @@ export function ArquivoMaterial({
   meta?: string;
   /** Abre o arquivo de um jeito próprio (ex.: `data:` URL); sem isso, link normal. */
   onOpen?: () => void;
-  onRemove: () => void;
+  /** Sem isto, o menu não oferece "Remover" (ex.: arquivo legado que não pode ser removido daqui). */
+  onRemove?: () => void;
   renderUpload: (label: string) => ReactNode;
 }) {
   const ext = /\.([a-z0-9]{2,5})$/i.exec(nome)?.[1]?.toUpperCase() ?? "Arquivo";
@@ -194,12 +195,14 @@ export function ArquivoMaterial({
             >
               Abrir
             </DropdownMenuItem>
-            <DropdownMenuItem
-              onSelect={onRemove}
-              className="text-destructive focus:text-destructive"
-            >
-              Remover arquivo
-            </DropdownMenuItem>
+            {onRemove && (
+              <DropdownMenuItem
+                onSelect={onRemove}
+                className="text-destructive focus:text-destructive"
+              >
+                Remover arquivo
+              </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
