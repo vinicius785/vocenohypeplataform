@@ -6,6 +6,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { captionLimit, type EditorialChannel } from "@/lib/marketing-editorial";
 import { cn } from "@/lib/utils";
 
+const QUIET_ACTION =
+  "text-xs font-medium text-text-secondary underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand";
+
 /** Legenda da publicação: leitura com Copiar e edição no próprio detalhe. O contador só aparece
  * nos canais com limite conhecido. */
 export function EditorialCaption({
@@ -13,11 +16,20 @@ export function EditorialCaption({
   canal,
   saving,
   onSave,
+  rows = 8,
+  emptyText = "Nenhuma legenda ainda.",
+  quiet = false,
 }: {
   value: string | null;
   canal: EditorialChannel;
   saving: boolean;
   onSave: (text: string | null) => Promise<boolean>;
+  /** Altura do campo de edição (padrão 8; contextos densos usam menos). */
+  rows?: number;
+  /** Texto da leitura quando não há legenda. */
+  emptyText?: string;
+  /** Versão discreta para painéis densos: ações como texto e, sem legenda, tudo numa linha só. */
+  quiet?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value ?? "");
@@ -37,27 +49,54 @@ export function EditorialCaption({
   return (
     <section aria-label="Legenda" className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
+        <h3 className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
           Legenda
         </h3>
-        {!editing && (
-          <div className="flex items-center gap-1">
-            {value && (
-              <Button variant="ghost" size="sm" onClick={copy}>
-                <Copy className="h-3.5 w-3.5" /> Copiar
-              </Button>
-            )}
-            <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
-              {value ? "Editar" : "Adicionar legenda"}
-            </Button>
-          </div>
+        {quiet && !editing && !value && (
+          <span className="min-w-0 flex-1 truncate text-sm text-text-secondary">{emptyText}</span>
         )}
+        {!editing &&
+          (quiet ? (
+            <div className="flex shrink-0 items-center gap-3">
+              {value && (
+                <button type="button" onClick={copy} className={QUIET_ACTION}>
+                  Copiar
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                aria-label={value ? "Editar legenda" : "Adicionar legenda"}
+                className={QUIET_ACTION}
+              >
+                {value ? (
+                  "Editar"
+                ) : (
+                  <>
+                    <span className="sm:hidden">Adicionar</span>
+                    <span className="hidden sm:inline">Adicionar legenda</span>
+                  </>
+                )}
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1">
+              {value && (
+                <Button variant="ghost" size="sm" onClick={copy}>
+                  <Copy className="h-3.5 w-3.5" /> Copiar
+                </Button>
+              )}
+              <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
+                {value ? "Editar" : "Adicionar legenda"}
+              </Button>
+            </div>
+          ))}
       </div>
       {editing ? (
         <div className="space-y-2">
           <Textarea
             autoFocus
-            rows={8}
+            rows={rows}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Escreva a legenda da publicação…"
@@ -89,7 +128,7 @@ export function EditorialCaption({
                 Cancelar
               </Button>
               <Button
-                variant="primary"
+                variant={quiet ? "default" : "primary"}
                 size="sm"
                 isLoading={saving}
                 onClick={async () => {
@@ -106,7 +145,7 @@ export function EditorialCaption({
           <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
             {value}
           </p>
-          {limit && (
+          {limit && (!quiet || value.length > limit) && (
             <p
               className={cn(
                 "text-xs tabular-nums",
@@ -118,7 +157,7 @@ export function EditorialCaption({
           )}
         </>
       ) : (
-        <p className="text-sm text-text-secondary">Nenhuma legenda ainda.</p>
+        !quiet && <p className="text-sm text-text-secondary">{emptyText}</p>
       )}
     </section>
   );

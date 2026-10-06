@@ -1,25 +1,33 @@
 {
-  "version": "1.335.0",
+  "version": "1.336.0",
   "releases": [
     {
-      "version": "1.335.0",
-      "summary": "Feedback do cliente dentro da entrega e Financeiro reestruturado em resumo, pendências, detalhes e atividade.",
+      "version": "1.336.0",
+      "summary": "Detalhe da entrega refeito: próxima ação, feedback, progresso com prazos, arquivos, legenda e histórico em um painel mais compacto.",
       "modules": [
         {
           "name": "CAMPANHAS",
-          "tagline": "Detalhe do influenciador",
+          "tagline": "Detalhe da entrega",
           "items": [
             {
-              "title": "Feedback dentro da entrega",
-              "description": "O feedback do cliente aparece sob a entrega a que se refere, com citação curta, autor e horário, o que aconteceu depois e 'Ver feedback completo'. Sem feedback, nada ocupa espaço."
+              "title": "Cabeçalho único e próxima ação",
+              "description": "Seta de voltar, entrega, status e influenciador num cabeçalho só; uma superfície com a única ação do momento (ou a espera pelo cliente)."
             },
             {
-              "title": "Financeiro em resumo, pendências e detalhes",
-              "description": "Faixa de resumo (remuneração em destaque), lista de pendências com a ação ao lado, depois Remuneração, Pagamento, Dados bancários e Contrato em modo consulta, e atividade financeira com 'Ver tudo'."
+              "title": "Feedback do cliente em destaque sutil",
+              "description": "O pedido de ajuste vem logo depois da ação, com filete lateral, autor e horário; 'Ver feedback completo' expande no próprio painel."
             },
             {
-              "title": "Cores semânticas",
-              "description": "Laranja para ajuste pedido, âmbar para aguardando, verde para concluído, azul em andamento e vermelho só para rejeição."
+              "title": "Progresso e prazos juntos",
+              "description": "Quatro etapas com a data de cada uma e aviso de atraso na publicação; edição dos prazos sob demanda."
+            },
+            {
+              "title": "Arquivos por categoria e legenda",
+              "description": "Roteiro, conteúdo final, gravação e outros, com versão atual aberta e anteriores recolhidas; a legenda agora é um campo próprio da entrega."
+            },
+            {
+              "title": "Histórico enxuto",
+              "description": "Três eventos recentes com 'Ver tudo'; envio e remoção de arquivos e edição da legenda passam a ser registrados."
             }
           ]
         }

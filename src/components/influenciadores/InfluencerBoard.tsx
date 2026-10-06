@@ -16,8 +16,6 @@ import {
   ExternalLink,
   Facebook,
   FileText,
-  FileVideo,
-  Film,
   Instagram,
   Linkedin,
   LayoutList,
@@ -42,13 +40,10 @@ import {
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { DateField } from "@/components/ui/date-field";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import {
   DropdownMenu,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
@@ -57,20 +52,35 @@ import { supabase } from "@/integrations/supabase/client";
 import { loadBank, saveBank, type BankInflu } from "@/lib/banco-influs-store";
 import { findExistingBankInfluMatch } from "@/lib/bank-influ-match";
 import { useConfirm } from "@/hooks/use-confirm";
+import { EditorialCaption } from "@/components/marketing/editorial/EditorialCaption";
+import { entregaAjusteView, entregaStatusLabel, historyActionText } from "@/lib/entrega-ajustes";
 import {
-  AjusteStatusPill,
-  EntregaFeedbackSection,
-  EntregaProximoPasso,
-  EntregaReenviadoNote,
-  EntregaStatusBadge,
-} from "@/components/influenciadores/EntregaAjustePanel";
+  ARQUIVO_CATEGORIA_LABEL,
+  ENTREGA_FASE_COLUNA_ENTRY_STAGE,
+  ENTREGA_FASE_COLUNA_LABEL,
+  agruparAnexos,
+  categoriaEsperada,
+  entregaFaseColuna,
+  entregaFocus,
+  entregaStepper,
+  entregaUnidadesLabel,
+  historicoDaEntrega,
+  legendaCanal,
+  linkDoPost,
+  metricasResumo,
+  publicacaoAtrasoDias,
+  type EntregaFaseColuna,
+} from "@/lib/entrega-detail";
 import {
-  ajusteNextStep,
-  anexoAtualizadoDesde,
-  entregaAjusteView,
-  entregaStatusLabel,
-  historyActionText,
-} from "@/lib/entrega-ajustes";
+  EntregaActionSurface,
+  EntregaArquivos,
+  EntregaEditorInline,
+  EntregaHeader,
+  EntregaHistorico,
+  EntregaMenu,
+  EntregaPublicacao,
+  EntregaStepper,
+} from "./EntregaV2";
 import { linkifyText } from "@/lib/linkify";
 import {
   formatSeguidores,
@@ -92,7 +102,7 @@ import {
 } from "@/lib/social-profiles";
 import type { CustomQuestionType } from "@/lib/inscricao-page";
 import { HeaderContact } from "./InfluencerContact";
-import { EntregasRows, SelectionFeedback } from "./InfluencerPanels";
+import { EntregasRows, FeedbackNote, SelectionFeedback } from "./InfluencerPanels";
 import { RecursosMenu } from "./InfluencerResources";
 import {
   availableResources,
@@ -100,7 +110,14 @@ import {
   type ResourceItem,
   type ResourceKey,
 } from "@/lib/influencer-resources";
-import { clientFeedbacks, nextBestAction, type NextAction } from "@/lib/influencer-next-action";
+import {
+  clientFeedbacks,
+  entregaFeedback,
+  entregaNome,
+  entregaTone,
+  nextBestAction,
+  type NextAction,
+} from "@/lib/influencer-next-action";
 import { CockpitTitle, InlineNote, KeyStats, QuietButton } from "./InfluencerCockpit";
 import { AudienceInsights } from "@/components/shared/AudienceInsights";
 import { formatActivityWhen } from "@/lib/activity-time";
@@ -150,7 +167,6 @@ import {
   ChecklistItem,
   DemographicEntry,
   ENTREGA_ACTION_LOG,
-  ENTREGA_ANEXO_CATEGORIAS,
   Entrega,
   EntregaAnexo,
   EntregaAnexoCategoria,
@@ -194,7 +210,6 @@ import {
   INFLU_STATUS_TONE,
   INFLU_STATUS_BORDER,
   ENTREGA_STAGE_TONE,
-  ENTREGA_STAGE_DESCRIPTION,
   entregaFaseConceitual,
   nextActionForInflu,
   NEXT_ACTOR_LABEL,
@@ -202,7 +217,6 @@ import {
   canReopenInfluApproval,
   isInfluencerEligibleForDeliveries,
   type InfluStatus,
-  type EntregaStage,
   type NextActor,
 } from "@/lib/campanha-status";
 import { toast } from "sonner";
@@ -2345,41 +2359,6 @@ function ContratoEditor({
   );
 }
 
-/** Popup de anexos de uma entrega — usado nos cards de linha do tempo do
- * resumo (visualização compacta, sem precisar expandir o card inteiro só
- * pra anexar um arquivo). */
-function EntregaAnexosPopup({
-  entregaLabel,
-  anexos,
-  onChange,
-}: {
-  entregaLabel: string;
-  anexos: EntregaAnexo[];
-  onChange: (next: EntregaAnexo[]) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground hover:text-foreground"
-      >
-        <Paperclip className="h-3 w-3" /> Anexos{anexos.length > 0 ? ` (${anexos.length})` : ""}
-      </button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-sm border-border bg-background">
-          <DialogTitle className="text-sm font-semibold">Anexos · {entregaLabel}</DialogTitle>
-          <DialogDescription className="sr-only">
-            Anexos da entrega: visualize, adicione ou remova arquivos.
-          </DialogDescription>
-          <EntregaAnexosEditor anexos={anexos} onChange={onChange} />
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
-
 /** `dataRecebimentoRoteiro`/`dataRecebimentoConteudo` são ao mesmo tempo
  * editáveis à mão E carimbadas automaticamente pelo motor no momento em
  * que o time anexa o arquivo (`entrega-engine.ts`) — não existe um campo
@@ -2409,54 +2388,23 @@ function nextPrazoData(entrega: Entrega): { label: string; data: string } | null
   return { label, data };
 }
 
-// Agrupamento em 4 fases (não os 8 estágios internos do motor) só pra
-// dar um "Mover para" rápido e um stepper visual no painel de detalhe —
-// pedido explícito: dá pra colocar a entrega na fase desejada direto,
-// sem depender de rodar a ação certa (sem travas). Puramente de
-// apresentação: nunca substitui `ENTREGA_STAGE_ORDER`/transições reais,
-// só decide o estágio de ENTRADA de cada fase quando movido na mão.
-const ENTREGA_FASE_COLUNAS = ["ROTEIRO", "CONTEUDO", "PUBLICACAO", "CONCLUIDO"] as const;
-type EntregaFaseColuna = (typeof ENTREGA_FASE_COLUNAS)[number];
-const ENTREGA_FASE_COLUNA_LABEL: Record<EntregaFaseColuna, string> = {
-  ROTEIRO: "Roteiro",
-  CONTEUDO: "Conteúdo",
-  PUBLICACAO: "Publicação",
-  CONCLUIDO: "Concluído",
-};
-const ENTREGA_FASE_COLUNA_DOT: Record<EntregaFaseColuna, string> = {
-  ROTEIRO: "bg-muted-foreground/40",
-  CONTEUDO: "bg-sky-500",
-  PUBLICACAO: "bg-teal-500",
-  CONCLUIDO: "bg-emerald-500",
-};
-const ENTREGA_FASE_COLUNA_ENTRY_STAGE: Record<EntregaFaseColuna, EntregaStage> = {
-  ROTEIRO: "ROTEIRO_PRODUCAO",
-  CONTEUDO: "PRODUCAO",
-  PUBLICACAO: "PUBLICACAO",
-  CONCLUIDO: "PUBLICADA",
-};
-function entregaFaseColuna(stage: EntregaStage): EntregaFaseColuna {
-  if (stage === "PUBLICADA") return "CONCLUIDO";
-  const { fase } = entregaFaseConceitual(stage);
-  if (fase === "Roteiro") return "ROTEIRO";
-  if (fase === "Conteúdo") return "CONTEUDO";
-  return "PUBLICACAO";
-}
-
-/** View dedicada de uma entrega — de quem é (quando `influNome` é
- * passado), progresso, próxima ação, prazos, arquivos e histórico. Abre
- * num Sheet lateral ao clicar numa linha de `EntregasEditor`, em vez de
- * expandir inline. */
-/** Conteúdo puro do detalhe de uma entrega — sem casca de `Sheet`/`Dialog`
- * própria, pra poder ser renderizado tanto dentro de um `Sheet` isolado
- * (`EntregaDetailSheet`, usado pelo formulário de criação) quanto embutido
- * no MESMO workspace lateral do influenciador (sem empilhar um segundo
- * overlay por cima do primeiro — rodada de reestruturação). */
+/** Conteúdo puro do detalhe de uma entrega (V2) — sem casca de `Sheet`/`Dialog` própria, para ser
+ * renderizado tanto dentro de um `Sheet` isolado (`EntregaDetailSheet`, formulário de criação) quanto
+ * embutido no MESMO workspace lateral do influenciador (sem empilhar um segundo overlay).
+ *
+ * Aqui mora só a LÓGICA (upload, motor de ações, confirmação, persistência via `onChange`); o que
+ * mostrar vem de `lib/entrega-detail.ts` e o desenho de `EntregaV2.tsx`. Ordem: cabeçalho → próxima
+ * ação → feedback do cliente (só se houver) → progresso+prazos → publicação (só publicada) →
+ * arquivos → legenda → histórico. `onChange` aceita um texto de log opcional, gravado na Atividade
+ * no MESMO patch (nunca em dois patches separados, para um não sobrescrever o outro). */
 function EntregaDetailBody({
   influNome,
   influFoto,
+  influRede,
   entrega,
   influActivity,
+  onBack,
+  onClose,
   onChange,
   onRunAction,
   onSetStage,
@@ -2466,9 +2414,15 @@ function EntregaDetailBody({
 }: {
   influNome?: string;
   influFoto?: string;
+  /** Rede principal do influenciador — vira "@handle · Instagram" no cabeçalho e define o limite da legenda. */
+  influRede?: { plataforma: string; handle?: string };
   entrega: Entrega;
   influActivity: InfluActivity[];
-  onChange: (patch: Partial<Entrega>) => void;
+  /** Presente no workspace do influenciador: mostra a seta "Voltar ao influenciador". */
+  onBack?: () => void;
+  /** Fecha o painel (o cabeçalho desenha o próprio X). */
+  onClose?: () => void;
+  onChange: (patch: Partial<Entrega>, log?: string) => void;
   onRunAction: (action: EntregaEngineActionKind, opts?: EntregaActionOpts) => void;
   onSetStage: (coluna: EntregaFaseColuna) => void;
   onRemove: () => void;
@@ -2482,97 +2436,84 @@ function EntregaDetailBody({
   onSplitExistente: () => void;
 }) {
   const stage = entrega.stage ?? "ROTEIRO_PRODUCAO";
-  const step = deriveEntregaNextStep(entrega);
-  const colunaAtual = entregaFaseColuna(stage);
-  const colunaAtualIndex = ENTREGA_FASE_COLUNAS.indexOf(colunaAtual);
+  const publicada = stage === "PUBLICADA";
+  const focus = entregaFocus(entrega);
+  const feedback = entregaFeedback(entrega);
+  const stepper = entregaStepper(entrega);
+  const atrasoDias = publicacaoAtrasoDias(entrega, todayISO());
+  const historico = historicoDaEntrega(influActivity, entrega);
+  const ajuste = entregaAjusteView(entrega);
+
   const fileRef = useRef<HTMLInputElement>(null);
+  const arquivosInputRef = useRef<HTMLInputElement>(null);
+  const pendingCategoria = useRef<EntregaAnexoCategoria>("Roteiro");
+  const arquivosRef = useRef<HTMLElement>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
-  const [editandoCabecalho, setEditandoCabecalho] = useState(false);
-
-  // Casa por `entregaId` quando presente (atividade registrada depois
-  // desse campo existir); cai pro casamento por substring do tipo só pra
-  // atividade antiga que não tem o id.
-  const historico = influActivity
-    .filter((a) =>
-      a.entregaId
-        ? a.entregaId === entrega.id
-        : a.action.toLowerCase().includes(entrega.tipo.toLowerCase()),
-    )
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-  // Ciclo de ajustes (só apresentação sobre a máquina de estados existente): em qual ponto do ciclo
-  // a entrega está, o feedback do cliente e o passo que o motor já considera válido agora.
-  const ajuste = entregaAjusteView(entrega);
-  const statusLabel = entregaStatusLabel(entrega);
-  const ajusteStep = ajuste ? ajusteNextStep(ajuste, step.action) : null;
-  // Com pendência do cliente, "Editar" (metadados) fica só como ícone para não competir com a ação principal.
-  const ajustePendente = !!ajuste && ajuste.phase !== "reenviado";
+  const [enviandoCategoria, setEnviandoCategoria] = useState<EntregaAnexoCategoria | null>(null);
+  const [arquivosError, setArquivosError] = useState("");
+  const [editando, setEditando] = useState(false);
+  const [editandoPrazos, setEditandoPrazos] = useState(false);
+  const [editandoPublicacao, setEditandoPublicacao] = useState(false);
+  const [verTodoHistorico, setVerTodoHistorico] = useState(false);
   const { confirm: confirmAction, confirmDialog: entregaConfirmDialog } = useConfirm();
-  const arquivosRef = useRef<HTMLDivElement>(null);
-  // Roteiro/conteúdo ainda não foi atualizado desde o feedback?
-  const semArquivoNovo =
-    !!ajuste &&
-    ajuste.phase === "em_ajustes" &&
-    !anexoAtualizadoDesde(entrega, ajuste.categoria, ajuste.veredito.respondedAt);
 
-  // Ação principal contextual — o motor já disse qual é a única válida
-  // agora (`step.action`). "Adicionar roteiro"/"conteúdo final" abrem o
-  // seletor de arquivo antes de chamar o motor; as demais chamam direto.
-  const handleActionClick = () => {
-    if (!step.action) return;
-    if (step.action === "anexar_roteiro" || step.action === "anexar_conteudo") {
+  const scrollToArquivos = () =>
+    window.setTimeout(
+      () => arquivosRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }),
+      150,
+    );
+
+  // Ação principal contextual — o motor já disse qual é a única válida agora (`focus.primary`).
+  // "Adicionar roteiro"/"conteúdo final" abrem o seletor de arquivo antes de chamar o motor; o passo
+  // do ciclo de ajustes e as demais chamam direto.
+  const handlePrimary = async () => {
+    const p = focus?.primary;
+    if (!p) return;
+    if (p.kind === "upload") {
       fileRef.current?.click();
       return;
     }
-    onRunAction(step.action);
-  };
-  const handleAjusteStep = async () => {
-    if (!ajusteStep) return;
-    if (ajusteStep.kind === "editar") {
-      // Reconhece o ajuste (stage → "Em ajustes") e leva a pessoa até o arquivo a atualizar.
-      onRunAction(ajusteStep.action);
-      window.setTimeout(
-        () => arquivosRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }),
-        150,
-      );
-      return;
+    if (p.kind === "ajuste") {
+      if (p.step === "editar") {
+        // Reconhece o ajuste (stage → "Em ajustes") e leva a pessoa até o arquivo a atualizar.
+        onRunAction(p.action);
+        scrollToArquivos();
+        return;
+      }
+      if (focus?.semArquivoNovo) {
+        const yes = await confirmAction(
+          `Você ainda não anexou uma nova versão do ${ajuste?.etapa === "conteudo" ? "conteúdo final" : "roteiro"} desde o feedback do cliente. Enviar mesmo assim?`,
+          { title: "Enviar sem arquivo novo?", confirmLabel: "Enviar mesmo assim" },
+        );
+        if (!yes) return;
+      }
     }
-    if (semArquivoNovo) {
-      const yes = await confirmAction(
-        `Você ainda não anexou uma nova versão do ${ajuste!.etapa === "roteiro" ? "roteiro" : "conteúdo final"} desde o feedback do cliente. Enviar mesmo assim?`,
-        { title: "Enviar sem arquivo novo?", confirmLabel: "Enviar mesmo assim" },
-      );
-      if (!yes) return;
-    }
-    onRunAction(ajusteStep.action);
+    onRunAction(p.action);
   };
 
-  // Aceita vários arquivos de uma vez (ex: Story de 3 unidades = 3
-  // arquivos) — sobe todos e anexa numa ÚNICA chamada de `onRunAction`
-  // (`opts.anexos`, plural), pra virarem IRMÃOS na mesma versão em vez de
-  // 3 versões sequenciais um "substituindo" o outro.
+  // Aceita vários arquivos de uma vez (ex: Story de 3 unidades = 3 arquivos) — sobe todos e anexa
+  // numa ÚNICA chamada de `onRunAction` (`opts.anexos`, plural), pra virarem IRMÃOS na mesma versão
+  // em vez de 3 versões sequenciais um "substituindo" o outro.
   const handleFilesForAction = async (files: File[]) => {
-    if (step.action !== "anexar_roteiro" && step.action !== "anexar_conteudo") return;
-    if (files.length === 0) return;
+    const p = focus?.primary;
+    if (p?.kind !== "upload" || files.length === 0) return;
     setUploading(true);
     setUploadError("");
     try {
-      const categoria: EntregaAnexoCategoria =
-        step.action === "anexar_roteiro" ? "Roteiro" : "Conteúdo final";
-      // Cada arquivo sobe de forma independente — um falhar (ex: excedeu o
-      // limite de tamanho) não derruba os outros do mesmo lote.
+      // Cada arquivo sobe de forma independente — um falhar (ex: excedeu o limite de tamanho) não
+      // derruba os outros do mesmo lote.
       const anexos: { categoria: EntregaAnexoCategoria; nome: string; url: string }[] = [];
       const falhas: string[] = [];
       for (const file of files) {
         try {
           const url = await uploadEntregaAnexo(file);
-          anexos.push({ categoria, nome: file.name, url });
+          anexos.push({ categoria: p.categoria, nome: file.name, url });
         } catch (err) {
           falhas.push(`${file.name}: ${err instanceof Error ? err.message : "falha desconhecida"}`);
         }
       }
-      if (anexos.length > 0) onRunAction(step.action, { anexos });
+      if (anexos.length > 0) onRunAction(p.action, { anexos });
       if (falhas.length > 0) {
         setUploadError(
           falhas.length === files.length
@@ -2587,6 +2528,63 @@ function EntregaDetailBody({
     }
   };
 
+  // "+ Adicionar" e "Substituir" da área de Arquivos: arquivos da mesma seleção são IRMÃOS (mesma
+  // versão); "Substituir" envia uma nova versão (a anterior continua em "versões anteriores").
+  const pickArquivo = (c: EntregaAnexoCategoria) => {
+    pendingCategoria.current = c;
+    arquivosInputRef.current?.click();
+  };
+  const handleArquivosFiles = async (files: File[]) => {
+    if (files.length === 0) return;
+    const categoria = pendingCategoria.current;
+    setArquivosError("");
+    setEnviandoCategoria(categoria);
+    const novos: { nome: string; url: string }[] = [];
+    const falhas: string[] = [];
+    for (const file of files) {
+      try {
+        novos.push({ nome: file.name, url: await uploadEntregaAnexo(file) });
+      } catch (err) {
+        falhas.push(`${file.name}: ${err instanceof Error ? err.message : "falha desconhecida"}`);
+      }
+    }
+    if (novos.length > 0) {
+      const o = novos.length === 1 ? `o arquivo "${novos[0].nome}"` : `${novos.length} arquivos`;
+      onChange(
+        { anexos: addAnexosComVersao(entrega.anexos ?? [], categoria, novos) },
+        `adicionou ${o} em ${ARQUIVO_CATEGORIA_LABEL[categoria]} — "${entregaNome(entrega)}"`,
+      );
+    }
+    if (falhas.length > 0) {
+      setArquivosError(
+        falhas.length === files.length
+          ? `Falha ao subir. ${falhas[0]}`
+          : `${novos.length} de ${files.length} arquivo(s) subiram. Falha: ${falhas.join("; ")}`,
+      );
+    }
+    setEnviandoCategoria(null);
+  };
+  const removerArquivo = (a: EntregaAnexo) =>
+    onChange(
+      { anexos: (entrega.anexos ?? []).filter((x) => x.id !== a.id) },
+      `removeu o arquivo "${a.nome}" — "${entregaNome(entrega)}"`,
+    );
+
+  // Abre o arquivo que o cliente está analisando (a versão mais recente da categoria).
+  const abrirEmAnalise = () => {
+    const grupo = agruparAnexos(entrega.anexos).find((g) => g.categoria === focus?.openCategoria);
+    const url = grupo?.atual.anexos[0]?.url;
+    if (url) window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const link = linkDoPost(entrega.url);
+  const canal = legendaCanal(influRede?.plataforma);
+  const contexto = influRede
+    ? [influRede.handle ? `@${influRede.handle}` : null, influRede.plataforma]
+        .filter(Boolean)
+        .join(" · ")
+    : undefined;
+
   return (
     <>
       <input
@@ -2600,314 +2598,141 @@ function EntregaDetailBody({
           if (files.length > 0) void handleFilesForAction(files);
         }}
       />
+      <input
+        ref={arquivosInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          const files = Array.from(e.target.files ?? []);
+          if (arquivosInputRef.current) arquivosInputRef.current.value = "";
+          if (files.length > 0) void handleArquivosFiles(files);
+        }}
+      />
 
-      <div className="space-y-5">
-        {/* Cabeçalho — de quem é (quando `influNome` é passado) + o quê
-              é; edição de tipo/título/quantidade fica atrás de "Editar"
-              pra não competir com o resto. */}
-        <div className="space-y-2 border-b border-border pb-4 pr-8">
-          <div className="flex items-start gap-3">
-            {influNome && (
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
-                {influFoto ? (
-                  <img src={influFoto} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <User className="h-5 w-5 text-muted-foreground" strokeWidth={1.5} />
-                )}
-              </div>
-            )}
-            <div className="min-w-0 flex-1">
-              {influNome && (
-                <p className="truncate text-xs font-medium text-muted-foreground">{influNome}</p>
-              )}
-              <p className="truncate text-lg font-semibold text-foreground">
-                {entrega.tipo || "Sem tipo"}
-                {!entrega.grupoId && (
-                  <span className="ml-1.5 text-sm font-normal text-muted-foreground">
-                    · {entrega.quantidade} {entrega.quantidade === 1 ? "unidade" : "unidades"}
-                  </span>
-                )}
-              </p>
-              {entrega.titulo && (
-                <p className="truncate text-xs text-muted-foreground">{entrega.titulo}</p>
-              )}
-              {entrega.grupoId && (
-                <p className="truncate text-xs text-muted-foreground">
-                  Unidade independente — aprovada separadamente das demais.
-                </p>
-              )}
-              <div className="mt-2">
-                {ajuste ? (
-                  <AjusteStatusPill phase={ajuste.phase} />
-                ) : (
-                  <EntregaStatusBadge label={statusLabel} done={stage === "PUBLICADA"} />
-                )}
-              </div>
-            </div>
-            <div className="flex shrink-0 items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setEditandoCabecalho((v) => !v)}
-                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-                aria-label="Editar tipo, título e quantidade"
-              >
-                <Pencil className="h-3 w-3" />
-                {!ajustePendente && "Editar"}
-              </button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label="Mais ações"
-                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-                  >
-                    <MoreVertical className="h-4 w-4" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-52">
-                  <DropdownMenuLabel className="text-[11px] font-medium text-text-secondary">
-                    Mover manualmente para
-                  </DropdownMenuLabel>
-                  {ENTREGA_FASE_COLUNAS.map((c) => (
-                    <DropdownMenuItem
-                      key={c}
-                      disabled={c === colunaAtual}
-                      onSelect={() => onSetStage(c)}
-                    >
-                      {ENTREGA_FASE_COLUNA_LABEL[c]}
-                    </DropdownMenuItem>
-                  ))}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onSelect={onRemove}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" /> Remover entrega
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
-          {editandoCabecalho && (
-            <div className="flex flex-wrap items-center gap-2 rounded-md bg-muted/40 p-2">
-              <input
-                list="entregas-tipos"
-                value={entrega.tipo}
-                onChange={(ev) => onChange({ tipo: ev.target.value })}
-                placeholder="Tipo (Reels, Stories...)"
-                className="min-w-[130px] rounded-md border border-border bg-background px-2 py-1 text-xs font-medium outline-none focus:ring-1 focus:ring-ring"
-              />
-              <input
-                value={entrega.titulo ?? ""}
-                onChange={(ev) => onChange({ titulo: ev.target.value || undefined })}
-                placeholder="Título (opcional)"
-                className="min-w-[130px] flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-ring"
-              />
-              {!entrega.grupoId && (
-                <div className="flex shrink-0 items-center rounded-md bg-background">
-                  <button
-                    type="button"
-                    onClick={() => onChange({ quantidade: Math.max(1, entrega.quantidade - 1) })}
-                    className="h-7 w-7 text-sm text-muted-foreground hover:text-foreground"
-                  >
-                    −
-                  </button>
-                  <span className="w-7 text-center text-xs font-medium tabular-nums">
-                    {entrega.quantidade}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => onChange({ quantidade: entrega.quantidade + 1 })}
-                    className="h-7 w-7 text-sm text-muted-foreground hover:text-foreground"
-                  >
-                    +
-                  </button>
-                </div>
-              )}
-              {!entrega.grupoId && splitEntregaExistente(entrega) && (
-                <button
-                  type="button"
-                  onClick={onSplitExistente}
-                  title="Divide os arquivos já enviados em entregas independentes, uma por arquivo"
-                  className="inline-flex shrink-0 items-center gap-1 rounded-md border border-primary/40 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10"
-                >
-                  Dividir em unidades
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => onSplitUnidade(1)}
-                title="Dividir em unidades independentes — cada uma aprovada separadamente"
-                className="inline-flex shrink-0 items-center gap-1 rounded-md border border-dashed border-border px-2 py-1 text-xs font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground"
-              >
-                <Plus className="h-3 w-3" /> Unidade
-              </button>
-              {entrega.grupoId && (
-                <button
-                  type="button"
-                  onClick={() => onSplitUnidade(-1)}
-                  className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
-                >
-                  − Unidade
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Feedback do cliente (quando existe um ciclo de ajustes) */}
-        {ajuste && <EntregaFeedbackSection view={ajuste} />}
-
-        {/* Próximo passo — UMA ação principal por momento. */}
-        {ajusteStep ? (
-          <EntregaProximoPasso
-            step={ajusteStep}
-            phase={ajuste!.phase}
-            note={
-              semArquivoNovo
-                ? `O ${ajuste!.etapa === "roteiro" ? "roteiro" : "conteúdo final"} ainda não foi atualizado desde o feedback.`
-                : undefined
-            }
-            onRun={() => void handleAjusteStep()}
+      <EntregaHeader
+        tipo={entrega.tipo}
+        titulo={entrega.titulo}
+        unidades={entregaUnidadesLabel(entrega)}
+        grupo={!!entrega.grupoId}
+        statusLabel={entregaStatusLabel(entrega)}
+        tone={entregaTone(entrega)}
+        influNome={influNome}
+        influFoto={influFoto}
+        influContexto={contexto}
+        onBack={onBack}
+        onClose={onClose}
+        editing={editando}
+        onToggleEdit={() => setEditando((v) => !v)}
+        editor={
+          <EntregaEditorInline
+            tipo={entrega.tipo}
+            titulo={entrega.titulo}
+            quantidade={entrega.quantidade}
+            grupo={!!entrega.grupoId}
+            onChange={(patch) => onChange(patch)}
           />
-        ) : step.action ? (
-          <button
-            type="button"
-            onClick={handleActionClick}
-            disabled={uploading}
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-foreground px-4 py-2.5 text-sm font-semibold text-background shadow-sm hover:opacity-90 disabled:opacity-60"
-          >
-            {uploading ? "Enviando..." : step.actionLabel}
-          </button>
-        ) : (
-          stage !== "PUBLICADA" &&
-          ajuste?.phase !== "reenviado" && (
-            <p className="text-xs text-muted-foreground">
-              {step.responsavel === "cliente"
-                ? "Aguardando aprovação do cliente."
-                : "Nenhuma ação pendente no momento."}
-            </p>
-          )
-        )}
-        {ajuste?.phase === "reenviado" && <EntregaReenviadoNote view={ajuste} />}
-        {uploadError && <p className="text-xs text-destructive">{uploadError}</p>}
+        }
+        menu={
+          <EntregaMenu
+            colunaAtual={entregaFaseColuna(stage)}
+            grupo={!!entrega.grupoId}
+            podeSepararArquivos={!entrega.grupoId && !!splitEntregaExistente(entrega)}
+            onEditar={() => setEditando(true)}
+            onMover={onSetStage}
+            onSplitUnidade={onSplitUnidade}
+            onSplitExistente={onSplitExistente}
+            onRemover={onRemove}
+          />
+        }
+      />
 
-        {/* Progresso — as 4 fases num stepper único, sem repetir
-              "Situação atual"/"Etapas" como dois blocos dizendo quase a
-              mesma coisa. */}
-        <div className="space-y-2">
-          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
-            Progresso
-          </h3>
-          <div className="flex items-center gap-1.5">
-            {ENTREGA_FASE_COLUNAS.map((c, i) => (
-              <div key={c} className="flex flex-1 flex-col items-center gap-1">
-                <span
-                  className={`h-1.5 w-full rounded-full ${
-                    i <= colunaAtualIndex ? ENTREGA_FASE_COLUNA_DOT[c] : "bg-muted"
-                  }`}
+      <div className="space-y-4 px-5 py-4">
+        {focus && (
+          <EntregaActionSurface
+            focus={focus}
+            busy={uploading}
+            error={uploadError}
+            onPrimary={() => void handlePrimary()}
+            onOpenArquivo={focus.openCategoria ? abrirEmAnalise : undefined}
+          />
+        )}
+
+        {feedback && <FeedbackNote f={feedback} expandable />}
+
+        <EntregaStepper
+          steps={stepper.steps}
+          tone={stepper.tone}
+          atrasoDias={atrasoDias}
+          datas={{
+            dataRecebimentoRoteiro: entrega.dataRecebimentoRoteiro,
+            dataRecebimentoConteudo: entrega.dataRecebimentoConteudo,
+            dataPostagem: entrega.dataPostagem,
+          }}
+          editing={editandoPrazos}
+          onToggleEdit={() => setEditandoPrazos((v) => !v)}
+          onChangeData={(campo, valor) => onChange({ [campo]: valor })}
+        />
+
+        {publicada && (
+          <EntregaPublicacao
+            publicadoEm={entrega.publicadoEm}
+            link={link}
+            urlTexto={link ? undefined : entrega.url}
+            metricas={metricasResumo(entrega.metrics)}
+            editing={editandoPublicacao}
+            onToggleEdit={() => setEditandoPublicacao((v) => !v)}
+            editor={
+              <div className="space-y-2">
+                <AutoSaveInput
+                  key={entrega.id}
+                  value={entrega.url ?? ""}
+                  onSave={(v) => onChange({ url: v })}
+                  placeholder="Link do conteúdo publicado"
                 />
-                <span
-                  className={`text-center text-[11px] font-medium ${
-                    i === colunaAtualIndex ? "text-foreground" : "text-text-secondary"
-                  }`}
-                >
-                  {ENTREGA_FASE_COLUNA_LABEL[c]}
-                </span>
+                <MetricsEditor value={entrega.metrics} onChange={(m) => onChange({ metrics: m })} />
               </div>
-            ))}
-          </div>
-          <p className="text-xs text-text-secondary">{ENTREGA_STAGE_DESCRIPTION[stage]}</p>
-        </div>
-
-        {/* Prazos — recolhidos: não competem com a pendência do cliente. */}
-        <div className="border-y border-border/60">
-          <CollapsibleSection
-            title="Prazos"
-            summary={[
-              ["Roteiro", entrega.dataRecebimentoRoteiro],
-              ["Conteúdo", entrega.dataRecebimentoConteudo],
-              ["Publicação", entrega.dataPostagem],
-            ]
-              .map(([l, d]) => `${l} ${d ? formatDataCurta(d) : "—"}`)
-              .join(" · ")}
-          >
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <PrazoField
-                label="Roteiro"
-                value={entrega.dataRecebimentoRoteiro}
-                onChange={(v) => onChange({ dataRecebimentoRoteiro: v })}
-              />
-              <PrazoField
-                label="Conteúdo"
-                value={entrega.dataRecebimentoConteudo}
-                onChange={(v) => onChange({ dataRecebimentoConteudo: v })}
-              />
-              <PrazoField
-                label="Publicação"
-                value={entrega.dataPostagem}
-                onChange={(v) => onChange({ dataPostagem: v })}
-              />
-            </div>
-          </CollapsibleSection>
-        </div>
-
-        {/* Arquivos */}
-        <div ref={arquivosRef} className="space-y-2">
-          <FieldLabel title="Arquivos" />
-          <EntregaAnexosEditor
-            anexos={entrega.anexos ?? []}
-            onChange={(anexos) => onChange({ anexos })}
-            ajusteCategoria={ajuste && ajuste.phase !== "reenviado" ? ajuste.categoria : undefined}
+            }
           />
-        </div>
-
-        {/* Publicação — só quando já concluída (link + métricas). O
-              motivo de reprovação do cliente já aparece em Situação
-              atual, não fica mais numa seção "Aprovação" separada. */}
-        {stage === "PUBLICADA" && (
-          <div className="space-y-2 border-t border-border pt-4">
-            <FieldLabel title="Publicação" />
-            <div className="space-y-2">
-              <AutoSaveInput
-                key={entrega.id}
-                value={entrega.url ?? ""}
-                onSave={(v) => onChange({ url: v })}
-                placeholder="Link do conteúdo publicado"
-              />
-              <MetricsEditor value={entrega.metrics} onChange={(m) => onChange({ metrics: m })} />
-            </div>
-          </div>
         )}
 
-        {/* Histórico — menor peso; o texto do feedback fica só em "Feedback do cliente". */}
-        <div className="space-y-2 border-t border-border/60 pt-4">
-          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
-            Histórico
-          </h3>
-          {historico.length === 0 ? (
-            <p className="text-[11px] text-text-secondary">Nenhum evento registrado ainda.</p>
-          ) : (
-            <ul className="space-y-2 border-l border-border/60 pl-3">
-              {historico.map((a) => (
-                <li key={a.id} className="relative text-xs leading-relaxed text-text-secondary">
-                  <span className="absolute -left-[15.5px] top-1.5 h-1.5 w-1.5 rounded-full bg-border" />
-                  <span className="text-foreground">{a.author}</span> {historyActionText(a.action)}
-                  <span className="ml-1.5 text-[11px] tabular-nums">
-                    {new Date(a.createdAt).toLocaleString("pt-BR", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
+        <EntregaArquivos
+          anexos={entrega.anexos}
+          esperada={categoriaEsperada(entrega)}
+          ajusteCategoria={ajuste && ajuste.phase !== "reenviado" ? ajuste.categoria : undefined}
+          enviando={enviandoCategoria}
+          error={arquivosError}
+          onPick={pickArquivo}
+          onRemove={removerArquivo}
+          sectionRef={arquivosRef}
+        />
+
+        <EditorialCaption
+          key={entrega.id}
+          value={entrega.legenda ?? null}
+          canal={canal}
+          saving={false}
+          rows={4}
+          quiet
+          emptyText="Nenhuma legenda adicionada."
+          onSave={async (text) => {
+            onChange(
+              { legenda: text ?? undefined },
+              `${text ? "atualizou a legenda" : "removeu a legenda"} — "${entregaNome(entrega)}"`,
+            );
+            return true;
+          }}
+        />
+
+        <div className="border-t border-border/60 pt-4">
+          <EntregaHistorico
+            items={historico}
+            showAll={verTodoHistorico}
+            onToggleAll={() => setVerTodoHistorico((v) => !v)}
+          />
         </div>
-        {entregaConfirmDialog}
       </div>
+      {entregaConfirmDialog}
     </>
   );
 }
@@ -2950,18 +2775,20 @@ function EntregaDetailSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
+        hideClose
         className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-lg"
       >
         <SheetTitle className="sr-only">Entrega · {label}</SheetTitle>
         <SheetDescription className="sr-only">
-          Detalhes de cronograma, progresso, arquivos, aprovação e histórico desta entrega.
+          Próxima ação, progresso, prazos, arquivos, legenda e histórico desta entrega.
         </SheetDescription>
-        <div className="flex-1 overflow-y-auto p-5">
+        <div className="flex-1 overflow-y-auto">
           <EntregaDetailBody
             influNome={influNome}
             influFoto={influFoto}
             entrega={entrega}
             influActivity={influActivity}
+            onClose={() => onOpenChange(false)}
             onChange={onChange}
             onRunAction={onRunAction}
             onSetStage={onSetStage}
@@ -3141,6 +2968,7 @@ function InfluencerWorkspaceSheet({
     <Sheet open onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
+        hideClose={view === "entrega"}
         className="flex w-full flex-col gap-0 overflow-hidden p-0 focus:outline-none sm:w-[820px] sm:max-w-[85vw]"
         onEscapeKeyDown={(e) => {
           // Esc fecha primeiro Atividade/Entrega (o que estiver aberto),
@@ -3186,24 +3014,6 @@ function InfluencerWorkspaceSheet({
             resources={resources}
             onOpenResource={openResource}
           />
-        )}
-        {view === "entrega" && selectedEntrega && (
-          <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3">
-            <button
-              type="button"
-              onClick={backToDetail}
-              className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" /> Voltar ao influenciador
-            </button>
-            <span className="text-muted-foreground">·</span>
-            <p className="min-w-0 truncate text-xs font-medium text-foreground">
-              {influ.nome} — {selectedEntrega.tipo}
-              {selectedEntrega.titulo ? ` · ${selectedEntrega.titulo}` : ""}
-              {!selectedEntrega.grupoId &&
-                ` · ${selectedEntrega.quantidade} ${selectedEntrega.quantidade === 1 ? "unidade" : "unidades"}`}
-            </p>
-          </div>
         )}
         {view === "recurso" && resource && (
           <div className="flex shrink-0 items-center gap-2 border-b border-border py-3 pl-4 pr-12">
@@ -3264,17 +3074,27 @@ function InfluencerWorkspaceSheet({
             />
           )}
           {view === "entrega" && selectedEntrega && (
-            <div className="p-5">
+            <div>
               <EntregaDetailBody
                 influNome={influ.nome}
                 influFoto={influ.foto}
+                influRede={
+                  influ.redes[0]
+                    ? { plataforma: influ.redes[0].plataforma, handle: influ.redes[0].handle }
+                    : undefined
+                }
                 entrega={selectedEntrega}
                 influActivity={influ.activity ?? []}
-                onChange={(patch) =>
+                onBack={backToDetail}
+                onClose={() => onOpenChange(false)}
+                onChange={(patch, log) =>
                   onPatch({
                     entregas: influ.entregas.map((x) =>
                       x.id === selectedEntrega.id ? { ...x, ...patch } : x,
                     ),
+                    ...(log
+                      ? { activity: logInfluActivity(influ, log, selectedEntrega.id).activity }
+                      : {}),
                   })
                 }
                 onRunAction={(action, opts) => onRunEntregaAction(selectedEntrega.id, action, opts)}
@@ -3523,44 +3343,6 @@ function WorkspaceDetailHeader({
         </div>
       </div>
     </div>
-  );
-}
-
-/** Seção recolhível reutilizada por Perfil/Briefing/Financeiro — fechada
- * ocupa só a altura do título + resumo de uma linha (~44-52px), sem
- * `min-height` artificial. */
-function CollapsibleSection({
-  title,
-  summary,
-  defaultOpen = false,
-  children,
-}: {
-  title: string;
-  summary?: ReactNode;
-  defaultOpen?: boolean;
-  children: ReactNode;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger asChild>
-        <button
-          type="button"
-          className="flex w-full items-center justify-between gap-3 py-3 text-left"
-        >
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-foreground">{title}</p>
-            {!open && summary && (
-              <div className="mt-0.5 truncate text-xs text-muted-foreground">{summary}</div>
-            )}
-          </div>
-          <ChevronDown
-            className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
-          />
-        </button>
-      </CollapsibleTrigger>
-      <CollapsibleContent className="pb-5">{children}</CollapsibleContent>
-    </Collapsible>
   );
 }
 
@@ -6073,49 +5855,6 @@ function PagamentoEditor({
   );
 }
 
-/* ============================================================
- * Entrega anexos — lista de arquivos ligados a uma entrega (roteiro,
- * gravação, conteúdo publicado, etc), independente do status/etapa em que
- * ela está e sem limite de quantidade por categoria.
- * ============================================================ */
-
-/** Campo de data compacto (rótulo em cima, não ao lado) — usado em grade
- * de 3 colunas no painel de detalhe da entrega; rótulo ao lado (largura
- * fixa) estourava/sobrepunha o input nessa largura estreita. */
-function PrazoField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value?: string;
-  onChange: (v: string | undefined) => void;
-}) {
-  return (
-    <label className="flex min-w-0 flex-col gap-1">
-      <span className="truncate text-[11px] font-medium text-muted-foreground">{label}</span>
-      <DateField
-        value={value ?? undefined}
-        onChange={onChange}
-        className="w-full min-w-0 text-[11px]"
-      />
-    </label>
-  );
-}
-
-const ENTREGA_ANEXO_ICON: Record<EntregaAnexoCategoria, typeof FileText> = {
-  Roteiro: FileText,
-  Gravação: Film,
-  "Conteúdo final": Upload,
-  Outro: Paperclip,
-};
-function isImageName(nome: string): boolean {
-  return /\.(png|jpe?g|gif|webp|svg)$/i.test(nome);
-}
-function isVideoName(nome: string): boolean {
-  return /\.(mp4|mov|webm|avi|mkv)$/i.test(nome);
-}
-
 /** Sobe a foto de perfil pro bucket `avatars` (Storage) e devolve uma URL
  * assinada válida por ~10 anos — antes virava um data: URL (base64) direto
  * na linha JSONB: ~80KB por foto, baixados de novo em TODA busca/resync da
@@ -6192,224 +5931,6 @@ async function uploadEntregaAnexo(file: File): Promise<string> {
     .createSignedUrl(path, 60 * 60 * 24 * 365);
   if (!signed) throw new Error("Falha ao gerar o link do arquivo. Tente de novo.");
   return signed.signedUrl;
-}
-
-/** Miniatura do anexo — imagem de verdade quando dá, ícone por tipo de
- * arquivo nos outros casos (vídeo, documento) — antes era só um nome de
- * arquivo sublinhado, difícil de saber de relance o que era cada anexo. */
-function AnexoThumb({ nome, url }: { nome: string; url: string }) {
-  if (isImageName(nome)) {
-    return (
-      <img
-        src={url}
-        alt=""
-        className="h-10 w-10 shrink-0 rounded-md border border-border object-cover"
-      />
-    );
-  }
-  const Icon = isVideoName(nome) ? FileVideo : FileText;
-  return (
-    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-muted-foreground">
-      <Icon className="h-4 w-4" />
-    </div>
-  );
-}
-
-function EntregaAnexosEditor({
-  anexos,
-  onChange,
-  ajusteCategoria,
-}: {
-  anexos: EntregaAnexo[];
-  onChange: (next: EntregaAnexo[]) => void;
-  /** Categoria afetada pelo ajuste pedido pelo cliente: ganha uma dica e "Enviar nova versão". */
-  ajusteCategoria?: EntregaAnexoCategoria;
-}) {
-  const fileRef = useRef<HTMLInputElement>(null);
-  const pendingCategoria = useRef<EntregaAnexoCategoria>("Roteiro");
-  const [uploading, setUploading] = useState<EntregaAnexoCategoria | null>(null);
-  const [error, setError] = useState("");
-
-  const pick = (c: EntregaAnexoCategoria) => {
-    pendingCategoria.current = c;
-    fileRef.current?.click();
-  };
-
-  // Aceita vários arquivos de uma vez (ex: Story de 3 unidades) — sobe
-  // todos e anexa numa ÚNICA chamada de `addAnexosComVersao`, na MESMA
-  // categoria escolhida: os arquivos são IRMÃOS (mesma versão), não
-  // revisões sequenciais um do outro.
-  const handleFiles = async (files: File[]) => {
-    if (files.length === 0) return;
-    setError("");
-    setUploading(pendingCategoria.current);
-    // Cada arquivo sobe de forma independente — se um falhar (ex: excedeu
-    // o limite de tamanho), os outros continuam e são anexados normalmente
-    // em vez de perder o lote inteiro por causa de 1 arquivo problemático.
-    const novos: { nome: string; url: string }[] = [];
-    const falhas: string[] = [];
-    for (const file of files) {
-      try {
-        const url = await uploadEntregaAnexo(file);
-        novos.push({ nome: file.name, url });
-      } catch (err) {
-        falhas.push(`${file.name}: ${err instanceof Error ? err.message : "falha desconhecida"}`);
-      }
-    }
-    if (novos.length > 0) onChange(addAnexosComVersao(anexos, pendingCategoria.current, novos));
-    if (falhas.length > 0) {
-      setError(
-        falhas.length === files.length
-          ? `Falha ao subir. ${falhas[0]}`
-          : `${novos.length} de ${files.length} arquivo(s) subiram. Falha: ${falhas.join("; ")}`,
-      );
-    }
-    setUploading(null);
-  };
-
-  return (
-    <div className="space-y-2.5">
-      <input
-        ref={fileRef}
-        type="file"
-        multiple
-        className="hidden"
-        onChange={(e) => {
-          const files = Array.from(e.target.files ?? []);
-          if (fileRef.current) fileRef.current.value = "";
-          if (files.length > 0) void handleFiles(files);
-        }}
-      />
-
-      {/* Um único botão compacto abre um menu com as 4 categorias — todas
-          continuam descobríveis e a um clique, sem gastar 4 blocos grandes
-          de tela quando ainda não há nada anexado. */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            disabled={uploading !== null}
-            className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {uploading ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Plus className="h-3.5 w-3.5" />
-            )}
-            {uploading ? `Enviando ${uploading}...` : "Adicionar arquivo"}
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
-          {ENTREGA_ANEXO_CATEGORIAS.map((c) => {
-            const Icon = ENTREGA_ANEXO_ICON[c];
-            const count = anexos.filter((a) => a.categoria === c).length;
-            return (
-              <DropdownMenuItem key={c} onClick={() => pick(c)}>
-                <Icon className="h-3.5 w-3.5" />
-                {c}
-                {count > 0 && (
-                  <span className="ml-auto text-[11px] text-muted-foreground">{count}</span>
-                )}
-              </DropdownMenuItem>
-            );
-          })}
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      {error && <p className="text-[11px] text-destructive">{error}</p>}
-
-      {anexos.length > 0 || ajusteCategoria ? (
-        <div className="space-y-2.5">
-          {ENTREGA_ANEXO_CATEGORIAS.filter(
-            (c) => anexos.some((a) => a.categoria === c) || c === ajusteCategoria,
-          ).map((c) => (
-            <div key={c} className="space-y-1">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-[11px] font-medium text-muted-foreground">
-                  {c}
-                  {c === ajusteCategoria && (
-                    <span className="font-normal"> · relacionado ao ajuste pedido</span>
-                  )}
-                </p>
-                {c === ajusteCategoria && (
-                  <button
-                    type="button"
-                    disabled={uploading !== null}
-                    onClick={() => pick(c)}
-                    className="text-[11px] font-medium text-foreground underline-offset-2 hover:underline disabled:opacity-60"
-                  >
-                    Enviar nova versão
-                  </button>
-                )}
-              </div>
-              <ul className="space-y-1.5">
-                {anexos
-                  .filter((a) => a.categoria === c)
-                  .map((a) => {
-                    const totalNaCategoria = anexos.filter(
-                      (x) => x.categoria === a.categoria,
-                    ).length;
-                    return (
-                      <li
-                        key={a.id}
-                        className="flex items-center gap-2.5 rounded-md border border-border bg-background p-1.5"
-                      >
-                        <AnexoThumb nome={a.nome} url={a.url} />
-                        <div className="min-w-0 flex-1">
-                          <a
-                            href={a.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            download={a.nome}
-                            className="block truncate text-xs font-medium text-foreground underline-offset-2 hover:underline"
-                          >
-                            {a.nome}
-                          </a>
-                          {totalNaCategoria > 1 && (
-                            <span className="mt-0.5 inline-block rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
-                              v{a.versao ?? 1}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex shrink-0 items-center gap-0.5 text-[11px]">
-                          <a
-                            href={a.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="rounded px-1.5 py-1 font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-                          >
-                            Abrir
-                          </a>
-                          <button
-                            type="button"
-                            disabled={uploading !== null}
-                            onClick={() => pick(a.categoria)}
-                            title="Envia uma nova versão (a anterior continua no histórico de versões)"
-                            className="rounded px-1.5 py-1 font-medium text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-60"
-                          >
-                            Substituir
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onChange(anexos.filter((x) => x.id !== a.id))}
-                            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
-                            aria-label="Remover anexo"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </li>
-                    );
-                  })}
-              </ul>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="text-[11px] text-text-secondary">Nenhum anexo ainda.</p>
-      )}
-    </div>
-  );
 }
 
 /* ============================================================

@@ -627,6 +627,9 @@ export type Entrega = {
   roteiroReprovacao?: ClienteVeredito;
   /** Idem, para o conteúdo publicado. */
   conteudoReprovacao?: ClienteVeredito;
+  /** Legenda do post — texto próprio da entrega (não um arquivo). Só uso interno: não vai para o
+   * portal do cliente. Aditivo: entregas antigas não têm. */
+  legenda?: string;
 };
 
 /** Motivo + carimbo de quando o cliente reprovou algo pelo link público

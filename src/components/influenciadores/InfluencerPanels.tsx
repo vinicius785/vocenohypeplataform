@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { ChevronRight, MoreVertical, Plus, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
@@ -10,26 +11,17 @@ import {
   entregaNome,
   entregaTone,
   type ClientFeedback,
-  type EntregaTone,
   type FeedbackTone,
 } from "@/lib/influencer-next-action";
 import { formatFeedbackWhen, feedbackExcerpt } from "@/lib/entrega-ajustes";
 import type { Entrega } from "@/lib/influencer-model";
 import { cn } from "@/lib/utils";
 import { CockpitTitle, QuietButton } from "./InfluencerCockpit";
+import { ENTREGA_TONE_DOT } from "./entrega-tone";
 
 /** Peças de apresentação da V2 do detalhe do influenciador (só layout; as regras estão em
  * `lib/influencer-next-action.ts` e os dados continuam onde sempre estiveram). */
 
-/** Cor só como sinal semântico, na mesma família do Início: verde concluído, âmbar aguardando,
- * laranja ajuste pedido, azul em andamento. */
-const TONE_DOT: Record<EntregaTone, string> = {
-  ok: "bg-emerald-500",
-  waiting: "bg-amber-500",
-  adjust: "bg-orange-500",
-  progress: "bg-sky-500",
-  neutral: "bg-muted-foreground/50",
-};
 const FEEDBACK_BAR: Record<FeedbackTone, string> = {
   adjust: "border-orange-500/60",
   waiting: "border-amber-500/60",
@@ -115,7 +107,10 @@ export function EntregasRows({
                   >
                     <span
                       aria-hidden
-                      className={cn("h-2 w-2 shrink-0 rounded-full", TONE_DOT[entregaTone(e)])}
+                      className={cn(
+                        "h-2 w-2 shrink-0 rounded-full",
+                        ENTREGA_TONE_DOT[entregaTone(e)],
+                      )}
                     />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium text-foreground">
@@ -178,13 +173,19 @@ export function EntregasRows({
 export function FeedbackNote({
   f,
   onOpen,
+  expandable,
   className,
 }: {
   f: ClientFeedback;
+  /** Abre a entrega (usado na lista de entregas do influenciador). */
   onOpen?: (entregaId: string) => void;
+  /** Dentro da própria entrega: "Ver feedback completo" expande o texto aqui mesmo, sem janela. */
+  expandable?: boolean;
   className?: string;
 }) {
+  const [open, setOpen] = useState(false);
   const excerpt = feedbackExcerpt(f.motivo, 150);
+  const text = expandable && open ? f.motivo.trim() : excerpt.text;
   const when = formatFeedbackWhen(f.respondedAt);
   return (
     <div className={cn("space-y-1 border-l-2 pl-3", FEEDBACK_BAR[f.tone], className)}>
@@ -192,7 +193,9 @@ export function FeedbackNote({
         Feedback do cliente
         <span className="font-normal normal-case tracking-normal"> · {f.etapaLabel}</span>
       </p>
-      <p className="text-sm font-medium leading-snug text-foreground">“{excerpt.text}”</p>
+      <p className="whitespace-pre-line break-words text-sm font-medium leading-snug text-foreground">
+        “{text}”
+      </p>
       <p className="text-xs text-text-secondary">
         {[f.autorNome, when].filter(Boolean).join(" · ")}
       </p>
@@ -206,6 +209,11 @@ export function FeedbackNote({
         </p>
         {f.entregaId && onOpen && (
           <QuietButton onClick={() => onOpen(f.entregaId!)}>Ver feedback completo →</QuietButton>
+        )}
+        {expandable && excerpt.truncated && (
+          <QuietButton onClick={() => setOpen((v) => !v)}>
+            {open ? "Ver menos" : "Ver feedback completo →"}
+          </QuietButton>
         )}
       </div>
     </div>

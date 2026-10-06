@@ -190,24 +190,30 @@ export type ClientFeedback = {
   statusLabel: string;
 };
 
+/** O feedback "vivo" de UMA entrega (o carimbo só some quando o cliente aprova), ou `null`. */
+export function entregaFeedback(e: Entrega): ClientFeedback | null {
+  const a = entregaAjusteView(e);
+  if (!a) return null;
+  return {
+    key: e.id,
+    entregaId: e.id,
+    entregaNome: entregaNome(e),
+    etapaLabel: a.etapaLabel,
+    motivo: a.veredito.motivo,
+    respondedAt: a.veredito.respondedAt,
+    autorNome: a.veredito.autorNome,
+    phase: a.phase,
+    tone: a.phase === "reenviado" ? "waiting" : "adjust",
+    statusLabel: a.phase === "reenviado" ? "Reenviado para aprovação" : "Aguardando novo envio",
+  };
+}
+
 /** Feedbacks do cliente ainda "vivos" (o carimbo só some quando ele aprova), do mais recente ao mais antigo. */
 export function clientFeedbacks(influ: Influ): ClientFeedback[] {
   const out: ClientFeedback[] = [];
   for (const e of influ.entregas) {
-    const a = entregaAjusteView(e);
-    if (!a) continue;
-    out.push({
-      key: e.id,
-      entregaId: e.id,
-      entregaNome: entregaNome(e),
-      etapaLabel: a.etapaLabel,
-      motivo: a.veredito.motivo,
-      respondedAt: a.veredito.respondedAt,
-      autorNome: a.veredito.autorNome,
-      phase: a.phase,
-      tone: a.phase === "reenviado" ? "waiting" : "adjust",
-      statusLabel: a.phase === "reenviado" ? "Reenviado para aprovação" : "Aguardando novo envio",
-    });
+    const f = entregaFeedback(e);
+    if (f) out.push(f);
   }
   if (influ.status === "RECUSADO" && influ.clienteReprovacao) {
     out.push({
