@@ -1,6 +1,22 @@
 {
-  "version": "1.368.0",
+  "version": "1.369.0",
   "releases": [
+    {
+      "version": "1.369.0",
+      "summary": "Kanban de tarefas do Comercial: “Ver mais” agora expande dentro da própria coluna.",
+      "modules": [
+        {
+          "name": "COMERCIAL",
+          "tagline": "Tarefas",
+          "items": [
+            {
+              "title": "Ver mais inline",
+              "description": "Em vez de abrir uma lateral, “Ver mais (N)” mostra as demais tarefas na própria coluna e vira “Ver menos”. Cada coluna expande de forma independente."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.368.0",
       "summary": "Score Operacional v3: prazo vigente sem dupla penalização e nova dimensão Fluxo sem retrabalho.",

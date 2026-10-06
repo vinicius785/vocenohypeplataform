@@ -157,7 +157,7 @@ import {
   PRIORITY_TONE,
   type TaskPriority,
 } from "@/lib/task-status";
-import { KanbanVerMais } from "@/components/shared/KanbanVerMais";
+import { columnView } from "@/lib/kanban-limit";
 import {
   applyRecurrenceIfCompleted,
   fmtDate,
@@ -956,6 +956,14 @@ export function TaskBoard({
   // `onDrop` de cada coluna).
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   const [showAllDone, setShowAllDone] = useState(false);
+  // "Ver mais" do Kanban com limite por coluna: expansão INLINE e independente por coluna.
+  const [expandedCols, setExpandedCols] = useState<Set<string>>(() => new Set());
+  const toggleCol = (key: string) =>
+    setExpandedCols((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
   // Expandir subtarefas direto no card do board (fora da tarefa) — pedido
   // explícito de dar pra ver as subtarefas sem abrir a tarefa-mãe. Estado
   // só de sessão (não persiste), igual a qualquer accordion aberto/fechado.
@@ -1793,8 +1801,11 @@ export function TaskBoard({
                       ? sortedItems.slice(0, 4)
                       : sortedItems;
                   const hiddenCount = allItems.length - items.length;
-                  const visibleItems =
-                    columnLimit !== undefined ? items.slice(0, columnLimit) : items;
+                  const colView =
+                    columnLimit !== undefined
+                      ? columnView(items, columnLimit, expandedCols.has(col.key))
+                      : null;
+                  const visibleItems = colView ? colView.visible : items;
                   const renderCard = (t: BoardItem, inSheet: boolean) => (
                     <div
                       key={t.id}
@@ -2131,18 +2142,17 @@ export function TaskBoard({
                           </div>
                         )}
                         {visibleItems.map((t) => renderCard(t, false))}
-                        {columnLimit !== undefined && (
-                          <KanbanVerMais
-                            hiddenCount={items.length - visibleItems.length}
-                            title={col.label}
-                            total={items.length}
+                        {colView && (colView.hiddenCount > 0 || colView.canCollapse) && (
+                          <button
+                            type="button"
+                            onClick={() => toggleCol(col.key)}
+                            aria-expanded={expandedCols.has(col.key)}
+                            className="w-full rounded-md px-2 py-1.5 text-center text-xs font-medium text-text-secondary hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           >
-                            {(close) => (
-                              <div onClickCapture={close} className="space-y-2.5">
-                                {items.map((t) => renderCard(t, true))}
-                              </div>
-                            )}
-                          </KanbanVerMais>
+                            {colView.hiddenCount > 0
+                              ? `Ver mais (${colView.hiddenCount})`
+                              : "Ver menos"}
+                          </button>
                         )}
                         {isDone && columnLimit === undefined && hiddenCount > 0 && (
                           <button
