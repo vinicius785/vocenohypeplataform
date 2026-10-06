@@ -63,13 +63,8 @@ import {
 } from "@/lib/reunioes-store";
 import { useTeamMembers } from "@/components/tasks/task-people";
 import { WorkTaskRow } from "@/components/inicio/WorkTaskRow";
-import { changeTaskStatus } from "@/lib/task-status-change";
-import {
-  pendingDependencyCount,
-  statusGate,
-  timerMatchesTask,
-  workContextLabel,
-} from "@/lib/home-work";
+import { runWorkStatusChange } from "@/lib/work-status-action";
+import { timerMatchesTask, workContextLabel } from "@/lib/home-work";
 import { useTaskDependencies } from "@/lib/task-dependencies-store";
 import { startTimerOnInProgress, stopTimer, useRunningTimer } from "@/lib/time-entries";
 import { statusTargetOrigin } from "@/lib/task-status-change";
@@ -829,39 +824,18 @@ export function InicioDashboard() {
   /** Muda o status direto da Home pelo MESMO pipeline do Kanban (`changeTaskStatus`). Bloqueio e
    * desbloqueio exigem o questionário: abrem a tarefa em vez de contornar a regra. */
   const handleWorkStatus = async (t: DashTask, next: TaskStatus, index: number) => {
-    const raw = t.id.replace(/^mkt:/, "");
-    const hasDeps = allDeps.some((d) => d.blockedTaskId === raw);
-    const pending = hasDeps
-      ? pendingDependencyCount(
-          raw,
-          allDeps,
-          (id) =>
-            loadAllTasksFlat(campanhaNameMap).find((x) => x.id.replace(/^mkt:/, "") === id)?.status,
-        )
-      : 0;
-    const gate = statusGate(t.status, next, pending);
-    if (gate === "noop") return;
-    if (gate === "open-task") return openTask(t);
-    if (gate === "blocked-by-dependency") {
-      toast.error("Esta tarefa depende de outra ainda não concluída.");
-      return;
-    }
-    if (gate === "confirm-complete") {
-      const yes = await confirm(
-        "Esta tarefa depende de outra ainda não concluída. Concluir mesmo assim?",
-        { title: "Concluir tarefa?", confirmLabel: "Concluir" },
-      );
-      if (!yes) return;
-    }
-    const res = changeTaskStatus(t, next, {
-      members: workMembers,
-      performanceSettings,
+    const res = await runWorkStatusChange({
+      task: t,
+      next,
+      allDeps,
+      statusOf: (id) =>
+        loadAllTasksFlat(campanhaNameMap).find((x) => x.id.replace(/^mkt:/, "") === id)?.status,
+      ctx: { members: workMembers, performanceSettings },
+      confirm,
+      openTask,
+      notifyError: (m) => toast.error(m),
     });
-    if (!res.ok) {
-      toast.error("Não foi possível alterar o status desta tarefa.");
-      return;
-    }
-    if (res.completed) {
+    if (res.ok && res.completed) {
       const key = workKey(t);
       setLeaving((m) => new Map(m).set(key, { task: { ...t, status: "Concluído" }, index }));
       window.setTimeout(

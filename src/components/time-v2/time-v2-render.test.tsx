@@ -27,20 +27,13 @@ vi.mock("@/components/tasks/TaskBoard", () => ({
 
 const { TimeMembersTable } = await import("./TimeMembersTable");
 const { TimeSummaryStrip } = await import("./TimeSummaryStrip");
-const {
-  ProfileActivity,
-  ProfilePerformance,
-  ProfileHistory,
-  ProfileSummary,
-  ProfileScoreSummary,
-  ProfileDependencies,
-  ProfileInsights,
-  ProfileWorkload,
-} = await import("./profile-sections");
+const { OverviewView, PerformanceView, TasksView, DependenciesView, HistoryView } =
+  await import("./MemberViews");
+const { CommunicationView } = await import("./MemberCommunication");
 const { buildMemberRows, sortMemberRows } = await import("./member-rows");
-const { assessLoad, dependencySummary } = await import("./member-metrics");
+const { assessLoad } = await import("./member-metrics");
 const { memberTaskStats } = await import("./time-v2-utils");
-const { ProfileCommunication } = await import("./ProfileCommunication");
+const { communicationReading, scoreView, blockedRows } = await import("./member-v2");
 
 const LONG_NAME = "Gustavo Rogério de Souza de Freitas da Silva Albuquerque Vasconcelos Neto";
 const LONG_ROLE = "Head de Estratégia, Operações e Relacionamento com Influenciadores e Parceiros";
@@ -231,70 +224,155 @@ describe("TimeSummaryStrip", () => {
   });
 });
 
-describe("seções do perfil central", () => {
-  it("ProfileActivity: pessoa sem tarefas mostra estado vazio; título longo trunca", () => {
-    expect(renderToStaticMarkup(<ProfileActivity tasks={[]} onOpenTask={() => {}} />)).toContain(
-      "Nenhuma tarefa vinculada",
-    );
+const agg = {
+  pctNoPrazo: null,
+  pctComAtraso: null,
+  atualmenteAtrasadas: 0,
+  tempoMedioAtrasoDias: null,
+  qtdReplanejamentos: 0,
+  qtdReplanejamentosNoDia: 0,
+  pctComPrazoAlterado: null,
+  motivosMaisComuns: [],
+  pctDependenciaExterna: null,
+};
+const noCycle = {
+  completedInRange: 0,
+  cycleDays: null,
+  cycleSample: 0,
+  leadDays: null,
+  leadSample: 0,
+};
+const baseScore = {
+  score: null,
+  dataState: "sem_dados",
+  amostra: 0,
+  confidence: "sem_dados",
+  classificacao: null,
+} as never;
+const perfProps = {
+  score: baseScore,
+  trendLabel: null,
+  panel: null,
+  agg,
+  aggPrevious: agg,
+  aggPrevious2: agg,
+  completed: 0,
+  lateCount: 0,
+  previousCompleted: 0,
+  previous2Completed: 0,
+  overdueNow: 0,
+  replan: { tasksReplanned: 0, taskBase: 0, before: 0, after: 0 },
+  cycle: noCycle,
+  periodInProgress: true,
+  meetings: { attended: 0, expected: 0 },
+};
+const ctx = (isSelf: boolean) => ({
+  isSelf,
+  context: (t: DashTask) => t.projectName,
+  timerStartedAt: () => null,
+  onOpen: () => {},
+  onStatus: () => {},
+  onTimerStart: () => {},
+  onTimerStop: () => {},
+});
+const seg = (avg: number | null) => ({
+  answered: avg == null ? 0 : 4,
+  unanswered: 0,
+  averageSeconds: avg,
+  medianSeconds: avg,
+});
+const rt = (all: number | null, direct: number | null, mention: number | null) => ({
+  all: { answered: 8, unanswered: 0, averageSeconds: all, medianSeconds: all },
+  direct: seg(direct),
+  mention: seg(mention),
+});
+
+describe("detalhe do membro V2 — visões", () => {
+  it("Tarefas: pessoa sem tarefas mostra estado vazio; título longo trunca", () => {
+    const stats = memberTaskStats([]);
+    const load = assessLoad(stats, null);
+    expect(
+      renderToStaticMarkup(<TasksView tasks={[]} stats={stats} load={load} ctx={ctx(true)} />),
+    ).toContain("Nenhuma tarefa vinculada");
+    const t = [task({ title: LONG_NAME, bucket: "atrasada", due: "Atrasada · 2d" })];
     const html = renderToStaticMarkup(
-      <ProfileActivity
-        tasks={[task({ title: LONG_NAME, bucket: "atrasada", due: "Atrasada · 2d" })]}
-        onOpenTask={() => {}}
-      />,
+      <TooltipProvider>
+        <TasksView
+          tasks={t}
+          stats={memberTaskStats(t)}
+          load={assessLoad(memberTaskStats(t), null)}
+          ctx={ctx(true)}
+        />
+      </TooltipProvider>,
     );
-    expect(html).toContain("Atrasadas");
+    expect(html).toContain("Próximas do vencimento");
+    expect(html).toContain("1 aberta · 0 vencem hoje · 1 atrasada · 0 em andamento");
     expect(html).toMatch(/truncate[^>]*>Gustavo/);
   });
 
-  const agg = {
-    pctNoPrazo: null,
-    pctComAtraso: null,
-    atualmenteAtrasadas: 0,
-    tempoMedioAtrasoDias: null,
-    qtdReplanejamentos: 0,
-    qtdReplanejamentosNoDia: 0,
-    pctComPrazoAlterado: null,
-    motivosMaisComuns: [],
-    pctDependenciaExterna: null,
-  };
-  const noCycle = {
-    completedInRange: 0,
-    cycleDays: null,
-    cycleSample: 0,
-    leadDays: null,
-    leadSample: 0,
-  };
-  const perfProps = {
-    agg,
-    aggPrevious: agg,
-    aggPrevious2: agg,
-    completed: 0,
-    lateCount: 0,
-    previousCompleted: 0,
-    previous2Completed: 0,
-    overdueNow: 0,
-    replan: { tasksReplanned: 0, taskBase: 0, before: 0, after: 0 },
-    cycle: noCycle,
-    periodInProgress: true,
-    meetingsAttended: 0,
-    meetingsExpected: 0,
-    totalSeconds: 0,
-  };
+  it("Tarefas: status só é editável no próprio perfil", () => {
+    const t = [task({ title: "X", status: "Aberto", bucket: "hoje" })];
+    const mk = (self: boolean) =>
+      renderToStaticMarkup(
+        <TooltipProvider>
+          <TasksView
+            tasks={t}
+            stats={memberTaskStats(t)}
+            load={assessLoad(memberTaskStats(t), null)}
+            ctx={ctx(self)}
+          />
+        </TooltipProvider>,
+      );
+    expect(mk(true)).toMatch(/aria-haspopup|Alterar status|combobox/i);
+    expect(mk(false)).not.toMatch(/aria-haspopup|combobox/i);
+  });
 
-  it("ProfilePerformance: sem dados nunca inventa número (—, nunca 0/0 nem 0%)", () => {
-    const html = renderToStaticMarkup(<ProfilePerformance {...perfProps} />);
+  it("Desempenho: sem dados nunca inventa número (—, nunca 0/0 nem 0%)", () => {
+    const html = renderToStaticMarkup(<PerformanceView {...perfProps} />);
+    expect(html).toContain("Sem dados suficientes no período");
     expect(html).toContain("nenhuma esperada");
     expect(html).toContain("Nenhuma conclusão no período");
     expect(html).toContain("Sem base de tarefas no período");
-    expect(html).toContain("Nenhuma tarefa concluída no período");
     expect(html).not.toContain("0/0");
     expect(html).not.toContain(">0%<");
   });
 
-  it("ProfilePerformance: prazo, replanejamento, ciclo e tendência em 3 períodos", () => {
+  it("Desempenho: amostra pequena → 'Dados insuficientes para score' (sem 100/100 enganoso)", () => {
     const html = renderToStaticMarkup(
-      <ProfilePerformance
+      <PerformanceView
         {...perfProps}
+        score={
+          {
+            ...(baseScore as object),
+            score: 100,
+            dataState: "definitivo",
+            amostra: 12,
+            confidence: "baixa",
+            classificacao: "Excelente",
+          } as never
+        }
+      />,
+    );
+    expect(html).toContain("Dados insuficientes para score");
+    expect(html).toContain("12 tarefas na base");
+    expect(html).not.toContain("Excelente");
+    expect(html).not.toContain("/100");
+  });
+
+  it("Desempenho: com amostra suficiente mostra score, confiança e indicadores com tendência", () => {
+    const html = renderToStaticMarkup(
+      <PerformanceView
+        {...perfProps}
+        score={
+          {
+            ...(baseScore as object),
+            score: 87,
+            dataState: "definitivo",
+            amostra: 25,
+            confidence: "media",
+            classificacao: "Muito bom",
+          } as never
+        }
         agg={{ ...agg, pctNoPrazo: 90, qtdReplanejamentos: 2 }}
         aggPrevious={{ ...agg, pctNoPrazo: 84 }}
         aggPrevious2={{ ...agg, pctNoPrazo: 78 }}
@@ -307,145 +385,149 @@ describe("seções do perfil central", () => {
         cycle={{ completedInRange: 5, cycleDays: 2.4, cycleSample: 3, leadDays: 4, leadSample: 5 }}
       />,
     );
-    expect(html).toContain("90%");
-    expect(html).toContain("9 no prazo · 1 com atraso · 1 atrasada agora");
+    expect(html).toContain("87");
+    expect(html).toContain("Confiança média · 25 tarefas na base");
+    expect(html).toContain("9 no prazo · 1 com atraso");
     expect(html).toContain("78% → 84% → 90%");
-    expect(html).toContain("2 de 18 tarefas · 1 antes do vencimento · 1 no dia ou depois");
-    expect(html).toContain("11%");
+    expect(html).toContain("2 de 18 tarefas");
     expect(html).toContain("2,4 dias");
-    expect(html).toContain("3 de 5 com início registrado");
   });
 
-  it("Carga, Dependências e Insights mostram motivo/categoria e estados vazios", () => {
-    const tasks = [
-      task({ id: "1", bucket: "atrasada" }),
-      task({ id: "2", status: "Em andamento" }),
-      task({ id: "3", title: "Aguardando briefing", blockCategory: "aguardando_cliente" }),
-    ];
-    const stats = memberTaskStats(tasks);
-    const workload = renderToStaticMarkup(
-      <TooltipProvider>
-        <ProfileWorkload stats={stats} load={assessLoad(stats, null)} />
-      </TooltipProvider>,
-    );
-    expect(workload).toContain("3 abertas · 0 vencem hoje · 1 atrasada · 1 em andamento");
-    expect(workload).toContain("1 tarefa atrasada");
-
-    const deps = renderToStaticMarkup(
-      <ProfileDependencies summary={dependencySummary(tasks)} onOpenTask={() => {}} />,
-    );
-    expect(deps).toContain("1 tarefa bloqueada");
-    expect(deps).toContain("Aguardando cliente");
-    expect(
-      renderToStaticMarkup(
-        <ProfileDependencies summary={dependencySummary([])} onOpenTask={() => {}} />,
-      ),
-    ).toContain("Nenhuma tarefa bloqueada");
-
-    expect(renderToStaticMarkup(<ProfileInsights insights={[]} />)).toContain(
-      "Nenhum insight relevante",
-    );
-    expect(
-      renderToStaticMarkup(
-        <ProfileInsights insights={[{ kind: "atencao", text: "3 tarefas estão atrasadas." }]} />,
-      ),
-    ).toContain("3 tarefas estão atrasadas.");
-  });
-
-  it("ProfileHistory: sem atividade mostra estado vazio", () => {
-    const html = renderToStaticMarkup(
-      <ProfileHistory
-        completions={[]}
-        deadlineChanges={[]}
-        attendance={[]}
-        meetingsById={new Map()}
-        projectNames={[]}
+  it("Visão geral: sem pontos de atenção → 'Tudo sob controle'; com atenção, no máximo 3", () => {
+    const base = {
+      tasks: [] as DashTask[],
+      ctx: ctx(false),
+      journey: { statusLabel: "Disponível", hours: "12,5h", days: 4 },
+      communication: { state: "ready" as const, reading: communicationReading(null, null) },
+      goTo: () => {},
+    };
+    const calm = renderToStaticMarkup(<OverviewView {...base} insights={[]} />);
+    expect(calm).toContain("Tudo sob controle");
+    expect(calm).toContain("Ainda não há dados suficientes.");
+    expect(calm).toContain("Nenhuma tarefa aberta.");
+    const many = renderToStaticMarkup(
+      <OverviewView
+        {...base}
+        insights={[1, 2, 3, 4].map((n) => ({ kind: "atencao" as const, text: `Item ${n}.` }))}
       />,
     );
-    expect(html).toContain("Sem atividade registrada");
-    expect(html).toContain("Nenhum projeto ou campanha");
+    expect(many).toContain("Item 3.");
+    expect(many).not.toContain("Item 4.");
   });
-});
 
-describe("perfil contínuo", () => {
-  it("resumo: cada indicador é um atalho acessível pra sua seção", () => {
+  it("Dependências: lista, bloqueador só com dependência formal, e vazio compacto", () => {
+    expect(
+      renderToStaticMarkup(
+        <DependenciesView rows={[]} categoryLabel={() => ""} onOpenTask={() => {}} />,
+      ),
+    ).toContain("Nenhuma tarefa bloqueada agora.");
+    const t = task({ id: "x", title: "Aguardando briefing", status: "Bloqueada" });
+    const rows = blockedRows([t], [{ blockedTaskId: "x", blockingTaskId: "b" }], () => ({
+      label: "Criar briefing",
+      status: "Em andamento",
+      assignees: ["Toni"],
+      dueDate: "2026-10-09",
+    }));
     const html = renderToStaticMarkup(
-      <ProfileSummary
-        items={[
-          { key: "a", icon: null, label: "Atrasadas", value: 3, tone: "danger", onClick: () => {} },
+      <TooltipProvider>
+        <DependenciesView
+          rows={rows}
+          categoryLabel={() => "Aguardando cliente"}
+          onOpenTask={() => {}}
+        />
+      </TooltipProvider>,
+    );
+    expect(html).toContain("Bloqueada por");
+    expect(html).toContain("Criar briefing");
+    expect(html).toContain("Toni");
+    expect(html).toContain("09/10");
+  });
+
+  it("Histórico: vazio mostra mensagem; com eventos usa a linha do tempo compartilhada", () => {
+    expect(renderToStaticMarkup(<HistoryView events={[]} projects={[]} />)).toContain(
+      "Sem atividade registrada",
+    );
+    const html = renderToStaticMarkup(
+      <HistoryView
+        projects={["Você no Hype", "Outro"]}
+        events={[
           {
-            key: "b",
-            icon: null,
-            label: "Resposta média",
-            value: "—",
-            hint: "Sem dados suficientes",
-            onClick: () => {},
+            id: "1",
+            at: new Date().toISOString(),
+            autor: "Toni",
+            kind: "outro",
+            texto: "concluiu “Distribuir”",
+            entrega: "Você no Hype",
+            menor: false,
           },
         ]}
       />,
     );
-    expect(html).toContain("Atrasadas: 3. Ir para a seção");
-    expect(html).toContain("Sem dados suficientes");
+    expect(html).toContain("Todos os projetos");
+    expect(html).toContain("concluiu “Distribuir”");
+    expect(html).toContain("Você no Hype");
+    expect(html).toContain("Hoje");
   });
+});
 
-  it("Score sem dados mostra 'Sem dados suficientes' e a ação 'Ver composição do Score'", () => {
-    const html = renderToStaticMarkup(
-      <ProfileScoreSummary
-        score={{ score: null, dataState: "sem_dados" } as never}
-        trendLabel={null}
-        expanded={false}
-        onToggle={() => {}}
-      />,
-    );
-    expect(html).toContain("Sem dados suficientes");
-    expect(html).toContain("Ver composição do Score");
-  });
-
-  it("Comunicação: estado de erro e sem dados nunca inventam número; aviso de privacidade sempre presente", () => {
+describe("Comunicação V2", () => {
+  it("erro e sem dados nunca inventam número", () => {
     const err = renderToStaticMarkup(
-      <ProfileCommunication data={null} previous={null} state="error" />,
+      <CommunicationView
+        state="error"
+        reading={communicationReading(null, null)}
+        data={null}
+        previous={null}
+      />,
     );
     expect(err).toContain("Ainda não disponível");
-    expect(err).toContain(
-      "O conteúdo, participantes e conversas utilizados no cálculo não são exibidos",
-    );
-    expect(err).toContain("O tempo é calculado com base nos eventos registrados pela plataforma");
+    expect(err).toContain("o conteúdo das conversas não é exibido");
     const empty = renderToStaticMarkup(
-      <ProfileCommunication
-        data={{
-          direct: { answered: 0, unanswered: 0, averageSeconds: null, medianSeconds: null },
-          mention: { answered: 0, unanswered: 0, averageSeconds: null, medianSeconds: null },
-          all: { answered: 0, unanswered: 0, averageSeconds: null, medianSeconds: null },
-        }}
-        previous={null}
+      <CommunicationView
         state="ready"
+        reading={communicationReading(rt(null, null, null), null)}
+        data={rt(null, null, null)}
+        previous={null}
       />,
     );
-    expect(empty).toContain("Sem dados suficientes");
+    expect(empty).toContain("Ainda não há dados suficientes.");
   });
 
-  it("Comunicação com dados: média, mediana, diretas/menções e variação — sem contagens nem conversas", () => {
-    const seg = { answered: 4, unanswered: 1, averageSeconds: 1080, medianSeconds: 600 };
+  it("com dados: média, 'demora mais em', comparação com o time e recomendação — sem mediana, contagens ou conversas", () => {
+    const data = rt(7200, 8040, 300);
     const html = renderToStaticMarkup(
-      <ProfileCommunication
-        data={{
-          direct: { ...seg, averageSeconds: 900 },
-          mention: { ...seg, averageSeconds: 1440 },
-          all: { answered: 8, unanswered: 2, averageSeconds: 1080, medianSeconds: 600 },
-        }}
-        previous={{
-          direct: seg,
-          mention: seg,
-          all: { answered: 8, unanswered: 2, averageSeconds: 1200, medianSeconds: 600 },
-        }}
+      <CommunicationView
         state="ready"
+        reading={communicationReading(data, 3600)}
+        data={data}
+        previous={rt(9000, null, null)}
       />,
     );
-    expect(html).toContain("18 min");
-    expect(html).toContain("10 min");
-    expect(html).toContain("15 min");
-    expect(html).toContain("24 min");
-    expect(html).toContain("↓ 10% vs período anterior");
-    expect(html).not.toMatch(/analisadas|sem resposta/i);
+    expect(html).toContain("2h");
+    expect(html).toContain("Demora mais em");
+    expect(html).toContain("Mensagens diretas");
+    expect(html).toContain("Acima da média do time");
+    expect(html).toContain("Recomendação");
+    expect(html).toContain("↓ 20% vs período anterior");
+    expect(html).toContain("o conteúdo das conversas não é exibido");
+    expect(html).not.toMatch(/mediana|analisadas|sem resposta/i);
+  });
+
+  it("sem referência do time não inventa comparação", () => {
+    const data = rt(420, null, null);
+    const html = renderToStaticMarkup(
+      <CommunicationView
+        state="ready"
+        reading={communicationReading(data, null)}
+        data={data}
+        previous={null}
+      />,
+    );
+    expect(html).toContain("7 min");
+    expect(html).not.toMatch(/média do time/);
+  });
+
+  it("scoreView exportado coerente", () => {
+    expect(scoreView({ score: 50, amostra: 3, dataState: "provisorio" }).mode).toBe("insuficiente");
   });
 });

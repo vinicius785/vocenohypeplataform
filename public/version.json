@@ -1,29 +1,33 @@
 {
-  "version": "1.345.0",
+  "version": "1.346.0",
   "releases": [
     {
-      "version": "1.345.0",
-      "summary": "Financeiro do influenciador V2: resumo, uma próxima ação, pagamento como fluxo, dados bancários, contrato e atividade.",
+      "version": "1.346.0",
+      "summary": "Detalhe do membro V2: visão rápida, uma seção por vez e métricas mais confiáveis.",
       "modules": [
         {
-          "name": "CAMPANHAS",
-          "tagline": "Detalhe do influenciador · Recursos",
+          "name": "TIME",
+          "tagline": "Detalhe do membro",
           "items": [
             {
-              "title": "Uma próxima ação",
-              "description": "Sem a lista de pendências: a tela mostra só a ação prioritária (definir remuneração, cadastrar dados, anexar contrato, iniciar ou registrar pagamento)."
+              "title": "Visão rápida e navegação clara",
+              "description": "Cabeçalho compacto, período como contexto, 5 indicadores e as visões Visão geral, Desempenho, Tarefas, Jornada, Comunicação, Dependências e Histórico, uma por vez."
             },
             {
-              "title": "Pagamento como fluxo",
-              "description": "Estado em destaque com os requisitos (remuneração, dados bancários, contrato) e as ações secundárias no menu ⋯."
+              "title": "Visão geral com atenção",
+              "description": "No máximo 3 pontos de atenção/leitura, “Meu trabalho” com status editável no próprio perfil (liga o cronômetro como no Início) e resumos de Jornada e Comunicação."
             },
             {
-              "title": "Dados bancários protegidos e contrato como arquivo",
-              "description": "Conta, agência, CPF/CNPJ e PIX aparecem parcialmente ocultos (Mostrar/Ocultar); o contrato vira um item de documento."
+              "title": "Score só com amostra confiável",
+              "description": "Com menos de 20 tarefas na base, mostra “Dados insuficientes para score” em vez de 100/100 com confiança baixa."
             },
             {
-              "title": "Atividade financeira",
-              "description": "Mesma linha do tempo do histórico das entregas, só com eventos financeiros."
+              "title": "Comunicação sobre velocidade",
+              "description": "Tempo médio, onde demora mais, comparação com a média do time (quando existe) e uma recomendação; sem mediana."
+            },
+            {
+              "title": "Dependências e histórico",
+              "description": "Mostra quem bloqueia quando há dependência formal; histórico em linha do tempo com filtro por projeto. “Informações do membro” foi para o menu ⋯."
             }
           ]
         }

@@ -3,6 +3,7 @@ import { Play, Square } from "lucide-react";
 import {
   TaskDeadlineBadge,
   TaskPriorityFlag,
+  TaskStatusIcon,
   TaskStatusSelect,
   deadlineViewFromDashTask,
   isTaskStatus,
@@ -31,6 +32,8 @@ export function WorkTaskRow({
   context,
   timerStartedAt,
   leaving,
+  readOnlyStatus = false,
+  hideTimer = false,
   onOpen,
   onStatus,
   onTimerStart,
@@ -42,13 +45,17 @@ export function WorkTaskRow({
   timerStartedAt: string | null;
   /** Concluída agora: fica um instante riscada antes de sair da lista. */
   leaving?: boolean;
+  /** Só mostra o status (perfil de outra pessoa): mudar status liga o cronômetro de QUEM muda. */
+  readOnlyStatus?: boolean;
+  /** Sem cronômetro na linha. */
+  hideTimer?: boolean;
   onOpen: () => void;
   onStatus: (next: TaskStatus) => void;
-  onTimerStart: () => void;
-  onTimerStop: () => void;
+  onTimerStart?: () => void;
+  onTimerStop?: () => void;
 }) {
   const status: TaskStatus = isTaskStatus(task.status) ? task.status : "Aberto";
-  const canStart = !timerStartedAt && status === "Em andamento";
+  const canStart = !hideTimer && !timerStartedAt && status === "Em andamento";
   return (
     <div
       role="button"
@@ -71,12 +78,16 @@ export function WorkTaskRow({
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => e.stopPropagation()}
       >
-        <TaskStatusSelect
-          value={status}
-          variant="icon"
-          onChange={onStatus}
-          onSelectBlocked={() => onStatus("Bloqueada")}
-        />
+        {readOnlyStatus ? (
+          <TaskStatusIcon status={status} className="h-4 w-4" />
+        ) : (
+          <TaskStatusSelect
+            value={status}
+            variant="icon"
+            onChange={onStatus}
+            onSelectBlocked={() => onStatus("Bloqueada")}
+          />
+        )}
       </span>
 
       <div className="min-w-0 flex-1 basis-[14rem]">
@@ -107,12 +118,12 @@ export function WorkTaskRow({
       <div className="flex basis-full flex-wrap items-center gap-x-3 gap-y-1 pl-8 sm:basis-auto sm:shrink-0 sm:pl-0">
         <TaskPriorityFlag priority={task.priority ?? "Normal"} size="xs" />
         <TaskDeadlineBadge view={deadlineViewFromDashTask(task)} size="xs" />
-        {timerStartedAt ? (
+        {hideTimer ? null : timerStartedAt ? (
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onTimerStop();
+              onTimerStop?.();
             }}
             aria-label="Parar cronômetro"
             title="Parar cronômetro"
@@ -126,7 +137,7 @@ export function WorkTaskRow({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onTimerStart();
+              onTimerStart?.();
             }}
             aria-label="Iniciar cronômetro"
             title="Iniciar cronômetro"
