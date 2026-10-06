@@ -53,11 +53,28 @@ Somente relações formais (`task_dependencies`) entre tarefas **abertas**.
 do bundle do motor + contagens + resposta). Limiares em `TEAM_INSIGHT_THRESHOLDS`. Cada insight traz a
 janela em que o número vale (`window`). Não altera Score nem regras de tarefa.
 
-## Prazo, atraso e replanejamento (Score Operacional)
-- **Atraso = descumprir o PRAZO VIGENTE** (corte às `deadlineCutoffHour`, padrão 19h, em Brasília) — não o prazo original.
-- **Replanejar antes de o prazo expirar** (qualquer dia anterior, ou no próprio dia até o corte): replanejamento, **não** atraso. O novo prazo passa a ser o vigente. No próprio dia gera só um custo leve em Previsibilidade (`sameDayReplans`).
-- **Replanejar depois de expirado**: atraso **e** replanejamento. A referência fica no prazo descumprido e nenhum replanejamento posterior a "descongela" (o atraso não é apagado). Isenção por motivo externo (ou correção de Admin) continua avançando a referência.
-- **Vencida sem replanejamento**: atraso. **Bloqueio**: continua pausando o prazo e dependência externa isenta a penalidade da saúde atual (bloqueio ≠ atraso).
-- **Fonte única**: `isDeadlineExpiredAt` → `isCriticalReplan`, `classifyReplanTiming`, `effectivePerformanceDueDate` e `reconcilePerformanceReference` (`lib/performance-engine.ts`).
-- **Histórico**: eventos do ledger nunca são alterados; ao LER, `reconcileLedgerEvents` (`lib/performance-reconcile.ts`, aplicado em `usePerformanceEvents`) recalcula a criticidade e o resultado das conclusões pelo histórico de prazos da própria tarefa. Tarefas abertas usam `performanceDueDate` gravado reconciliado com o histórico (dias de bloqueio preservados).
-- **Taxa de conclusão** (`EntregaResult.completionRate`): só informação; não entra no score.
+## Score Operacional — fórmula v3 (`OPERATIONAL_SCORE_VERSION = 3`)
+| Dimensão | Pontos | O que mede |
+|---|---|---|
+| Confiabilidade de prazo | 50 | Conclusões no prazo vigente (40) + saúde atual dos prazos (10) |
+| Previsibilidade | 25 | Gestão dos prazos: replanejamentos por severidade, repetição, isenções |
+| Compromissos | 15 | Presença nas reuniões esperadas |
+| Fluxo sem retrabalho | 10 | Entregas aprovadas sem voltar para "Em ajustes" |
+
+Dimensão sem dado sai do cálculo e as demais são escaladas para 100; sem nenhuma dimensão, "sem dados". A confiança da amostra (nº de tarefas) é separada da nota. Quantidade de tarefas nunca soma pontos; comunicação (tempo de resposta) fica fora do score. A taxa de conclusão é só informativa.
+
+### Prazo vigente, atraso e replanejamento
+- **PRAZO** responde "entregou dentro do prazo VIGENTE?"; **PREVISIBILIDADE** responde "quão previsível foi a gestão desse prazo?". Nunca o mesmo evento nos dois (sem dupla penalização).
+- **Prazo vigente = o último prazo definido** (`effectivePerformanceDueDate`), seja o replanejamento antes ou depois de o anterior expirar. A tarefa não fica presa ao prazo antigo nem acumula "dias de atraso" depois do novo prazo.
+- **Replanejar antes de expirar** (qualquer dia anterior, ou no dia até o corte de `deadlineCutoffHour`, padrão 19h): replanejamento sem custo de prazo; no dia, custo leve em Previsibilidade.
+- **Replanejar depois de expirado** (`isCriticalReplan` = prazo anterior já expirado): custo pesado em Previsibilidade (4× o do dia) — e só aí. Repetição na mesma tarefa soma. Isenção por motivo externo tira o evento da conta.
+- **Vencida sem replanejamento**: atrasada contra o prazo vigente. **Bloqueio**: continua pausando o prazo; dependência externa isenta a penalidade da saúde atual (bloqueio ≠ atraso).
+- Previsibilidade: `25 × (no_dia + 4×após_vencimento + 2×repetição) ÷ 7`, cada termo dividido pela base de tarefas do período.
+- **Histórico**: eventos do ledger nunca são alterados; ao LER, `reconcileLedgerEvents` (`lib/performance-reconcile.ts`, em `usePerformanceEvents`) recalcula criticidade e resultado das conclusões pelo histórico de prazos da tarefa; tarefas abertas usam `performanceDueDate` reconciliado (`reconcilePerformanceReference`, preserva dias de bloqueio).
+
+### Fluxo sem retrabalho (`lib/approval-flow.ts`)
+- **Avaliável**: tarefa (ou subtarefa) que passou por "Em aprovação" e foi resolvida ("Aprovado" ou "Concluído") no período. Sem aprovação, ou ainda não resolvida: fora.
+- **Retrabalho**: ao menos uma TRANSIÇÃO REAL para "Em ajustes" entre a primeira aprovação e a resolução (atividade "mudou status para X" da tarefa; texto/comentário nunca conta). Vários ciclos = 1 tarefa com retrabalho; o nº de ciclos é guardado (média só para quem teve ajuste).
+- **Atribuição**: responsável principal, ou todos os responsáveis se não houver principal (mesma regra da conclusão).
+- **Pontos** = % sem ajustes × 10, com mínimo de 3 tarefas avaliáveis (senão a dimensão fica sem dados). Mede o fluxo de aprovação, não a qualidade de quem entrega.
+- Tarefas antigas sem registro de atividade não são avaliáveis. Entregas de influenciador (etapas/feedback do cliente) têm outro motor e não entram aqui.

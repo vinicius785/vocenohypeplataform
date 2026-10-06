@@ -169,6 +169,7 @@ function ProfileBody({
     range,
     openTasksForMember,
     performanceSettings.deadlineCutoffHour,
+    member.name,
   );
   const { entries, loading: entriesLoading } = useTeamTimeEntries(range, member.id);
   const rt = useMemberResponseTimeData(member.id, range);

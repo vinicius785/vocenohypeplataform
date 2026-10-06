@@ -4,6 +4,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { loadProjetos, onProjetosChange } from "@/lib/projetos";
 import { insightWindows } from "@/components/time-v2/team-metrics";
+import { approvalFlowByPerson, type ApprovalFlowSummary } from "@/lib/approval-flow";
 import { onMeetingsChange, loadMeetings } from "@/lib/reunioes-store";
 import { useClientes } from "@/lib/clientes-store";
 import { getAllCampanhaTarefas, onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
@@ -32,6 +33,7 @@ import { usePerformanceEvents, usePerformanceSettings } from "@/lib/performance-
 import {
   loadTasksByAssignee,
   loadAllTasksFlat,
+  collectRawFlowNodes,
   marketingStandaloneAsTaskGroup,
   type DashTask,
   type DashTaskFlat,
@@ -267,6 +269,16 @@ export function useTimeData() {
     [performanceEvents],
   );
 
+  // Fluxo sem retrabalho (Score v3): transições reais de status das tarefas, por pessoa e período.
+  const flowNodes = useMemo(() => {
+    void tick;
+    return collectRawFlowNodes();
+  }, [tick]);
+  const flowSelectedByName = useMemo(
+    () => approvalFlowByPerson(flowNodes, scoreRange),
+    [flowNodes, scoreRange],
+  );
+
   const scoreByMemberId = useMemo(() => {
     const map = new Map<string, ScoreOperacionalV2>();
     for (const m of members) {
@@ -274,11 +286,17 @@ export function useTimeData() {
       const openTasks = openTasksByMemberId.get(m.id) ?? [];
       map.set(
         m.id,
-        computeMemberScoreV2(personEvents, openTasks, performanceSettings.deadlineCutoffHour),
+        computeMemberScoreV2(
+          personEvents,
+          openTasks,
+          performanceSettings.deadlineCutoffHour,
+          undefined,
+          flowSelectedByName.get(m.name),
+        ),
       );
     }
     return map;
-  }, [members, eventsByPersonId, openTasksByMemberId, performanceSettings]);
+  }, [members, eventsByPersonId, openTasksByMemberId, performanceSettings, flowSelectedByName]);
 
   // Indicadores do período por pessoa (lista da aba Time: "No prazo",
   // "Replanejamentos") — mesmos eventos e mesma função
@@ -544,10 +562,20 @@ export function useTimeData() {
     return counts.reduce((s, n) => s + n, 0) / counts.length;
   }, [members, tasksByMember]);
 
+  const flowCurByName = useMemo(
+    () => approvalFlowByPerson(flowNodes, last30Range),
+    [flowNodes, last30Range],
+  );
+  const flowPrevByName = useMemo(
+    () => approvalFlowByPerson(flowNodes, previous30Range),
+    [flowNodes, previous30Range],
+  );
+
   const insightBundles = useMemo<MemberInsightBundle[]>(() => {
     const scoreFromEvents = (
       personEvents: PerformanceEventLike[],
       openTasks: PerformanceOpenTask[],
+      flow?: ApprovalFlowSummary,
     ) => {
       const attendance = dedupAttendanceEvents(
         personEvents.filter((e) => e.eventType === "meeting_attendance_recorded"),
@@ -556,6 +584,8 @@ export function useTimeData() {
         personEvents,
         openTasks,
         performanceSettings.deadlineCutoffHour,
+        undefined,
+        flow,
       );
       return { score, attendance };
     };
@@ -608,8 +638,10 @@ export function useTimeData() {
         completionsLast14.length >= INSIGHT_THRESHOLDS.amostraMinima &&
         !completionsLast14.some((c) => c.outcome === "late");
 
-      const scoreNowResult = scoreFromEvents(personEvents30d, openTasks);
-      const scorePreviousResult = scoreFromEvents(personEventsPrev30d, openTasks);
+      const flowNow = flowCurByName.get(m.name);
+      const flowPrev = flowPrevByName.get(m.name);
+      const scoreNowResult = scoreFromEvents(personEvents30d, openTasks, flowNow);
+      const scorePreviousResult = scoreFromEvents(personEventsPrev30d, openTasks, flowPrev);
 
       const overdueTasks = (tasksByMember.get(m.name) ?? []).filter((t) => t.bucket === "atrasada");
       const overdueHighPriorityCount = overdueTasks.filter(
@@ -689,6 +721,11 @@ export function useTimeData() {
             : null,
         meetingsExpected: scoreNowResult.attendance.length,
         meetingsAttended: scoreNowResult.attendance.filter((a) => a.attended).length,
+        flowEvaluated: flowNow?.evaluated ?? 0,
+        flowWithAdjustments: flowNow?.withAdjustments ?? 0,
+        flowCycles: flowNow?.cycles ?? 0,
+        flowEvaluatedPrevious: flowPrev?.evaluated ?? 0,
+        flowWithAdjustmentsPrevious: flowPrev?.withAdjustments ?? 0,
         earlyStartCount,
         earlyStartWindow: recentDays.length > 0 ? recentDays.length : null,
       };

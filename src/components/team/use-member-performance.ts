@@ -9,6 +9,8 @@ import {
 } from "@/lib/performance-engine";
 import type { PerformanceOpenTask } from "@/lib/score";
 import { usePerformanceEvents } from "@/lib/performance-events-store";
+import { approvalFlowByPerson, type ApprovalFlowSummary } from "@/lib/approval-flow";
+import { collectRawFlowNodes } from "@/lib/task-aggregation";
 
 /**
  * Eventos + Score Operacional + indicadores de UMA pessoa num período —
@@ -22,6 +24,7 @@ export function useMemberPerformance(
   profileRange: { from?: string; to?: string },
   openTasksForMember: PerformanceOpenTask[],
   deadlineCutoffHour: number,
+  memberName?: string,
 ) {
   const { events } = usePerformanceEvents(profileRange, memberId);
 
@@ -69,14 +72,32 @@ export function useMemberPerformance(
     () => overdueOpenTasks(openTasksForMember, undefined, deadlineCutoffHour),
     [openTasksForMember, deadlineCutoffHour],
   );
+  // Fluxo sem retrabalho (v3): lê as transições de status das tarefas da pessoa no período (e no
+  // anterior). O mesmo dado alimenta o score e o que o painel mostra.
+  const previousRange = useMemo(() => previousEquivalentRange(profileRange), [profileRange]);
+  const flow = useMemo<ApprovalFlowSummary | undefined>(
+    () =>
+      memberName
+        ? approvalFlowByPerson(collectRawFlowNodes(), profileRange).get(memberName)
+        : undefined,
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `events` muda a cada refetch (30s)
+    [memberName, profileRange, events],
+  );
+  const previousFlow = useMemo<ApprovalFlowSummary | undefined>(
+    () =>
+      memberName
+        ? approvalFlowByPerson(collectRawFlowNodes(), previousRange).get(memberName)
+        : undefined,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [memberName, previousRange, events],
+  );
   const score = useMemo(
-    () => computeMemberScoreV2(events, openTasksForMember, deadlineCutoffHour),
-    [events, openTasksForMember, deadlineCutoffHour],
+    () => computeMemberScoreV2(events, openTasksForMember, deadlineCutoffHour, undefined, flow),
+    [events, openTasksForMember, deadlineCutoffHour, flow],
   );
 
   // Comparação com o período imediatamente anterior equivalente (item 12
   // do pedido) — mesmo fetch/extração, só sobre outra janela de tempo.
-  const previousRange = useMemo(() => previousEquivalentRange(profileRange), [profileRange]);
   const { events: previousEvents } = usePerformanceEvents(previousRange, memberId);
   const previousScore = useMemo(() => {
     // Sem `openTasksForMember` do período anterior, não há como saber
@@ -85,8 +106,8 @@ export function useMemberPerformance(
     // limitação documentada, não uma aproximação silenciosa). A tendência
     // usa só as conclusões e replanejamentos do período anterior; mesma
     // fórmula/versão (`OPERATIONAL_SCORE_VERSION`) do período atual.
-    return computeMemberScoreV2(previousEvents, [], deadlineCutoffHour);
-  }, [previousEvents, deadlineCutoffHour]);
+    return computeMemberScoreV2(previousEvents, [], deadlineCutoffHour, undefined, previousFlow);
+  }, [previousEvents, deadlineCutoffHour, previousFlow]);
   const trendLabel = useMemo(() => {
     if (score.score == null || previousScore.score == null) return null;
     const diff = score.score - previousScore.score;
@@ -168,6 +189,8 @@ export function useMemberPerformance(
     attendance,
     overdueNow,
     score,
+    flow,
+    previousFlow,
     trendLabel,
     aggCurrent,
     aggPrevious,

@@ -1,4 +1,10 @@
 import { parseIsoDateLocal, formatDateToIso } from "@/lib/utils";
+import {
+  FLUXO_MAX_PONTOS,
+  computeFluxo,
+  type ApprovalFlowSummary,
+  type FluxoResult,
+} from "@/lib/approval-flow";
 import type { DateRange, PerformanceOpenTask } from "@/lib/score";
 
 export type { DateRange };
@@ -104,34 +110,23 @@ const isExempt = (entry: DeadlineHistoryEntryLike) =>
   entry.adminOverride ? entry.adminOverride.exempted : entry.exemptFromResponsibility;
 
 /**
- * A referência usada pra medir cumprimento: o PRAZO VIGENTE, sem apagar atraso já ocorrido.
+ * A referência usada pra medir cumprimento: o PRAZO VIGENTE — o último prazo definido, venha o
+ * replanejamento antes OU depois de o prazo anterior expirar (v3 do Score).
  *
- * - Replanejar ANTES do prazo expirar (inclusive no próprio dia, até o corte): o novo prazo vira a
- *   referência na hora — não há descumprimento.
- * - Replanejar DEPOIS de expirado (crítico), sem isenção: a referência fica congelada no prazo que
- *   foi descumprido — o atraso existiu — e NENHUM replanejamento posterior a "descongela". Com
- *   isenção (motivo externo, ou corrigida por Admin via `adminOverride`) a referência avança.
- * Recalculável a qualquer momento a partir do histórico (nunca mutação incremental).
+ * PRAZO responde "entregou dentro do prazo vigente?"; PREVISIBILIDADE responde "quão previsível foi
+ * a gestão desse prazo?". Por isso um replanejamento tardio NÃO mantém a tarefa atrasada para
+ * sempre contra o prazo antigo (dupla penalização): o prazo vigente passa a ser o novo, e o custo
+ * do replanejamento (maior quando feito depois do vencimento, e fora da conta quando isento) vive
+ * só na Previsibilidade (`computePrevisibilidade`). Tarefa vencida SEM replanejamento continua
+ * atrasada contra o prazo que vale. Recalculável a qualquer momento a partir do histórico.
  */
 export function effectivePerformanceDueDate(
   originalDueDate: string | undefined,
   deadlineHistory: DeadlineHistoryEntryLike[] | undefined,
-  cutoffHour: number = DEADLINE_CUTOFF_HOUR,
+  _cutoffHour: number = DEADLINE_CUTOFF_HOUR,
 ): string | undefined {
   let ref = originalDueDate;
-  let frozen = false;
-  for (const entry of deadlineHistory ?? []) {
-    const exempted = isExempt(entry);
-    if (exempted) {
-      ref = entry.to;
-      continue;
-    }
-    if (entryIsCritical(entry, cutoffHour)) {
-      frozen = true;
-      continue;
-    }
-    if (!frozen) ref = entry.to;
-  }
+  for (const entry of deadlineHistory ?? []) ref = entry.to;
   return ref;
 }
 
@@ -798,7 +793,7 @@ export function previousEquivalentRange(range: DateRange): DateRange {
  * esta reescrita completa introduz o conceito de versão). Exibida como
  * rodapé discreto ("Fórmula v2") na composição do score, pra qualquer
  * pessoa revisando um score antigo saber que a régua mudou. */
-export const OPERATIONAL_SCORE_VERSION = 2;
+export const OPERATIONAL_SCORE_VERSION = 3;
 
 function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
@@ -842,8 +837,10 @@ export function isHighPriority(priority: string | undefined): boolean {
 export const ENTREGA_MAX_PONTOS = 50;
 export const CONCLUSOES_NO_PRAZO_MAX_PONTOS = 40;
 export const SAUDE_ATUAL_MAX_PONTOS = 10;
-export const PREVISIBILIDADE_MAX_PONTOS = 35;
+export const PREVISIBILIDADE_MAX_PONTOS = 25;
 export const COMPROMISSOS_MAX_PONTOS = 15;
+/** v3: 4ª dimensão — Fluxo sem retrabalho (10 pts). Ver `approval-flow.ts`. */
+export { FLUXO_MAX_PONTOS };
 
 /** Categorias de bloqueio tratadas como DEPENDÊNCIA EXTERNA — uma tarefa
  * atualmente atrasada e bloqueada por uma dessas isenta a penalidade de
@@ -1266,9 +1263,11 @@ export function computePrevisibilidade(
   const sameDayRate = clamp(sameDayReplans / eligibleTaskBase, 0, 1);
   const lateReplanRate = clamp(lateReplans / eligibleTaskBase, 0, 1);
   const repeatedReplanRate = clamp(repeatedProblematicReplans / eligibleTaskBase, 0, 1);
+  // Mesma proporção de severidade das versões anteriores (1 : 4 : 2 sobre 7), agora sobre 25 pts:
+  // no dia = leve, depois do vencimento = pesado, repetição na mesma tarefa = adicional.
   const predictabilityLoss = Math.min(
     PREVISIBILIDADE_MAX_PONTOS,
-    sameDayRate * 5 + lateReplanRate * 20 + repeatedReplanRate * 10,
+    PREVISIBILIDADE_MAX_PONTOS * ((sameDayRate + 4 * lateReplanRate + 2 * repeatedReplanRate) / 7),
   );
   const value = PREVISIBILIDADE_MAX_PONTOS - predictabilityLoss;
 
@@ -1349,13 +1348,18 @@ export type ScoreOperacionalV2 = {
    * exatamente ao `score` inteiro exibido (ver `largestRemainderRound`). */
   entregaPontos: number | null;
   previsibilidade: PrevisibilidadeResult;
-  previsibilidadePontos: number | null; // 0-35
+  previsibilidadePontos: number | null; // 0-25
   compromissos: CompromissosResult;
   compromissosPontos: number | null; // 0-15; null quando `!compromissosAplicavel`
   /** `false` quando não havia nenhuma reunião esperada no período — a
    * dimensão é "Não aplicável" (não pontua 15 de fábrica, não penaliza,
    * e o peso dela é redistribuído entre as dimensões com dado). */
   compromissosAplicavel: boolean;
+  /** v3 — Fluxo sem retrabalho (0-10 pts). `fluxoAplicavel` falso = sem amostra mínima de tarefas
+   * avaliáveis: a dimensão sai do cálculo e o peso é redistribuído (como Compromissos). */
+  fluxo: FluxoResult;
+  fluxoPontos: number | null;
+  fluxoAplicavel: boolean;
   classificacao: string | null; // null fora de `dataState === "definitivo"`
   /** Fórmula usada nesta versão (`OPERATIONAL_SCORE_VERSION`) — exposta
    * pra "Ver composição do score" mostrar "Fórmula v2". */
@@ -1396,8 +1400,10 @@ export function combineScoreV2(
   entrega: EntregaResult,
   previsibilidade: PrevisibilidadeResult,
   compromissos: CompromissosResult,
+  fluxo: FluxoResult = computeFluxo(undefined),
 ): ScoreOperacionalV2 {
   const compromissosAplicavel = compromissos.value != null;
+  const fluxoAplicavel = fluxo.value != null;
 
   const dims: { points: number; weight: number }[] = [];
   if (entrega.value != null) dims.push({ points: entrega.value, weight: ENTREGA_MAX_PONTOS });
@@ -1410,6 +1416,7 @@ export function combineScoreV2(
   if (compromissosAplicavel) {
     dims.push({ points: compromissosPontosRaw, weight: COMPROMISSOS_MAX_PONTOS });
   }
+  if (fluxoAplicavel) dims.push({ points: fluxo.value!, weight: FLUXO_MAX_PONTOS });
 
   if (dims.length === 0) {
     return {
@@ -1421,6 +1428,9 @@ export function combineScoreV2(
       compromissos,
       compromissosPontos: null,
       compromissosAplicavel,
+      fluxo,
+      fluxoPontos: null,
+      fluxoAplicavel,
     };
   }
 
@@ -1448,14 +1458,22 @@ export function combineScoreV2(
     ? Math.round(compromissosPontosRaw)
     : null;
 
-  if (entrega.value != null && previsibilidade.value != null && compromissosAplicavel) {
-    const [e, p, c] = largestRemainderRound(
-      [entrega.value, previsibilidade.value, compromissosPontosRaw],
+  let fluxoPontos: number | null = fluxoAplicavel ? Math.round(fluxo.value!) : null;
+
+  if (
+    entrega.value != null &&
+    previsibilidade.value != null &&
+    compromissosAplicavel &&
+    fluxoAplicavel
+  ) {
+    const [e, p, c, f] = largestRemainderRound(
+      [entrega.value, previsibilidade.value, compromissosPontosRaw, fluxo.value!],
       score,
     );
     entregaPontos = e;
     previsibilidadePontos = p;
     compromissosPontos = c;
+    fluxoPontos = f;
   }
 
   return {
@@ -1470,6 +1488,9 @@ export function combineScoreV2(
     compromissos,
     compromissosPontos,
     compromissosAplicavel,
+    fluxo,
+    fluxoPontos,
+    fluxoAplicavel,
     classificacao: dataState === "definitivo" ? classificacaoDoScore(score) : null,
     version: OPERATIONAL_SCORE_VERSION,
     guardrails: [],
@@ -1498,6 +1519,7 @@ export function computeMemberScoreV2(
   openTasksNow: PerformanceOpenTask[],
   cutoffHour: number = DEADLINE_CUTOFF_HOUR,
   now: Date = new Date(),
+  flow?: ApprovalFlowSummary,
 ): ScoreOperacionalV2 {
   const completions: EntregaCompletionLike[] = personEvents
     .filter((e) => e.eventType === "task_completed")
@@ -1528,5 +1550,5 @@ export function computeMemberScoreV2(
     cutoffHour,
   );
   const compromissos = computeCompromissos(attendance);
-  return combineScoreV2(entrega, previsibilidade, compromissos);
+  return combineScoreV2(entrega, previsibilidade, compromissos, computeFluxo(flow));
 }

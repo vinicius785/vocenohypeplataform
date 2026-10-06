@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Gauge, CheckCircle2, RefreshCcw, CalendarClock, ChevronDown, Info } from "lucide-react";
+import { Gauge, ChevronDown, Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import {
   classifyReplanTiming,
@@ -7,6 +7,10 @@ import {
   SAMPLE_CONFIDENCE_LABEL,
   SCORE_CLASSIFICACAO_TONE,
   OPERATIONAL_SCORE_VERSION,
+  COMPROMISSOS_MAX_PONTOS,
+  ENTREGA_MAX_PONTOS,
+  FLUXO_MAX_PONTOS,
+  PREVISIBILIDADE_MAX_PONTOS,
   type PerformanceSettings,
   type ScoreOperacionalV2,
   type TaskOutcome,
@@ -17,7 +21,7 @@ import {
   DEADLINE_CHANGE_MOTIVO_LABEL,
   type DeadlineChangeMotivo,
 } from "@/components/tasks/task-people";
-import { MiniStat } from "./member-ui";
+import { explainScore, scoreDimensionRows } from "@/lib/score-explanation";
 
 export type ProfileCompletion = {
   outcome: TaskOutcome;
@@ -96,6 +100,9 @@ export function ScoreOperacionalPanel({
   const entrega = score.entrega;
   const previsibilidade = score.previsibilidade;
   const compromissos = score.compromissos;
+  const fluxo = score.fluxo;
+  const rows = scoreDimensionRows(score);
+  const explanation = explainScore(score);
   const scoreTone =
     score.score == null
       ? "text-text-secondary"
@@ -108,7 +115,7 @@ export function ScoreOperacionalPanel({
         <div className="flex items-start justify-between gap-3">
           <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-text-secondary">
             <Gauge className="h-3.5 w-3.5" /> Score Operacional
-            <InfoTip text="Este indicador analisa execução operacional, prazos e compromissos. Ele não representa sozinho a performance completa do profissional." />
+            <InfoTip text="Mede como o trabalho está sendo executado: prazo, previsibilidade, compromissos e eficiência do fluxo de aprovação. Não é uma avaliação da pessoa nem inclui comunicação." />
           </p>
           <div className="text-right">
             <p
@@ -125,11 +132,6 @@ export function ScoreOperacionalPanel({
             )}
             {score.classificacao && (
               <p className="text-xs font-medium text-text-secondary">{score.classificacao}</p>
-            )}
-            {score.dataState !== "sem_dados" && (
-              <p className="text-[11px] text-text-secondary">
-                {SAMPLE_CONFIDENCE_LABEL[score.confidence]}
-              </p>
             )}
             {trendLabel && score.dataState !== "sem_dados" && (
               <p className="text-[11px] text-text-secondary">{trendLabel}</p>
@@ -156,101 +158,42 @@ export function ScoreOperacionalPanel({
           </p>
         )}
 
-        <div className="mt-5 space-y-5">
-          <div>
-            <div className="mb-2.5 flex items-center justify-between gap-2">
-              <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-text-secondary">
-                <CheckCircle2 className="h-3 w-3" /> Entrega
-              </p>
-              <span className="text-xs font-semibold tabular-nums text-foreground">
-                {score.entregaPontos == null ? "—" : score.entregaPontos} / 50
-              </span>
-            </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <MiniStat label="Concluídas no período" value={entrega.concluidas} />
-              <MiniStat label="No prazo" value={entrega.noPrazo} />
-              <MiniStat
-                label="Com atraso"
-                value={entrega.comAtraso}
-                tone={entrega.comAtraso > 0 ? "danger" : "neutral"}
-              />
-              <MiniStat
-                label="Atualmente atrasadas"
-                value={entrega.atualmenteAtrasadas}
-                tone={entrega.atualmenteAtrasadas > 0 ? "danger" : "neutral"}
-              />
-            </div>
-          </div>
-          <div className="border-t border-border pt-5">
-            <div className="mb-2.5 flex items-center justify-between gap-2">
-              <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-text-secondary">
-                <RefreshCcw className="h-3 w-3" /> Previsibilidade
-                <InfoTip text="Mede a estabilidade do planejamento considerando alterações de prazo e o momento em que ocorreram." />
-              </p>
-              <span className="text-xs font-semibold tabular-nums text-foreground">
-                {score.previsibilidadePontos == null ? "—" : score.previsibilidadePontos} / 35
-              </span>
-            </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <MiniStat
-                label="Taxa de replanejamento"
-                value={fmtTaxaComN(
-                  previsibilidade.taxaReplanejamento,
-                  previsibilidade.tarefasReplanejadas,
-                  previsibilidade.tarefasElegiveis,
-                )}
-              />
-              <MiniStat
-                label="No dia"
-                value={previsibilidade.porTiming.no_dia}
-                tone={previsibilidade.porTiming.no_dia > 0 ? "danger" : "neutral"}
-              />
-              <MiniStat
-                label="Após vencimento"
-                value={previsibilidade.porTiming.apos_vencimento}
-                tone={previsibilidade.porTiming.apos_vencimento > 0 ? "danger" : "neutral"}
-              />
-            </div>
-          </div>
-          <div className="border-t border-border pt-5">
-            <div className="mb-2.5 flex items-center justify-between gap-2">
-              <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-text-secondary">
-                <CalendarClock className="h-3 w-3" /> Compromissos
-                {!score.compromissosAplicavel && (
-                  <InfoTip text="Sem reunião esperada desta pessoa no período — a dimensão não entra no cálculo do score (nem soma, nem penaliza)." />
-                )}
-              </p>
-              <span className="text-xs font-semibold tabular-nums text-foreground">
-                {score.compromissosAplicavel ? (
-                  <>{score.compromissosPontos} / 15</>
-                ) : (
-                  <span className="text-text-secondary">Não aplicável</span>
-                )}
-              </span>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <MiniStat
-                label="Reuniões consideradas"
-                value={compromissos.expected === 0 ? "—" : compromissos.expected}
-              />
-              <MiniStat
-                label="Participadas"
-                value={compromissos.expected === 0 ? "—" : compromissos.attended}
-              />
-              <MiniStat
-                label="Perdidas"
-                value={
-                  compromissos.expected === 0 ? "—" : compromissos.expected - compromissos.attended
-                }
-                tone={
-                  compromissos.expected > 0 && compromissos.expected - compromissos.attended > 0
-                    ? "danger"
-                    : "neutral"
-                }
-              />
-            </div>
-          </div>
-        </div>
+        {score.dataState !== "sem_dados" && explanation && (
+          <p className="mt-3 text-sm text-foreground">{explanation}</p>
+        )}
+
+        <ul className="mt-5 space-y-3.5" aria-label="Dimensões do score">
+          {rows.map((r) => (
+            <li key={r.key}>
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-sm font-medium text-foreground">{r.label}</span>
+                <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">
+                  {r.points == null ? (
+                    <span className="font-normal text-text-secondary">Sem dados</span>
+                  ) : (
+                    <>
+                      {r.points}
+                      <span className="font-normal text-text-secondary"> / {r.max}</span>
+                    </>
+                  )}
+                </span>
+              </div>
+              <div
+                className="mt-1.5 h-1 overflow-hidden rounded-full bg-muted"
+                role="img"
+                aria-label={`${r.label}: ${r.points ?? 0} de ${r.max}`}
+              >
+                <div
+                  className="h-full rounded-full bg-foreground/70"
+                  style={{
+                    width: `${r.points == null ? 0 : Math.min(100, (r.points / r.max) * 100)}%`,
+                  }}
+                />
+              </div>
+              <p className="mt-1 text-xs text-text-secondary">{r.detail}</p>
+            </li>
+          ))}
+        </ul>
 
         <button
           type="button"
@@ -267,9 +210,11 @@ export function ScoreOperacionalPanel({
           <div className="mt-4 space-y-4 rounded-lg border border-border bg-muted/20 p-4 text-xs">
             <div>
               <div className="flex items-center justify-between">
-                <span className="font-medium text-foreground">Entregas e prazo — fórmula</span>
+                <span className="font-medium text-foreground">
+                  Confiabilidade de prazo — fórmula
+                </span>
                 <span className="tabular-nums text-text-secondary">
-                  {score.entregaPontos == null ? "—" : score.entregaPontos} / 50
+                  {score.entregaPontos == null ? "—" : score.entregaPontos} / {ENTREGA_MAX_PONTOS}
                 </span>
               </div>
               <div className="mt-1.5 space-y-0.5 text-text-secondary">
@@ -370,13 +315,15 @@ export function ScoreOperacionalPanel({
               <div className="flex items-center justify-between">
                 <span className="font-medium text-foreground">Previsibilidade</span>
                 <span className="tabular-nums text-text-secondary">
-                  {score.previsibilidadePontos == null ? "—" : score.previsibilidadePontos} / 35
+                  {score.previsibilidadePontos == null ? "—" : score.previsibilidadePontos} /{" "}
+                  {PREVISIBILIDADE_MAX_PONTOS}
                 </span>
               </div>
               <div className="mt-1.5 space-y-0.5 text-text-secondary">
                 <p>
-                  predictabilityLoss = sameDayRate×5 + lateReplanRate×20 + repeatedRate×10 ={" "}
-                  {previsibilidade.predictabilityLoss.toFixed(1)} pts descontados de 35
+                  predictabilityLoss = (sameDayRate + 4×lateReplanRate + 2×repeatedRate) ÷ 7 ×{" "}
+                  {PREVISIBILIDADE_MAX_PONTOS} = {previsibilidade.predictabilityLoss.toFixed(1)} pts
+                  descontados de {PREVISIBILIDADE_MAX_PONTOS}
                 </p>
                 <p>
                   Taxa de replanejamento:{" "}
@@ -444,7 +391,7 @@ export function ScoreOperacionalPanel({
                 <span className="font-medium text-foreground">Compromissos</span>
                 <span className="tabular-nums text-text-secondary">
                   {score.compromissosAplicavel
-                    ? `${score.compromissosPontos} / 15`
+                    ? `${score.compromissosPontos} / ${COMPROMISSOS_MAX_PONTOS}`
                     : "Não aplicável"}
                 </span>
               </div>
@@ -476,10 +423,41 @@ export function ScoreOperacionalPanel({
                   </>
                 ) : (
                   <p>
-                    Nenhuma reunião esperada desta pessoa no período — peso redistribuído entre
-                    Entrega e Previsibilidade (não conta nem a favor nem contra).
+                    Nenhuma reunião esperada desta pessoa no período — peso redistribuído entre as
+                    demais dimensões (não conta nem a favor nem contra).
                   </p>
                 )}
+              </div>
+            </div>
+
+            <div className="border-t border-border pt-3">
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-foreground">Fluxo sem retrabalho</span>
+                <span className="tabular-nums text-text-secondary">
+                  {score.fluxoAplicavel
+                    ? `${score.fluxoPontos} / ${FLUXO_MAX_PONTOS}`
+                    : "Sem dados"}
+                </span>
+              </div>
+              <div className="mt-1.5 space-y-0.5 text-text-secondary">
+                <p>
+                  Entregas avaliadas (passaram por aprovação e foram resolvidas no período):{" "}
+                  {fluxo.evaluated}
+                </p>
+                <p>Aprovadas sem passar por “Em ajustes”: {fluxo.clean}</p>
+                <p>Passaram por ajustes: {fluxo.withAdjustments}</p>
+                {fluxo.avgCycles != null && (
+                  <p>
+                    Ciclos de ajuste: {fluxo.cycles} no total ·{" "}
+                    {fluxo.avgCycles.toFixed(1).replace(".", ",")} por entrega com ajuste
+                  </p>
+                )}
+                <p>
+                  {score.fluxoAplicavel
+                    ? `Pontos = ${fluxo.rate == null ? "—" : Math.round(fluxo.rate * 100)}% × ${FLUXO_MAX_PONTOS} (entrega com vários ciclos conta uma vez só).`
+                    : "Menos de 3 entregas avaliadas: a dimensão não entra no cálculo e o peso é redistribuído."}
+                </p>
+                <p>Mede o fluxo de aprovação, não a qualidade de quem entrega.</p>
               </div>
             </div>
 

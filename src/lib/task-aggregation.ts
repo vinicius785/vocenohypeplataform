@@ -714,3 +714,14 @@ export function buildTaskDeadlineIndex(): Map<
   walk(loadComercialTasks() as unknown as CampanhaTaskLike[]);
   return index;
 }
+
+/** Todas as tarefas e subtarefas da plataforma (projetos, campanhas, Marketing, Comercial) no
+ * formato mínimo do fluxo de aprovação — só leitura (atividade de status + responsáveis). */
+export function collectRawFlowNodes(): import("@/lib/approval-flow").FlowTaskNode[] {
+  const out: import("@/lib/approval-flow").FlowTaskNode[] = [];
+  for (const p of loadProjetos()) out.push(...((p.tasks ?? []) as never[]));
+  for (const [, tasks] of getAllCampanhaTarefas()) out.push(...(tasks as never[]));
+  out.push(...(loadStandalone() as never[]));
+  out.push(...(loadComercialTasks() as never[]));
+  return out;
+}

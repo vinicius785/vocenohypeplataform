@@ -70,6 +70,16 @@ export function useTeamInsightsV2(
       {
         tasksCreated: { current: novasAtual.total, previous: novasAnterior.total },
         replans: { current: sum((m) => m.replans), previous: sum((m) => m.replansPrev) },
+        flow: {
+          current: {
+            evaluated: sum((m) => m.flowEvaluated),
+            withAdjustments: sum((m) => m.flowWithAdjustments),
+          },
+          previous: {
+            evaluated: sum((m) => m.flowEvaluatedPrev),
+            withAdjustments: sum((m) => m.flowWithAdjustmentsPrev),
+          },
+        },
         response: {
           current: respCur.data?.teamAverageSeconds ?? null,
           previous: respPrev.data?.teamAverageSeconds ?? null,

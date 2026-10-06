@@ -84,6 +84,15 @@ export const TEAM_INSIGHT_THRESHOLDS = {
   respostaRapidaMin: 10,
   atrasosConcentradosMin: 6,
   atrasosConcentradosPct: 0.7,
+  fluxoMinAvaliaveis: 5,
+  fluxoMinPessoasTime: 3,
+  fluxoMelhorPct: 0.9,
+  fluxoAjustesAltoPct: 0.4,
+  fluxoAjustesVsTime: 1.3,
+  fluxoTendenciaPP: 10,
+  fluxoTendenciaMinBase: 10,
+  cargaBoaExecDemandaPct: 0.3,
+  cargaBoaExecDemandaMinNovas: 8,
   maxInsights: 12,
   maxPorPessoa: 2,
   maxDestaques: 3,
@@ -124,6 +133,11 @@ export type MemberSignals = {
   responseAvgPrev: number | null;
   answered: number;
   answeredPrev: number;
+  /** Fluxo sem retrabalho (tarefas aprovadas no período; quantas passaram por "Em ajustes"). */
+  flowEvaluated: number;
+  flowWithAdjustments: number;
+  flowEvaluatedPrev: number;
+  flowWithAdjustmentsPrev: number;
 };
 
 export type DependencyTask = { id: string; title: string; memberIds: string[]; open: boolean };
@@ -574,6 +588,112 @@ export function ruleDestaque(
   return null;
 }
 
+/* ---------------- fluxo sem retrabalho (eficiência de aprovação) ---------------- */
+
+const adjRate = (m: MemberSignals) =>
+  m.flowEvaluated > 0 ? m.flowWithAdjustments / m.flowEvaluated : null;
+
+/** Melhor índice do time: aprovou ≥ 90% das entregas sem ajustes (amostra mínima e time comparável). */
+export function ruleFluxoEficiencia(
+  all: MemberSignals[],
+  o?: Partial<InsightThresholds>,
+): TeamInsightV2 | null {
+  const T = th(o);
+  const base = all.filter((m) => m.flowEvaluated >= T.fluxoMinAvaliaveis);
+  if (base.length < T.fluxoMinPessoasTime) return null;
+  const clean = (m: MemberSignals) => (m.flowEvaluated - m.flowWithAdjustments) / m.flowEvaluated;
+  const best = Math.max(...base.map(clean));
+  const top = base.filter((m) => clean(m) === best);
+  if (top.length !== 1 || best < T.fluxoMelhorPct) return null;
+  const m = top[0];
+  return mk({
+    ruleId: "fluxo_eficiente",
+    topic: "fluxo",
+    rank: 12,
+    label: "Destaque",
+    category: "destaque",
+    priority: 3,
+    memberId: m.id,
+    memberName: m.name,
+    evidence: `${m.name} aprovou ${pct(m.flowEvaluated - m.flowWithAdjustments, m.flowEvaluated)}% das entregas sem ajustes (${m.flowEvaluated - m.flowWithAdjustments} de ${m.flowEvaluated}). Melhor índice do time no período.`,
+    reading:
+      "As entregas chegam à aprovação sem voltar para ajustes — fluxo de aprovação eficiente.",
+    view: "desempenho",
+    actionLabel: `Ver ${first(m.name)}`,
+    weight: clean(m) * 100 + m.flowEvaluated,
+  });
+}
+
+/** Alta taxa de ajustes: ≥ 40% das entregas e acima da média do time. Neutro: ajuste é parte do fluxo. */
+export function ruleFluxoAjustes(
+  m: MemberSignals,
+  all: MemberSignals[],
+  o?: Partial<InsightThresholds>,
+): TeamInsightV2 | null {
+  const T = th(o);
+  const rate = adjRate(m);
+  if (rate == null || m.flowEvaluated < T.fluxoMinAvaliaveis || rate < T.fluxoAjustesAltoPct)
+    return null;
+  const base = all.filter((x) => x.flowEvaluated >= T.fluxoMinAvaliaveis);
+  if (base.length < T.fluxoMinPessoasTime) return null;
+  const totEval = base.reduce((s, x) => s + x.flowEvaluated, 0);
+  const totAdj = base.reduce((s, x) => s + x.flowWithAdjustments, 0);
+  const teamRate = totEval > 0 ? totAdj / totEval : 0;
+  if (rate < teamRate * T.fluxoAjustesVsTime) return null;
+  return mk({
+    ruleId: "fluxo_ajustes_altos",
+    topic: "fluxo",
+    rank: 6,
+    label: "Ajustes",
+    category: "atencao",
+    priority: 1,
+    memberId: m.id,
+    memberName: m.name,
+    evidence: `${m.name} teve ajustes em ${Math.round(rate * 100)}% das entregas (${m.flowWithAdjustments} de ${m.flowEvaluated}), acima da média do time (${Math.round(teamRate * 100)}%).`,
+    reading:
+      "Ajuste faz parte da aprovação; vale ver se o briefing e o alinhamento inicial chegam completos antes da produção.",
+    view: "desempenho",
+    actionLabel: `Ver desempenho de ${first(m.name)}`,
+    weight: rate * 100,
+  });
+}
+
+/** Cruza carga e execução: recebeu boa parte das novas demandas E manteve entregas sem retrabalho. */
+export function ruleCargaBoaExecucao(
+  all: MemberSignals[],
+  o?: Partial<InsightThresholds>,
+  newTasksTotal?: number,
+): TeamInsightV2 | null {
+  const T = th(o);
+  const total = newTasksTotal ?? all.reduce((s, x) => s + x.newTasks, 0);
+  if (total < T.cargaBoaExecDemandaMinNovas) return null;
+  const candidatos = all
+    .filter((m) => m.newTasks / total >= T.cargaBoaExecDemandaPct)
+    .filter((m) => m.flowEvaluated >= T.fluxoMinAvaliaveis)
+    .filter((m) => 1 - (adjRate(m) ?? 1) >= T.fluxoMelhorPct)
+    .sort((a, b) => b.newTasks - a.newTasks);
+  const m = candidatos[0];
+  if (!m) return null;
+  const limpas = m.flowEvaluated - m.flowWithAdjustments;
+  return mk({
+    ruleId: "carga_boa_execucao",
+    topic: "demanda",
+    rank: 2,
+    label: "Carga e execução",
+    category: "operacao",
+    priority: 2,
+    memberId: m.id,
+    memberName: m.name,
+    evidence: `${m.name} recebeu ${m.newTasks} das ${total} tarefas criadas neste mês (${pct(m.newTasks, total)}%) e manteve ${pct(limpas, m.flowEvaluated)}% das entregas sem retrabalho.`,
+    reading:
+      "Volume alto de demanda com aprovação sem ajustes: a carga, por si só, não aparece como problema de execução.",
+    caveat: CAVEAT_REATRIBUICAO,
+    view: "tarefas",
+    actionLabel: `Ver tarefas de ${first(m.name)}`,
+    weight: 1000 + pct(m.newTasks, total),
+  });
+}
+
 /* ---------------- dependências (só relações formais) ---------------- */
 
 export function ruleDependencias(
@@ -692,6 +812,11 @@ export type TeamTrendsInput = {
   tasksCreated: { current: number; previous: number };
   replans: { current: number; previous: number };
   response: { current: number | null; previous: number | null; answered: number };
+  /** Fluxo sem retrabalho do time (soma das pessoas) no período e no anterior. */
+  flow?: {
+    current: { evaluated: number; withAdjustments: number };
+    previous: { evaluated: number; withAdjustments: number };
+  };
 };
 
 export function ruleTendenciasTime(
@@ -762,6 +887,30 @@ export function ruleTendenciasTime(
         }),
       );
   }
+  if (
+    t.flow &&
+    t.flow.current.evaluated >= T.fluxoTendenciaMinBase &&
+    t.flow.previous.evaluated >= T.fluxoTendenciaMinBase
+  ) {
+    const cur = t.flow.current.withAdjustments / t.flow.current.evaluated;
+    const prev = t.flow.previous.withAdjustments / t.flow.previous.evaluated;
+    const dpp = Math.round((cur - prev) * 100);
+    if (Math.abs(dpp) >= T.fluxoTendenciaPP)
+      out.push(
+        mk({
+          ruleId: "tendencia_fluxo",
+          category: "tendencia",
+          priority: 2,
+          rank: dpp > 0 ? 11 : 10,
+          evidence: `A parcela de entregas com ajustes no time ${dpp > 0 ? "subiu" : "caiu"} de ${Math.round(prev * 100)}% para ${Math.round(cur * 100)}%.`,
+          reading:
+            dpp > 0
+              ? "Mais entregas estão voltando para ajustes; vale olhar o alinhamento antes da produção."
+              : "Mais entregas estão sendo aprovadas de primeira.",
+          weight: Math.abs(dpp),
+        }),
+      );
+  }
   return out.sort((a, b) => b.weight - a.weight).slice(0, T.maxTendenciasTime);
 }
 
@@ -789,6 +938,10 @@ const JANELA: Record<string, string> = {
   tendencia_tarefas: "este mês vs. mesmo período do mês passado",
   tendencia_replanejamentos: "este mês vs. mesmo período do mês passado",
   tendencia_resposta: "este mês vs. mesmo período do mês passado",
+  tendencia_fluxo: "este mês vs. mesmo período do mês passado",
+  fluxo_eficiente: "este mês",
+  fluxo_ajustes_altos: "este mês",
+  carga_boa_execucao: "este mês",
 };
 
 /** Todos os candidatos, sem corte (útil para testes e para o detalhe do membro). */
@@ -829,6 +982,7 @@ export function generateTeamInsights(
       ruleCarga(m, input.members, o, input.newTasksTotal),
       ruleReplanejamento(m, o),
       ruleReplanReducao(m, o),
+      ruleFluxoAjustes(m, input.members, o),
       ruleReunioes(m, o),
       ruleResposta(m, o),
       ruleDestaque(m, o),
@@ -839,6 +993,8 @@ export function generateTeamInsights(
     ruleDemanda(input.members, o, input.newTasksTotal),
     ruleMaisAbertas(input.members, o),
     ruleAtrasosConcentrados(input.members, o),
+    ruleFluxoEficiencia(input.members, o),
+    ruleCargaBoaExecucao(input.members, o, input.newTasksTotal),
   ])
     if (r) out.push(r);
   out.push(...ruleRespostaRelativa(input.members, o));

@@ -130,5 +130,9 @@ export function buildMemberSignals(
     responseAvgPrev: extra.responsePrev?.averageSeconds ?? null,
     answered: extra.response?.answered ?? 0,
     answeredPrev: extra.responsePrev?.answered ?? 0,
+    flowEvaluated: b.flowEvaluated,
+    flowWithAdjustments: b.flowWithAdjustments,
+    flowEvaluatedPrev: b.flowEvaluatedPrevious,
+    flowWithAdjustmentsPrev: b.flowWithAdjustmentsPrevious,
   };
 }

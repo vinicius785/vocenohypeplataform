@@ -1,6 +1,34 @@
 {
-  "version": "1.367.0",
+  "version": "1.368.0",
   "releases": [
+    {
+      "version": "1.368.0",
+      "summary": "Score Operacional v3: prazo vigente sem dupla penalização e nova dimensão Fluxo sem retrabalho.",
+      "modules": [
+        {
+          "name": "TIME",
+          "tagline": "Score operacional",
+          "items": [
+            {
+              "title": "Pesos 50 / 25 / 15 / 10",
+              "description": "Confiabilidade de prazo, Previsibilidade, Compromissos e Fluxo sem retrabalho (entregas aprovadas sem voltar para “Em ajustes”)."
+            },
+            {
+              "title": "Prazo vigente",
+              "description": "Replanejar não mantém a tarefa atrasada contra o prazo antigo; o custo do replanejamento fica só na Previsibilidade."
+            },
+            {
+              "title": "Score explicado",
+              "description": "Quatro dimensões comparáveis e uma frase com os mesmos números do cálculo, no detalhe do membro."
+            },
+            {
+              "title": "Novos insights",
+              "description": "Eficiência de aprovação, alta taxa de ajustes, carga alta com boa execução e tendência de ajustes do time."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.367.0",
       "summary": "Score: replanejar antes do prazo expirar não é mais atraso; atraso mede o prazo vigente.",

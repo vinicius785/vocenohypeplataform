@@ -72,17 +72,40 @@ describe("replanejamento", () => {
     expect(isCriticalReplan("2026-10-06", "2026-10-06T19:01:00")).toBe(true);
   });
 
-  it("DEPOIS do vencimento: atraso E replanejamento (exemplo 2)", () => {
+  it("DEPOIS do vencimento: o prazo vigente passa a ser o novo; o custo fica na Previsibilidade (v3)", () => {
     const h = [H("2026-10-06", "2026-10-09", "2026-10-07T10:00:00")];
     expect(isCriticalReplan("2026-10-06", "2026-10-07T10:00:00")).toBe(true);
     expect(classifyReplanTiming("2026-10-06", "2026-10-07T10:00:00")).toBe("apos_vencimento");
     const ref = effectivePerformanceDueDate("2026-10-06", h);
-    expect(ref).toBe("2026-10-06"); // o prazo descumprido continua sendo a referência
-    expect(classifyOutcome(ref, "2026-10-08T10:00:00").outcome).toBe("late");
+    expect(ref).toBe("2026-10-09"); // não fica preso ao prazo antigo
+    expect(classifyOutcome(ref, "2026-10-08T10:00:00").outcome).toBe("early");
+    // …mas o replanejamento tardio custa caro em Previsibilidade (uma vez só)
+    const prev = computePrevisibilidade(
+      [{ taskId: "t1", from: "2026-10-06", occurredAt: "2026-10-07T10:00:00" }],
+      10,
+    );
+    expect(prev.lateReplans).toBe(1);
+    expect(prev.predictabilityLoss).toBeGreaterThan(1);
   });
-  it("no dia do vencimento, mas DEPOIS do corte, também é atraso", () => {
+  it("replanejar depois de expirado NÃO continua acumulando atraso depois do novo prazo", () => {
+    const t = {
+      status: "Aberto",
+      dueDate: "2026-10-10",
+      originalDueDate: "2026-10-06",
+      performanceDueDate: "2026-10-06", // referência congelada pelo modelo anterior
+      deadlineHistory: [H("2026-10-06", "2026-10-10", "2026-10-07T10:00:00")],
+    };
+    // 08/10: contra o prazo ANTIGO seriam 2 dias de atraso; contra o vigente (10/10) está no prazo
+    expect(taskDeadlineHealth(t, new Date("2026-10-08T10:00:00")).health).toBe("no_prazo");
+    // só depois do novo corte volta a atrasar — e contando a partir do novo prazo
+    const late = taskDeadlineHealth(t, new Date("2026-10-11T09:00:00"));
+    expect(late.health).toBe("atrasada");
+    expect(late.delayDays).toBe(1);
+  });
+  it("no dia do vencimento, DEPOIS do corte: prazo vigente novo, custo em Previsibilidade", () => {
     const h = [H("2026-10-06", "2026-10-08", "2026-10-06T20:00:00")];
-    expect(effectivePerformanceDueDate("2026-10-06", h)).toBe("2026-10-06");
+    expect(effectivePerformanceDueDate("2026-10-06", h)).toBe("2026-10-08");
+    expect(classifyReplanTiming("2026-10-06", "2026-10-06T20:00:00")).toBe("apos_vencimento");
   });
   it("com isenção por motivo externo, a referência avança mesmo depois de expirar", () => {
     const h = [H("2026-10-06", "2026-10-09", "2026-10-07T10:00:00", { exempt: true })];
@@ -102,21 +125,22 @@ describe("replanejamento", () => {
     ];
     expect(effectivePerformanceDueDate("2026-10-06", h)).toBe("2026-10-10");
   });
-  it("atraso ocorrido NÃO é apagado por replanejamentos posteriores", () => {
-    const h = [
-      H("2026-10-06", "2026-10-08", "2026-10-07T10:00:00"), // já expirado → atraso
-      H("2026-10-08", "2026-10-12", "2026-10-08T09:00:00"), // depois, no prazo novo
-    ];
-    expect(effectivePerformanceDueDate("2026-10-06", h)).toBe("2026-10-06");
+  it("com isenção por motivo externo, o replanejamento sai da conta de Previsibilidade", () => {
+    const apos = computePrevisibilidade(
+      [
+        {
+          taskId: "t1",
+          from: "2026-10-06",
+          occurredAt: "2026-10-07T10:00:00",
+          exemptFromResponsibility: true,
+        },
+      ],
+      10,
+    );
+    expect(apos.exemptedCount).toBe(1);
+    expect(apos.lateReplans).toBe(0);
+    expect(apos.predictabilityLoss).toBe(0);
   });
-  it("reabrir só se a mudança for isenta (regra de isenção preservada)", () => {
-    const h = [
-      H("2026-10-06", "2026-10-08", "2026-10-07T10:00:00"),
-      H("2026-10-08", "2026-10-12", "2026-10-08T09:00:00", { exempt: true }),
-    ];
-    expect(effectivePerformanceDueDate("2026-10-06", h)).toBe("2026-10-12");
-  });
-
   it("pedido de justificativa continua no dia do vencimento (adiando), sem virar atraso", () => {
     expect(isCriticalDeadlineMove("2026-10-06", "2026-10-08", "2026-10-06T10:00:00")).toBe(true);
     expect(isCriticalDeadlineMove("2026-10-06", "2026-10-08", "2026-10-03T10:00:00")).toBe(false);
@@ -261,7 +285,7 @@ describe("ledger: recalculado na leitura, nunca regravado", () => {
     expect(c.data.performanceDueDateUsed).toBe("2026-10-08");
     expect(out.find((e) => e.eventType === "task_deadline_changed")!.data.isCritical).toBe(false);
   });
-  it("replanejamento depois de expirar continua atraso", () => {
+  it("replanejamento depois de expirar: criticidade preservada, conclusão medida no prazo vigente", () => {
     const late = replan();
     late.occurredAt = "2026-10-07T10:00:00";
     const out = reconcileLedgerEvents([completion(), late], (id) =>
@@ -272,8 +296,8 @@ describe("ledger: recalculado na leitura, nunca regravado", () => {
           }
         : undefined,
     );
-    expect(out[0].data.outcome).toBe("late");
-    expect(out[1].data.isCritical).toBe(true);
+    expect(out[0].data.outcome).toBe("on_time"); // concluída 08/10 15:00, prazo vigente 08/10
+    expect(out[1].data.isCritical).toBe(true); // continua um replanejamento depois de vencido
   });
   it("tarefa inexistente ou sem histórico: evento como gravado", () => {
     const c = completion();

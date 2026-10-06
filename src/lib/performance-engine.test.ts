@@ -1,3 +1,4 @@
+import { computeFluxo } from "./approval-flow";
 import { describe, expect, it } from "vitest";
 import {
   computeEntrega,
@@ -167,13 +168,13 @@ describe("21/22 — peso de responsabilidade primário vs. colaborador na Saúde
   });
 });
 
-describe("computePrevisibilidade — 35 pontos, desconto proporcional por severidade", () => {
+describe("computePrevisibilidade — 25 pontos (v3), desconto proporcional por severidade", () => {
   it("cenário 9: replanejamento antecipado não penaliza", () => {
     const result = computePrevisibilidade(
       [{ taskId: "t1", from: "2026-01-10", occurredAt: "2026-01-05T10:00:00" }],
       10,
     );
-    expect(result.value).toBe(35);
+    expect(result.value).toBe(25);
     expect(result.earlyReplans).toBe(1);
   });
 
@@ -182,7 +183,7 @@ describe("computePrevisibilidade — 35 pontos, desconto proporcional por severi
       [{ taskId: "t1", from: "2026-01-10", occurredAt: "2026-01-10T10:00:00" }],
       10,
     );
-    expect(result.value!).toBeLessThan(35);
+    expect(result.value!).toBeLessThan(25);
     expect(result.sameDayReplans).toBe(1);
   });
 
@@ -226,12 +227,12 @@ describe("computePrevisibilidade — 35 pontos, desconto proporcional por severi
       ],
       10,
     );
-    expect(isento.value).toBe(35);
+    expect(isento.value).toBe(25);
     expect(isento.exemptedCount).toBe(1);
     expect(isento.lateReplans).toBe(0);
   });
 
-  it("periodTaskBase = 0 => value null (Sem dados), nunca 35 de fábrica", () => {
+  it("periodTaskBase = 0 => value null (Sem dados), nunca 25 de fábrica", () => {
     const result = computePrevisibilidade(
       [{ taskId: "t1", from: "2026-01-01", occurredAt: "2026-01-01T10:00:00" }],
       0,
@@ -309,7 +310,7 @@ describe("combineScoreV2 — redistribuição de peso entre as 3 dimensões", ()
     const attendance = Array.from({ length: 5 }, () => ({ attended: true }));
     const score = build(completions, openTasks, deadlineChanges, attendance);
     expect(score.entregaPontos!).toBeGreaterThanOrEqual(49);
-    expect(score.previsibilidadePontos).toBe(35);
+    expect(score.previsibilidadePontos).toBe(25);
     expect(score.compromissosPontos).toBe(15);
     expect(score.score!).toBeGreaterThanOrEqual(98);
     expect(score.score!).toBeLessThanOrEqual(100);
@@ -353,10 +354,19 @@ describe("combineScoreV2 — redistribuição de peso entre as 3 dimensões", ()
       { attended: true },
       { attended: false },
     ]); // 2/3 => rate com dízima
-    const score = combineScoreV2(entrega, previsibilidade, compromissos);
-    expect(score.entregaPontos! + score.previsibilidadePontos! + score.compromissosPontos!).toBe(
-      score.score,
+    // v3: as 4 dimensões aplicáveis somam EXATAMENTE ao score (maior resto).
+    const score = combineScoreV2(
+      entrega,
+      previsibilidade,
+      compromissos,
+      computeFluxo({ evaluated: 7, withAdjustments: 2, cycles: 3 }),
     );
+    expect(
+      score.entregaPontos! +
+        score.previsibilidadePontos! +
+        score.compromissosPontos! +
+        score.fluxoPontos!,
+    ).toBe(score.score);
   });
 });
 
@@ -398,10 +408,10 @@ describe("computeMemberScoreV2 — monta o score a partir do ledger cru (ponto �
     expect(score.entrega.semPrazoCount).toBe(1);
   });
 
-  it("versão exposta = OPERATIONAL_SCORE_VERSION (2), pra composição mostrar 'Fórmula v2'", () => {
+  it("versão exposta = OPERATIONAL_SCORE_VERSION (3), pra composição mostrar 'Fórmula v3'", () => {
     const score = computeMemberScoreV2([], [], 19, NOW);
     expect(score.version).toBe(OPERATIONAL_SCORE_VERSION);
-    expect(OPERATIONAL_SCORE_VERSION).toBe(2);
+    expect(OPERATIONAL_SCORE_VERSION).toBe(3);
   });
 
   it("cenário 20: comparação com período anterior usa a mesma versão/fórmula dos dois lados", () => {

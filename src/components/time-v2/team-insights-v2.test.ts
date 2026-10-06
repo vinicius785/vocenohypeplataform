@@ -6,7 +6,10 @@ import {
   ruleDependencias,
   ruleDestaque,
   ruleAtrasosConcentrados,
+  ruleCargaBoaExecucao,
   ruleDemanda,
+  ruleFluxoAjustes,
+  ruleFluxoEficiencia,
   ruleMaisAbertas,
   ruleReplanReducao,
   ruleRespostaRelativa,
@@ -42,6 +45,10 @@ const sig = (id: string, o: Partial<MemberSignals> = {}): MemberSignals => ({
   responseAvgPrev: 600,
   answered: 10,
   answeredPrev: 10,
+  flowEvaluated: 0,
+  flowWithAdjustments: 0,
+  flowEvaluatedPrev: 0,
+  flowWithAdjustmentsPrev: 0,
   ...o,
 });
 const time = (...over: Partial<MemberSignals>[]) =>
@@ -369,5 +376,99 @@ describe("seleção", () => {
     const a = sig("a", { openCount: 5, overdueCount: 3 });
     expect(ruleAtraso(a)).not.toBeNull();
     expect(ruleAtraso(a, { acumuloPctAbertas: 0.9, acumuloMinAtrasadas: 5 })).toBeNull();
+  });
+});
+
+describe("fluxo sem retrabalho (eficiência de aprovação)", () => {
+  const f = (ev: number, adj: number) => ({ flowEvaluated: ev, flowWithAdjustments: adj });
+  it("melhor índice do time: ≥ 90% sem ajustes, amostra mínima e time comparável", () => {
+    const t = time(f(11, 1), f(10, 4), f(10, 3), f(8, 2));
+    const i = ruleFluxoEficiencia(t)!;
+    expect(i.ruleId).toBe("fluxo_eficiente");
+    expect(i.memberId).toBe("a");
+    expect(i.evidence).toContain("aprovou 91% das entregas sem ajustes (10 de 11)");
+    expect(i.evidence).toContain("Melhor índice do time");
+    expect(i.category).toBe("destaque");
+  });
+  it("sem base: poucas pessoas com amostra, ou índice abaixo de 90% → nada", () => {
+    expect(ruleFluxoEficiencia(time(f(11, 0), f(2, 0), f(2, 0), f(1, 0)))).toBeNull();
+    expect(ruleFluxoEficiencia(time(f(10, 2), f(10, 3), f(10, 3)))).toBeNull();
+    expect(ruleFluxoEficiencia(time(f(0, 0), f(0, 0), f(0, 0)))).toBeNull();
+  });
+  it("alta taxa de ajustes: ≥ 40% e acima da média do time; linguagem neutra", () => {
+    const t = time(f(12, 5), f(10, 1), f(10, 1), f(10, 1));
+    const i = ruleFluxoAjustes(t[0], t)!;
+    expect(i.ruleId).toBe("fluxo_ajustes_altos");
+    expect(i.evidence).toContain("ajustes em 42% das entregas (5 de 12)");
+    expect(i.evidence).toContain("acima da média do time");
+    expect(`${i.evidence} ${i.reading}`.toLowerCase()).not.toContain("ruim");
+    expect(i.category).toBe("atencao");
+  });
+  it("ajustes altos mas o time inteiro é igual, ou amostra pequena → nada", () => {
+    const igual = time(f(10, 5), f(10, 5), f(10, 5));
+    expect(ruleFluxoAjustes(igual[0], igual)).toBeNull();
+    const pequena = time(f(3, 2), f(10, 1), f(10, 1), f(10, 1));
+    expect(ruleFluxoAjustes(pequena[0], pequena)).toBeNull();
+  });
+  it("carga alta + boa execução: cruza novas demandas e entregas sem retrabalho", () => {
+    const t = time(
+      { newTasks: 11, ...f(16, 1) },
+      { newTasks: 4, ...f(8, 3) },
+      { newTasks: 4, ...f(8, 3) },
+      { newTasks: 3, ...f(8, 3) },
+    );
+    const i = ruleCargaBoaExecucao(t)!;
+    expect(i.evidence).toContain("recebeu 11 das 22 tarefas criadas neste mês (50%)");
+    expect(i.evidence).toContain("manteve 94% das entregas sem retrabalho");
+    expect(i.caveat).toContain("reatribuições");
+    expect(`${i.evidence} ${i.reading}`.toLowerCase()).not.toContain("sobrecarreg");
+  });
+  it("carga alta sem boa execução, ou sem dados de fluxo → nada", () => {
+    const ruim = time(
+      { newTasks: 11, ...f(16, 8) },
+      { newTasks: 4 },
+      { newTasks: 4 },
+      { newTasks: 3 },
+    );
+    expect(ruleCargaBoaExecucao(ruim)).toBeNull();
+    const semFluxo = time({ newTasks: 11 }, { newTasks: 4 }, { newTasks: 4 }, { newTasks: 3 });
+    expect(ruleCargaBoaExecucao(semFluxo)).toBeNull();
+  });
+  it("tendência do time: parcela de ajustes sobe/cai de forma relevante e com base", () => {
+    const sobe = ruleTendenciasTime({
+      tasksCreated: { current: 0, previous: 0 },
+      replans: { current: 0, previous: 0 },
+      response: { current: null, previous: null, answered: 0 },
+      flow: {
+        current: { evaluated: 20, withAdjustments: 10 },
+        previous: { evaluated: 20, withAdjustments: 4 },
+      },
+    });
+    expect(sobe.map((x) => x.ruleId)).toEqual(["tendencia_fluxo"]);
+    expect(sobe[0].evidence).toContain("subiu de 20% para 50%");
+    const pouco = ruleTendenciasTime({
+      tasksCreated: { current: 0, previous: 0 },
+      replans: { current: 0, previous: 0 },
+      response: { current: null, previous: null, answered: 0 },
+      flow: {
+        current: { evaluated: 5, withAdjustments: 3 },
+        previous: { evaluated: 5, withAdjustments: 0 },
+      },
+    });
+    expect(pouco).toEqual([]);
+  });
+  it("a seleção não repete fluxo da mesma pessoa e respeita o limite", () => {
+    const t = time(
+      { newTasks: 11, ...f(16, 1) },
+      { newTasks: 4, ...f(8, 3) },
+      { newTasks: 4, ...f(8, 3) },
+      { newTasks: 3, ...f(8, 3) },
+    );
+    const out = selectTeamInsights(
+      generateTeamInsights({ members: t, edges: [], tasks: new Map() }, null),
+    );
+    const daPessoa = out.filter((i) => i.memberId === "a");
+    expect(daPessoa.length).toBeLessThanOrEqual(2);
+    expect(new Set(daPessoa.map((i) => i.topic)).size).toBe(daPessoa.length);
   });
 });

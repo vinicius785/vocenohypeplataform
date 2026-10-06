@@ -103,7 +103,7 @@ function ScoreOperacionalForm() {
       <SettingsCard
         layout="split"
         title="Pontuação por tarefas"
-        description="Entrega (50 pts), Previsibilidade (35 pts) e Compromissos (15 pts) usam regras fixas — só o XP abaixo é configurável."
+        description="Confiabilidade de prazo (50 pts), Previsibilidade (25 pts), Compromissos (15 pts) e Fluxo sem retrabalho (10 pts) usam regras fixas — só o XP abaixo é configurável."
       >
         <div className="grid max-w-xl grid-cols-1 gap-4 sm:grid-cols-2">
           <Field

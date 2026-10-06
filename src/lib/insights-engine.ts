@@ -136,6 +136,13 @@ export type MemberInsightBundle = {
   meetingsExpected: number;
   meetingsAttended: number;
 
+  // Fluxo sem retrabalho (Score v3): tarefas aprovadas no período e quantas passaram por ajustes
+  flowEvaluated: number;
+  flowWithAdjustments: number;
+  flowCycles: number;
+  flowEvaluatedPrevious: number;
+  flowWithAdjustmentsPrevious: number;
+
   // Início do dia
   earlyStartCount: number | null;
   earlyStartWindow: number | null;
