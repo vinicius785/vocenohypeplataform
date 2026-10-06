@@ -1,6 +1,30 @@
 {
-  "version": "1.366.0",
+  "version": "1.367.0",
   "releases": [
+    {
+      "version": "1.367.0",
+      "summary": "Score: replanejar antes do prazo expirar não é mais atraso; atraso mede o prazo vigente.",
+      "modules": [
+        {
+          "name": "TIME",
+          "tagline": "Score operacional",
+          "items": [
+            {
+              "title": "Prazo vigente",
+              "description": "Replanejar antes do prazo expirar — inclusive no próprio dia, até o corte — é só replanejamento. Atraso é descumprir o prazo vigente; replanejar depois de expirado conta atraso e replanejamento."
+            },
+            {
+              "title": "Histórico recalculado",
+              "description": "Conclusões e replanejamentos antigos são reavaliados na leitura pela regra nova, sem alterar os eventos gravados."
+            },
+            {
+              "title": "Taxa de conclusão",
+              "description": "Calculada como informação de contexto, sem mudar os pesos do score."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.366.0",
       "summary": "Tarefas do Comercial agora têm cronômetro, score por origem e podem ser movidas e duplicadas.",

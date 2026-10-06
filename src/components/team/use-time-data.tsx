@@ -254,7 +254,12 @@ export function useTimeData() {
 
   const openTasksByMemberId = useMemo(() => {
     void tick;
-    return loadOpenTasksByMemberId(loadProjetos(), members, groupsWithMarketing);
+    return loadOpenTasksByMemberId(
+      loadProjetos(),
+      members,
+      groupsWithMarketing,
+      performanceSettings.deadlineCutoffHour,
+    );
   }, [members, tick, groupsWithMarketing]);
 
   const eventsByPersonId = useMemo(

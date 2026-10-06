@@ -188,6 +188,7 @@ export function recordTaskLedgerEventsOnStatusChange(
     const ref = effectivePerformanceDueDate(
       next.originalDueDate ?? next.dueDate,
       next.deadlineHistory,
+      ctx.performanceSettings.deadlineCutoffHour,
     );
     const { outcome, delayMinutes } = classifyOutcome(
       ref,

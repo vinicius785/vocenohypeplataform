@@ -4,6 +4,7 @@ import {
   getTaskPrimaryAssignee,
   ACTIVITY_STATUS_COMPLETED_ACTION,
 } from "./projetos";
+import { reconcilePerformanceReference } from "./performance-engine";
 import type { Meeting } from "./reunioes-store";
 import { attendanceState } from "./meeting-attendance";
 import type { ChatMember } from "./chat-store";
@@ -161,6 +162,7 @@ export function loadOpenTasksByMemberId(
   projetos: Project[],
   members: ChatMember[],
   campanhaGroups: TaskGroup[] = [],
+  cutoffHour?: number,
 ): Map<string, PerformanceOpenTask[]> {
   const byId = new Map<string, PerformanceOpenTask[]>();
   const byName = new Map(members.map((m) => [m.name, m]));
@@ -183,7 +185,13 @@ export function loadOpenTasksByMemberId(
           title: t.title,
           status: t.status,
           dueDate: t.dueDate,
-          performanceDueDate: t.performanceDueDate,
+          // Prazo VIGENTE: o gravado reconciliado com o histórico de replanejamentos.
+          performanceDueDate: reconcilePerformanceReference({
+            stored: t.performanceDueDate,
+            originalDueDate: t.originalDueDate ?? t.dueDate,
+            deadlineHistory: t.deadlineHistory,
+            cutoffHour,
+          }),
           priority: t.priority,
           penaltyWeight,
           blockedState: t.blockedState,

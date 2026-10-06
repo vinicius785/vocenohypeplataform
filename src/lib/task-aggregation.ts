@@ -10,7 +10,11 @@ import { isMarketingProject } from "@/lib/marketing-project";
 import { getAllCampanhaTarefas } from "@/lib/campanha-scoped-store";
 import { loadStandalone } from "@/lib/marketing-tasks";
 import { loadComercialTasks } from "@/lib/comercial-tasks";
-import { deadlineCutoff } from "@/lib/performance-engine";
+import {
+  deadlineCutoff,
+  reconcilePerformanceReference,
+  type DeadlineHistoryEntryLike,
+} from "@/lib/performance-engine";
 import { resolvedCompletionTimestamp } from "@/lib/score";
 
 /** Nomes dos dias, compartilhado entre o cabeçalho do Início ("Segunda, 27
@@ -142,6 +146,8 @@ type CampanhaTaskLike = {
   title: string;
   dueDate?: string;
   performanceDueDate?: string;
+  originalDueDate?: string;
+  deadlineHistory?: DeadlineHistoryEntryLike[];
   priority?: ProjTask["priority"];
   status: ProjTask["status"];
   assignee?: string;
@@ -195,6 +201,22 @@ function taskOwners(t: CampanhaTaskLike): string[] {
   return getTaskAssignees(t);
 }
 
+/** Corte (hora) usado pelas funções públicas desta passada — definido na entrada de cada uma. */
+let activeCutoff: number | undefined;
+
+/** A tarefa com o prazo VIGENTE de performance: o `performanceDueDate` gravado reconciliado com o
+ * histórico de replanejamentos (regra atual: replanejar antes de expirar não é atraso). */
+function vigente<T extends CampanhaTaskLike>(t: T): T {
+  if (!t.deadlineHistory?.length) return t;
+  const ref = reconcilePerformanceReference({
+    stored: t.performanceDueDate ?? t.dueDate,
+    originalDueDate: t.originalDueDate ?? t.dueDate,
+    deadlineHistory: t.deadlineHistory,
+    cutoffHour: activeCutoff,
+  });
+  return ref && ref !== t.performanceDueDate ? { ...t, performanceDueDate: ref } : t;
+}
+
 /** Percorre uma tarefa e (recursivamente) suas subtarefas, chamando `push`
  * pra cada DONO (`taskOwners`) de cada nível (uma subtarefa pode ter
  * responsáveis diferentes da tarefa-mãe, e uma tarefa pode ter mais de um
@@ -208,7 +230,8 @@ function collectAssignedTasks<T extends CampanhaTaskLike>(
   push: (t: T, parentTitle: string | undefined, assignee: string) => void,
 ): void {
   for (const t of items) {
-    for (const assignee of taskOwners(t)) push(t, parentTitle, assignee);
+    const tv = vigente(t);
+    for (const assignee of taskOwners(t)) push(tv, parentTitle, assignee);
     if (t.subtasks?.length) {
       collectAssignedTasks(t.subtasks as T[], t.title, push);
     }
@@ -226,6 +249,7 @@ export function loadTasksByAssignee(
   campanhaNames: Map<string, string>,
   cutoffHour?: number,
 ): Map<string, DashTask[]> {
+  activeCutoff = cutoffHour;
   const byName = new Map<string, DashTask[]>();
   const addFor = (name: string, task: DashTask) => {
     const arr = byName.get(name);
@@ -388,7 +412,7 @@ function collectAllTasks<T extends CampanhaTaskLike>(
   push: (t: T, parentTitle: string | undefined, assignees: string[]) => void,
 ): void {
   for (const t of items) {
-    push(t, parentTitle, getTaskAssignees(t));
+    push(vigente(t), parentTitle, getTaskAssignees(t));
     if (t.subtasks?.length) {
       collectAllTasks(t.subtasks as T[], t.title, push);
     }
@@ -406,6 +430,7 @@ export function loadAllTasksFlat(
   campanhaNames: Map<string, string>,
   cutoffHour?: number,
 ): DashTaskFlat[] {
+  activeCutoff = cutoffHour;
   const out: DashTaskFlat[] = [];
 
   const projs = loadProjetos();
@@ -650,4 +675,42 @@ export function collectTaskCommentMentions(myName: string): TaskCommentMention[]
   }
 
   return out.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+}
+
+/** Índice taskId → dados de prazo (original + histórico), de TODAS as origens (projetos, campanhas,
+ * Marketing e Comercial, incluindo subtarefas) — usado para reconciliar o ledger de performance
+ * com a regra de replanejamento vigente. Só leitura. */
+export function buildTaskDeadlineIndex(): Map<
+  string,
+  {
+    originalDueDate?: string;
+    dueDate?: string;
+    deadlineHistory?: import("@/lib/performance-engine").DeadlineHistoryEntryLike[];
+  }
+> {
+  const index = new Map<
+    string,
+    {
+      originalDueDate?: string;
+      dueDate?: string;
+      deadlineHistory?: import("@/lib/performance-engine").DeadlineHistoryEntryLike[];
+    }
+  >();
+  const walk = (items: CampanhaTaskLike[]) => {
+    for (const t of items) {
+      if (t.deadlineHistory?.length) {
+        index.set(t.id, {
+          originalDueDate: t.originalDueDate,
+          dueDate: t.dueDate,
+          deadlineHistory: t.deadlineHistory as never,
+        });
+      }
+      if (t.subtasks?.length) walk(t.subtasks as CampanhaTaskLike[]);
+    }
+  };
+  for (const p of loadProjetos()) walk((p.tasks ?? []) as unknown as CampanhaTaskLike[]);
+  for (const [, tasks] of getAllCampanhaTarefas()) walk(tasks as unknown as CampanhaTaskLike[]);
+  walk(loadStandalone() as unknown as CampanhaTaskLike[]);
+  walk(loadComercialTasks() as unknown as CampanhaTaskLike[]);
+  return index;
 }

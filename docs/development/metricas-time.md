@@ -52,3 +52,12 @@ Somente relações formais (`task_dependencies`) entre tarefas **abertas**.
 `team-insights-v2.ts`: regras puras sobre `MemberSignals` (montados por `buildMemberSignals` a partir
 do bundle do motor + contagens + resposta). Limiares em `TEAM_INSIGHT_THRESHOLDS`. Cada insight traz a
 janela em que o número vale (`window`). Não altera Score nem regras de tarefa.
+
+## Prazo, atraso e replanejamento (Score Operacional)
+- **Atraso = descumprir o PRAZO VIGENTE** (corte às `deadlineCutoffHour`, padrão 19h, em Brasília) — não o prazo original.
+- **Replanejar antes de o prazo expirar** (qualquer dia anterior, ou no próprio dia até o corte): replanejamento, **não** atraso. O novo prazo passa a ser o vigente. No próprio dia gera só um custo leve em Previsibilidade (`sameDayReplans`).
+- **Replanejar depois de expirado**: atraso **e** replanejamento. A referência fica no prazo descumprido e nenhum replanejamento posterior a "descongela" (o atraso não é apagado). Isenção por motivo externo (ou correção de Admin) continua avançando a referência.
+- **Vencida sem replanejamento**: atraso. **Bloqueio**: continua pausando o prazo e dependência externa isenta a penalidade da saúde atual (bloqueio ≠ atraso).
+- **Fonte única**: `isDeadlineExpiredAt` → `isCriticalReplan`, `classifyReplanTiming`, `effectivePerformanceDueDate` e `reconcilePerformanceReference` (`lib/performance-engine.ts`).
+- **Histórico**: eventos do ledger nunca são alterados; ao LER, `reconcileLedgerEvents` (`lib/performance-reconcile.ts`, aplicado em `usePerformanceEvents`) recalcula a criticidade e o resultado das conclusões pelo histórico de prazos da própria tarefa. Tarefas abertas usam `performanceDueDate` gravado reconciliado com o histórico (dias de bloqueio preservados).
+- **Taxa de conclusão** (`EntregaResult.completionRate`): só informação; não entra no score.

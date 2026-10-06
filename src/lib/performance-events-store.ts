@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { isDemoTaskId } from "@/lib/campanha-scoped-store";
 import {
@@ -6,6 +6,8 @@ import {
   type DateRange,
   type PerformanceSettings,
 } from "@/lib/performance-engine";
+import { reconcileLedgerEvents } from "@/lib/performance-reconcile";
+import { buildTaskDeadlineIndex } from "@/lib/task-aggregation";
 
 /**
  * Leitura/escrita do ledger `performance_events` — append-only e
@@ -115,6 +117,9 @@ export function recordPerformanceEvent(input: NewPerformanceEvent): void {
  * precisar de infraestrutura de realtime nova. */
 const REFETCH_INTERVAL_MS = 30_000;
 
+/** Corte configurado (Configurações → Score), atualizado por `usePerformanceSettings`. */
+let cutoffHourInUse = DEFAULT_PERFORMANCE_SETTINGS.deadlineCutoffHour;
+
 export function usePerformanceEvents(
   range?: DateRange,
   personId?: string,
@@ -151,7 +156,13 @@ export function usePerformanceEvents(
     };
   }, [range?.from, range?.to, personId]);
 
-  return { events, loading };
+  // O ledger é imutável; ao LER, aplica a regra de prazo vigente (replanejar antes de expirar não
+  // é atraso) a partir do histórico de prazos da própria tarefa — nunca altera o que foi gravado.
+  const reconciled = useMemo(() => {
+    const index = buildTaskDeadlineIndex();
+    return reconcileLedgerEvents(events, (id) => index.get(id), cutoffHourInUse);
+  }, [events]);
+  return { events: reconciled, loading };
 }
 
 type PerformanceSettingsRow = {
@@ -196,7 +207,11 @@ export function usePerformanceSettings(): { settings: PerformanceSettings; loadi
       .maybeSingle()
       .then(({ data, error }) => {
         if (cancelled) return;
-        if (!error && data) setSettings(fromSettingsRow(data as unknown as PerformanceSettingsRow));
+        if (!error && data) {
+          const next = fromSettingsRow(data as unknown as PerformanceSettingsRow);
+          cutoffHourInUse = next.deadlineCutoffHour;
+          setSettings(next);
+        }
         setLoading(false);
       });
     return () => {

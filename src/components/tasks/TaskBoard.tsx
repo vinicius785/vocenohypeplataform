@@ -509,7 +509,8 @@ export type DeadlineChangeEntry = {
   to?: string;
   changedAt: string;
   changedBy: string;
-  /** A alteração aconteceu no mesmo dia local do prazo anterior. */
+  /** O prazo anterior JÁ havia expirado (depois do corte) quando foi alterado: atraso + replanejamento.
+   * Replanejar antes de expirar (inclusive no dia, até o corte) é só replanejamento. */
   isCritical: boolean;
   motivo?: DeadlineChangeMotivo;
   observacao?: string;
@@ -2676,7 +2677,7 @@ export function TaskDialog({
     // sempre): a âncora passa a ser o prazo que ela tinha até agora.
     const anchor = originalDueDate ?? from;
     const motivo = justification?.motivo ?? "replanejamento_operacional";
-    const critical = isCriticalReplan(from, nowISO);
+    const critical = isCriticalReplan(from, nowISO, performanceSettings.deadlineCutoffHour);
     const entry: DeadlineChangeEntry = {
       id: crypto.randomUUID(),
       from,
@@ -2691,7 +2692,9 @@ export function TaskDialog({
     const nextHistory = [...deadlineHistory, entry];
     setOriginalDueDate(anchor);
     setDeadlineHistory(nextHistory);
-    setPerformanceDueDate(effectivePerformanceDueDate(anchor, nextHistory));
+    setPerformanceDueDate(
+      effectivePerformanceDueDate(anchor, nextHistory, performanceSettings.deadlineCutoffHour),
+    );
   };
 
   const discardPendingDeadlineChange = () => {

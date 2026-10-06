@@ -40,71 +40,147 @@ export function deadlineCutoff(dueISO: string, cutoffHour: number = DEADLINE_CUT
   return d;
 }
 
-/** Uma alteração de prazo é "crítica" quando acontece no mesmo dia local
- * do prazo anterior OU DEPOIS DELE — replanejamento normal (item 11) é
- * qualquer outra alteração, sempre ANTES do dia do vencimento. Antes só
- * comparava igualdade de data (`===`), o que tratava uma tarefa mudada
- * de prazo DIAS depois de já vencida como replanejamento "normal" —
- * `effectivePerformanceDueDate` então avançava a referência livremente
- * pro novo prazo, apagando o atraso já ocorrido. Comparar `>=` (strings
- * ISO `YYYY-MM-DD` ordenam cronologicamente) cobre os dois casos que já
- * eram considerados críticos na intenção original: mudar no próprio dia
- * do vencimento ("Replanejamento no dia") e mudar depois dele ("Prazo
- * alterado depois do atraso") — ambos continuam exigindo isenção pra
- * avançar a referência. */
-export function isCriticalReplan(previousDueDate: string, changedAtISO: string): boolean {
-  return formatDateToIso(new Date(changedAtISO)) >= previousDueDate;
+/** O prazo VIGENTE já expirou no momento da alteração? Expira às `cutoffHour`h do dia do prazo
+ * (nunca 23:59): mudar até esse instante (inclusive) é replanejar um prazo que ainda valia; mudar
+ * depois é mexer num prazo já descumprido. Mesma comparação de `classifyOutcome` (`> 0` = tarde). */
+export function isDeadlineExpiredAt(
+  previousDueDate: string,
+  changedAtISO: string,
+  cutoffHour: number = DEADLINE_CUTOFF_HOUR,
+): boolean {
+  return new Date(changedAtISO).getTime() > deadlineCutoff(previousDueDate, cutoffHour).getTime();
 }
 
-/** Só exige justificativa quando a tarefa vence hoje/já está atrasada
- * (`isCriticalReplan`) E o novo prazo está sendo ADIADO — `isCriticalReplan`
- * sozinha não sabe a direção da mudança (uma tarefa atrasada movida pra
- * uma data ainda mais cedo continuaria "crítica" por ela, mesmo sem
- * fazer sentido pedir motivo pra quem está antecipando). Antecipar
- * prazo, ou mudar uma tarefa com prazo futuro, nunca interrompe o
- * fluxo — sempre salva silenciosamente. */
+/** Uma alteração de prazo é "crítica" SÓ quando o prazo anterior já havia expirado
+ * (`isDeadlineExpiredAt`): isso é atraso (o compromisso vigente foi descumprido) E replanejamento.
+ * Replanejar antes de expirar — inclusive no próprio dia do vencimento, até o corte — é apenas
+ * replanejamento (sinal de previsibilidade), nunca atraso. */
+export function isCriticalReplan(
+  previousDueDate: string,
+  changedAtISO: string,
+  cutoffHour: number = DEADLINE_CUTOFF_HOUR,
+): boolean {
+  return isDeadlineExpiredAt(previousDueDate, changedAtISO, cutoffHour);
+}
+
+/** Pede justificativa quando a tarefa vence hoje/já venceu E o prazo está sendo ADIADO — o
+ * formulário serve para registrar o motivo (e eventual isenção). Pedir motivo NÃO significa atraso:
+ * quem atrasa é `isCriticalReplan` (prazo já expirado). Antecipar ou mudar tarefa com prazo futuro
+ * salva silenciosamente. */
 export function isCriticalDeadlineMove(
   previousDueDate: string,
   nextDueDate: string,
   nowISO: string,
 ): boolean {
   return (
-    !!nextDueDate && nextDueDate > previousDueDate && isCriticalReplan(previousDueDate, nowISO)
+    !!nextDueDate &&
+    nextDueDate > previousDueDate &&
+    formatDateToIso(new Date(nowISO)) >= previousDueDate
   );
 }
 
 export type DeadlineHistoryEntryLike = {
+  from?: string;
   to?: string;
+  /** Momento da alteração (ISO). Com `from`, a criticidade é RECALCULADA pela regra vigente em vez
+   * de confiar no `isCritical` gravado (histórico antigo usava "mesmo dia = crítico"). */
+  changedAt?: string;
   isCritical: boolean;
   exemptFromResponsibility: boolean;
   adminOverride?: { exempted: boolean };
 };
 
+/** A alteração foi feita com o prazo anterior já expirado? (recalcula quando há `from`/`changedAt`) */
+export function entryIsCritical(
+  entry: DeadlineHistoryEntryLike,
+  cutoffHour: number = DEADLINE_CUTOFF_HOUR,
+): boolean {
+  return entry.from && entry.changedAt
+    ? isCriticalReplan(entry.from, entry.changedAt, cutoffHour)
+    : entry.isCritical;
+}
+
+const isExempt = (entry: DeadlineHistoryEntryLike) =>
+  entry.adminOverride ? entry.adminOverride.exempted : entry.exemptFromResponsibility;
+
 /**
- * A referência usada pra medir cumprimento operacional. Replanejamento
- * NORMAL sempre avança a referência (não há o que "escapar" fora do dia
- * do vencimento). Replanejamento CRÍTICO só avança se a alteração for
- * isenta (motivo externo, ou corrigido depois por um Admin via
- * `adminOverride`) — senão a referência fica congelada no prazo
- * anterior, mesmo que o prazo "operacional" (o que o time vê) já tenha
- * mudado. Recalculável a qualquer momento a partir do histórico — nunca
- * uma mutação incremental espalhada, o que torna a correção do Admin
- * seguro (corrigir uma entrada + rodar esta função de novo sempre dá o
- * resultado certo).
+ * A referência usada pra medir cumprimento: o PRAZO VIGENTE, sem apagar atraso já ocorrido.
+ *
+ * - Replanejar ANTES do prazo expirar (inclusive no próprio dia, até o corte): o novo prazo vira a
+ *   referência na hora — não há descumprimento.
+ * - Replanejar DEPOIS de expirado (crítico), sem isenção: a referência fica congelada no prazo que
+ *   foi descumprido — o atraso existiu — e NENHUM replanejamento posterior a "descongela". Com
+ *   isenção (motivo externo, ou corrigida por Admin via `adminOverride`) a referência avança.
+ * Recalculável a qualquer momento a partir do histórico (nunca mutação incremental).
  */
 export function effectivePerformanceDueDate(
+  originalDueDate: string | undefined,
+  deadlineHistory: DeadlineHistoryEntryLike[] | undefined,
+  cutoffHour: number = DEADLINE_CUTOFF_HOUR,
+): string | undefined {
+  let ref = originalDueDate;
+  let frozen = false;
+  for (const entry of deadlineHistory ?? []) {
+    const exempted = isExempt(entry);
+    if (exempted) {
+      ref = entry.to;
+      continue;
+    }
+    if (entryIsCritical(entry, cutoffHour)) {
+      frozen = true;
+      continue;
+    }
+    if (!frozen) ref = entry.to;
+  }
+  return ref;
+}
+
+/** Regra ANTERIOR (críticos por "mesmo dia ou depois" gravados em `isCritical`; mudança não crítica
+ * descongelava). Só existe para reconciliar valores já gravados com a regra nova — ver
+ * `reconcilePerformanceReference`. */
+function legacyEffectivePerformanceDueDate(
   originalDueDate: string | undefined,
   deadlineHistory: DeadlineHistoryEntryLike[] | undefined,
 ): string | undefined {
   let ref = originalDueDate;
   for (const entry of deadlineHistory ?? []) {
-    const exempted = entry.adminOverride
-      ? entry.adminOverride.exempted
-      : entry.exemptFromResponsibility;
-    if (!entry.isCritical || exempted) ref = entry.to;
-    // crítico e não isento: ref permanece congelado no prazo anterior.
+    if (!entry.isCritical || isExempt(entry)) ref = entry.to;
   }
   return ref;
+}
+
+const dayDiff = (a: string, b: string) =>
+  Math.round(
+    (parseIsoDateLocal(a).getTime() - parseIsoDateLocal(b).getTime()) / (24 * 60 * 60 * 1000),
+  );
+const addDaysIso = (iso: string, days: number) => {
+  const d = parseIsoDateLocal(iso);
+  d.setDate(d.getDate() + days);
+  return formatDateToIso(d);
+};
+
+/**
+ * Reconcilia a referência GRAVADA (`stored`: `performanceDueDate` da tarefa, ou
+ * `performanceDueDateUsed` do evento de conclusão) com a regra vigente, a partir do histórico de
+ * prazos. O gravado pode incluir ajustes que o histórico não explica (dias de bloqueio que pausam
+ * o prazo): quando difere do resultado da regra ANTERIOR, aplica só a diferença entre a regra nova
+ * e a antiga por cima do gravado. Sem histórico, devolve o gravado — nada a reconciliar.
+ */
+export function reconcilePerformanceReference(args: {
+  stored: string | undefined;
+  originalDueDate: string | undefined;
+  deadlineHistory: DeadlineHistoryEntryLike[] | undefined;
+  cutoffHour?: number;
+}): string | undefined {
+  const { stored, originalDueDate, deadlineHistory } = args;
+  if (!deadlineHistory?.length) return stored;
+  const cutoff = args.cutoffHour ?? DEADLINE_CUTOFF_HOUR;
+  const anchor = originalDueDate ?? deadlineHistory[0]?.from;
+  const fresh = effectivePerformanceDueDate(anchor, deadlineHistory, cutoff);
+  const legacy = legacyEffectivePerformanceDueDate(anchor, deadlineHistory);
+  if (!stored) return fresh;
+  if (!fresh || !legacy || stored === legacy) return fresh ?? stored;
+  return addDaysIso(stored, dayDiff(fresh, legacy));
 }
 
 export type TaskOutcome = "on_time" | "early" | "late";
@@ -197,7 +273,11 @@ export function taskDeadlineHealth(
     // ainda aberta e vencida). Cair no ramo ao vivo abaixo mostraria uma
     // tarefa já concluída como se ainda estivesse em aberto e vencida.
     if (!t.completedAt) return build("concluida_no_prazo", "Concluída");
-    const ref = effectivePerformanceDueDate(t.originalDueDate ?? t.dueDate, t.deadlineHistory);
+    const ref = effectivePerformanceDueDate(
+      t.originalDueDate ?? t.dueDate,
+      t.deadlineHistory,
+      cutoffHour,
+    );
     const { outcome, delayMinutes } = classifyOutcome(ref, t.completedAt, cutoffHour);
     if (outcome === "late") {
       const delayDays = Math.max(1, Math.ceil(delayMinutes / (24 * 60)));
@@ -206,7 +286,14 @@ export function taskDeadlineHealth(
     return build("concluida_no_prazo", "Concluída no prazo");
   }
 
-  const ref = t.performanceDueDate ?? t.dueDate;
+  // Prazo VIGENTE: o gravado, reconciliado com o histórico (regra de replanejamento atual).
+  const ref =
+    reconcilePerformanceReference({
+      stored: t.performanceDueDate ?? t.dueDate,
+      originalDueDate: t.originalDueDate ?? t.dueDate,
+      deadlineHistory: t.deadlineHistory,
+      cutoffHour,
+    }) ?? t.dueDate;
   if (!ref) return build("sem_prazo", "Sem prazo");
 
   const diffMs = now.getTime() - deadlineCutoff(ref, cutoffHour).getTime();
@@ -922,6 +1009,9 @@ export type EntregaResult = {
   weightedCurrentOverdue: number;
   currentHealthRate: number | null;
   overdueDetails: CurrentHealthOverdueDetail[];
+  /** Taxa de conclusão — SÓ informativa (contexto, nunca entra no score): concluídas com prazo ÷
+   * (concluídas com prazo + ainda abertas com prazo). `null` sem base. */
+  completionRate: number | null;
   /** @deprecated alias de `completedTasksWithDeadline + completedLate +
    * completedOnTime + semPrazoCount` (todas as conclusões do período,
    * com ou sem prazo) — mantido só pra telas que ainda leem esse nome. */
@@ -1012,6 +1102,7 @@ export function computeEntrega(
     weightedCurrentOverdue: saude.weightedOverdue,
     currentHealthRate,
     overdueDetails: saude.details,
+    completionRate: periodTaskBase > 0 ? completedTasksWithDeadline / periodTaskBase : null,
     concluidas: completions.length,
     noPrazo: completedOnTime,
     comAtraso: completedLate,
@@ -1030,24 +1121,19 @@ export const REPLAN_TIMING_LABEL: Record<ReplanTiming, string> = {
   apos_vencimento: "Após vencimento",
 };
 
-/** Classifica UMA alteração de prazo pela distância entre o momento da
- * mudança e o prazo ANTERIOR (`from`) — mais de 2 dias completos antes =
- * antecipado (nenhuma penalidade); 1-2 dias antes = próximo do prazo
- * (ainda "antecipado" pro novo modelo — ver `computePrevisibilidade`);
- * mesmo dia = "no dia"; depois de já vencida = "após vencimento". Usa a
- * mesma referência de corte (`deadlineCutoff`) que já decide se uma
- * conclusão é "atrasada", pra manter as duas classificações consistentes
- * entre si. */
+/** Classifica UMA alteração de prazo em relação ao prazo ANTERIOR (`from`): depois do corte dele =
+ * "após vencimento" (atraso + replanejamento); no próprio dia, até o corte = "no dia" (replanejamento
+ * leve, nunca atraso); 1-2 dias antes = "próximo do prazo"; mais que isso = "antecipado". Usa o
+ * mesmo critério de `isCriticalReplan`/`classifyOutcome`, para as classificações nunca divergirem. */
 export function classifyReplanTiming(
   previousDueDate: string,
   changedAtISO: string,
   cutoffHour: number = DEADLINE_CUTOFF_HOUR,
 ): ReplanTiming {
-  const limite = deadlineCutoff(previousDueDate, cutoffHour).getTime();
-  const mudou = new Date(changedAtISO).getTime();
-  const diasAntes = (limite - mudou) / (24 * 60 * 60 * 1000);
-  if (diasAntes < 0) return "apos_vencimento";
-  if (diasAntes < 1) return "no_dia";
+  // Mesmo critério de `isCriticalReplan`: expirou = depois do corte do prazo vigente.
+  if (isDeadlineExpiredAt(previousDueDate, changedAtISO, cutoffHour)) return "apos_vencimento";
+  const diasAntes = dayDiff(previousDueDate, formatDateToIso(new Date(changedAtISO)));
+  if (diasAntes <= 0) return "no_dia";
   if (diasAntes <= 2) return "proximo";
   return "antecipado";
 }
