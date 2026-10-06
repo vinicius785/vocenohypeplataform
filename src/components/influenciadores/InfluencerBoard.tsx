@@ -118,7 +118,8 @@ import {
   nextBestAction,
   type NextAction,
 } from "@/lib/influencer-next-action";
-import { CockpitTitle, InlineNote, KeyStats, QuietButton } from "./InfluencerCockpit";
+import { CockpitTitle, KeyStats, QuietButton } from "./InfluencerCockpit";
+import { BriefingEMateriais, ContextoTexto } from "./ContextoCampanha";
 import { AudienceInsights } from "@/components/shared/AudienceInsights";
 import {
   FileLine,
@@ -1692,8 +1693,11 @@ function ChecklistSection({
         )}
       </CockpitTitle>
 
+      {checklist.length === 0 && !adding && (
+        <p className="text-sm text-text-secondary">Nenhum item no checklist.</p>
+      )}
       {checklist.length > 0 && (
-        <ul className="space-y-1">
+        <ul className="space-y-1.5">
           {checklist.map((item) => (
             <li key={item.id} className="group flex items-center gap-2">
               <input
@@ -4973,74 +4977,49 @@ function ContextoCampanhaView({
   onApplyChecklistToAll: (checklist: ChecklistItem[]) => void;
 }) {
   return (
-    <div className="space-y-7">
-      <InlineNote
+    <div className="space-y-9">
+      <ContextoTexto
         key={influ.id}
-        label="Motivo da escolha"
-        hint="Aparece pro cliente no portal."
-        surface={false}
+        title="Motivo da escolha"
+        question="Por que este influenciador?"
+        description="Explique por que ele é interessante para esta campanha. Aparece pro cliente no portal."
+        emphasis
         value={influ.justificativaTime ?? ""}
-        emptyText="Nenhum motivo registrado"
-        addLabel="Adicionar"
+        emptyText="Nenhum motivo registrado."
+        addLabel="Adicionar motivo"
         placeholder="Ex.: Forte afinidade com o público da campanha, bom histórico de conteúdo e audiência concentrada na região..."
         onSave={(v) => onPatch({ justificativaTime: v || undefined })}
       />
-      <div className="grid grid-cols-1 gap-x-8 gap-y-7 md:grid-cols-2">
-        <InlineNote
-          key={`${influ.id}-briefing`}
-          label="Briefing"
-          hint="O que este influenciador precisa saber/fazer nesta campanha — aparece no portal do cliente."
-          surface={false}
-          value={influ.briefingPersonalizado ?? ""}
-          emptyText={influ.briefingAnexoUrl ? "" : "Sem briefing"}
-          addLabel="Adicionar"
-          placeholder="Ex: focar no tom descontraído, evitar mencionar concorrentes..."
-          onSave={(v) => onPatch({ briefingPersonalizado: v || undefined })}
-          footer={
-            influ.briefingAnexoUrl ? (
-              <div className="flex items-center gap-2 text-xs">
-                <a
-                  href={influ.briefingAnexoUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex min-w-0 items-center gap-1 font-medium text-foreground underline underline-offset-2"
-                >
-                  <Paperclip className="h-3 w-3 shrink-0" />
-                  <span className="truncate">{influ.briefingAnexoNome || "Anexo"}</span>
-                </a>
-                <button
-                  type="button"
-                  onClick={() =>
-                    onPatch({ briefingAnexoNome: undefined, briefingAnexoUrl: undefined })
-                  }
-                  className="text-muted-foreground hover:text-destructive"
-                  aria-label="Remover anexo"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            ) : (
-              <BriefingAnexoUploadButton
-                quiet
-                onUpload={(nome, url) =>
-                  onPatch({ briefingAnexoNome: nome, briefingAnexoUrl: url })
-                }
-              />
-            )
-          }
-        />
-        <InlineNote
-          key={`${influ.id}-obs`}
-          label="Observações compartilhadas"
-          hint="Informações operacionais — visíveis pro time e pro cliente no portal (o cliente também escreve aqui)."
-          surface={false}
-          value={influ.observacoes ?? ""}
-          emptyText="Sem observações"
-          addLabel="Adicionar"
-          placeholder="Ex: prefere ser contatado por WhatsApp à tarde..."
-          onSave={(v) => onPatch({ observacoes: v || undefined })}
-        />
-      </div>
+      <BriefingEMateriais
+        key={`${influ.id}-briefing`}
+        texto={influ.briefingPersonalizado ?? ""}
+        arquivo={
+          influ.briefingAnexoUrl
+            ? { nome: influ.briefingAnexoNome ?? "", url: influ.briefingAnexoUrl }
+            : undefined
+        }
+        onSaveTexto={(v) => onPatch({ briefingPersonalizado: v || undefined })}
+        onRemoveArquivo={() =>
+          onPatch({ briefingAnexoNome: undefined, briefingAnexoUrl: undefined })
+        }
+        renderUpload={(label) => (
+          <BriefingAnexoUploadButton
+            quiet
+            label={label}
+            onUpload={(nome, url) => onPatch({ briefingAnexoNome: nome, briefingAnexoUrl: url })}
+          />
+        )}
+      />
+      <ContextoTexto
+        key={`${influ.id}-obs`}
+        title="Observações"
+        description="Informações operacionais compartilhadas com o influenciador e a equipe (o cliente também escreve aqui)."
+        value={influ.observacoes ?? ""}
+        emptyText="Sem observações."
+        addLabel="Adicionar observação"
+        placeholder="Ex.: prefere ser contatado por WhatsApp à tarde..."
+        onSave={(v) => onPatch({ observacoes: v || undefined })}
+      />
       <ChecklistSection
         checklist={influ.checklist ?? []}
         onChange={onSetChecklist}
@@ -5572,8 +5551,10 @@ function InfluenciadorDialog({
 function BriefingAnexoUploadButton({
   onUpload,
   quiet = false,
+  label = "Anexar arquivo",
 }: {
   onUpload: (nome: string, url: string) => void;
+  label?: string;
   /** Só texto (sem moldura tracejada), para contextos densos. */
   quiet?: boolean;
 }) {
@@ -5592,7 +5573,7 @@ function BriefingAnexoUploadButton({
             : "inline-flex items-center gap-1.5 rounded-md border border-dashed border-border px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground disabled:opacity-50"
         }
       >
-        <Paperclip className="h-3 w-3" /> {uploading ? "Enviando..." : "Anexar arquivo"}
+        {!quiet && <Paperclip className="h-3 w-3" />} {uploading ? "Enviando..." : label}
       </button>
       {error && <p className="mt-1 text-[11px] text-destructive">{error}</p>}
       <input

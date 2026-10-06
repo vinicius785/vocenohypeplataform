@@ -1,5 +1,6 @@
 {
   "notes": [
+    "1.342.0: ContextoCampanhaView reescrita visualmente (ContextoCampanha.tsx: ContextoTexto, BriefingEMateriais); mesmos campos/patches e visibilidade no portal. Checklist: estado vazio. BriefingAnexoUploadButton ganhou prop label.",
     "1.341.0: EntregasRows mostra só aviso de feedback NOVO (phase 'solicitados', derivada do stage salvo — vale em qualquer dispositivo); registro completo só no Histórico. Espaçamento: detalhe do influenciador space-y-8, da entrega space-y-5.",
     "1.340.0: Histórico do influenciador usa EntregaHistorico (historicoInfluEventos: deriva por entrega + eventos gerais). Removido AtividadeRecente. Regras e eventos intactos.",
     "1.339.0: UI de Dependências do TaskDialog refeita (TaskDependencyRows.tsx; TaskDependencyIndicator agora 'Bloqueada por N dependência(s)'). Lógica/modelo (task_dependencies, dependsOnPending, TaskPicker) intactos.",
