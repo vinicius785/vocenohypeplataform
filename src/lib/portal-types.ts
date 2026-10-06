@@ -109,6 +109,7 @@ export type PublicCronogramaItem = {
   recurring?: boolean;
   hora?: string;
   tipo?: string;
+  dataFim?: string;
 };
 export type PublicRelatorioMensal = {
   id: string;

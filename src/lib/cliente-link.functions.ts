@@ -621,6 +621,7 @@ const _CronogramaItemPublic = z.object({
   recurring: z.boolean().optional(),
   hora: z.string().optional(),
   tipo: z.string().optional(),
+  dataFim: z.string().optional(),
 });
 
 /** Um ciclo/mês operacional real (`campaign_cycles`) de uma campanha

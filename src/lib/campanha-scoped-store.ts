@@ -29,6 +29,8 @@ export type CronogramaItem = {
   title: string;
   description?: string;
   recurring?: boolean;
+  /** Fim do período (inclusive). Ausente/igual a `date` = evento de um dia. */
+  dataFim?: string;
   /** "HH:MM". */
   hora?: string;
   /** Ausente nos eventos antigos (contam como "cronograma"). */

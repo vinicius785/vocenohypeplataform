@@ -42,6 +42,9 @@ export function ClientCampaignTimeline({ items }: { items: PublicCronogramaItem[
                   </div>
                   <p className="mt-0.5 text-xs text-text-secondary">
                     {new Date(item.date).toLocaleDateString("pt-BR")}
+                    {item.dataFim && item.dataFim > item.date
+                      ? ` → ${new Date(item.dataFim).toLocaleDateString("pt-BR")}`
+                      : ""}
                     {item.hora ? ` · ${item.hora}` : ""}
                     {item.description ? ` · ${item.description}` : ""}
                   </p>

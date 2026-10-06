@@ -44,7 +44,11 @@ import {
   filtrarOcorrencias,
   limitarDia,
   novoEvento,
+  barrasDaSemana,
+  ehPeriodo,
+  fimDe,
   ocorrenciasDaGrade,
+  validarPeriodo,
   tipoDe,
   visivelAoCliente,
   type FiltroVisibilidade,
@@ -145,8 +149,25 @@ export function CalendarTool({
     () => filtrarOcorrencias(ocorrenciasDaGrade(cronograma, cells), { busca, visibilidade }),
     [cronograma, cells, busca, visibilidade],
   );
-  const porDia = useMemo(() => agruparPorDia(ocorrencias), [ocorrencias]);
-  const dias = useMemo(() => [...porDia.keys()].sort(), [porDia]);
+  const periodos = useMemo(() => ocorrencias.filter((o) => ehPeriodo(o.item)), [ocorrencias]);
+  const porDia = useMemo(
+    () => agruparPorDia(ocorrencias.filter((o) => !ehPeriodo(o.item))),
+    [ocorrencias],
+  );
+  /** Tudo que acontece num dia (simples + períodos que o cobrem). */
+  const doDia = (d: string) => [
+    ...periodos.filter((o) => o.item.date <= d && fimDe(o.item) >= d),
+    ...(porDia.get(d) ?? []),
+  ];
+  // Agenda (celular): período aparece uma vez, no 1º dia visível dele.
+  const agenda = useMemo(() => {
+    const ini = cells[0].date;
+    return agruparPorDia([
+      ...ocorrencias.filter((o) => !ehPeriodo(o.item)),
+      ...periodos.map((o) => ({ ...o, date: o.item.date < ini ? ini : o.item.date })),
+    ]);
+  }, [ocorrencias, periodos, cells]);
+  const dias = useMemo(() => [...agenda.keys()].sort(), [agenda]);
   const hoje = todayIso();
   const monthLabel = new Date(cursor.y, cursor.m, 1).toLocaleDateString("pt-BR", {
     month: "long",
@@ -265,48 +286,93 @@ export function CalendarTool({
               </div>
             ))}
           </div>
-          <div className="grid grid-cols-7">
-            {cells.map((cell) => {
-              const list = porDia.get(cell.date) ?? [];
-              const { shown, rest } = limitarDia(list, 3);
-              const day = Number(cell.date.slice(8, 10));
-              return (
-                <div
-                  key={cell.date}
-                  onClick={() => setEditor({ date: cell.date })}
-                  className={`group min-h-[7rem] cursor-pointer space-y-0.5 border-b border-r border-border p-1.5 transition-colors hover:bg-muted/30 ${cell.inMonth ? "" : "bg-muted/20"}`}
-                >
-                  <span
-                    className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] tabular-nums ${cell.date === hoje ? "bg-foreground font-semibold text-background" : cell.inMonth ? "text-foreground" : "text-text-secondary/60"}`}
-                  >
-                    {day}
-                    {day === 1 && (
-                      <span className="ml-1 font-normal uppercase">
-                        {new Date(`${cell.date}T12:00:00`)
-                          .toLocaleDateString("pt-BR", { month: "short" })
-                          .replace(".", "")}
-                      </span>
-                    )}
-                  </span>
-                  {shown.map((o) => (
-                    <EventoLinha key={`${o.item.id}-${o.date}`} o={o} compact />
-                  ))}
-                  {rest > 0 && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDiaAberto(cell.date);
-                      }}
-                      className="px-1 text-[11px] font-medium text-text-secondary hover:text-foreground"
+          {Array.from({ length: 6 }, (_, w) => {
+            const semana = cells.slice(w * 7, w * 7 + 7);
+            const barras = barrasDaSemana(
+              periodos,
+              semana.map((c) => c.date),
+            );
+            const LANES = 2;
+            const visiveis = barras.filter((b) => b.lane < LANES);
+            const faixas = Math.min(
+              LANES,
+              barras.reduce((m, b) => Math.max(m, b.lane + 1), 0),
+            );
+            return (
+              <div key={semana[0].date} className="relative grid grid-cols-7">
+                {semana.map((cell, col) => {
+                  const list = porDia.get(cell.date) ?? [];
+                  const ocultas = barras.filter(
+                    (b) => b.lane >= LANES && col >= b.col && col < b.col + b.span,
+                  ).length;
+                  const { shown, rest } = limitarDia(list, 3);
+                  const day = Number(cell.date.slice(8, 10));
+                  return (
+                    <div
+                      key={cell.date}
+                      onClick={() => setEditor({ date: cell.date })}
+                      className={`group min-h-[7rem] cursor-pointer space-y-0.5 border-b border-r border-border p-1.5 transition-colors hover:bg-muted/30 ${cell.inMonth ? "" : "bg-muted/20"}`}
                     >
-                      +{rest} evento{rest === 1 ? "" : "s"}
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                      <span
+                        className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] tabular-nums ${cell.date === hoje ? "bg-foreground font-semibold text-background" : cell.inMonth ? "text-foreground" : "text-text-secondary/60"}`}
+                      >
+                        {day}
+                        {day === 1 && (
+                          <span className="ml-1 font-normal uppercase">
+                            {new Date(`${cell.date}T12:00:00`)
+                              .toLocaleDateString("pt-BR", { month: "short" })
+                              .replace(".", "")}
+                          </span>
+                        )}
+                      </span>
+                      <div style={{ paddingTop: faixas * 20 }} className="space-y-0.5">
+                        {shown.map((o) => (
+                          <EventoLinha key={`${o.item.id}-${o.date}`} o={o} compact />
+                        ))}
+                        {(rest > 0 || ocultas > 0) && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDiaAberto(cell.date);
+                            }}
+                            className="px-1 text-[11px] font-medium text-text-secondary hover:text-foreground"
+                          >
+                            +{rest + ocultas} evento{rest + ocultas === 1 ? "" : "s"}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+                {visiveis.length > 0 && (
+                  <div className="pointer-events-none absolute inset-x-0 top-[30px] grid grid-cols-7 gap-y-0.5">
+                    {visiveis.map((b) => (
+                      <button
+                        key={`${b.o.item.id}-${b.lane}`}
+                        type="button"
+                        onClick={() => setDetalhe(b.o)}
+                        title={`${b.o.item.title} · ${dataCurta(b.o.item.date)} → ${dataCurta(fimDe(b.o.item))} · ${visivelAoCliente(b.o.item) ? "Visível para o cliente" : "Interno"}`}
+                        style={{ gridColumn: `${b.col + 1} / span ${b.span}`, gridRow: b.lane + 1 }}
+                        className={`pointer-events-auto mx-0.5 flex h-[18px] min-w-0 items-center gap-1 border px-1.5 text-left text-[11px] font-medium leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
+                          visivelAoCliente(b.o.item)
+                            ? "border-brand-border bg-brand-subtle text-foreground hover:bg-brand-subtle/70"
+                            : "border-border bg-muted text-foreground hover:bg-muted/70"
+                        } ${b.continuaAntes ? "ml-0 rounded-l-none border-l-0" : "rounded-l-md"} ${b.continuaDepois ? "mr-0 rounded-r-none border-r-0" : "rounded-r-md"}`}
+                      >
+                        <span className="min-w-0 flex-1 truncate">
+                          {b.continuaAntes && "‹ "}
+                          {b.o.item.title}
+                        </span>
+                        {b.continuaDepois && <span aria-hidden>›</span>}
+                        <Visibilidade item={b.o.item} className="h-2.5 w-2.5" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         {/* Celular: agenda por dia */}
@@ -323,7 +389,7 @@ export function CalendarTool({
                     })}
                   </p>
                   <ul className="mt-1 divide-y divide-border/40">
-                    {(porDia.get(d) ?? []).map((o) => (
+                    {(agenda.get(d) ?? []).map((o) => (
                       <li key={`${o.item.id}-${o.date}`}>
                         <EventoLinha o={o} />
                       </li>
@@ -367,7 +433,7 @@ export function CalendarTool({
           </DialogTitle>
           <DialogDescription className="sr-only">Eventos do dia.</DialogDescription>
           <ul className="divide-y divide-border/40">
-            {(diaAberto ? (porDia.get(diaAberto) ?? []) : []).map((o) => (
+            {(diaAberto ? doDia(diaAberto) : []).map((o) => (
               <li key={o.item.id}>
                 <EventoLinha o={o} />
               </li>
@@ -453,7 +519,9 @@ export function CalendarTool({
                 <p className="text-sm font-medium tabular-nums text-foreground">
                   {detalhe.item.recurring
                     ? `Todo dia ${Number(detalhe.item.date.slice(8, 10))}`
-                    : dataCurta(detalhe.date)}
+                    : ehPeriodo(detalhe.item)
+                      ? `${dataCurta(detalhe.item.date)} → ${dataCurta(fimDe(detalhe.item))}`
+                      : dataCurta(detalhe.date)}
                   {detalhe.item.hora ? ` · ${detalhe.item.hora}` : ""}
                 </p>
                 {detalhe.item.atualizadoEm && (
@@ -487,6 +555,10 @@ export function CalendarTool({
                             ...values,
                             description: values.description.trim() || undefined,
                             hora: values.hora || undefined,
+                            dataFim:
+                              !values.recurring && values.dataFim > values.date
+                                ? values.dataFim
+                                : undefined,
                             recurring: values.recurring ? true : undefined,
                             atualizadoEm: agora,
                           }
@@ -510,6 +582,7 @@ export function CalendarTool({
 type Valores = {
   title: string;
   date: string;
+  dataFim: string;
   hora: string;
   tipo: CronogramaTipo;
   description: string;
@@ -533,6 +606,7 @@ function EventoForm({
   const [v, setV] = useState<Valores>({
     title: item?.title ?? "",
     date: item?.date ?? dateInicial ?? "",
+    dataFim: item?.dataFim && item.dataFim > item.date ? item.dataFim : "",
     hora: item?.hora ?? "",
     tipo: tipoDe(item ?? {}),
     description: item?.description ?? "",
@@ -544,7 +618,8 @@ function EventoForm({
   const [salvando, setSalvando] = useState(false);
   const erroTitulo = tentou && v.title.trim() === "";
   const erroData = tentou && v.date === "";
-  const ok = v.title.trim() !== "" && v.date !== "";
+  const erroPeriodo = validarPeriodo(v.date, v.dataFim || undefined);
+  const ok = v.title.trim() !== "" && v.date !== "" && !erroPeriodo;
   return (
     <form
       className="space-y-3"
@@ -590,15 +665,35 @@ function EventoForm({
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
-          <span className="text-xs font-medium text-text-secondary">Data *</span>
+          <span className="text-xs font-medium text-text-secondary">Data de *</span>
           <DateField
             value={v.date || undefined}
-            onChange={(d) => setV({ ...v, date: d ?? "" })}
-            ariaLabel="Data do evento"
+            onChange={(d) =>
+              setV({
+                ...v,
+                date: d ?? "",
+                dataFim: d && v.dataFim && v.dataFim < d ? "" : v.dataFim,
+              })
+            }
+            ariaLabel="Data de início do evento"
             className={cn("h-9", erroData && "border-danger")}
           />
           {erroData && <p className="text-xs text-danger">Escolha a data.</p>}
         </div>
+        <div className="space-y-1">
+          <span className="text-xs font-medium text-text-secondary">Data até</span>
+          <DateField
+            value={v.dataFim || undefined}
+            onChange={(d) => setV({ ...v, dataFim: d ?? "", recurring: d ? false : v.recurring })}
+            min={v.date || undefined}
+            placeholder="Opcional"
+            ariaLabel="Data final do período (opcional)"
+            className={cn("h-9", erroPeriodo && "border-danger")}
+          />
+        </div>
+        {erroPeriodo && <p className="col-span-2 -mt-1 text-xs text-danger">{erroPeriodo}</p>}
+      </div>
+      <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
           <span className="text-xs font-medium text-text-secondary">Horário</span>
           <TimeField
@@ -610,44 +705,45 @@ function EventoForm({
             className="h-9"
           />
         </div>
-      </div>
-      <div className="space-y-1">
-        <span className="text-xs font-medium text-text-secondary">Tipo</span>
-        <Popover open={tipoAberto} onOpenChange={setTipoAberto}>
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              disabled={salvando}
-              aria-label="Tipo do evento"
-              className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
-            >
-              {EVENTO_TIPO_LABEL[v.tipo]}
-              <ChevronDown className="h-4 w-4 text-text-secondary" />
-            </button>
-          </PopoverTrigger>
-          <PopoverContent
-            align="start"
-            className="w-[var(--radix-popover-trigger-width)] p-1"
-            role="listbox"
-          >
-            {EVENTO_TIPOS.map((t) => (
+
+        <div className="space-y-1">
+          <span className="text-xs font-medium text-text-secondary">Tipo</span>
+          <Popover open={tipoAberto} onOpenChange={setTipoAberto}>
+            <PopoverTrigger asChild>
               <button
-                key={t}
                 type="button"
-                role="option"
-                aria-selected={t === v.tipo}
-                onClick={() => {
-                  setV({ ...v, tipo: t });
-                  setTipoAberto(false);
-                }}
-                className="flex h-8 w-full items-center justify-between rounded-sm px-2 text-sm hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+                disabled={salvando}
+                aria-label="Tipo do evento"
+                className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
               >
-                {EVENTO_TIPO_LABEL[t]}
-                {t === v.tipo && <Check className="h-4 w-4" />}
+                {EVENTO_TIPO_LABEL[v.tipo]}
+                <ChevronDown className="h-4 w-4 text-text-secondary" />
               </button>
-            ))}
-          </PopoverContent>
-        </Popover>
+            </PopoverTrigger>
+            <PopoverContent
+              align="start"
+              className="w-[var(--radix-popover-trigger-width)] p-1"
+              role="listbox"
+            >
+              {EVENTO_TIPOS.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  role="option"
+                  aria-selected={t === v.tipo}
+                  onClick={() => {
+                    setV({ ...v, tipo: t });
+                    setTipoAberto(false);
+                  }}
+                  className="flex h-8 w-full items-center justify-between rounded-sm px-2 text-sm hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+                >
+                  {EVENTO_TIPO_LABEL[t]}
+                  {t === v.tipo && <Check className="h-4 w-4" />}
+                </button>
+              ))}
+            </PopoverContent>
+          </Popover>
+        </div>
       </div>
       <div className="space-y-1">
         <label htmlFor="evento-desc" className="text-xs font-medium text-text-secondary">
@@ -667,7 +763,7 @@ function EventoForm({
         <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
           <Checkbox
             checked={v.recurring}
-            disabled={salvando}
+            disabled={salvando || !!v.dataFim}
             onCheckedChange={(c) => setV({ ...v, recurring: c === true })}
             className="transition-transform active:scale-90 motion-reduce:transition-none"
           />

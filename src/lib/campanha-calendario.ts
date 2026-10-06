@@ -26,6 +26,18 @@ export const visivelAoCliente = (i: Pick<CronogramaItem, "visivelCliente">): boo
 export const iso = (y: number, m0: number, d: number) =>
   `${y}-${String(m0 + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 
+/** Último dia do evento (inclusive). Evento recorrente nunca é período. */
+export const fimDe = (i: Pick<CronogramaItem, "date" | "dataFim" | "recurring">): string =>
+  !i.recurring && i.dataFim && i.dataFim > i.date ? i.dataFim : i.date;
+export const ehPeriodo = (i: Pick<CronogramaItem, "date" | "dataFim" | "recurring">): boolean =>
+  fimDe(i) > i.date;
+
+/** Validação do período: "até" não pode ser anterior a "de". */
+export function validarPeriodo(date: string, dataFim?: string): string | null {
+  if (dataFim && date && dataFim < date) return "A data final não pode ser anterior à inicial.";
+  return null;
+}
+
 export type Ocorrencia = { item: CronogramaItem; date: string };
 
 /** Ocorrências do mês (m0 = 0..11). Evento recorrente repete no mesmo dia do mês (ajustado ao
@@ -52,9 +64,17 @@ export function ocorrenciasDaGrade(
   const visiveis = new Set(cells.map((c) => c.date));
   const meses = new Set(cells.map((c) => c.date.slice(0, 7)));
   const out: Ocorrencia[] = [];
+  const ini = cells[0]?.date ?? "";
+  const fim = cells[cells.length - 1]?.date ?? "";
+  // Período: UMA ocorrência (na data inicial) se cruzar a grade, mesmo começando em outro mês.
+  const simples = items.filter((i) => !ehPeriodo(i));
+  for (const item of items) {
+    if (ehPeriodo(item) && item.date <= fim && fimDe(item) >= ini)
+      out.push({ item, date: item.date });
+  }
   for (const ym of meses) {
     const [y, m] = ym.split("-").map(Number);
-    for (const o of ocorrenciasDoMes(items, y, m - 1)) if (visiveis.has(o.date)) out.push(o);
+    for (const o of ocorrenciasDoMes(simples, y, m - 1)) if (visiveis.has(o.date)) out.push(o);
   }
   return out;
 }
@@ -85,6 +105,48 @@ export function filtrarOcorrencias(
   });
 }
 
+export type Barra = {
+  o: Ocorrencia;
+  /** Coluna inicial (0 = domingo) e quantos dias a barra ocupa NESTA semana. */
+  col: number;
+  span: number;
+  lane: number;
+  continuaAntes: boolean;
+  continuaDepois: boolean;
+};
+
+/** Barras dos períodos numa semana (7 datas ISO): só a interseção com a semana, em faixas
+ * (lanes) sem sobreposição. */
+export function barrasDaSemana(periodos: Ocorrencia[], semana: string[]): Barra[] {
+  const ini = semana[0];
+  const fim = semana[semana.length - 1];
+  const ordenados = periodos
+    .filter((o) => ehPeriodo(o.item) && o.item.date <= fim && fimDe(o.item) >= ini)
+    .sort(
+      (a, b) =>
+        a.item.date.localeCompare(b.item.date) ||
+        fimDe(b.item).localeCompare(fimDe(a.item)) ||
+        a.item.title.localeCompare(b.item.title, "pt-BR"),
+    );
+  const ocupado: boolean[][] = [];
+  return ordenados.map((o) => {
+    const a = Math.max(0, semana.indexOf(o.item.date < ini ? ini : o.item.date));
+    const fimSem = fimDe(o.item) > fim ? fim : fimDe(o.item);
+    const b = semana.indexOf(fimSem);
+    let lane = 0;
+    while ((ocupado[lane] ??= []).slice(a, b + 1).some(Boolean)) lane++;
+    for (let c = a; c <= b; c++) ocupado[lane][c] = true;
+    return {
+      o,
+      col: a,
+      span: b - a + 1,
+      lane,
+      continuaAntes: o.item.date < ini,
+      continuaDepois: fimDe(o.item) > fim,
+    };
+  });
+}
+
 /** Mostra até `max` eventos no dia; o resto vira "+N eventos". */
 export function limitarDia<T>(list: T[], max = 3): { shown: T[]; rest: number } {
   return { shown: list.slice(0, max), rest: Math.max(0, list.length - max) };
@@ -105,6 +167,7 @@ export function novoEvento(
     title: string;
     date: string;
     hora?: string;
+    dataFim?: string;
     tipo?: CronogramaTipo;
     description?: string;
     visivelCliente?: boolean;
@@ -121,6 +184,8 @@ export function novoEvento(
     hora: input.hora || undefined,
     tipo: input.tipo ?? "cronograma",
     recurring: input.recurring ? true : undefined,
+    dataFim:
+      !input.recurring && input.dataFim && input.dataFim > input.date ? input.dataFim : undefined,
     visivelCliente: input.visivelCliente === true,
     criadoPor: autor,
     criadoEm: now.toISOString(),
@@ -157,6 +222,7 @@ export function cronogramaPublico(items: CronogramaItem[]): PublicCronogramaItem
       ...(i.description ? { description: i.description } : {}),
       ...(i.recurring ? { recurring: true } : {}),
       ...(i.hora ? { hora: i.hora } : {}),
+      ...(ehPeriodo(i) ? { dataFim: i.dataFim } : {}),
       ...(i.tipo ? { tipo: i.tipo } : {}),
     }))
     .sort((a, b) => a.date.localeCompare(b.date));

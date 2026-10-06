@@ -1,6 +1,26 @@
 {
-  "version": "1.353.0",
+  "version": "1.354.0",
   "releases": [
+    {
+      "version": "1.354.0",
+      "summary": "Marcos com período: “Data de” e “Data até” viram uma barra contínua no calendário.",
+      "modules": [
+        {
+          "name": "CAMPANHAS",
+          "tagline": "Recursos · Calendário",
+          "items": [
+            {
+              "title": "Período em uma barra",
+              "description": "Um marco pode ter início e fim. No calendário vira uma única barra que atravessa dias, semanas e meses, com o título dentro e tooltip."
+            },
+            {
+              "title": "Validação",
+              "description": "A data final não pode ser anterior à inicial. O cliente vê o período no portal quando o marco é compartilhado."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.353.0",
       "summary": "Detalhe do marco do calendário mais simples: título, quem vê, descrição, quando e última atualização.",
