@@ -6,7 +6,11 @@ import {
   ruleCarga,
   ruleDependencias,
   ruleDestaque,
-  ruleMaisDemandado,
+  ruleAtrasosConcentrados,
+  ruleDemanda,
+  ruleMaisAbertas,
+  ruleReplanReducao,
+  ruleRespostaRelativa,
   ruleReplanejamento,
   ruleResposta,
   ruleTendenciasTime,
@@ -101,43 +105,87 @@ describe("carga acima do esperado e concentração de demandas", () => {
     expect(i.evidence).toContain("das tarefas criadas nos últimos 30 dias");
     expect(i.caveat).toContain("reatribuições");
   });
-  it("só concentração de novas demandas → concentracao_demandas", () => {
-    const t = time(
-      { openCount: 4, newTasks: 9 },
-      { newTasks: 4 },
-      { newTasks: 4 },
-      { newTasks: 3 },
-    );
-    expect(ruleCarga(t[0], t)!.ruleId).toBe("concentracao_demandas");
-  });
   it("time pequeno demais para comparar → nada", () => {
     const t = time({ openCount: 12, newTasks: 12 }, {});
     expect(ruleCarga(t[0], t)).toBeNull();
   });
 });
 
-describe("mais demandado (≥ 3 sinais)", () => {
-  it("lidera em 3 sinais → insight; não é chamado de sobrecarga", () => {
+describe("demanda (volume ≠ sobrecarga)", () => {
+  it("maior volume de novas tarefas → 'maior demanda', sem concluir sobrecarga", () => {
+    const t = time({ newTasks: 12 }, { newTasks: 3 }, { newTasks: 3 }, { newTasks: 2 });
+    const i = ruleDemanda(t)!;
+    expect(i.ruleId).toBe("maior_volume_demandas");
+    expect(i.label).toBe("Maior demanda");
+    expect(i.evidence).toContain("60% das tarefas criadas no período (12 de 20)");
+    expect(`${i.evidence} ${i.reading}`.toLowerCase()).not.toContain("está sobrecarregad");
+    expect(i.reading).toContain("não sobrecarga");
+    expect(i.caveat).toContain("reatribuições");
+  });
+  it("com ≥ 3 sinais convergentes → 'mais demandado' (ainda volume, nunca diagnóstico)", () => {
     const t = time(
-      { openCount: 10, newTasks: 9, answered: 30, meetingsAttended: 4 },
-      { openCount: 4, newTasks: 3, answered: 10, meetingsAttended: 4 },
-      { openCount: 4, newTasks: 3, answered: 10, meetingsAttended: 4 },
-      { openCount: 4, newTasks: 3, answered: 10, meetingsAttended: 4 },
+      { newTasks: 12, openCount: 10, answered: 30, meetingsAttended: 4 },
+      { newTasks: 3, openCount: 4, answered: 10, meetingsAttended: 4 },
+      { newTasks: 3, openCount: 4, answered: 10, meetingsAttended: 4 },
+      { newTasks: 2, openCount: 4, answered: 10, meetingsAttended: 4 },
     );
-    const i = ruleMaisDemandado(t)!;
-    expect(i.memberId).toBe("a");
+    const i = ruleDemanda(t)!;
+    expect(i.ruleId).toBe("mais_demandado");
     expect(i.evidence).toContain("tarefas abertas");
     expect(i.evidence).toContain("demandas respondidas");
-    expect(i.reading).toContain("não de sobrecarga");
+    expect(i.reading).toContain("é volume de demanda");
   });
-  it("só 2 sinais → nada", () => {
+  it("sem líder claro, amostra pequena ou time pequeno → nada", () => {
+    expect(
+      ruleDemanda(time({ newTasks: 5 }, { newTasks: 5 }, { newTasks: 5 }, { newTasks: 5 })),
+    ).toBeNull();
+    expect(
+      ruleDemanda(time({ newTasks: 5 }, { newTasks: 1 }, { newTasks: 1 }, { newTasks: 0 })),
+    ).toBeNull();
+    expect(ruleDemanda(time({ newTasks: 12 }, { newTasks: 3 }))).toBeNull();
+  });
+  it("maior número de tarefas abertas: descritivo e só se não for atraso", () => {
+    const t = time({ openCount: 12 }, { openCount: 4 }, { openCount: 4 }, { openCount: 4 });
+    expect(ruleMaisAbertas(t)!.evidence).toContain("12");
+    const atrasado = time({ openCount: 12, overdueCount: 8 }, {}, {}, {});
+    expect(ruleMaisAbertas(atrasado)).toBeNull();
+  });
+});
+
+describe("insights de time e comunicação relativa", () => {
+  it("atrasos concentrados em 2 pessoas", () => {
     const t = time(
-      { openCount: 10, newTasks: 9 },
-      { openCount: 4, newTasks: 3 },
-      { openCount: 4, newTasks: 3 },
-      { openCount: 4, newTasks: 3 },
+      { overdueCount: 5 },
+      { overdueCount: 3 },
+      { overdueCount: 1 },
+      { overdueCount: 0 },
     );
-    expect(ruleMaisDemandado(t)).toBeNull();
+    const i = ruleAtrasosConcentrados(t)!;
+    expect(i.memberId).toBeUndefined();
+    expect(i.evidence).toContain("89% das 9 tarefas atrasadas");
+    expect(
+      ruleAtrasosConcentrados(
+        time({ overdueCount: 2 }, { overdueCount: 2 }, { overdueCount: 2 }, { overdueCount: 2 }),
+      ),
+    ).toBeNull();
+  });
+  it("resposta mais lenta e mais rápida em relação ao time", () => {
+    const t = time(
+      { responseAvg: 7200, answered: 10 },
+      { responseAvg: 1800, answered: 10 },
+      { responseAvg: 1800, answered: 12 },
+      { responseAvg: 300, answered: 12 },
+    );
+    const out = ruleRespostaRelativa(t);
+    expect(out.map((i) => i.ruleId).sort()).toEqual([
+      "resposta_mais_lenta",
+      "resposta_mais_rapida",
+    ]);
+  });
+  it("redução de replanejamentos é reconhecimento", () => {
+    const i = ruleReplanReducao(sig("a", { criticalReplans: 1, criticalReplansPrev: 5 }))!;
+    expect(i.category).toBe("destaque");
+    expect(ruleReplanReducao(sig("a", { criticalReplans: 4, criticalReplansPrev: 5 }))).toBeNull();
   });
 });
 
@@ -251,7 +299,7 @@ describe("tendências do time", () => {
   it("só variações relevantes e com base", () => {
     const out = ruleTendenciasTime({
       tasksCreated: { current: 64, previous: 50 },
-      replans: { current: 12, previous: 10 },
+      replans: { current: 11, previous: 10 },
       response: { current: 1080, previous: 2520, answered: 40 },
     });
     expect(out.map((i) => i.ruleId).sort()).toEqual(["tendencia_resposta", "tendencia_tarefas"]);
@@ -274,7 +322,7 @@ describe("seleção", () => {
     memberId: string | undefined,
     priority: TeamInsightV2["priority"],
     cat: TeamInsightV2["category"] = "atencao",
-    weight = 1,
+    o: Partial<TeamInsightV2> = {},
   ): TeamInsightV2 => ({
     id: `${ruleId}:${memberId ?? "t"}`,
     ruleId,
@@ -284,27 +332,37 @@ describe("seleção", () => {
     memberName: memberId,
     evidence: "e",
     reading: "r",
-    weight,
+    weight: 1,
+    topic: ruleId,
+    rank: 8,
+    ...o,
   });
-  it("ordena P0→P3, 1 por pessoa, no máximo 2 destaques e 6 no total", () => {
+  it("P0 primeiro, depois ordem editorial; no máximo 12", () => {
     const all = [
-      mkI("a1", "a", 1),
-      mkI("a0", "a", 0),
-      mkI("b", "b", 3, "destaque"),
-      mkI("c", "c", 3, "destaque"),
-      mkI("d", "d", 3, "destaque"),
-      mkI("t1", undefined, 2, "tendencia"),
-      mkI("e", "e", 1),
-      mkI("f", "f", 1),
-      mkI("g", "g", 1),
+      mkI("rep", "a", 1, "atencao", { rank: 6 }),
+      mkI("dem", "b", 2, "operacao", { rank: 2 }),
+      mkI("risco", "c", 0, "atencao", { rank: 4 }),
+      ...Array.from({ length: 14 }, (_, i) => mkI(`x${i}`, `m${i}`, 1)),
     ];
     const out = selectTeamInsights(all);
-    expect(out).toHaveLength(6);
-    expect(out[0].ruleId).toBe("a0");
-    expect(out.filter((i) => i.memberId === "a")).toHaveLength(1);
-    expect(out.filter((i) => i.category === "destaque").length).toBeLessThanOrEqual(2);
+    expect(out).toHaveLength(12);
+    expect(out[0].ruleId).toBe("risco");
+    expect(out[1].ruleId).toBe("dem");
   });
-  it("poucos relevantes → poucos; sem dados → vazio", () => {
+  it("elimina redundância: 1 insight por pessoa e tema, no máximo 2 por pessoa", () => {
+    const out = selectTeamInsights([
+      mkI("queda", "a", 1, "atencao", { topic: "prazo", rank: 4 }),
+      mkI("piora_geral", "a", 1, "atencao", { topic: "prazo", rank: 5 }),
+      mkI("resp", "a", 1, "atencao", { topic: "resposta", rank: 5 }),
+      mkI("rep", "a", 1, "atencao", { topic: "replan", rank: 6 }),
+    ]);
+    expect(out.map((i) => i.ruleId)).toEqual(["queda", "resp"]);
+  });
+  it("limita reconhecimentos e não preenche à força", () => {
+    const out = selectTeamInsights([
+      ...Array.from({ length: 5 }, (_, i) => mkI(`d${i}`, `d${i}`, 3, "destaque")),
+    ]);
+    expect(out.filter((i) => i.category === "destaque")).toHaveLength(3);
     expect(selectTeamInsights([mkI("x", "a", 1)])).toHaveLength(1);
     expect(generateTeamInsights({ members: [], edges: [], tasks: new Map() }, null)).toEqual([]);
   });

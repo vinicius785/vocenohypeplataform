@@ -1,6 +1,30 @@
 {
-  "version": "1.356.0",
+  "version": "1.357.0",
   "releases": [
+    {
+      "version": "1.357.0",
+      "summary": "Insights do Time em 2 colunas, até 12, com mais sinais e sem repetição.",
+      "modules": [
+        {
+          "name": "TIME",
+          "tagline": "Insights",
+          "items": [
+            {
+              "title": "Mais denso e mais curto",
+              "description": "Até 12 insights em 2 colunas de 6 (1 coluna no celular), com subtítulo, sem cards e com avatar menor."
+            },
+            {
+              "title": "Demanda sem rótulo de sobrecarga",
+              "description": "“Maior demanda” e “Mais demandado” descrevem volume de novas tarefas; só viram “mais demandado” com sinais convergentes. Atrasos concentrados, resposta mais lenta/rápida e redução de replanejamentos também entram."
+            },
+            {
+              "title": "Sem redundância",
+              "description": "Um insight por pessoa e tema (prazo, demanda, resposta, replanejamento…), no máximo 2 por pessoa, ordenados por risco → demanda → desempenho → comunicação → tendências → reconhecimento."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.356.0",
       "summary": "Insights do Time: radar operacional com leitura gerencial, prioridade e ação real.",

@@ -40,6 +40,12 @@ export type TeamInsightV2 = {
   actionLabel?: string;
   /** Desempate dentro da mesma prioridade (maior = mais forte). */
   weight: number;
+  /** Tema para eliminar redundância: no máximo 1 insight por pessoa e tema. */
+  topic: string;
+  /** Ordem editorial dentro da lista (menor = antes; P0 sempre vem primeiro). */
+  rank: number;
+  /** Rótulo curto que substitui o da categoria (ex.: "Maior demanda"). */
+  label?: string;
 };
 
 export const TEAM_INSIGHT_THRESHOLDS = {
@@ -68,9 +74,18 @@ export const TEAM_INSIGHT_THRESHOLDS = {
   reunioesPrevistasMin: 2,
   tendenciaTimePct: 20,
   tendenciaMinBase: 5,
-  maxInsights: 6,
-  maxDestaques: 2,
-  maxTendenciasTime: 2,
+  demandaPctNovas: 0.25,
+  demandaVsMedia: 1.5,
+  demandaMinNovas: 8,
+  respostaLentaVsTime: 1.5,
+  respostaRapidaVsTime: 0.5,
+  respostaRapidaMin: 10,
+  atrasosConcentradosMin: 6,
+  atrasosConcentradosPct: 0.7,
+  maxInsights: 12,
+  maxPorPessoa: 2,
+  maxDestaques: 3,
+  maxTendenciasTime: 3,
 } as const;
 export type InsightThresholds = { -readonly [K in keyof typeof TEAM_INSIGHT_THRESHOLDS]: number };
 
@@ -121,10 +136,18 @@ export type TeamInsightsInput = {
 const pct = (v: number, total: number) => (total > 0 ? Math.round((v / total) * 100) : 0);
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const first = (name: string) => name.split(" ")[0];
-const mk = (i: Omit<TeamInsightV2, "id" | "weight"> & { weight?: number }): TeamInsightV2 => ({
+const mk = (
+  i: Omit<TeamInsightV2, "id" | "weight" | "topic" | "rank"> & {
+    weight?: number;
+    topic?: string;
+    rank?: number;
+  },
+): TeamInsightV2 => ({
   ...i,
   id: `${i.ruleId}:${i.memberId ?? "time"}`,
   weight: i.weight ?? 0,
+  topic: i.topic ?? i.ruleId,
+  rank: i.rank ?? 8,
 });
 
 /* ---------------- regras por pessoa ---------------- */
@@ -167,6 +190,8 @@ export function ruleAtraso(m: MemberSignals, o?: Partial<InsightThresholds>): Te
   const p0 = altaPrioridade || m.overdueOld > 0 || drop >= T.pontualidadeQuedaForteP0;
   return mk({
     ruleId: "atraso",
+    rank: 4,
+    topic: "prazo",
     category: "atencao",
     priority: p0 ? 0 : 1,
     memberId: m.id,
@@ -179,7 +204,8 @@ export function ruleAtraso(m: MemberSignals, o?: Partial<InsightThresholds>): Te
   });
 }
 
-/** Carga acima do esperado / concentração de demandas — NUNCA por volume sozinho. */
+/** Carga acima do esperado: parcela alta das abertas E das tarefas novas, sem ser backlog de atraso.
+ * "Carga" não é diagnóstico de sobrecarga — só descreve onde o trabalho está concentrado. */
 export function ruleCarga(
   m: MemberSignals,
   all: MemberSignals[],
@@ -193,90 +219,207 @@ export function ruleCarga(
   const openShare = totalOpen > 0 ? m.openCount / totalOpen : 0;
   const newShare = totalNew > 0 ? m.newTasks / totalNew : 0;
   const mostlyOverdue = m.openCount > 0 && m.overdueCount / m.openCount >= T.acumuloPctAbertas;
-
-  const cargaAlta =
-    !mostlyOverdue &&
-    m.openCount >= T.cargaMinAbertas &&
-    openShare >= T.cargaPctAbertas &&
-    m.openCount >= avgOpen * T.cargaVsMedia &&
-    newShare >= T.novasPctCarga;
-  const concentracao = totalNew >= T.concentracaoMinNovas && newShare >= T.concentracaoNovasPct;
-  if (!cargaAlta && !concentracao) return null;
-
-  const partes: string[] = [];
-  if (cargaAlta)
-    partes.push(`${m.name} concentra ${pct(m.openCount, totalOpen)}% das tarefas abertas do time`);
-  if (concentracao)
-    partes.push(
-      cargaAlta
-        ? `e recebeu ${pct(m.newTasks, totalNew)}% das tarefas criadas nos últimos 30 dias`
-        : `${pct(m.newTasks, totalNew)}% das tarefas criadas nos últimos 30 dias estão com ${m.name}`,
-    );
-  const reading = cargaAlta
-    ? "Boa parte do que entra no time está sendo direcionada para uma pessoa; vale revisar a distribuição antes que vire gargalo."
-    : "As novas demandas estão se concentrando numa pessoa só; vale checar se a distribuição é intencional.";
+  if (
+    mostlyOverdue ||
+    m.openCount < T.cargaMinAbertas ||
+    openShare < T.cargaPctAbertas ||
+    m.openCount < avgOpen * T.cargaVsMedia ||
+    newShare < T.novasPctCarga
+  )
+    return null;
   return mk({
-    ruleId: cargaAlta ? "carga_acima" : "concentracao_demandas",
+    ruleId: "carga_acima",
+    topic: "demanda",
+    rank: 3,
+    label: "Carga",
     category: "operacao",
     priority: 1,
     memberId: m.id,
     memberName: m.name,
-    evidence: `${partes.join(" ")}.`,
-    reading,
-    caveat:
-      "Considera o responsável atual das tarefas; reatribuições podem distorcer a parcela de novas demandas.",
+    evidence: `${m.name} concentra ${pct(m.openCount, totalOpen)}% das tarefas abertas do time e recebeu ${pct(m.newTasks, totalNew)}% das tarefas criadas nos últimos 30 dias.`,
+    reading:
+      "As duas medidas apontam para a mesma pessoa; vale revisar se a distribuição é intencional antes que vire gargalo.",
+    caveat: CAVEAT_REATRIBUICAO,
     view: "tarefas",
     actionLabel: `Ver tarefas de ${first(m.name)}`,
     weight: openShare * 100 + newShare * 100,
   });
 }
 
-/** Mais demandado: combinação de ≥ 3 sinais independentes (não é sobrecarga). */
-export function ruleMaisDemandado(
+const CAVEAT_REATRIBUICAO =
+  "Considera o responsável atual das tarefas; reatribuições podem distorcer a parcela de novas demandas.";
+
+/** Demanda: quem recebeu o maior volume de tarefas novas. Separa VOLUME DE DEMANDA de sobrecarga:
+ * só vira "mais demandado" (≥ 3 sinais independentes) quando outros sinais convergem — e mesmo
+ * assim descreve volume, nunca conclui sobrecarga. */
+export function ruleDemanda(
   all: MemberSignals[],
   o?: Partial<InsightThresholds>,
 ): TeamInsightV2 | null {
   const T = th(o);
   if (all.length < T.cargaMinMembros) return null;
-  const sinais: { label: string; get: (m: MemberSignals) => number }[] = [
-    { label: "tarefas abertas", get: (m) => m.openCount },
-    { label: "novas tarefas atribuídas", get: (m) => m.newTasks },
-    { label: "reuniões", get: (m) => m.meetingsAttended },
-    { label: "demandas respondidas", get: (m) => m.answered },
-  ];
-  const lideres = new Map<string, string[]>();
-  for (const s of sinais) {
-    const vals = all.map((m) => s.get(m));
-    const max = Math.max(...vals);
+  const totalNew = all.reduce((s, x) => s + x.newTasks, 0);
+  if (totalNew < T.demandaMinNovas) return null;
+  const max = Math.max(...all.map((m) => m.newTasks));
+  const lideres = all.filter((m) => m.newTasks === max);
+  if (lideres.length !== 1) return null;
+  const m = lideres[0];
+  const share = m.newTasks / totalNew;
+  if (share < T.demandaPctNovas || m.newTasks < (totalNew / all.length) * T.demandaVsMedia)
+    return null;
+
+  const lidera = (get: (x: MemberSignals) => number) => {
+    const vals = all.map(get);
+    const mx = Math.max(...vals);
     const media = vals.reduce((a, b) => a + b, 0) / vals.length;
-    if (max <= 0 || vals.filter((v) => v === max).length !== 1) continue;
-    if (max < media * T.demandadoVsMedia) continue;
-    const m = all[vals.indexOf(max)];
-    lideres.set(m.id, [...(lideres.get(m.id) ?? []), s.label]);
-  }
-  let top: { id: string; labels: string[] } | null = null;
-  for (const [id, labels] of lideres)
-    if (labels.length >= T.demandadoMinSinais && (!top || labels.length > top.labels.length))
-      top = { id, labels };
-  if (!top) return null;
-  const m = all.find((x) => x.id === top!.id)!;
+    return (
+      mx > 0 &&
+      get(m) === mx &&
+      vals.filter((v) => v === mx).length === 1 &&
+      mx >= media * T.demandadoVsMedia
+    );
+  };
+  const outros: string[] = [];
+  if (lidera((x) => x.openCount)) outros.push("tarefas abertas");
+  if (lidera((x) => x.meetingsAttended)) outros.push("reuniões");
+  if (lidera((x) => x.answered)) outros.push("demandas respondidas");
+  const convergente = 1 + outros.length >= T.demandadoMinSinais;
   const lista =
-    top.labels.length > 1
-      ? `${top.labels.slice(0, -1).join(", ")} e ${top.labels[top.labels.length - 1]}`
-      : top.labels[0];
+    outros.length > 1
+      ? `${outros.slice(0, -1).join(", ")} e ${outros[outros.length - 1]}`
+      : outros[0];
+  const base = `${m.name} recebeu ${pct(m.newTasks, totalNew)}% das tarefas criadas no período (${m.newTasks} de ${totalNew})`;
   return mk({
-    ruleId: "mais_demandado",
+    ruleId: convergente ? "mais_demandado" : "maior_volume_demandas",
+    topic: "demanda",
+    rank: 2,
+    label: convergente ? "Mais demandado" : "Maior demanda",
     category: "operacao",
     priority: 2,
     memberId: m.id,
     memberName: m.name,
-    evidence: `${m.name} foi o mais demandado do período: lidera em ${lista}, acima dos demais membros.`,
-    reading:
-      "É uma leitura de volume de demandas (vários sinais juntos), não de sobrecarga — vale conferir se o ritmo está sustentável.",
-    view: "visao",
-    actionLabel: `Ver ${first(m.name)}`,
-    weight: top.labels.length * 10,
+    evidence: convergente
+      ? `${base} e também lidera em ${lista}.`
+      : `${base}, o maior volume do time.`,
+    reading: convergente
+      ? "Vários sinais convergem para esta pessoa; é volume de demanda — vale conferir se o ritmo está sustentável."
+      : "É volume de demanda recebida, não sobrecarga: pode ser papel, especialidade ou decisão de distribuição.",
+    caveat: CAVEAT_REATRIBUICAO,
+    view: "tarefas",
+    actionLabel: `Ver tarefas de ${first(m.name)}`,
+    weight: share * 100 + outros.length * 5,
   });
+}
+
+/** Quem tem o maior número de tarefas abertas (descritivo, com comparação à média). */
+export function ruleMaisAbertas(
+  all: MemberSignals[],
+  o?: Partial<InsightThresholds>,
+): TeamInsightV2 | null {
+  const T = th(o);
+  if (all.length < T.cargaMinMembros) return null;
+  const max = Math.max(...all.map((m) => m.openCount));
+  const topo = all.filter((m) => m.openCount === max);
+  if (topo.length !== 1) return null;
+  const m = topo[0];
+  const avg = all.reduce((s, x) => s + x.openCount, 0) / all.length;
+  if (m.openCount < T.cargaMinAbertas || m.openCount < avg * T.cargaVsMedia) return null;
+  if (m.overdueCount / m.openCount >= T.acumuloPctAbertas) return null; // é atraso, não volume
+  return mk({
+    ruleId: "mais_abertas",
+    topic: "demanda",
+    rank: 3,
+    label: "Tarefas abertas",
+    category: "operacao",
+    priority: 2,
+    memberId: m.id,
+    memberName: m.name,
+    evidence: `${m.name} tem o maior número de tarefas abertas do time: ${m.openCount}, contra ${avg.toFixed(1).replace(".", ",")} em média por pessoa.`,
+    reading: "Descreve volume em andamento, sem concluir sobre capacidade.",
+    view: "tarefas",
+    actionLabel: `Ver tarefas de ${first(m.name)}`,
+    weight: m.openCount,
+  });
+}
+
+/** Atrasos concentrados em poucas pessoas (insight do time). */
+export function ruleAtrasosConcentrados(
+  all: MemberSignals[],
+  o?: Partial<InsightThresholds>,
+): TeamInsightV2 | null {
+  const T = th(o);
+  if (all.length < T.cargaMinMembros) return null;
+  const total = all.reduce((s, m) => s + m.overdueCount, 0);
+  if (total < T.atrasosConcentradosMin) return null;
+  const ord = [...all].sort((a, b) => b.overdueCount - a.overdueCount);
+  const top2 = ord[0].overdueCount + ord[1].overdueCount;
+  if (top2 / total < T.atrasosConcentradosPct) return null;
+  return mk({
+    ruleId: "atrasos_concentrados",
+    topic: "atrasos_time",
+    rank: 7,
+    label: "Atrasos",
+    category: "atencao",
+    priority: 1,
+    evidence: `${pct(top2, total)}% das ${total} tarefas atrasadas do time estão com ${ord[0].name} e ${ord[1].name}.`,
+    reading: "Os atrasos não estão espalhados: destravar essas duas frentes resolve a maior parte.",
+    weight: top2,
+  });
+}
+
+/** Resposta mais lenta / mais rápida em relação à média do time (com amostra). */
+export function ruleRespostaRelativa(
+  all: MemberSignals[],
+  o?: Partial<InsightThresholds>,
+): TeamInsightV2[] {
+  const T = th(o);
+  const com = all.filter((m) => m.responseAvg != null && m.answered >= T.respostaMinRespondidas);
+  if (com.length < T.cargaMinMembros) return [];
+  const resp = com.reduce((s, m) => s + m.answered, 0);
+  const media = com.reduce((s, m) => s + m.responseAvg! * m.answered, 0) / resp;
+  const out: TeamInsightV2[] = [];
+  const lento = [...com].sort((a, b) => b.responseAvg! - a.responseAvg!)[0];
+  if (lento.responseAvg! >= media * T.respostaLentaVsTime)
+    out.push(
+      mk({
+        ruleId: "resposta_mais_lenta",
+        topic: "resposta",
+        rank: 5,
+        label: "Comunicação",
+        category: "atencao",
+        priority: 1,
+        memberId: lento.id,
+        memberName: lento.name,
+        evidence: `${lento.name} tem o maior tempo médio de resposta do time: ${formatResponseDuration(lento.responseAvg)}, contra ${formatResponseDuration(media)} do time.`,
+        reading: "Vale ver em que tipo de conversa a demora aparece antes de tirar conclusões.",
+        view: "comunicacao",
+        actionLabel: `Ver comunicação de ${first(lento.name)}`,
+        weight: lento.responseAvg! / media,
+      }),
+    );
+  const rapido = [...com].sort((a, b) => a.responseAvg! - b.responseAvg!)[0];
+  if (
+    rapido.answered >= T.respostaRapidaMin &&
+    rapido.responseAvg! <= media * T.respostaRapidaVsTime
+  )
+    out.push(
+      mk({
+        ruleId: "resposta_mais_rapida",
+        topic: "resposta",
+        rank: 12,
+        label: "Destaque",
+        category: "destaque",
+        priority: 3,
+        memberId: rapido.id,
+        memberName: rapido.name,
+        evidence: `${rapido.name} responde mais rápido que o time: ${formatResponseDuration(rapido.responseAvg)} em média, contra ${formatResponseDuration(media)}.`,
+        reading: "Quem depende desta pessoa é atendido mais rápido — vale reconhecer.",
+        view: "comunicacao",
+        actionLabel: `Ver comunicação de ${first(rapido.name)}`,
+        weight: media / Math.max(rapido.responseAvg!, 1),
+      }),
+    );
+  return out;
 }
 
 export function ruleReplanejamento(
@@ -292,6 +435,8 @@ export function ruleReplanejamento(
       : `${m.name} alterou o prazo da mesma tarefa mais de uma vez, no dia ou após o vencimento.`;
   return mk({
     ruleId: "replanejamento",
+    rank: 6,
+    topic: "replan",
     category: "atencao",
     priority: 1,
     memberId: m.id,
@@ -314,6 +459,8 @@ export function ruleReunioes(
   if (m.meetingsExpected < T.reunioesPrevistasMin || perdidas < T.reunioesPerdidasMin) return null;
   return mk({
     ruleId: "reunioes_perdidas",
+    rank: 1,
+    topic: "reunioes",
     category: "atencao",
     priority: 0,
     memberId: m.id,
@@ -347,6 +494,8 @@ export function ruleResposta(
   if (change > 0)
     return mk({
       ruleId: "resposta_piora",
+      rank: 5,
+      topic: "resposta",
       category: "atencao",
       priority: 1,
       memberId: m.id,
@@ -360,6 +509,8 @@ export function ruleResposta(
     });
   return mk({
     ruleId: "resposta_melhora",
+    rank: 9,
+    topic: "resposta",
     category: "destaque",
     priority: 3,
     memberId: m.id,
@@ -381,6 +532,8 @@ export function ruleDestaque(
   if (m.onTimeRate >= T.previsibilidadePct && m.criticalReplans === 0 && m.overdueCount === 0) {
     return mk({
       ruleId: "previsibilidade",
+      rank: 12,
+      topic: "prazo",
       category: "destaque",
       priority: 3,
       memberId: m.id,
@@ -399,6 +552,8 @@ export function ruleDestaque(
   ) {
     return mk({
       ruleId: "pontualidade_melhora",
+      rank: 8,
+      topic: "prazo",
       category: "destaque",
       priority: 3,
       memberId: m.id,
@@ -445,6 +600,8 @@ export function ruleDependencias(
     out.push(
       mk({
         ruleId: "gargalo",
+        rank: 1,
+        topic: "dependencia",
         category: "atencao",
         priority: 0,
         memberId: dono ? t.memberIds[0] : undefined,
@@ -484,6 +641,8 @@ export function ruleDependencias(
     out.push(
       mk({
         ruleId: "mais_bloqueia",
+        rank: 1,
+        topic: "dependencia",
         category: "atencao",
         priority: 1,
         memberId: b1[0],
@@ -503,6 +662,8 @@ export function ruleDependencias(
     out.push(
       mk({
         ruleId: "mais_bloqueado",
+        rank: 1,
+        topic: "dependencia",
         category: "atencao",
         priority: 1,
         memberId: b2[0],
@@ -541,6 +702,7 @@ export function ruleTendenciasTime(
       out.push(
         mk({
           ruleId: "tendencia_tarefas",
+          rank: 11,
           category: "tendencia",
           priority: 2,
           evidence: `O time recebeu ${Math.abs(c)}% ${c > 0 ? "mais" : "menos"} tarefas nos últimos 30 dias (${t.tasksCreated.current} contra ${t.tasksCreated.previous}).`,
@@ -558,6 +720,7 @@ export function ruleTendenciasTime(
       out.push(
         mk({
           ruleId: "tendencia_replanejamentos",
+          rank: 10,
           category: "tendencia",
           priority: 2,
           evidence: `Os replanejamentos do time ${c > 0 ? "aumentaram" : "diminuíram"} ${Math.abs(c)}% (${t.replans.current} contra ${t.replans.previous}).`,
@@ -580,6 +743,7 @@ export function ruleTendenciasTime(
       out.push(
         mk({
           ruleId: "tendencia_resposta",
+          rank: 10,
           category: "tendencia",
           priority: 2,
           evidence: `O tempo médio de resposta do time ${c > 0 ? "subiu" : "caiu"} de ${formatResponseDuration(t.response.previous)} para ${formatResponseDuration(t.response.current)}.`,
@@ -598,6 +762,31 @@ export function ruleTendenciasTime(
 /* ---------------- geração + seleção ---------------- */
 
 /** Todos os candidatos, sem corte (útil para testes e para o detalhe do membro). */
+export function ruleReplanReducao(
+  m: MemberSignals,
+  o?: Partial<InsightThresholds>,
+): TeamInsightV2 | null {
+  const T = th(o);
+  const queda = m.criticalReplansPrev - m.criticalReplans;
+  if (queda < T.replanejamentoAlta) return null;
+  return mk({
+    ruleId: "replanejamento_reducao",
+    topic: "replan",
+    rank: 9,
+    label: "Destaque",
+    category: "destaque",
+    priority: 3,
+    memberId: m.id,
+    memberName: m.name,
+    evidence: `${m.name} reduziu os replanejamentos no dia ou após o vencimento de ${m.criticalReplansPrev} para ${m.criticalReplans}.`,
+    reading: "Os prazos estão se sustentando melhor do que nos 30 dias anteriores.",
+    view: "desempenho",
+    actionLabel: `Ver desempenho de ${first(m.name)}`,
+    weight: queda,
+  });
+}
+
+/** Todos os candidatos, sem corte (útil para testes e para o detalhe do membro). */
 export function generateTeamInsights(
   input: TeamInsightsInput,
   trends: TeamTrendsInput | null,
@@ -609,33 +798,51 @@ export function generateTeamInsights(
       ruleAtraso(m, o),
       ruleCarga(m, input.members, o),
       ruleReplanejamento(m, o),
+      ruleReplanReducao(m, o),
       ruleReunioes(m, o),
       ruleResposta(m, o),
       ruleDestaque(m, o),
     ])
       if (r) out.push(r);
   }
-  const demandado = ruleMaisDemandado(input.members, o);
-  if (demandado) out.push(demandado);
+  for (const r of [
+    ruleDemanda(input.members, o),
+    ruleMaisAbertas(input.members, o),
+    ruleAtrasosConcentrados(input.members, o),
+  ])
+    if (r) out.push(r);
+  out.push(...ruleRespostaRelativa(input.members, o));
   out.push(...ruleDependencias(input, o));
   if (trends) out.push(...ruleTendenciasTime(trends, o));
   return out;
 }
 
-/** Prioridade (P0→P3), depois peso. No máximo 1 por pessoa, `maxDestaques` reconhecimentos e
- * `maxInsights` no total — nunca completa a lista à força. */
+/** Ranking: P0 primeiro; depois a ordem editorial (`rank`: risco → demanda → queda → comunicação →
+ * replanejamento → atrasos → melhora → tendências → reconhecimento) e, por fim, o peso do dado.
+ * Elimina redundância (1 insight por pessoa e tema; no máximo `maxPorPessoa` por pessoa) e limita
+ * reconhecimentos e o total (12) — nunca completa a lista à força. */
 export function selectTeamInsights(
   all: TeamInsightV2[],
   o?: Partial<InsightThresholds>,
 ): TeamInsightV2[] {
   const T = th(o);
-  const seen = new Set<string>();
+  const temas = new Set<string>();
+  const porPessoa = new Map<string, number>();
   const out: TeamInsightV2[] = [];
   let destaques = 0;
-  for (const i of [...all].sort((a, b) => a.priority - b.priority || b.weight - a.weight)) {
-    if (i.memberId && seen.has(i.memberId)) continue;
+  const ordem = (i: TeamInsightV2) => [i.priority === 0 ? 0 : 1, i.rank, -i.weight];
+  const sorted = [...all].sort((a, b) => {
+    const x = ordem(a);
+    const y = ordem(b);
+    return x[0] - y[0] || x[1] - y[1] || x[2] - y[2] || a.priority - b.priority;
+  });
+  for (const i of sorted) {
+    const tema = `${i.memberId ?? "time"}:${i.topic}`;
+    if (temas.has(tema)) continue;
+    if (i.memberId && (porPessoa.get(i.memberId) ?? 0) >= T.maxPorPessoa) continue;
     if (i.category === "destaque" && destaques >= T.maxDestaques) continue;
-    if (i.memberId) seen.add(i.memberId);
+    temas.add(tema);
+    if (i.memberId) porPessoa.set(i.memberId, (porPessoa.get(i.memberId) ?? 0) + 1);
     if (i.category === "destaque") destaques += 1;
     out.push(i);
     if (out.length >= T.maxInsights) break;

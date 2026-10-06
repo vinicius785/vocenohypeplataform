@@ -587,7 +587,7 @@ describe("Time V2 — tabela: score com corte e colunas enxutas", () => {
 });
 
 const { AttentionTasks, attentionCounts } = await import("@/components/team/AttentionTasks");
-const { TeamInsights } = await import("@/components/team/TeamInsights");
+const { TeamInsights, splitColumns } = await import("@/components/team/TeamInsights");
 const { TeamPerformance } = await import("./TeamPerformance");
 
 describe("Time V2 — precisa de atenção", () => {
@@ -678,6 +678,8 @@ describe("Time V2 — insights e desempenho", () => {
             view: "tarefas",
             actionLabel: "Ver tarefas de Lucas",
             weight: 1,
+            topic: "atraso",
+            rank: 4,
           },
         ]}
         membersById={new Map()}
@@ -688,6 +690,16 @@ describe("Time V2 — insights e desempenho", () => {
     expect(html).toContain("caiu de 41% para 13%");
     expect(html).toContain("ritmo piorou");
     expect(html).toContain("Considera o responsável atual");
+  });
+  it("insights: 2 colunas de até 6 (máximo 12)", () => {
+    expect(splitColumns(Array.from({ length: 12 }, (_, i) => i)).map((c) => c.length)).toEqual([
+      6, 6,
+    ]);
+    expect(splitColumns(Array.from({ length: 4 }, (_, i) => i)).map((c) => c.length)).toEqual([4]);
+    expect(splitColumns(Array.from({ length: 9 }, (_, i) => i)).map((c) => c.length)).toEqual([
+      6, 3,
+    ]);
+    expect(splitColumns([])).toEqual([]);
   });
   it("desempenho do time: valores com tendência e travessão sem base", () => {
     const html = renderToStaticMarkup(

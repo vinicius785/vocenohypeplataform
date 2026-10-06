@@ -1,5 +1,6 @@
 {
   "notes": [
+    "1.357.0: team-insights-v2 — maxInsights 12 (6 por coluna, TeamInsights.splitColumns), campo topic/rank/label por insight, ruleDemanda (substitui concentração+mais demandado), ruleMaisAbertas, ruleAtrasosConcentrados, ruleRespostaRelativa, ruleReplanReducao; seleção P0→rank→peso com 1 insight por pessoa/tema. Limiares seguem em TEAM_INSIGHT_THRESHOLDS.",
     "1.356.0: time-v2/team-insights-v2.ts (regras puras + TEAM_INSIGHT_THRESHOLDS sobrescrevíveis), use-team-insights-v2.ts (liga bundles, tarefas, task_dependencies e resposta atual/anterior), InsightRow/TeamInsights no novo modelo; memberProfileInsights ganha DM x menção. Motor antigo/Score intactos.",
     "1.355.0: ChatV2ThreadPanel em grade 3 linhas (header/conversa/composer), pane como @container (≥900px coluna de 440px; senão camada absoluta; <md tela cheia), scroll ancorado no fim (ResizeObserver), 'Ver no canal' (?highlight) e destaque persistente data-thread-origin. Sem mudança de dados/envio.",
     "1.354.0: CronogramaItem.dataFim (JSONB aditivo, sem migration). campanha-calendario: fimDe/ehPeriodo/validarPeriodo/barrasDaSemana; ocorrenciasDaGrade inclui períodos que cruzam a grade; cronogramaPublico e portal levam dataFim. Recorrente nunca é período.",

@@ -20,8 +20,9 @@ export function InsightRow({
   onOpen?: () => void;
 }) {
   const cat = CATEGORY[insight.category];
+  const label = insight.label ?? cat.label;
   return (
-    <div className="flex items-start gap-3 py-3">
+    <div className="flex items-start gap-3 py-2.5">
       {avatar}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
@@ -33,10 +34,12 @@ export function InsightRow({
           {!insight.memberName && (
             <span className="truncate text-sm font-semibold text-foreground">Time</span>
           )}
-          <span className={`shrink-0 text-[11px] font-medium ${cat.className}`}>{cat.label}</span>
+          <span className={`shrink-0 text-[11px] font-medium ${cat.className}`}>{label}</span>
         </div>
-        <p className="mt-0.5 text-sm text-foreground">{insight.evidence}</p>
-        <p className="mt-0.5 text-xs text-text-secondary">{insight.reading}</p>
+        <p className="mt-0.5 text-[13px] leading-snug text-foreground">{insight.evidence}</p>
+        <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-text-secondary">
+          {insight.reading}
+        </p>
         {insight.caveat && (
           <p className="mt-0.5 text-[11px] italic text-text-secondary/80">{insight.caveat}</p>
         )}
