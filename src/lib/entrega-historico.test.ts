@@ -228,3 +228,37 @@ describe("textos gravados pelo detalhe da entrega", () => {
     expect(c.texto.startsWith("adicionou o arquivo")).toBe(true);
   });
 });
+
+describe("histórico do influenciador", () => {
+  it("numera o feedback por entrega e mantém eventos gerais", async () => {
+    const { historicoInfluEventos } = await import("./entrega-historico");
+    const mk = (id: string, tipo: string) => ({ id, tipo, quantidade: 1 }) as unknown as Entrega;
+    const a = (id: string, action: string, at: string, entregaId?: string) =>
+      ({
+        id,
+        author: "X",
+        initials: "X",
+        color: "",
+        action,
+        entregaId,
+        createdAt: at,
+      }) as InfluActivity;
+    const ev = historicoInfluEventos(
+      [
+        a("1", "solicitou ajustes em o roteiro de uma entrega — um", "2026-10-01T10:00:00Z", "e1"),
+        a(
+          "2",
+          "solicitou ajustes em o roteiro de uma entrega — dois",
+          "2026-10-02T10:00:00Z",
+          "e2",
+        ),
+        a("3", "aprovou a seleção pra campanha", "2026-09-30T10:00:00Z"),
+      ],
+      [mk("e1", "Reels"), mk("e2", "Story")],
+    );
+    expect(ev.map((e) => e.id)).toEqual(["2", "1", "3"]);
+    expect(ev[0]).toMatchObject({ versao: 1, entrega: "Reels".replace("Reels", "Story") });
+    expect(ev[1]).toMatchObject({ versao: 1, entrega: "Reels" });
+    expect(ev[2].menor).toBe(false);
+  });
+});

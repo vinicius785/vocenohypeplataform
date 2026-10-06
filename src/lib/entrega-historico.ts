@@ -6,6 +6,7 @@ import {
   historicoTexto,
 } from "@/lib/entrega-detail";
 import type { Entrega, EntregaAnexoCategoria, InfluActivity } from "@/lib/influencer-model";
+import { entregaNome } from "@/lib/influencer-next-action";
 
 /**
  * Histórico da ENTREGA (V2), derivado — nada novo é gravado. A fonte é a Atividade do influenciador
@@ -51,6 +52,8 @@ export type HistoricoEvento = {
   versao?: number;
   /** Texto do feedback do cliente (só `feedback`). */
   motivo?: string;
+  /** Entrega a que o evento pertence (só na visão do influenciador, com mais de uma entrega). */
+  entrega?: string;
   /** Material do evento ("Roteiro", "Conteúdo final"…): do registro novo ou da etapa. */
   material?: string;
   /** Versão do ARQUIVO no momento (só eventos gravados com `meta`; nunca inferida). */
@@ -236,3 +239,34 @@ export const entregaLog = {
     return `${tem ? "atualizou a legenda" : "removeu a legenda"}${alvo(entregaLabel)}`;
   },
 };
+
+/**
+ * Histórico do INFLUENCIADOR: a mesma derivação do histórico da entrega, uma entrega por vez (assim
+ * o feedback V1/V2 de uma entrega nunca se mistura com o de outra), mais os eventos que não são de
+ * nenhuma entrega (status, perfil, financeiro…), que aparecem como estão. Mais recente primeiro.
+ */
+export function historicoInfluEventos(
+  activity: InfluActivity[] | undefined,
+  entregas: Entrega[],
+): HistoricoEvento[] {
+  const todas = activity ?? [];
+  const varias = entregas.length > 1;
+  const daEntrega = entregas.flatMap((e) =>
+    historicoEventos(
+      todas.filter((a) => a.entregaId === e.id),
+      e,
+    ).map((ev) => ({ ...ev, ...(varias ? { entrega: entregaNome(e) } : {}) })),
+  );
+  const ids = new Set(entregas.map((e) => e.id));
+  const gerais: HistoricoEvento[] = todas
+    .filter((a) => !a.entregaId || !ids.has(a.entregaId))
+    .map((a) => ({
+      id: a.id,
+      at: a.createdAt,
+      autor: a.author,
+      ...(a.meta ? { material: a.meta.material, arquivoVersao: a.meta.versao } : {}),
+      ...classificarAcao(a.action),
+      menor: false,
+    }));
+  return [...daEntrega, ...gerais].sort((a, b) => cmp(b.at, a.at));
+}

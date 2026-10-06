@@ -53,7 +53,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { loadBank, saveBank, type BankInflu } from "@/lib/banco-influs-store";
 import { findExistingBankInfluMatch } from "@/lib/bank-influ-match";
 import { useConfirm } from "@/hooks/use-confirm";
-import { entregaAjusteView, historyActionText } from "@/lib/entrega-ajustes";
+import { entregaAjusteView } from "@/lib/entrega-ajustes";
 import {
   ARQUIVO_CATEGORIA_LABEL,
   ENTREGA_FASE_COLUNA_ENTRY_STAGE,
@@ -73,7 +73,7 @@ import {
   type EntregaFaseColuna,
   type PrazoCampo,
 } from "@/lib/entrega-detail";
-import { entregaLog, historicoEventos } from "@/lib/entrega-historico";
+import { entregaLog, historicoEventos, historicoInfluEventos } from "@/lib/entrega-historico";
 import {
   EntregaArquivos,
   EntregaEditorInline,
@@ -120,7 +120,6 @@ import {
 } from "@/lib/influencer-next-action";
 import { CockpitTitle, InlineNote, KeyStats, QuietButton } from "./InfluencerCockpit";
 import { AudienceInsights } from "@/components/shared/AudienceInsights";
-import { formatActivityWhen } from "@/lib/activity-time";
 import {
   FileLine,
   FinanceActivity,
@@ -3271,7 +3270,6 @@ function InfluencerWorkspaceSheet({
               onAddEntrega={addEntrega}
               onRemoveEntrega={removeEntrega}
               onRunEntregaAction={onRunEntregaAction}
-              onOpenActivity={openActivity}
               onSendToClient={onSendToClient}
               onSetStatus={onSetStatus}
             />
@@ -4884,55 +4882,6 @@ function FinanceiroContratoSection({
   );
 }
 
-/** Atividade recente: linha do tempo discreta com os últimos eventos; o histórico completo e os
- * comentários continuam na visão de Atividade. */
-function AtividadeRecente({
-  activity,
-  onOpenActivity,
-  limit = 5,
-  entregas = [],
-}: {
-  activity: InfluActivity[];
-  /** Para nomear a entrega a que o evento se refere (ex.: — "Reels"). */
-  entregas?: Entrega[];
-  onOpenActivity: () => void;
-  limit?: number;
-}) {
-  const recent = [...activity]
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, limit);
-  return (
-    <section aria-label="Atividade" className="space-y-2">
-      <CockpitTitle action={<QuietButton onClick={onOpenActivity}>Ver tudo</QuietButton>}>
-        Atividade
-      </CockpitTitle>
-      {recent.length === 0 ? (
-        <p className="text-sm text-text-secondary">Nenhuma atividade registrada</p>
-      ) : (
-        <ul className="space-y-2">
-          {recent.map((a) => (
-            <li key={a.id} className="relative">
-              <p className="text-[11px] tabular-nums text-text-secondary">
-                {formatActivityWhen(a.createdAt)}
-              </p>
-              <p className="text-sm text-foreground">
-                <span className="font-medium">{a.author}</span>{" "}
-                <span className="text-text-secondary">
-                  {historyActionText(a.action)}
-                  {(() => {
-                    const e = a.entregaId ? entregas.find((x) => x.id === a.entregaId) : undefined;
-                    return e && !a.action.includes(" — ") ? ` — "${e.tipo}"` : "";
-                  })()}
-                </span>
-              </p>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
 /** Corpo do detalhe — SÓ operação: próxima ação (quando houver) → entregas → feedback do cliente
  * (quando houver) → atividade recente. Perfil, financeiro, contexto, inscrição, NPS e outros dados
  * ficam em "Recursos" (`WorkspaceResourceBody`), a camada de consulta do influenciador. */
@@ -4943,14 +4892,11 @@ function WorkspaceDetailBody({
   onAddEntrega,
   onRemoveEntrega,
   onRunEntregaAction,
-  onOpenActivity,
   onSendToClient,
   onSetStatus,
 }: {
   influ: Influ;
   has: (k: InfluencerFieldKey) => boolean;
-  /** Abre a visão completa de Atividade (histórico + comentários). */
-  onOpenActivity: () => void;
   onOpenEntrega: (id: string) => void;
   onAddEntrega: () => void;
   onRemoveEntrega: (e: Entrega) => Promise<boolean>;
@@ -4967,6 +4913,8 @@ function WorkspaceDetailBody({
 }) {
   const action = nextBestAction(influ);
   const feedbacks = clientFeedbacks(influ);
+  const [verTudo, setVerTudo] = useState(false);
+  const [feedbackAberto, setFeedbackAberto] = useState<string | null>(null);
 
   return (
     <div className="space-y-6 px-5 py-4">
@@ -4997,12 +4945,14 @@ function WorkspaceDetailBody({
        * nenhuma entrega (seleção não aprovada). Sem feedback, nada é renderizado. */}
       <SelectionFeedback items={feedbacks} />
 
-      {/* ATIVIDADE — histórico recente (3); "Ver tudo" abre o completo. */}
-      <AtividadeRecente
-        activity={influ.activity ?? []}
-        entregas={influ.entregas}
-        onOpenActivity={onOpenActivity}
-        limit={3}
+      {/* HISTÓRICO — o mesmo componente do detalhe da entrega; "Ver tudo" expande aqui mesmo. */}
+      <EntregaHistorico
+        eventos={historicoInfluEventos(influ.activity, influ.entregas)}
+        showAll={verTudo}
+        onToggleAll={() => setVerTudo((v) => !v)}
+        feedbackAberto={feedbackAberto}
+        onToggleFeedback={(id) => setFeedbackAberto((c) => (c === id ? null : id))}
+        limit={5}
       />
     </div>
   );

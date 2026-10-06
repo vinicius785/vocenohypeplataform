@@ -1,25 +1,21 @@
 {
-  "version": "1.339.0",
+  "version": "1.340.0",
   "releases": [
     {
-      "version": "1.339.0",
-      "summary": "Dependências da tarefa mais compactas: relações agrupadas por “Bloqueada por” e “Bloqueia”, com status, responsável e prazo.",
+      "version": "1.340.0",
+      "summary": "O histórico do influenciador agora é o mesmo componente do histórico da entrega.",
       "modules": [
         {
-          "name": "TAREFAS",
-          "tagline": "Detalhe da tarefa",
+          "name": "CAMPANHAS",
+          "tagline": "Detalhe do influenciador",
           "items": [
             {
-              "title": "Dependências como propriedade",
-              "description": "Sem cards nem “Depende de” solto: cada relação mostra título, status colorido, responsável (com foto) e prazo em duas linhas."
+              "title": "Mesma linha do tempo da entrega",
+              "description": "Dias, avatar, pessoa, ação, contexto e horário iguais aos da entrega; “Ver tudo (N)” expande no próprio painel."
             },
             {
-              "title": "Aviso de bloqueio junto ao status",
-              "description": "“Bloqueada por N dependência(s)” aparece perto dos campos da tarefa e some quando todas são concluídas; a relação continua visível."
-            },
-            {
-              "title": "Ações no menu ⋯",
-              "description": "Abrir a tarefa relacionada ou remover a dependência."
+              "title": "Feedback do cliente como evento",
+              "description": "Cada pedido de ajuste aparece com a entrega e a versão (ex.: Reels · Roteiro · Feedback V1), sem misturar entregas."
             }
           ]
         }

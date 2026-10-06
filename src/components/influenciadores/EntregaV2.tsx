@@ -940,11 +940,12 @@ const iniciaisDe = (nome: string) =>
 /** "Roteiro · V2" (arquivo), "Roteiro · Feedback V1" (feedback) ou só "Roteiro". */
 function metadadoDoEvento(e: HistoricoEvento): string | null {
   if (e.kind === "feedback") {
-    const mat = e.material ?? "";
-    return [mat, `Feedback V${e.versao ?? 1}`].filter(Boolean).join(" · ");
+    return [e.entrega, e.material, `Feedback V${e.versao ?? 1}`].filter(Boolean).join(" · ");
   }
-  if (!e.material) return null;
-  return e.arquivoVersao ? `${e.material} · V${e.arquivoVersao}` : e.material;
+  if (!e.material) return e.entrega ?? null;
+  return [e.entrega, e.arquivoVersao ? `${e.material} · V${e.arquivoVersao}` : e.material]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function diaRotulo(iso: string, agora = new Date()): string {
@@ -1057,7 +1058,9 @@ export function EntregaHistorico({
           eventos.length === 0 ? (
             <span className="text-xs text-text-secondary">Nenhum evento registrado ainda.</span>
           ) : temMais ? (
-            <QuietButton onClick={onToggleAll}>{showAll ? "Ver menos" : "Ver tudo"}</QuietButton>
+            <QuietButton onClick={onToggleAll}>
+              {showAll ? "Ver menos" : `Ver tudo (${eventos.length})`}
+            </QuietButton>
           ) : undefined
         }
       >
