@@ -1,6 +1,26 @@
 {
-  "version": "1.349.0",
+  "version": "1.350.0",
   "releases": [
+    {
+      "version": "1.350.0",
+      "summary": "Novo evento do calendário: formulário refinado, com seletores próprios de data, horário e tipo.",
+      "modules": [
+        {
+          "name": "CAMPANHAS",
+          "tagline": "Recursos · Calendário",
+          "items": [
+            {
+              "title": "Horário em duas colunas",
+              "description": "Escolha hora e minutos (de 5 em 5) rolando ou clicando, sem o seletor nativo."
+            },
+            {
+              "title": "Tipo e visibilidade mais claros",
+              "description": "Tipo em lista própria com ✓, “Mostrar para o cliente” em destaque (Só o time vê / Aparece no Portal), erros no campo e aviso ao salvar."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.349.0",
       "summary": "Calendário da campanha V2: um calendário, um evento e a opção “Mostrar para o cliente”.",

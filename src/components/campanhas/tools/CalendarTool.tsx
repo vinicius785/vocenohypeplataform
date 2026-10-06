@@ -3,6 +3,8 @@ import {
   CalendarClock,
   ChevronLeft,
   ChevronRight,
+  Check,
+  ChevronDown,
   Eye,
   EyeOff,
   MoreHorizontal,
@@ -14,7 +16,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { IconButton } from "@/components/ui/icon-button";
 import { DateField } from "@/components/ui/date-field";
-import { NativeSelect } from "@/components/ui/native-select";
+import { TimeField } from "@/components/ui/time-field";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -484,13 +490,26 @@ function EventoForm({
     visivelCliente: item ? visivelAoCliente(item) : false,
     recurring: !!item?.recurring,
   });
+  const [tentou, setTentou] = useState(false);
+  const [tipoAberto, setTipoAberto] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const erroTitulo = tentou && v.title.trim() === "";
+  const erroData = tentou && v.date === "";
   const ok = v.title.trim() !== "" && v.date !== "";
   return (
     <form
       className="space-y-3"
+      noValidate
       onSubmit={(e) => {
         e.preventDefault();
-        if (ok) onSave(v);
+        if (salvando) return;
+        if (!ok) {
+          setTentou(true);
+          return;
+        }
+        setSalvando(true);
+        onSave(v);
+        toast.success(item ? "Evento atualizado." : "Evento criado.");
       }}
     >
       <DialogTitle className="text-base font-semibold">
@@ -499,87 +518,142 @@ function EventoForm({
       <DialogDescription className="sr-only">
         Dados do evento do calendário da campanha.
       </DialogDescription>
-      <label className="block space-y-1">
-        <span className="text-xs font-medium text-text-secondary">Título *</span>
+      <div className="space-y-1">
+        <label htmlFor="evento-titulo" className="text-xs font-medium text-text-secondary">
+          Título *
+        </label>
         <Input
+          id="evento-titulo"
           autoFocus
           value={v.title}
+          disabled={salvando}
+          aria-invalid={erroTitulo}
+          aria-describedby={erroTitulo ? "evento-titulo-erro" : undefined}
           onChange={(e) => setV({ ...v, title: e.target.value })}
           placeholder="Ex.: Gravação do vídeo"
+          className={cn("h-9", erroTitulo && "border-danger focus-visible:ring-danger")}
         />
-      </label>
+        {erroTitulo && (
+          <p id="evento-titulo-erro" className="text-xs text-danger">
+            Dê um título ao evento.
+          </p>
+        )}
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
           <span className="text-xs font-medium text-text-secondary">Data *</span>
           <DateField
             value={v.date || undefined}
             onChange={(d) => setV({ ...v, date: d ?? "" })}
+            ariaLabel="Data do evento"
+            className={cn("h-9", erroData && "border-danger")}
+          />
+          {erroData && <p className="text-xs text-danger">Escolha a data.</p>}
+        </div>
+        <div className="space-y-1">
+          <span className="text-xs font-medium text-text-secondary">Horário</span>
+          <TimeField
+            layout="colunas"
+            value={v.hora}
+            onChange={(h) => setV({ ...v, hora: h })}
+            ariaLabel="Horário do evento"
+            placeholder="Sem horário"
             className="h-9"
           />
         </div>
-        <label className="block space-y-1">
-          <span className="text-xs font-medium text-text-secondary">Horário</span>
-          <Input
-            type="time"
-            value={v.hora}
-            onChange={(e) => setV({ ...v, hora: e.target.value })}
-          />
-        </label>
       </div>
-      <label className="block space-y-1">
+      <div className="space-y-1">
         <span className="text-xs font-medium text-text-secondary">Tipo</span>
-        <NativeSelect
-          value={v.tipo}
-          onChange={(e) => setV({ ...v, tipo: e.target.value as CronogramaTipo })}
-        >
-          {EVENTO_TIPOS.map((t) => (
-            <option key={t} value={t}>
-              {EVENTO_TIPO_LABEL[t]}
-            </option>
-          ))}
-        </NativeSelect>
-      </label>
-      <label className="block space-y-1">
-        <span className="text-xs font-medium text-text-secondary">Descrição</span>
+        <Popover open={tipoAberto} onOpenChange={setTipoAberto}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              disabled={salvando}
+              aria-label="Tipo do evento"
+              className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+            >
+              {EVENTO_TIPO_LABEL[v.tipo]}
+              <ChevronDown className="h-4 w-4 text-text-secondary" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent
+            align="start"
+            className="w-[var(--radix-popover-trigger-width)] p-1"
+            role="listbox"
+          >
+            {EVENTO_TIPOS.map((t) => (
+              <button
+                key={t}
+                type="button"
+                role="option"
+                aria-selected={t === v.tipo}
+                onClick={() => {
+                  setV({ ...v, tipo: t });
+                  setTipoAberto(false);
+                }}
+                className="flex h-8 w-full items-center justify-between rounded-sm px-2 text-sm hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+              >
+                {EVENTO_TIPO_LABEL[t]}
+                {t === v.tipo && <Check className="h-4 w-4" />}
+              </button>
+            ))}
+          </PopoverContent>
+        </Popover>
+      </div>
+      <div className="space-y-1">
+        <label htmlFor="evento-desc" className="text-xs font-medium text-text-secondary">
+          Descrição
+        </label>
         <Textarea
-          rows={3}
+          id="evento-desc"
+          rows={2}
           value={v.description}
+          disabled={salvando}
           onChange={(e) => setV({ ...v, description: e.target.value })}
           placeholder="Detalhes adicionais"
+          className="min-h-0 resize-none"
         />
-      </label>
+      </div>
       {isRecorrente && (
-        <label className="flex items-center gap-2 text-sm text-foreground">
-          <input
-            type="checkbox"
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
+          <Checkbox
             checked={v.recurring}
-            onChange={(e) => setV({ ...v, recurring: e.target.checked })}
-            className="h-4 w-4 accent-foreground"
+            disabled={salvando}
+            onCheckedChange={(c) => setV({ ...v, recurring: c === true })}
+            className="transition-transform active:scale-90 motion-reduce:transition-none"
           />
           Repete todo mês{v.date ? ` (dia ${Number(v.date.slice(8, 10))})` : ""}
         </label>
       )}
-      <div className="space-y-0.5">
-        <label className="flex items-center gap-2 text-sm font-medium text-foreground">
-          <input
-            type="checkbox"
-            checked={v.visivelCliente}
-            onChange={(e) => setV({ ...v, visivelCliente: e.target.checked })}
-            className="h-4 w-4 accent-foreground"
-          />
-          Mostrar para o cliente
-        </label>
-        {v.visivelCliente && (
-          <p className="pl-6 text-xs text-text-secondary">
-            Este evento aparecerá no calendário do Portal do Cliente.
-          </p>
+      <label
+        className={cn(
+          "flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors",
+          v.visivelCliente ? "border-foreground/30 bg-muted" : "border-border hover:bg-muted/50",
         )}
-      </div>
+      >
+        <Checkbox
+          checked={v.visivelCliente}
+          disabled={salvando}
+          onCheckedChange={(c) => setV({ ...v, visivelCliente: c === true })}
+          className="transition-transform active:scale-90 motion-reduce:transition-none"
+        />
+        <span className="min-w-0 flex-1">
+          <span className="block font-medium text-foreground">Mostrar para o cliente</span>
+          <span className="block text-xs text-text-secondary">
+            {v.visivelCliente ? "Aparece no Portal do Cliente" : "Só o time vê"}
+          </span>
+        </span>
+        {v.visivelCliente ? (
+          <Eye className="h-4 w-4 shrink-0 text-foreground" aria-hidden />
+        ) : (
+          <EyeOff className="h-4 w-4 shrink-0 text-text-secondary" aria-hidden />
+        )}
+      </label>
       <div className="flex justify-end gap-2 pt-1">
-        <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+        <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={salvando}>
           Cancelar
         </Button>
-        <Button type="submit" variant="primary" size="sm" disabled={!ok}>
+        <Button type="submit" variant="primary" size="sm" isLoading={salvando}>
           {item ? "Salvar" : "Criar evento"}
         </Button>
       </div>

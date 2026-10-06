@@ -1,5 +1,6 @@
 {
   "notes": [
+    "1.350.0: EventoForm refinado — TimeField ganhou layout=\"colunas\" (horas/minutos 5 em 5, valor HH:MM inalterado), Tipo em Popover próprio, Checkbox Radix, validação inline e toast ao salvar. Sem mudança de dados.",
     "1.349.0: CalendarTool V2 (só eventos manuais; removidos marcos derivados). CronogramaItem ganhou hora/tipo/visivelCliente/criadoPor/criadoEm/atualizadoEm (JSONB, sem migration; sem a propriedade = legado visível). lib/campanha-calendario.ts (regras puras + cronogramaPublico aplicado em buildClienteLinkData: só compartilhados, só campos públicos).",
     "1.348.0: Influ.ocultoDoCliente (sem migration, JSONB). buildClienteLinkData filtra ocultos e loadInfluRow bloqueia id adivinhado; UI: PortalVisibilityDialog no menu Visualização do InfluencerBoard, com log na Atividade.",
     "1.347.0: TimeV2Page reordenada (KPIs → Pessoas → Atenção → Entregas → Desempenho → Insights). team-v2.ts: curateInsights (prioridade>=55, 1/pessoa, max 4), insightTargetView, teamPerformance (30d vs 30d anteriores, sem nova consulta), trendPP. Tabela sem Replan./Horas e sem filtro Online/Ordenar duplicado; useTeamTimeEntries removido da página. MemberProfileV2 ganhou initialView e linha de entregas por semana. TeamDeliveriesWeek sem tabela por membro.",

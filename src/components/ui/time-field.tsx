@@ -28,7 +28,80 @@ export type TimeFieldProps = {
   min?: string;
   ariaLabel?: string;
   className?: string;
+  /** `lista` (padrão): lista de 15 em 15 min + digitação. `colunas`: horas e minutos (de 5 em 5)
+   * em duas colunas rolantes, com o valor central destacado — um popover pequeno, com "Limpar". */
+  layout?: "lista" | "colunas";
 };
+
+const HORAS = Array.from({ length: 24 }, (_, h) => String(h).padStart(2, "0"));
+const MINUTOS_BASE = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, "0"));
+
+/** Uma coluna rolante (listbox): clique escolhe; ↑/↓ movem; o selecionado fica centralizado. */
+function Coluna({
+  label,
+  items,
+  value,
+  onPick,
+}: {
+  label: string;
+  items: string[];
+  value: string | null;
+  onPick: (v: string) => void;
+}) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    ref.current
+      ?.querySelector<HTMLElement>('[aria-selected="true"]')
+      ?.scrollIntoView({ block: "center" });
+  }, [value]);
+  const move = (delta: number) => {
+    const i = value ? items.indexOf(value) : -1;
+    const next = items[Math.min(items.length - 1, Math.max(0, (i < 0 ? 0 : i) + delta))];
+    if (next) onPick(next);
+  };
+  return (
+    <div className="min-w-0 flex-1">
+      <p className="px-1 pb-1 text-center text-[11px] font-medium uppercase tracking-wide text-text-secondary">
+        {label}
+      </p>
+      <div
+        ref={ref}
+        role="listbox"
+        aria-label={label}
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            move(1);
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            move(-1);
+          }
+        }}
+        className="h-40 overflow-y-auto overscroll-contain rounded-md py-14 outline-none [scrollbar-width:none] focus-visible:ring-1 focus-visible:ring-ring [&::-webkit-scrollbar]:hidden"
+      >
+        {items.map((it) => (
+          <button
+            key={it}
+            type="button"
+            role="option"
+            aria-selected={it === value}
+            tabIndex={-1}
+            onClick={() => onPick(it)}
+            className={cn(
+              "block h-8 w-full rounded-md text-center text-sm tabular-nums transition-colors hover:bg-muted",
+              it === value
+                ? "bg-muted text-base font-semibold text-foreground"
+                : "text-text-secondary",
+            )}
+          >
+            {it}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /**
  * Seletor de horário próprio da plataforma — dropdown sólido com lista de
@@ -53,6 +126,7 @@ export function TimeField({
   min,
   ariaLabel,
   className,
+  layout = "lista",
 }: TimeFieldProps) {
   const [open, setOpen] = React.useState(false);
   const [draft, setDraft] = React.useState(value);
@@ -65,6 +139,8 @@ export function TimeField({
   // `draft` desatualizado (closure presa no valor de quando abriu).
   const latest = React.useRef({ draft, value, onChange });
   latest.current = { draft, value, onChange };
+  const layoutRef = React.useRef(layout);
+  layoutRef.current = layout;
 
   React.useEffect(() => {
     if (open) setDraft(value);
@@ -73,8 +149,10 @@ export function TimeField({
   React.useEffect(() => {
     if (!open) return;
     const commitAndClose = () => {
-      const v = latest.current.draft.trim();
-      if (TIME_RE.test(v) && v !== latest.current.value) latest.current.onChange(v);
+      if (layoutRef.current !== "colunas") {
+        const v = latest.current.draft.trim();
+        if (TIME_RE.test(v) && v !== latest.current.value) latest.current.onChange(v);
+      }
       setOpen(false);
     };
     // `mousedown` (não `pointerdown`) — mesmo padrão universal de "clique
@@ -131,7 +209,68 @@ export function TimeField({
         <span className="truncate tabular-nums">{value || placeholder}</span>
       </button>
 
-      {open && (
+      {open && layout === "colunas" && (
+        <div
+          role="dialog"
+          aria-label={ariaLabel ?? placeholder}
+          className="absolute left-0 top-full z-50 mt-1 w-48 max-w-[calc(100vw-2rem)] rounded-md border border-border bg-popover p-2 text-popover-foreground shadow-md"
+        >
+          {(() => {
+            const [hh, mm] = TIME_RE.test(value) ? value.split(":") : ["", ""];
+            const hora = hh ? hh.padStart(2, "0") : null;
+            const minutos =
+              mm && !MINUTOS_BASE.includes(mm) ? [...MINUTOS_BASE, mm].sort() : MINUTOS_BASE;
+            const set = (h: string | null, m: string | null) =>
+              onChange(`${h ?? "09"}:${m ?? "00"}`);
+            return (
+              <>
+                <div className="relative flex items-stretch gap-1">
+                  <Coluna
+                    label="Horas"
+                    items={HORAS}
+                    value={hora}
+                    onPick={(h) => set(h, mm || null)}
+                  />
+                  <span className="self-center pt-5 text-sm font-semibold text-text-secondary">
+                    :
+                  </span>
+                  <Coluna
+                    label="Minutos"
+                    items={minutos}
+                    value={mm || null}
+                    onPick={(m) => set(hora, m)}
+                  />
+                </div>
+                <div className="mt-2 flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onChange("");
+                      setOpen(false);
+                      triggerRef.current?.focus();
+                    }}
+                    className="text-xs font-medium text-text-secondary hover:text-foreground"
+                  >
+                    Limpar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
+                      triggerRef.current?.focus();
+                    }}
+                    className="rounded-md bg-foreground px-2.5 py-1 text-xs font-semibold text-background hover:opacity-90"
+                  >
+                    OK
+                  </button>
+                </div>
+              </>
+            );
+          })()}
+        </div>
+      )}
+
+      {open && layout !== "colunas" && (
         <div className="absolute left-0 top-full z-50 mt-1 w-40 overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-lg">
           <div className="border-b border-border p-2">
             <input
