@@ -283,6 +283,9 @@ export type MemberInsightInput = {
   onTimeSamplePrevious: number;
   responseAvgSeconds: number | null;
   responseAvgSecondsPrevious: number | null;
+  /** Resposta por tipo de conversa (opcional): DM x menção. */
+  responseDirect?: { avg: number | null; answered: number };
+  responseMention?: { avg: number | null; answered: number };
   replans: number;
   replansPrevious: number;
   dependencies: Record<DependencyGroup, number>;
@@ -331,6 +334,22 @@ export function memberProfileInsights(i: MemberInsightInput): MemberInsight[] {
     out.push({
       kind: "tendencia",
       text: `Tempo médio de resposta ${rtChange < 0 ? "caiu" : "subiu"} de ${formatResponseDuration(i.responseAvgSecondsPrevious)} para ${formatResponseDuration(i.responseAvgSeconds)}.`,
+    });
+  }
+
+  const d = i.responseDirect;
+  const m = i.responseMention;
+  if (
+    d?.avg != null &&
+    m?.avg != null &&
+    d.answered >= 5 &&
+    m.answered >= 5 &&
+    Math.max(d.avg, m.avg) >= Math.min(d.avg, m.avg) * 1.5
+  ) {
+    const dmMais = d.avg > m.avg;
+    out.push({
+      kind: "tendencia",
+      text: `Responde mais devagar ${dmMais ? "em mensagens diretas" : "em menções"} (${formatResponseDuration(dmMais ? d.avg : m.avg)}) do que ${dmMais ? "em menções" : "em mensagens diretas"} (${formatResponseDuration(dmMais ? m.avg : d.avg)}).`,
     });
   }
 

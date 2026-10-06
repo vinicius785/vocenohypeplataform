@@ -666,13 +666,18 @@ describe("Time V2 — insights e desempenho", () => {
       <TeamInsights
         insights={[
           {
-            ruleId: "pontualidade_queda",
+            id: "atraso:a",
+            ruleId: "atraso",
             memberId: "a",
             memberName: "Lucas Ragoni",
-            nature: "atencao",
-            category: "prazos",
-            priority: 85,
-            text: "A conclusão no prazo caiu de 41% para 13%.",
+            category: "atencao",
+            priority: 0,
+            evidence: "A conclusão no prazo caiu de 41% para 13%.",
+            reading: "O ritmo piorou frente aos 30 dias anteriores.",
+            caveat: "Considera o responsável atual das tarefas.",
+            view: "tarefas",
+            actionLabel: "Ver tarefas de Lucas",
+            weight: 1,
           },
         ]}
         membersById={new Map()}
@@ -681,6 +686,8 @@ describe("Time V2 — insights e desempenho", () => {
     );
     expect(html).toContain("Lucas Ragoni");
     expect(html).toContain("caiu de 41% para 13%");
+    expect(html).toContain("ritmo piorou");
+    expect(html).toContain("Considera o responsável atual");
   });
   it("desempenho do time: valores com tendência e travessão sem base", () => {
     const html = renderToStaticMarkup(

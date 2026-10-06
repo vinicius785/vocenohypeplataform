@@ -18,7 +18,8 @@ import { PeriodMenu } from "@/components/shared/PeriodMenu";
 import { MemberProfileV2 } from "./MemberProfileV2";
 import type { ViewId } from "./MemberViews";
 import { TeamPerformance } from "./TeamPerformance";
-import { curateInsights, teamPerformance } from "./team-v2";
+import { teamPerformance } from "./team-v2";
+import { useTeamInsightsV2 } from "./use-team-insights-v2";
 import { TimeMembersTable } from "./TimeMembersTable";
 import {
   FilterChips,
@@ -95,7 +96,6 @@ export function TimeV2Page() {
     weeklyTrendPct,
     deliveryMemberRows,
     meetingsById,
-    teamInsights,
     insightBundles,
     membersById,
     openTask,
@@ -197,7 +197,7 @@ export function TimeV2Page() {
 
   // Reutiliza os dados já carregados: insights curados, desempenho do time (janelas de 30 dias) e
   // o contexto "Cliente · Projeto" das tarefas.
-  const curatedInsights = useMemo(() => curateInsights(teamInsights), [teamInsights]);
+  const curatedInsights = useTeamInsightsV2(insightBundles, allTasksFlat);
   const performance = useMemo(
     () => teamPerformance(insightBundles, allTasksFlat, todayIsoInBrasilia()),
     [insightBundles, allTasksFlat],

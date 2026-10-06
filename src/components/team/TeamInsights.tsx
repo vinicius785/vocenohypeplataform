@@ -1,20 +1,20 @@
+import { Activity } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import type { Insight } from "@/lib/insights-engine";
 import type { Member } from "@/components/TimeSection";
 import type { ViewId } from "@/components/time-v2/MemberViews";
-import { insightTargetView } from "@/components/time-v2/team-v2";
+import type { TeamInsightV2 } from "@/components/time-v2/team-insights-v2";
 import { avatarAccent, initialsOf } from "./member-ui";
 import { InsightRow } from "./InsightRow";
 
-/** "Insights": um feed curto (já filtrado por `curateInsights`: poucos, 1 por pessoa, só o que
- * ajuda a decidir). Clicar abre o detalhe do membro no contexto do insight. Sem insight relevante,
- * uma linha — nunca um bloco vazio. */
+/** "Insights": radar operacional — até 6 leituras já priorizadas (P0→P3, 1 por pessoa), cada uma
+ * com fato, leitura gerencial e uma ação real. Sem insight relevante, uma linha — nunca um bloco
+ * vazio. */
 export function TeamInsights({
   insights,
   membersById,
   onOpenMember,
 }: {
-  insights: Insight[];
+  insights: TeamInsightV2[];
   membersById: Map<string, Member>;
   onOpenMember: (m: Member, view: ViewId) => void;
 }) {
@@ -26,24 +26,31 @@ export function TeamInsights({
       ) : (
         <div className="divide-y divide-border/60">
           {insights.map((insight) => {
-            const m = membersById.get(insight.memberId);
+            const m = insight.memberId ? membersById.get(insight.memberId) : undefined;
             return (
               <InsightRow
-                key={`${insight.ruleId}:${insight.memberId}`}
+                key={insight.id}
                 insight={insight}
                 avatar={
-                  <Avatar className="h-8 w-8 shrink-0">
-                    {m?.photo && <AvatarImage src={m.photo} alt={insight.memberName} />}
-                    <AvatarFallback
-                      className={`text-xs font-semibold ${avatarAccent(insight.memberId)}`}
+                  insight.memberName ? (
+                    <Avatar className="h-8 w-8 shrink-0">
+                      {m?.photo && <AvatarImage src={m.photo} alt={insight.memberName} />}
+                      <AvatarFallback
+                        className={`text-xs font-semibold ${avatarAccent(insight.memberId ?? "")}`}
+                      >
+                        {initialsOf(insight.memberName, insight.memberName)}
+                      </AvatarFallback>
+                    </Avatar>
+                  ) : (
+                    <span
+                      aria-hidden
+                      className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-muted text-text-secondary"
                     >
-                      {initialsOf(insight.memberName, insight.memberName)}
-                    </AvatarFallback>
-                  </Avatar>
+                      <Activity className="h-4 w-4" />
+                    </span>
+                  )
                 }
-                onOpenMember={
-                  m ? () => onOpenMember(m, insightTargetView(insight.ruleId)) : undefined
-                }
+                onOpen={m && insight.view ? () => onOpenMember(m, insight.view!) : undefined}
               />
             );
           })}

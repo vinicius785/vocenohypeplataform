@@ -183,3 +183,40 @@ describe("memberProfileInsights", () => {
     expect(r[0]).toEqual({ kind: "tendencia", text: "Conclusão no prazo subiu de 70% para 90%." });
   });
 });
+
+describe("memberProfileInsights — DM x menção", () => {
+  const base = {
+    overdueUnblocked: 0,
+    dueToday: 0,
+    onTimePct: null,
+    onTimeSample: 0,
+    onTimePctPrevious: null,
+    onTimeSamplePrevious: 0,
+    responseAvgSeconds: null,
+    responseAvgSecondsPrevious: null,
+    replans: 0,
+    replansPrevious: 0,
+    dependencies: { cliente: 0, aprovacao: 0, externa: 0, interna: 0, outro: 0 },
+  };
+  it("demora mais em DM do que em menção, com amostra", () => {
+    const out = memberProfileInsights({
+      ...base,
+      responseDirect: { avg: 3600, answered: 8 },
+      responseMention: { avg: 600, answered: 9 },
+    });
+    expect(out.some((x) => x.text.includes("mais devagar em mensagens diretas"))).toBe(true);
+  });
+  it("sem amostra ou diferença pequena → nada", () => {
+    const a = memberProfileInsights({
+      ...base,
+      responseDirect: { avg: 3600, answered: 2 },
+      responseMention: { avg: 600, answered: 9 },
+    });
+    const b = memberProfileInsights({
+      ...base,
+      responseDirect: { avg: 700, answered: 8 },
+      responseMention: { avg: 600, answered: 9 },
+    });
+    expect([...a, ...b].some((x) => x.text.includes("mais devagar"))).toBe(false);
+  });
+});

@@ -1,6 +1,30 @@
 {
-  "version": "1.355.0",
+  "version": "1.356.0",
   "releases": [
+    {
+      "version": "1.356.0",
+      "summary": "Insights do Time: radar operacional com leitura gerencial, prioridade e ação real.",
+      "modules": [
+        {
+          "name": "TIME",
+          "tagline": "Insights",
+          "items": [
+            {
+              "title": "Fato, leitura e ação",
+              "description": "Cada insight traz os números, o que eles significam e um link útil. Até 6, ordenados por prioridade, 1 por pessoa."
+            },
+            {
+              "title": "Sem falso diagnóstico",
+              "description": "Volume de tarefas não vira “sobrecarga”: acúmulo por atraso, carga acima do esperado e concentração de demandas são insights separados, com ressalva sobre reatribuições."
+            },
+            {
+              "title": "Novos sinais",
+              "description": "Dependências e gargalos, tempo de resposta, replanejamento, previsibilidade, mais demandado e tendências do time. No detalhe do membro: responde mais devagar em DM ou em menção."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.355.0",
       "summary": "Thread do chat V2: painel confortável, mensagem original em destaque e composer fixo.",

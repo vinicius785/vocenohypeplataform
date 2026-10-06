@@ -209,6 +209,12 @@ function ProfileBody({
         onTimeSamplePrevious: perf.previousCompletions.length,
         responseAvgSeconds: rt.data?.all.averageSeconds ?? null,
         responseAvgSecondsPrevious: rt.previous?.all.averageSeconds ?? null,
+        responseDirect: rt.data
+          ? { avg: rt.data.direct.averageSeconds, answered: rt.data.direct.answered }
+          : undefined,
+        responseMention: rt.data
+          ? { avg: rt.data.mention.averageSeconds, answered: rt.data.mention.answered }
+          : undefined,
         replans: perf.aggCurrent.qtdReplanejamentos,
         replansPrevious: perf.aggPrevious.qtdReplanejamentos,
         dependencies: deps.byGroup,
