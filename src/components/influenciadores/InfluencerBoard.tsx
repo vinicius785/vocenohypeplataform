@@ -1669,22 +1669,7 @@ function ChecklistSection({
 
   return (
     <section aria-label="Checklist" className="space-y-1.5">
-      <CockpitTitle
-        action={
-          adding ? (
-            <QuietButton
-              onClick={() => {
-                addItem();
-                setAdding(false);
-              }}
-            >
-              Concluir
-            </QuietButton>
-          ) : (
-            <QuietButton onClick={() => setAdding(true)}>Adicionar item</QuietButton>
-          )
-        }
-      >
+      <CockpitTitle>
         Checklist
         {checklist.length > 0 && (
           <span className="ml-1.5 font-normal normal-case tracking-normal">
@@ -1694,45 +1679,64 @@ function ChecklistSection({
       </CockpitTitle>
 
       {checklist.length === 0 && !adding && (
-        <p className="text-sm text-text-secondary">Nenhum item no checklist.</p>
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="-mx-2 block w-[calc(100%+1rem)] cursor-pointer rounded-md px-2 py-1 text-left text-sm text-text-secondary transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+        >
+          Nenhum item no checklist.
+        </button>
       )}
       {checklist.length > 0 && (
-        <ul className="space-y-1.5">
+        <ul className="space-y-1">
           {checklist.map((item) => (
             <li key={item.id} className="group flex items-center gap-2">
               <input
                 type="checkbox"
                 checked={item.done}
+                aria-label={item.done ? "Desmarcar item" : "Marcar item como feito"}
                 onChange={() =>
                   onChange(checklist.map((c) => (c.id === item.id ? { ...c, done: !c.done } : c)))
                 }
-                className="h-3.5 w-3.5 shrink-0 cursor-pointer accent-foreground"
+                className="h-4 w-4 shrink-0 cursor-pointer accent-foreground"
               />
               <input
                 value={item.text}
+                aria-label="Texto do item"
                 onChange={(e) =>
                   onChange(
                     checklist.map((c) => (c.id === item.id ? { ...c, text: e.target.value } : c)),
                   )
                 }
-                className={`min-w-0 flex-1 bg-transparent text-sm outline-none ${
+                className={`min-w-0 flex-1 rounded-md bg-transparent px-1.5 py-1 text-sm outline-none transition-colors hover:bg-muted/50 focus:bg-muted/50 ${
                   item.done ? "text-text-secondary line-through" : "text-foreground"
                 }`}
               />
-              <button
-                type="button"
-                onClick={() => onChange(checklist.filter((c) => c.id !== item.id))}
-                className="shrink-0 text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-100"
-                aria-label="Remover item"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="Mais ações do item"
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-text-secondary opacity-60 hover:bg-muted hover:text-foreground group-hover:opacity-100"
+                  >
+                    <MoreVertical className="h-3.5 w-3.5" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    onSelect={() => onChange(checklist.filter((c) => c.id !== item.id))}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    Remover item
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </li>
           ))}
         </ul>
       )}
 
-      {adding && (
+      {adding ? (
         <div className="flex items-center gap-3">
           <input
             autoFocus
@@ -1748,13 +1752,26 @@ function ChecklistSection({
                 setAdding(false);
               }
             }}
-            placeholder="Novo item..."
+            placeholder="Novo item... (Enter adiciona)"
+            aria-label="Novo item do checklist"
             className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
           />
           {checklist.length > 0 && (
             <QuietButton onClick={() => void applyToAll()}>Aplicar a todos</QuietButton>
           )}
+          <QuietButton
+            onClick={() => {
+              addItem();
+              setAdding(false);
+            }}
+          >
+            Concluir
+          </QuietButton>
         </div>
+      ) : (
+        checklist.length > 0 && (
+          <QuietButton onClick={() => setAdding(true)}>+ Adicionar item</QuietButton>
+        )
       )}
       {confirmDialog}
     </section>
@@ -4990,7 +5007,6 @@ function ContextoCampanhaView({
           value={influ.justificativaTime ?? ""}
           emptyText="Ainda não registramos o motivo da escolha."
           emptyHint="Explique rapidamente por que este influenciador foi escolhido."
-          addLabel="Adicionar motivo"
           placeholder="Ex.: Forte afinidade com o público da campanha, bom histórico de conteúdo e audiência concentrada na região..."
           onSave={(v) => onPatch({ justificativaTime: v || undefined })}
         />
@@ -5030,7 +5046,6 @@ function ContextoCampanhaView({
               value={influ.observacoes ?? ""}
               emptyText="Nenhuma observação registrada."
               emptyHint="O cliente também pode escrever aqui pelo portal."
-              addLabel="Adicionar observação"
               placeholder="Ex.: prefere ser contatado por WhatsApp à tarde..."
               onSave={(v) => onPatch({ observacoes: v || undefined })}
             />

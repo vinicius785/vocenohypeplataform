@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
-import { FileText, MoreHorizontal, Plus } from "lucide-react";
+import { FileText, MoreHorizontal, Pencil } from "lucide-react";
+import { toast } from "sonner";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -58,7 +59,6 @@ export function ContextoTexto({
   placeholder,
   emptyText,
   emptyHint,
-  addLabel,
   emphasis = false,
   onSave,
 }: {
@@ -68,7 +68,6 @@ export function ContextoTexto({
   placeholder?: string;
   emptyText: string;
   emptyHint?: string;
-  addLabel: string;
   emphasis?: boolean;
   onSave: (v: string) => void;
 }) {
@@ -80,23 +79,15 @@ export function ContextoTexto({
   };
   const commit = () => {
     const next = draft.trim();
-    if (next !== value.trim()) onSave(next);
+    if (next !== value.trim()) {
+      onSave(next);
+      toast.success("Salvo.");
+    }
     setEditing(false);
   };
-  const headerAction =
-    !editing && label && value ? <QuietButton onClick={open}>Editar</QuietButton> : null;
-  const addButton = (
-    <button
-      type="button"
-      onClick={open}
-      className="inline-flex items-center gap-1 text-xs font-medium text-text-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-    >
-      <Plus className="h-3.5 w-3.5" /> {addLabel}
-    </button>
-  );
   return (
     <div className="min-w-0 space-y-2">
-      {label && <CockpitTitle action={headerAction}>{label}</CockpitTitle>}
+      {label && <CockpitTitle>{label}</CockpitTitle>}
       {editing ? (
         <div className="space-y-2">
           <textarea
@@ -123,24 +114,33 @@ export function ContextoTexto({
             </button>
           </div>
         </div>
-      ) : value ? (
-        <>
-          <p
-            className={cn(
-              "whitespace-pre-wrap break-words leading-relaxed text-foreground",
-              emphasis ? "text-base" : "text-sm",
-            )}
-          >
-            {value}
-          </p>
-          {!label && <QuietButton onClick={open}>Editar</QuietButton>}
-        </>
       ) : (
-        <div className="space-y-1.5">
-          <p className="text-sm text-text-secondary">{emptyText}</p>
-          {emptyHint && <p className="text-xs text-text-secondary">{emptyHint}</p>}
-          {addButton}
-        </div>
+        <button
+          type="button"
+          onClick={open}
+          aria-label={`Editar ${ariaLabel}`}
+          className="group relative -mx-2 block w-[calc(100%+1rem)] cursor-pointer rounded-md px-2 py-1 pr-7 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+        >
+          {value ? (
+            <span
+              className={cn(
+                "block whitespace-pre-wrap break-words leading-relaxed text-foreground",
+                emphasis ? "text-base" : "text-sm",
+              )}
+            >
+              {value}
+            </span>
+          ) : (
+            <>
+              <span className="block text-sm text-text-secondary">{emptyText}</span>
+              {emptyHint && <span className="block text-xs text-text-secondary">{emptyHint}</span>}
+            </>
+          )}
+          <Pencil
+            aria-hidden
+            className="absolute right-2 top-2 h-3 w-3 text-text-secondary opacity-50 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
+          />
+        </button>
       )}
     </div>
   );
@@ -181,6 +181,9 @@ function ArquivoMaterial({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => window.open(url, "_blank", "noopener,noreferrer")}>
+              Abrir
+            </DropdownMenuItem>
             <DropdownMenuItem
               onSelect={onRemove}
               className="text-destructive focus:text-destructive"
@@ -229,7 +232,6 @@ export function BriefingEMateriais({
           value={texto}
           emptyText="Ainda não há briefing para este influenciador."
           emptyHint="O que ele precisa saber e fazer nesta campanha."
-          addLabel="Adicionar briefing"
           placeholder="Ex.: focar no tom descontraído, evitar mencionar concorrentes..."
           onSave={onSaveTexto}
         />

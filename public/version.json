@@ -1,25 +1,25 @@
 {
-  "version": "1.343.0",
+  "version": "1.344.0",
   "releases": [
     {
-      "version": "1.343.0",
-      "summary": "Contexto da campanha recomposto em três módulos: por que escolhemos, orientações e execução.",
+      "version": "1.344.0",
+      "summary": "Contexto da campanha editável direto no conteúdo: clique no texto para editar, sem botões de adicionar/editar.",
       "modules": [
         {
           "name": "CAMPANHAS",
           "tagline": "Detalhe do influenciador · Recursos",
           "items": [
             {
-              "title": "Módulos em vez de campos soltos",
-              "description": "“Por que escolhemos este influenciador?” em destaque, “Orientações da campanha” (briefing + materiais) e “Execução” (observações + checklist), cada um numa superfície própria."
+              "title": "Clique para editar",
+              "description": "Motivo, briefing e observações viram edição no próprio bloco, com Salvar e Cancelar só durante a edição e um aviso discreto ao salvar."
             },
             {
-              "title": "Materiais como documento",
-              "description": "O arquivo aparece como item de documento, com Abrir, Substituir e menu ⋯ para remover."
+              "title": "Checklist direto",
+              "description": "Clique em “Nenhum item no checklist.” para criar o primeiro item; depois, “+ Adicionar item”, marcar, editar o texto e remover pelo menu."
             },
             {
-              "title": "Estados vazios com contexto",
-              "description": "Cada módulo vazio explica o que registrar e traz a ação ali dentro."
+              "title": "Materiais",
+              "description": "O botão de adicionar arquivo permanece; o menu ⋯ ganhou “Abrir”."
             }
           ]
         }
