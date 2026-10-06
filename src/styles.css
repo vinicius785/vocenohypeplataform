@@ -414,3 +414,9 @@
     }
   }
 }
+
+/* Chat V2: mensagem que originou a thread aberta (destaque discreto, sem scroll). */
+[data-thread-origin] {
+  background-color: color-mix(in oklab, var(--color-brand) 8%, transparent);
+  box-shadow: inset 2px 0 0 var(--color-brand);
+}

@@ -90,6 +90,15 @@ export function ChatV2ConversationPane({
           ? headerInfo.name
           : undefined;
 
+  // Destaque discreto e persistente da mensagem de origem enquanto a thread está aberta (sem mexer
+  // no scroll do chat); some ao fechar.
+  useEffect(() => {
+    if (!threadId) return;
+    const node = document.querySelector(`[data-message-id="${CSS.escape(threadId)}"]`);
+    node?.setAttribute("data-thread-origin", "");
+    return () => node?.removeAttribute("data-thread-origin");
+  }, [threadId, convoMessages.length]);
+
   const closeThread = () => {
     void navigate({
       to: ".",
@@ -102,7 +111,7 @@ export function ChatV2ConversationPane({
   };
 
   return (
-    <div className="flex h-full min-w-0 flex-1">
+    <div className="@container relative flex h-full min-w-0 flex-1">
       {/* .conversation-pane: grid de 3 linhas (header/timeline/composer) em
        * vez do antigo `flex flex-col` — a diferença importa porque um filho
        * flex sem `min-height:0` explícito cresce pra caber seu conteúdo
@@ -144,7 +153,9 @@ export function ChatV2ConversationPane({
         />
       </div>
       {rootMessage && (
-        <div className="fixed inset-0 z-20 md:static md:inset-auto md:z-auto">
+        // Celular: tela cheia. Pane estreito: camada sobre o chat (nunca espremida).
+        // Pane largo (≥ 900px): coluna própria de 440px ao lado do chat.
+        <div className="fixed inset-0 z-20 bg-background md:absolute md:inset-auto md:inset-y-0 md:right-0 md:w-[min(100%,480px)] md:shadow-xl @[900px]:static @[900px]:z-auto @[900px]:w-[440px] @[900px]:shrink-0 @[900px]:shadow-none">
           <ChatV2ThreadPanel
             rootMessage={rootMessage}
             messages={convoMessages}

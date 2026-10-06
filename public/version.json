@@ -1,6 +1,26 @@
 {
-  "version": "1.354.0",
+  "version": "1.355.0",
   "releases": [
+    {
+      "version": "1.355.0",
+      "summary": "Thread do chat V2: painel confortável, mensagem original em destaque e composer fixo.",
+      "modules": [
+        {
+          "name": "CHAT",
+          "tagline": "Thread",
+          "items": [
+            {
+              "title": "Painel mais largo",
+              "description": "O thread tem 440px quando há espaço e, quando o chat está estreito, abre como camada sobre ele em vez de ser espremido. No celular ocupa a tela toda, com ←."
+            },
+            {
+              "title": "Leitura e resposta",
+              "description": "Mensagem original separada das respostas, abre já na resposta mais recente, só a conversa rola e o composer fica fixo. “Ver no canal” leva à mensagem, que fica destacada enquanto o thread está aberto."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.354.0",
       "summary": "Marcos com período: “Data de” e “Data até” viram uma barra contínua no calendário.",
