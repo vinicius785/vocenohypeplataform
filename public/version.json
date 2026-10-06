@@ -1,6 +1,30 @@
 {
-  "version": "1.364.0",
+  "version": "1.365.0",
   "releases": [
+    {
+      "version": "1.365.0",
+      "summary": "Tarefas do Comercial agora são tarefas como as outras: aparecem no Início, no Time e entram no score.",
+      "modules": [
+        {
+          "name": "TAREFAS",
+          "tagline": "Comercial",
+          "items": [
+            {
+              "title": "Início e Time",
+              "description": "As tarefas do Comercial aparecem em “Meu trabalho”, nas listas e na carga do Time, e dá para mudar o status por lá."
+            },
+            {
+              "title": "Score",
+              "description": "Abertas, atrasadas e concluídas do Comercial entram nas pendências e no score de cada responsável."
+            },
+            {
+              "title": "Menções e dependências",
+              "description": "Dá para referenciar e abrir tarefas do Comercial no chat e em dependências; comentários com @menção notificam; o clique abre a tarefa no Comercial."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.364.0",
       "summary": "A nota fiscal anexada no financeiro do influenciador agora aparece no detalhe da despesa.",

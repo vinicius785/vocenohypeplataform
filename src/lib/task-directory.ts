@@ -14,6 +14,11 @@ import {
   type MktStandalone,
 } from "@/lib/marketing-tasks";
 import { saveProjetoTarefas } from "@/lib/projeto-scoped-store";
+import {
+  loadComercialTasks,
+  onComercialTasksChange,
+  saveComercialTasks,
+} from "@/lib/comercial-tasks";
 import { useClientes } from "@/lib/clientes-store";
 import { cleanupDependenciesForTask } from "@/lib/task-dependencies-store";
 import {
@@ -34,6 +39,8 @@ export type TaskDirectoryEntry = {
   project?: string;
   projectId: string;
   campanhaId?: string;
+  /** Tarefa do Comercial (`comercial_tarefas`): sem projeto/campanha. */
+  comercial?: boolean;
   status: string;
   priority?: string;
   dueDate?: string;
@@ -86,6 +93,7 @@ export function useTaskDirectory(): TaskDirectoryEntry[] {
   const [, forceTasks] = useState(0);
   useEffect(() => onCampanhaTarefasChange(() => forceTasks((n) => n + 1)), []);
   useEffect(() => onStandaloneChange(() => forceTasks((n) => n + 1)), []);
+  useEffect(() => onComercialTasksChange(() => forceTasks((n) => n + 1)), []);
 
   return useMemo(() => {
     const projs = loadProjetos();
@@ -181,7 +189,35 @@ export function useTaskDirectory(): TaskDirectoryEntry[] {
           })),
         ])
       : [];
-    return [...projectTasks, ...campanhaTasks, ...standaloneTasks];
+    const comercialTasks: TaskDirectoryEntry[] = loadComercialTasks().flatMap((t) => [
+      {
+        id: t.id,
+        rawId: t.id,
+        label: titleOf(t.title),
+        project: "Comercial",
+        projectId: "",
+        comercial: true,
+        status: t.status,
+        priority: t.priority,
+        dueDate: t.dueDate,
+        assignees: getTaskAssignees(t),
+        blockedReason: t.blockedState?.reason,
+        ...subtaskProgress(t.subtasks),
+      },
+      ...(t.subtasks ?? []).map((s) => ({
+        id: s.id,
+        rawId: s.id,
+        label: `${titleOf(s.title)} (${titleOf(t.title)})`,
+        project: "Comercial",
+        projectId: "",
+        comercial: true,
+        status: s.status,
+        priority: s.priority,
+        dueDate: s.dueDate,
+        assignees: getTaskAssignees(s),
+      })),
+    ]);
+    return [...projectTasks, ...campanhaTasks, ...standaloneTasks, ...comercialTasks];
   }, [campanhaNameMap]);
 }
 
@@ -199,7 +235,7 @@ export function updateTaskDirectoryStatus(entry: TaskDirectoryEntry, newStatus: 
   const ok = applyTaskDirectoryStatus(entry, newStatus);
   // Mesmo comportamento do board: entrar em "Em andamento" inicia o cronômetro; sair dele (ou
   // concluir) para.
-  if (ok) {
+  if (ok && !entry.comercial) {
     const origin = entry.campanhaId
       ? "campanha"
       : entry.id.startsWith("mkt:")
@@ -220,6 +256,15 @@ export function updateTaskDirectoryStatus(entry: TaskDirectoryEntry, newStatus: 
 }
 
 function applyTaskDirectoryStatus(entry: TaskDirectoryEntry, newStatus: string): boolean {
+  if (entry.comercial) {
+    const list = loadComercialTasks();
+    const idx = list.findIndex((t) => t.id === entry.rawId);
+    if (idx < 0) return false;
+    saveComercialTasks(
+      list.map((t, i) => (i === idx ? { ...t, status: newStatus as TaskStatus } : t)),
+    );
+    return true;
+  }
   if (entry.campanhaId) {
     const all = getAllCampanhaTarefas();
     const list = all.get(entry.campanhaId);
@@ -306,7 +351,8 @@ export function taskToStandalonePatch(t: Task): Partial<Omit<MktStandalone, "id"
 
 export type TaskContext = {
   task: Task;
-  scope: TaskBoardScope;
+  /** Ausente nas tarefas do Comercial (o board delas não tem escopo). */
+  scope?: TaskBoardScope;
   breadcrumb: string;
   save: (t: Task) => void;
   remove: () => void;
@@ -476,6 +522,39 @@ export function findTaskContext(taskId: string): TaskContext | null {
             parent.id,
             taskToStandalonePatch({ ...standaloneToTask(parent), subtasks: nextSubs }),
           );
+          void cleanupDependenciesForTask(taskId);
+        },
+      };
+    }
+  }
+
+  const comercial = loadComercialTasks();
+  const cIdx = comercial.findIndex((t) => t.id === taskId);
+  if (cIdx >= 0) {
+    return {
+      task: comercial[cIdx],
+      breadcrumb: "Comercial",
+      save: (t) => saveComercialTasks(comercial.map((x) => (x.id === taskId ? t : x))),
+      remove: () => {
+        saveComercialTasks(comercial.filter((x) => x.id !== taskId));
+        void cleanupDependenciesForTask(taskId);
+      },
+    };
+  }
+  for (const parent of comercial) {
+    const subs = parent.subtasks ?? [];
+    const sub = subs.find((x) => x.id === taskId);
+    if (sub) {
+      const write = (nextSubs: Task[]) =>
+        saveComercialTasks(
+          comercial.map((x) => (x.id === parent.id ? { ...parent, subtasks: nextSubs } : x)),
+        );
+      return {
+        task: sub,
+        breadcrumb: `Comercial · ${parent.title}`,
+        save: (t) => write(subs.map((x) => (x.id === taskId ? t : x))),
+        remove: () => {
+          write(subs.filter((x) => x.id !== taskId));
           void cleanupDependenciesForTask(taskId);
         },
       };

@@ -18,7 +18,10 @@ export function initComercialTasksSync(): Promise<void> {
 }
 
 export const loadComercialTasks = (): Task[] => store.get();
-export const onComercialTasksChange = (cb: () => void) => store.subscribe(cb);
+export const onComercialTasksChange = (cb: () => void): (() => void) => {
+  const unsubscribe = store.subscribe(cb);
+  return () => void unsubscribe();
+};
 
 /** Aplica ao banco a diferença entre a lista atual e a que o `TaskBoard` devolveu. */
 export function saveComercialTasks(next: Task[]): void {
@@ -29,4 +32,13 @@ export function saveComercialTasks(next: Task[]): void {
     const added = next.filter((t) => !prevById.has(t.id));
     return [...kept, ...added];
   });
+}
+
+/** Id do "grupo" Comercial nas listas de tarefas (Score/Time) — mesmo papel de "marketing-standalone". */
+export const COMERCIAL_GROUP_ID = "comercial";
+
+/** As tarefas do Comercial no formato de grupo que o Score e a aba Time já aceitam: contam como
+ * tarefas de qualquer outra origem (abertas, atrasadas, concluídas, carga por membro). */
+export function comercialAsTaskGroup(): { id: string; name: string; tasks: Task[] } {
+  return { id: COMERCIAL_GROUP_ID, name: "Comercial", tasks: loadComercialTasks() };
 }

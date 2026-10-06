@@ -17,10 +17,10 @@ export function workContextLabel(
 
 /** A entrada de cronômetro rodando é desta tarefa? (id cru + origem) */
 export function timerMatchesTask(
-  task: Pick<DashTask, "id" | "projectId" | "campanhaId" | "parentId">,
+  task: Pick<DashTask, "id" | "projectId" | "campanhaId" | "parentId" | "comercial">,
   entry: Pick<TimeEntry, "taskId" | "taskOrigin"> | null | undefined,
 ): boolean {
-  if (!entry) return false;
+  if (!entry || task.comercial) return false;
   return (
     entry.taskId === task.id.replace(/^mkt:/, "") && entry.taskOrigin === statusTargetOrigin(task)
   );

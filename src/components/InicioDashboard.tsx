@@ -1,3 +1,4 @@
+import { stageComercialTask } from "@/lib/comercial-task-link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { PageContainer } from "@/components/shared/PageContainer";
@@ -72,6 +73,7 @@ import type { TaskStatus } from "@/lib/task-status";
 import { MeetingSummaryDialog } from "@/components/ReunioesSection";
 import { onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
 import { onStandaloneChange } from "@/lib/marketing-tasks";
+import { onComercialTasksChange } from "@/lib/comercial-tasks";
 import {
   loadAllTasks,
   loadAllTasksFlat,
@@ -516,6 +518,7 @@ export function InicioDashboard() {
     const unsubProjetos = onProjetosChange(refresh);
     const unsubCampanhaTarefas = onCampanhaTarefasChange(refresh);
     const unsubStandalone = onStandaloneChange(refresh);
+    const unsubComercial = onComercialTasksChange(refresh);
     const unsubMeetings = onMeetingsChange(refresh);
     return () => {
       window.removeEventListener("storage", refresh);
@@ -523,6 +526,7 @@ export function InicioDashboard() {
       unsubProjetos();
       unsubCampanhaTarefas();
       unsubStandalone();
+      unsubComercial();
     };
   }, [campanhaNameMap, performanceSettings.deadlineCutoffHour]);
 
@@ -792,7 +796,15 @@ export function InicioDashboard() {
   });
   const [reminderFormOpen, setReminderFormOpen] = useState(false);
 
-  const openTask = (t: Pick<DashTask, "id" | "projectId" | "campanhaId" | "parentId">) => {
+  const openTask = (
+    t: Pick<DashTask, "id" | "projectId" | "campanhaId" | "parentId" | "comercial">,
+  ) => {
+    if (t.comercial) {
+      // Tarefa do Comercial: sem projeto/campanha — abre a seção Comercial já na tarefa.
+      stageComercialTask(t.id);
+      navigate({ to: "/time", search: { section: "comercial" as SectionKey } });
+      return;
+    }
     // O deep-link (`?taskId=`) já resolve subtarefa (procura dentro de
     // `subtasks` da tarefa-mãe e abre o mesmo diálogo já direto nela —
     // ver `initialOpenTaskId` em `TaskBoard.tsx`), então passa o id da
@@ -851,6 +863,7 @@ export function InicioDashboard() {
   };
 
   const startWorkTimer = (t: DashTask) =>
+    !t.comercial &&
     void startTimerOnInProgress(t.id.replace(/^mkt:/, ""), statusTargetOrigin(t), t.title);
   const stopWorkTimer = () => {
     if (running.entry) void stopTimer(running.entry.id, running.entry.startedAt);

@@ -14,6 +14,7 @@ import type { TaskStatus } from "@/lib/task-status";
 import { loadProjetoTarefas, saveProjetoTarefas } from "@/lib/projeto-scoped-store";
 import { getAllCampanhaTarefas, saveCampanhaTarefas } from "@/lib/campanha-scoped-store";
 import { loadStandalone, updateStandalone } from "@/lib/marketing-tasks";
+import { loadComercialTasks, saveComercialTasks } from "@/lib/comercial-tasks";
 import { standaloneToTask, taskToStandalonePatch } from "@/lib/task-directory";
 import { startTimerOnInProgress, stopIfRunningOnTask } from "@/lib/time-entries";
 import {
@@ -150,7 +151,8 @@ export function withStatusChange(task: Task, newStatus: TaskStatus): Task {
 export function taskOriginFromScope(
   scope?: TaskBoardScope,
 ): "projeto" | "campanha" | "marketing" | null {
-  return scope?.kind ?? null;
+  // Comercial não grava origem (sem cronômetro; o evento de performance usa origem nula).
+  return scope && scope.kind !== "comercial" ? scope.kind : null;
 }
 
 export function resolvePersonId(name: string, members: Member[]): string | null {
@@ -281,6 +283,8 @@ export type StatusTarget = {
   projectId: string;
   campanhaId?: string;
   parentId?: string;
+  /** Tarefa do Comercial (`comercial_tarefas`): sem projeto/campanha e sem cronômetro. */
+  comercial?: boolean;
 };
 export type StatusChangeContext = { members: Member[]; performanceSettings: PerformanceSettings };
 
@@ -328,8 +332,10 @@ export function changeTaskStatus(
   ctx: StatusChangeContext,
 ): { ok: boolean; completed: boolean } {
   const origin = statusTargetOrigin(target);
-  const scope: TaskBoardScope =
-    origin === "campanha"
+  // O board do Comercial não tem escopo (mesmo registro de performance de hoje: origem nula).
+  const scope: TaskBoardScope | undefined = target.comercial
+    ? undefined
+    : origin === "campanha"
       ? { kind: "campanha", id: target.campanhaId! }
       : origin === "marketing"
         ? { kind: "marketing" }
@@ -345,7 +351,13 @@ export function changeTaskStatus(
     return applyRecurrenceIfCompleted(t, updated);
   };
 
-  if (origin === "campanha") {
+  if (target.comercial) {
+    const r = updateTaskNode(loadComercialTasks(), target.id, pipeline);
+    if (r) {
+      saveComercialTasks(r.list);
+      changed = r;
+    }
+  } else if (origin === "campanha") {
     const list = getAllCampanhaTarefas().get(target.campanhaId!);
     const r = list ? updateTaskNode(list, target.id, pipeline) : null;
     if (r) {
@@ -371,6 +383,8 @@ export function changeTaskStatus(
   if (!changed) return { ok: false, completed: false };
 
   const prevStatus = changed.prev.status;
+  // Tarefa do Comercial não tem cronômetro (o board dela também não).
+  if (target.comercial) return { ok: true, completed: newStatus === "Concluído" };
   if (shouldStopTimerOnStatusChange(prevStatus, newStatus)) {
     void stopIfRunningOnTask(rawId, origin);
   }

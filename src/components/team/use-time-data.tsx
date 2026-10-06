@@ -1,3 +1,4 @@
+import { stageComercialTask } from "@/lib/comercial-task-link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -7,6 +8,7 @@ import { onMeetingsChange, loadMeetings } from "@/lib/reunioes-store";
 import { useClientes } from "@/lib/clientes-store";
 import { getAllCampanhaTarefas, onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
 import { onStandaloneChange } from "@/lib/marketing-tasks";
+import { comercialAsTaskGroup, onComercialTasksChange } from "@/lib/comercial-tasks";
 import {
   weekdayProductivity,
   weeklyDeliveryTotalsByMember,
@@ -210,6 +212,7 @@ export function useTimeData() {
   useEffect(() => onMeetingsChange(() => setTick((t) => t + 1)), []);
   useEffect(() => onCampanhaTarefasChange(() => setTick((t) => t + 1)), []);
   useEffect(() => onStandaloneChange(() => setTick((t) => t + 1)), []);
+  useEffect(() => onComercialTasksChange(() => setTick((t) => t + 1)), []);
 
   const clientes = useClientes();
   const campanhaNames = useMemo(() => {
@@ -234,7 +237,8 @@ export function useTimeData() {
   // mesmo tendo trabalho pendente.
   const groupsWithMarketing = useMemo<TaskGroup[]>(() => {
     void tick;
-    return [...campanhaGroups, marketingStandaloneAsTaskGroup()];
+    // Comercial: tarefas como quaisquer outras (abertas/atrasadas/concluídas e Score).
+    return [...campanhaGroups, marketingStandaloneAsTaskGroup(), comercialAsTaskGroup()];
   }, [campanhaGroups, tick]);
 
   // Score Operacional (0-100, gestão) — SEPARADO do XP/gamificação (o
@@ -704,6 +708,12 @@ export function useTimeData() {
   // (Início) e no indicador de timer ativo — abrir uma tarefa da lista de
   // alguém na aba Time precisa cair no mesmo lugar.
   const openTask = (t: DashTask) => {
+    if (t.comercial) {
+      // Tarefa do Comercial: sem projeto/campanha — abre a seção Comercial já na tarefa.
+      stageComercialTask(t.id);
+      navigate({ to: "/time", search: { section: "comercial" as SectionKey } });
+      return;
+    }
     // `?taskId=` já resolve subtarefa (procura dentro de `subtasks` da
     // mãe e abre o mesmo diálogo já direto nela — `TaskBoard.tsx`), então
     // passa o id de verdade, nunca mais colapsado pro pai.

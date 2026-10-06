@@ -43,6 +43,7 @@ import { FilterRow, FilterSearch, FilterToolbar } from "@/components/shared/Filt
 import { SortSelect, FilterPanel, LeadFiltersSummary } from "./comercial/LeadFiltersBar";
 import { ComercialRecursosMenu } from "./comercial/ComercialRecursosMenu";
 import { ComercialTarefasBoard } from "./comercial/ComercialTarefasBoard";
+import { OPEN_COMERCIAL_TASK_EVENT, takeComercialTask } from "@/lib/comercial-task-link";
 import { PipelineBoard } from "./comercial/PipelineBoard";
 import { LeadDrawer, type OpportunityActionInput } from "./comercial/LeadDrawer";
 import { FollowUpDialog, type FollowUpInput } from "./comercial/FollowUpDialog";
@@ -77,6 +78,17 @@ export function ComercialSection() {
 
   const search = useSearch({ from: "/_authenticated/time" });
   const navigate = useNavigate();
+  // Deep-link vindo do Início/Time/notificações para uma tarefa do Comercial.
+  const [initialTaskId, setInitialTaskId] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    const pick = () => {
+      const id = takeComercialTask();
+      if (id) setInitialTaskId(id);
+    };
+    pick();
+    window.addEventListener(OPEN_COMERCIAL_TASK_EVENT, pick);
+    return () => window.removeEventListener(OPEN_COMERCIAL_TASK_EVENT, pick);
+  }, []);
 
   const sort: LeadSortField = search.cSort ?? DEFAULT_LEAD_SORT;
   const direction: LeadSortDirection = search.cDir ?? DEFAULT_LEAD_DIRECTION;
@@ -348,7 +360,10 @@ export function ComercialSection() {
           </div>
         )}
 
-        <ComercialTarefasBoard />
+        <ComercialTarefasBoard
+          initialOpenTaskId={initialTaskId}
+          onInitialOpenTaskHandled={() => setInitialTaskId(undefined)}
+        />
 
         {followUpLead && (
           <FollowUpDialog

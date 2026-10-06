@@ -107,7 +107,11 @@ import { useIsMobile } from "@/hooks/use-mobile";
  * Marketing, que também mora dentro de Projetos), fazendo quem clicasse
  * na notificação cair na seção errada. */
 function sectionForScope(scope?: TaskBoardScope): string {
-  return scope?.kind === "campanha" ? "campanhas" : "projetos";
+  return scope?.kind === "campanha"
+    ? "campanhas"
+    : scope?.kind === "comercial"
+      ? "comercial"
+      : "projetos";
 }
 
 async function notifyNewAssignees(names: string[], taskTitle: string, scope?: TaskBoardScope) {
@@ -675,7 +679,9 @@ const SUBTASKS_VISIBLE_ROWS = 8;
 export type TaskBoardScope =
   | { kind: "campanha"; id: string }
   | { kind: "projeto"; id: string }
-  | { kind: "marketing" };
+  | { kind: "marketing" }
+  /** Tarefas do Comercial: sem projeto/campanha, sem cronômetro, sem mover/duplicar entre áreas. */
+  | { kind: "comercial" };
 
 /* ============================================================
  * Componentes do card do kanban — extraídos pra deixar o card em si
@@ -3638,7 +3644,7 @@ export function TaskDialog({
                     {/* Ações DA TAREFA, agrupadas por contexto — nunca um
                         catálogo do que existe dentro dela. */}
                     <DropdownMenuContent align="end" className="w-52">
-                      {!parentTitle && scope && (
+                      {!parentTitle && scope && scope.kind !== "comercial" && (
                         <>
                           <DropdownMenuItem onClick={() => setMoveDialogOpen(true)}>
                             <FolderInput className="h-3.5 w-3.5" /> Mover para...
@@ -3713,7 +3719,7 @@ export function TaskDialog({
             )}
           </div>
 
-          {scope && initial && (
+          {scope && scope.kind !== "comercial" && initial && (
             <MoveTaskDialog
               open={moveDialogOpen}
               onOpenChange={setMoveDialogOpen}

@@ -9,6 +9,7 @@ import {
 import { isMarketingProject } from "@/lib/marketing-project";
 import { getAllCampanhaTarefas } from "@/lib/campanha-scoped-store";
 import { loadStandalone } from "@/lib/marketing-tasks";
+import { loadComercialTasks } from "@/lib/comercial-tasks";
 import { deadlineCutoff } from "@/lib/performance-engine";
 import { resolvedCompletionTimestamp } from "@/lib/score";
 
@@ -36,6 +37,9 @@ export type DashTask = {
    * campanha, que não tem rota própria e precisa do deep-link por
    * sessionStorage já usado pelo indicador de timer ativo. */
   campanhaId?: string;
+  /** Tarefa do Comercial (`comercial_tarefas`): sem projeto nem campanha; abre pelo deep-link do
+   * Comercial (`openComercialTask`). */
+  comercial?: boolean;
   /** Presente = isso é uma subtarefa (título da tarefa-mãe direta, só pra
    * exibição). Subtarefas não têm dialog próprio pra abrir sozinhas — só
    * são editadas de dentro do dialog da tarefa de nível raiz, que é o que
@@ -329,6 +333,33 @@ export function loadTasksByAssignee(
     }
   }
 
+  // Tarefas do Comercial: tarefas como quaisquer outras — entram em "Meu trabalho", na carga e no
+  // Score de cada responsável. Sem projeto/campanha: `comercial` leva ao deep-link do Comercial.
+  for (const root of loadComercialTasks() as unknown as CampanhaTaskLike[]) {
+    collectAssignedTasks([root], undefined, (t, parentTitle, assignee) => {
+      const b = bucketFor(t.dueDate, t.status, t.performanceDueDate, cutoffHour);
+      addFor(assignee, {
+        id: t.id,
+        projectId: "",
+        projectName: "Comercial",
+        title: t.title,
+        bucket: b,
+        due: formatDue(t.dueDate, b, t.performanceDueDate, cutoffHour),
+        overdueDays:
+          b === "atrasada"
+            ? overdueDaysFor(t.performanceDueDate ?? t.dueDate, cutoffHour)
+            : undefined,
+        dueISO: t.performanceDueDate ?? t.dueDate,
+        priority: t.priority,
+        status: t.status,
+        comercial: true,
+        parentTitle,
+        parentId: parentTitle ? root.id : undefined,
+        ...operationalFields(t),
+      });
+    });
+  }
+
   return byName;
 }
 
@@ -470,6 +501,32 @@ export function loadAllTasksFlat(
     }
   }
 
+  for (const root of loadComercialTasks() as unknown as CampanhaTaskLike[]) {
+    collectAllTasks([root], undefined, (t, parentTitle, assignees) => {
+      const b = bucketFor(t.dueDate, t.status, t.performanceDueDate, cutoffHour);
+      out.push({
+        id: t.id,
+        projectId: "",
+        projectName: "Comercial",
+        title: t.title,
+        bucket: b,
+        due: formatDue(t.dueDate, b, t.performanceDueDate, cutoffHour),
+        overdueDays:
+          b === "atrasada"
+            ? overdueDaysFor(t.performanceDueDate ?? t.dueDate, cutoffHour)
+            : undefined,
+        dueISO: t.performanceDueDate ?? t.dueDate,
+        priority: t.priority,
+        status: t.status,
+        comercial: true,
+        parentTitle,
+        parentId: parentTitle ? root.id : undefined,
+        assignees,
+        ...operationalFields(t),
+      });
+    });
+  }
+
   return out;
 }
 
@@ -511,6 +568,8 @@ export type TaskCommentMention = {
   id: string;
   projectId: string;
   campanhaId?: string;
+  /** Comentário numa tarefa do Comercial. */
+  comercial?: boolean;
   parentId?: string;
   taskTitle: string;
   parentTitle?: string;
@@ -538,6 +597,7 @@ export function collectTaskCommentMentions(myName: string): TaskCommentMention[]
     projectId: string,
     rootId: string,
     campanhaId?: string,
+    comercial?: boolean,
   ) => {
     const walk = (items: CampanhaTaskLike[], parentTitle: string | undefined) => {
       for (const t of items) {
@@ -549,6 +609,7 @@ export function collectTaskCommentMentions(myName: string): TaskCommentMention[]
             id: t.id,
             projectId,
             campanhaId,
+            comercial,
             parentId: parentTitle ? rootId : undefined,
             taskTitle: t.title,
             parentTitle,
@@ -582,6 +643,10 @@ export function collectTaskCommentMentions(myName: string): TaskCommentMention[]
     for (const s of loadStandalone() as unknown as CampanhaTaskLike[]) {
       collectFrom(s, marketingProjectId, `mkt:${s.id}`);
     }
+  }
+
+  for (const root of loadComercialTasks() as unknown as CampanhaTaskLike[]) {
+    collectFrom(root, "", root.id, undefined, true);
   }
 
   return out.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));

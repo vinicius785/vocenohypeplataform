@@ -32,6 +32,7 @@ seletor. Os números só são comparáveis quando a janela é a mesma.
 - É **média**: uma demanda muito longa puxa o valor de janelas longas.
 
 ## Tarefas
+- **Origens contadas** (Início, Time, Score, menções e diretório): tarefas de projetos, de campanhas, avulsas do Marketing e do **Comercial** (`comercial_tarefas`). Todas são tarefas como as demais; a do Comercial não tem projeto/campanha nem cronômetro e abre por deep-link no Comercial (`comercial-task-link.ts`).
 - **Abertas:** status em `OPEN_STATUSES`, responsável atual (`openTasksByMemberId`).
 - **Atrasadas:** abertas com prazo (de performance) vencido.
 - **Novas (criadas na janela):** tarefas **raiz** (subtarefas não contam) cuja `createdAt`, em Brasília,

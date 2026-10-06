@@ -1,3 +1,4 @@
+import { stageComercialTask } from "@/lib/comercial-task-link";
 import { useMemo } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useTaskDirectory, type TaskDirectoryEntry } from "@/lib/task-directory";
@@ -23,6 +24,11 @@ export function useMentionNavigation() {
   const openTask = (taskId: string) => {
     const t = taskInfoById.get(taskId);
     if (!t) return;
+    if (t.comercial) {
+      stageComercialTask(t.rawId);
+      navigate({ to: "/time", search: { section: "comercial" satisfies SectionKey } });
+      return;
+    }
     if (t.campanhaId) {
       sessionStorage.setItem(
         OPEN_CAMPANHA_TASK_KEY,
