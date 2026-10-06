@@ -1,25 +1,25 @@
 {
-  "version": "1.338.0",
+  "version": "1.339.0",
   "releases": [
     {
-      "version": "1.338.0",
-      "summary": "Histórico da entrega como história de trabalho: dias, linha do tempo, pessoas e material com versão.",
+      "version": "1.339.0",
+      "summary": "Dependências da tarefa mais compactas: relações agrupadas por “Bloqueada por” e “Bloqueia”, com status, responsável e prazo.",
       "modules": [
         {
-          "name": "CAMPANHAS",
-          "tagline": "Detalhe da entrega",
+          "name": "TAREFAS",
+          "tagline": "Detalhe da tarefa",
           "items": [
             {
-              "title": "Linha do tempo por dia",
-              "description": "Eventos agrupados em Hoje, Ontem e datas, com a pessoa em destaque, a ação e o horário discreto."
+              "title": "Dependências como propriedade",
+              "description": "Sem cards nem “Depende de” solto: cada relação mostra título, status colorido, responsável (com foto) e prazo em duas linhas."
             },
             {
-              "title": "Material e versão em cada evento",
-              "description": "Ex.: “Roteiro · V2” ou “Roteiro · Feedback V1”; os registros novos passam a guardar a versão do arquivo."
+              "title": "Aviso de bloqueio junto ao status",
+              "description": "“Bloqueada por N dependência(s)” aparece perto dos campos da tarefa e some quando todas são concluídas; a relação continua visível."
             },
             {
-              "title": "Feedback como evento",
-              "description": "O pedido de ajuste ganha uma pequena superfície com a citação e “Ver feedback completo”; eventos de rotina ficam em “Ver tudo”."
+              "title": "Ações no menu ⋯",
+              "description": "Abrir a tarefa relacionada ou remover a dependência."
             }
           ]
         }

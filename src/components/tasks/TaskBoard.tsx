@@ -25,7 +25,6 @@ import {
   Link2,
   Copy,
   Archive,
-  AlertTriangle,
   History,
   FolderInput,
   Lock,
@@ -44,10 +43,9 @@ import { useTaskDirectory, type TaskDirectoryEntry } from "@/lib/task-directory"
 import { pushTaskModal } from "@/lib/task-modal-stack";
 import { TaskPicker } from "@/components/tasks/TaskPicker";
 import { TaskTagsPopover } from "@/components/tasks/TaskTagsPopover";
-import { ListRow } from "@/components/shared/ListRow";
+import { TaskDependencyGroup, type DependencyRelation } from "./TaskDependencyRows";
 import { SegmentedControl } from "@/components/ui/segmented-control";
-import type { SemanticTone } from "@/lib/design-tokens";
-import { formatIsoDate, formatDateToIso, parseIsoDateLocal } from "@/lib/utils";
+import { formatDateToIso, parseIsoDateLocal } from "@/lib/utils";
 import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import { toRichDoc, isDescriptionEmpty, type RichDoc } from "@/lib/rich-text";
 import type { MentionOption } from "@/lib/mention-kinds";
@@ -209,10 +207,8 @@ import {
   TaskPriorityFlag,
   TaskPrioritySelect,
   TaskSectionHeader,
-  TaskStatusIcon,
   TaskStatusSelect,
   deadlineViewFromTask,
-  isTaskStatus,
   TASK_CHIP,
 } from "@/components/tasks/task-ui";
 import type { TaskBlockedState, TaskBlockCategory } from "@/lib/projetos";
@@ -2208,33 +2204,6 @@ export function TaskBoard({
   );
 }
 
-/** Uma linha de dependência (seção Dependências do `TaskDialog`) — status
- * (bolinha colorida, mesma paleta do resto do board), título, projeto,
- * prazo quando houver, e um "•••" só visível no hover pra remover. Se a
- * tarefa referenciada não existir mais no diretório (raro — ex. dado
- * ainda propagando), cai num rótulo mínimo em vez de sumir a linha. */
-/** Mapeamento pontual `TaskStatus`→`SemanticTone`, só pro `status` badge
- * de `ListRow` nas linhas de Dependências — não é o mapa de cor real do
- * status (que continua sendo `TASK_STATUS_TONE`/`TASK_STATUS_DOT`), só a
- * aproximação mais próxima dentre os 6 tons genéricos do design system. */
-function toneForTaskStatus(status: string): SemanticTone {
-  switch (status) {
-    case "Concluído":
-    case "Aprovado":
-      return "success";
-    case "Em andamento":
-      return "info";
-    case "Em aprovação":
-    case "Em ajustes":
-    case "Bloqueada":
-      return "warning";
-    case "Arquivado":
-      return "neutral";
-    default:
-      return "neutral";
-  }
-}
-
 /* ============================================================
  * Task dialog — ClickUp-style (shared)
  * ============================================================ */
@@ -2478,6 +2447,28 @@ export function TaskDialog({
   const dependsOnPending = dependsOn.filter(
     (id) => directoryByRawId.get(id)?.status !== "Concluído",
   );
+  const relationsFor = (kind: "depends" | "blocks"): DependencyRelation[] =>
+    (kind === "depends" ? dependsOn : blocks).flatMap((id) => {
+      const dep = allDeps.find((d) =>
+        kind === "depends"
+          ? d.blockedTaskId === depTaskId && d.blockingTaskId === id
+          : d.blockingTaskId === depTaskId && d.blockedTaskId === id,
+      );
+      if (!dep) return [];
+      const entry = directoryByRawId.get(id);
+      return [
+        {
+          id: dep.id,
+          title: entry?.label ?? id,
+          status: entry?.status,
+          assignees: entry?.assignees ?? [],
+          dueDate: entry?.dueDate,
+          pending: entry?.status !== "Concluído",
+          onOpen: () => pushTaskModal(id),
+          onRemove: () => void handleRemoveDependency(dep, entry?.label ?? id),
+        },
+      ];
+    });
   const [depPopover, setDepPopover] = useState<null | "menu" | "depends" | "blocks">(null);
   const [depsOpen, setDepsOpen] = useState(false);
   const [subtasksOpen, setSubtasksOpen] = useState(false);
@@ -4488,14 +4479,7 @@ export function TaskDialog({
                           count={dependsOn.length + blocks.length}
                           open={depsOpen}
                           onToggle={() => setDepsOpen((v) => !v)}
-                        >
-                          {dependsOnPending.length > 0 && (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 dark:text-amber-400">
-                              <AlertTriangle aria-hidden className="h-3 w-3" /> Aguardando
-                              dependência
-                            </span>
-                          )}
-                        </TaskSectionHeader>
+                        ></TaskSectionHeader>
                         <Popover
                           open={depPopover !== null}
                           onOpenChange={(o) => !o && setDepPopover(null)}
@@ -4556,111 +4540,22 @@ export function TaskDialog({
 
                       {depsOpen &&
                         (dependsOn.length === 0 && blocks.length === 0 ? (
-                          <TaskEmptyLine>Nenhuma dependência.</TaskEmptyLine>
+                          <TaskEmptyLine>Nada para exibir ainda.</TaskEmptyLine>
                         ) : (
                           dependsOn.length + blocks.length > 0 && (
-                            <div className="space-y-2 pl-5">
-                              {dependsOn.length > 0 && (
-                                <div className="space-y-1">
-                                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                    Depende de
-                                  </p>
-                                  {dependsOn.map((id) => {
-                                    const dep = allDeps.find(
-                                      (d) =>
-                                        d.blockedTaskId === depTaskId && d.blockingTaskId === id,
-                                    );
-                                    const entry = directoryByRawId.get(id);
-                                    if (!dep) return null;
-                                    return (
-                                      <ListRow
-                                        key={dep.id}
-                                        icon={
-                                          <TaskStatusIcon
-                                            status={
-                                              isTaskStatus(entry?.status) ? entry.status : "Aberto"
-                                            }
-                                            className="h-3.5 w-3.5"
-                                          />
-                                        }
-                                        title={entry?.label ?? id}
-                                        description={entry?.assignees.join(", ") || undefined}
-                                        meta={
-                                          entry?.dueDate ? formatIsoDate(entry.dueDate) : undefined
-                                        }
-                                        status={
-                                          entry
-                                            ? {
-                                                label: entry.status,
-                                                tone: toneForTaskStatus(entry.status),
-                                              }
-                                            : undefined
-                                        }
-                                        onClick={() => pushTaskModal(id)}
-                                        menuItems={[
-                                          {
-                                            label: "Remover dependência",
-                                            onClick: () =>
-                                              void handleRemoveDependency(dep, entry?.label ?? id),
-                                            destructive: true,
-                                          },
-                                        ]}
-                                      />
-                                    );
-                                  })}
-                                </div>
-                              )}
-
-                              {blocks.length > 0 && (
-                                <div className="space-y-1">
-                                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                    Esta tarefa bloqueia
-                                  </p>
-                                  {blocks.map((id) => {
-                                    const dep = allDeps.find(
-                                      (d) =>
-                                        d.blockingTaskId === depTaskId && d.blockedTaskId === id,
-                                    );
-                                    const entry = directoryByRawId.get(id);
-                                    if (!dep) return null;
-                                    return (
-                                      <ListRow
-                                        key={dep.id}
-                                        icon={
-                                          <TaskStatusIcon
-                                            status={
-                                              isTaskStatus(entry?.status) ? entry.status : "Aberto"
-                                            }
-                                            className="h-3.5 w-3.5"
-                                          />
-                                        }
-                                        title={entry?.label ?? id}
-                                        description={entry?.assignees.join(", ") || undefined}
-                                        meta={
-                                          entry?.dueDate ? formatIsoDate(entry.dueDate) : undefined
-                                        }
-                                        status={
-                                          entry
-                                            ? {
-                                                label: entry.status,
-                                                tone: toneForTaskStatus(entry.status),
-                                              }
-                                            : undefined
-                                        }
-                                        onClick={() => pushTaskModal(id)}
-                                        menuItems={[
-                                          {
-                                            label: "Remover dependência",
-                                            onClick: () =>
-                                              void handleRemoveDependency(dep, entry?.label ?? id),
-                                            destructive: true,
-                                          },
-                                        ]}
-                                      />
-                                    );
-                                  })}
-                                </div>
-                              )}
+                            <div className="space-y-2.5 pl-5">
+                              <TaskDependencyGroup
+                                tone={dependsOnPending.length > 0 ? "danger" : "neutral"}
+                                label={
+                                  dependsOnPending.length > 0 ? "Bloqueada por" : "Dependia de"
+                                }
+                                relations={relationsFor("depends")}
+                              />
+                              <TaskDependencyGroup
+                                tone="warning"
+                                label="Bloqueia"
+                                relations={relationsFor("blocks")}
+                              />
                             </div>
                           )
                         ))}

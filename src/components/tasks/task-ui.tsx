@@ -25,6 +25,7 @@ import {
   Circle,
   Flag,
   Hourglass,
+  AlertTriangle,
   Link2,
   Lock,
   PauseCircle,
@@ -642,15 +643,15 @@ export function TaskDependencyIndicator({
 }) {
   if (pendingTitles.length === 0) return null;
   const n = pendingTitles.length;
-  const label = `Aguardando ${n} dependência${n === 1 ? "" : "s"}`;
+  const label = `Bloqueada por ${n} dependência${n === 1 ? "" : "s"}`;
   return (
     <button
       type="button"
       onClick={onClick}
       title={`Depende de: ${pendingTitles.join(", ")}`}
-      className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-[11px] font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-warning-soft-foreground hover:bg-warning-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
     >
-      <Link2 aria-hidden className="h-3 w-3 shrink-0 text-muted-foreground" />
+      <AlertTriangle aria-hidden className="h-3 w-3 shrink-0" />
       {label}
     </button>
   );
