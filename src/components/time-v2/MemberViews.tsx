@@ -287,6 +287,7 @@ function Linha({ label, value }: { label: string; value: ReactNode }) {
 
 /* ---------------- Desempenho ---------------- */
 
+const fmtAvg = (v: number | null) => (v == null ? "—" : v.toFixed(1).replace(".", ","));
 const pct = (v: number | null) => (v == null ? "—" : `${Math.round(v)}%`);
 function delta(cur: number, prev: number): string {
   const d = cur - prev;
@@ -338,6 +339,7 @@ export function PerformanceView({
   cycle,
   periodInProgress,
   meetings,
+  deliveries,
 }: {
   score: ScoreOperacionalV2;
   trendLabel: string | null;
@@ -354,6 +356,12 @@ export function PerformanceView({
   cycle: CycleTimeStats;
   periodInProgress: boolean;
   meetings: { attended: number; expected: number };
+  deliveries?: {
+    thisWeek: number;
+    monthlyAvg: number | null;
+    quarterlyAvg: number | null;
+    yearlyAvg: number | null;
+  } | null;
 }) {
   const [composition, setComposition] = useState(false);
   const view = scoreView(score);
@@ -464,6 +472,14 @@ export function PerformanceView({
             : `${meetings.attended}/${meetings.expected}`}
         </b>
       </p>
+      {deliveries && (
+        <p className="text-xs tabular-nums text-text-secondary">
+          Entregas por semana: esta <b className="text-foreground">{deliveries.thisWeek}</b> · média
+          mensal <b className="text-foreground">{fmtAvg(deliveries.monthlyAvg)}</b> · trimestral{" "}
+          <b className="text-foreground">{fmtAvg(deliveries.quarterlyAvg)}</b> · anual{" "}
+          <b className="text-foreground">{fmtAvg(deliveries.yearlyAvg)}</b>
+        </p>
+      )}
     </div>
   );
 }

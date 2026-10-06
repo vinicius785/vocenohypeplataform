@@ -9,13 +9,12 @@ import { SCORE_CLASSIFICACAO_TONE, type ScoreOperacionalV2 } from "@/lib/perform
 import { formatResponseDuration } from "@/lib/member-response-time";
 import { LoadBadge } from "./LoadBadge";
 import type { MemberRow, MemberSort, MemberSortKey } from "./member-rows";
-import { formatHours } from "./time-v2-utils";
+import { MIN_SCORE_TASKS, scoreView } from "./member-v2";
 
 /** Colunas progressivas: em telas médias só o essencial (pessoa, carga,
- * abertas, atrasadas, Score); a partir de `xl` entram prazo, resposta,
- * replanejamento e horas. Células `hidden` não ocupam trilha do grid. */
+ * abertas, atrasadas, Score); a partir de `xl` entram prazo e resposta. Células `hidden` não ocupam trilha do grid. */
 const GRID =
-  "md:grid-cols-[minmax(0,2fr)_84px_64px_72px_64px] xl:grid-cols-[minmax(0,2.2fr)_84px_64px_72px_72px_80px_60px_64px_72px]";
+  "md:grid-cols-[minmax(0,2fr)_84px_64px_72px_64px] xl:grid-cols-[minmax(0,2.2fr)_84px_64px_72px_72px_80px_64px]";
 
 /** Texto longo SEMPRE trunca com ellipsis e expõe o valor completo por
  * tooltip — nunca por redução de fonte. */
@@ -31,21 +30,25 @@ function Truncated({ text, className }: { text: string; className?: string }) {
 }
 
 function ScoreCell({ score }: { score: ScoreOperacionalV2 | undefined }) {
-  if (!score || score.score == null || score.dataState === "sem_dados") {
-    return <span className="text-text-secondary">—</span>;
+  const v = score ? scoreView(score) : ({ mode: "sem_dados" } as const);
+  if (v.mode === "sem_dados") return <span className="text-text-secondary">—</span>;
+  if (v.mode === "insuficiente") {
+    // Prévia discreta: nunca com a cor/precisão de um score confiável.
+    return (
+      <Tooltip delayDuration={300}>
+        <TooltipTrigger asChild>
+          <span className="tabular-nums text-text-secondary/70">{v.previa}</span>
+        </TooltipTrigger>
+        <TooltipContent side="top">
+          Dados insuficientes para score ({v.amostra} {v.amostra === 1 ? "tarefa" : "tarefas"};
+          mínimo {MIN_SCORE_TASKS})
+        </TooltipContent>
+      </Tooltip>
+    );
   }
   const tone =
-    score.dataState === "definitivo"
-      ? (SCORE_CLASSIFICACAO_TONE[score.classificacao ?? "Sem avaliação"] ?? "text-foreground")
-      : "text-text-secondary";
-  return (
-    <span className={`font-semibold tabular-nums ${tone}`}>
-      {score.score}
-      {score.dataState === "provisorio" && (
-        <span className="ml-1 text-[11px] font-normal">prov.</span>
-      )}
-    </span>
-  );
+    SCORE_CLASSIFICACAO_TONE[score?.classificacao ?? "Sem avaliação"] ?? "text-foreground";
+  return <span className={`font-semibold tabular-nums ${tone}`}>{v.score}</span>;
 }
 
 function HeaderCell({
@@ -141,23 +144,7 @@ export function TimeMembersTable({
           xlOnly
           className="justify-end"
         />
-        <HeaderCell
-          label="Replan."
-          title="Replanejamentos"
-          sortKey="replanejamentos"
-          {...hp}
-          xlOnly
-          className="justify-end"
-        />
         <HeaderCell label="Score" sortKey="score" {...hp} className="justify-end" />
-        <HeaderCell
-          label="Horas"
-          title="Horas trabalhadas"
-          sortKey="horas"
-          {...hp}
-          xlOnly
-          className="justify-end"
-        />
       </div>
 
       {loading && rows.length === 0 ? (
@@ -246,26 +233,21 @@ export function TimeMembersTable({
                   <span className="hidden text-right text-sm tabular-nums text-text-secondary xl:block">
                     {formatResponseDuration(r.responseSeconds)}
                   </span>
-                  <span className="hidden text-right text-sm tabular-nums text-text-secondary xl:block">
-                    {r.replans}
-                  </span>
                   <span className="hidden text-right text-sm md:block">
                     <ScoreCell score={r.score} />
                   </span>
-                  <span className="hidden text-right text-sm tabular-nums text-text-secondary xl:block">
-                    {formatHours(r.seconds)}
-                  </span>
 
-                  <div className="flex min-w-0 items-center gap-2 pl-12 md:hidden">
+                  <div className="flex min-w-0 items-start gap-2 pl-12 md:hidden">
                     <LoadBadge load={r.load} />
-                    <p className="min-w-0 truncate text-[11px] text-text-secondary">
+                    <p className="min-w-0 text-[11px] leading-snug text-text-secondary">
                       {r.stats.abertas} abertas ·{" "}
                       <span
                         className={r.stats.atrasadas > 0 ? "font-semibold text-destructive" : ""}
                       >
                         {r.stats.atrasadas} atrasadas
                       </span>{" "}
-                      · Score <ScoreCell score={r.score} />
+                      · {pct(r.onTimePct)} no prazo · {formatResponseDuration(r.responseSeconds)} ·{" "}
+                      <ScoreCell score={r.score} />
                     </p>
                   </div>
                 </div>

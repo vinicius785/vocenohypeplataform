@@ -18,35 +18,14 @@ export type MemberRow = {
   stats: MemberTaskStats;
   load: LoadAssessment;
   score: ScoreOperacionalV2 | undefined;
-  seconds: number;
   onTimePct: number | null;
   completed: number;
-  replans: number;
   responseSeconds: number | null;
 };
 
-export type MemberSortKey =
-  | "nome"
-  | "abertas"
-  | "atrasadas"
-  | "noPrazo"
-  | "resposta"
-  | "horas"
-  | "replanejamentos"
-  | "score";
+export type MemberSortKey = "nome" | "abertas" | "atrasadas" | "noPrazo" | "resposta" | "score";
 
 export type MemberSort = { key: MemberSortKey; dir: "asc" | "desc" };
-
-export const MEMBER_SORT_LABEL: Record<MemberSortKey, string> = {
-  nome: "Nome",
-  abertas: "Tarefas abertas",
-  atrasadas: "Tarefas atrasadas",
-  noPrazo: "Conclusão no prazo",
-  resposta: "Tempo médio de resposta",
-  horas: "Horas trabalhadas",
-  replanejamentos: "Replanejamentos",
-  score: "Score",
-};
 
 /** Direção inicial ao escolher um critério: nome A→Z; tempo de resposta do
  * menor pro maior; demais do maior pro menor. */
@@ -56,8 +35,6 @@ export const DEFAULT_SORT_DIR: Record<MemberSortKey, "asc" | "desc"> = {
   atrasadas: "desc",
   noPrazo: "desc",
   resposta: "asc",
-  horas: "desc",
-  replanejamentos: "desc",
   score: "desc",
 };
 
@@ -65,8 +42,7 @@ export type MemberRowSources = {
   viewer: { isAdmin: boolean; meId: string | null };
   tasksByMember: Map<string, DashTask[]>;
   scoreByMemberId: Map<string, ScoreOperacionalV2>;
-  secondsByUser: Map<string, number>;
-  periodByMemberId: Map<string, { completed: number; pctNoPrazo: number | null; replans: number }>;
+  periodByMemberId: Map<string, { completed: number; pctNoPrazo: number | null }>;
   responseByMemberId: Map<string, { averageSeconds: number | null }> | null;
 };
 
@@ -83,10 +59,8 @@ export function buildMemberRows(members: Member[], src: MemberRowSources): Membe
       stats,
       load: assessLoad(stats, teamAvg),
       score: src.scoreByMemberId.get(m.id),
-      seconds: src.secondsByUser.get(m.id) ?? 0,
       onTimePct: period?.pctNoPrazo ?? null,
       completed: period?.completed ?? 0,
-      replans: period?.replans ?? 0,
       responseSeconds: src.responseByMemberId?.get(m.id)?.averageSeconds ?? null,
     };
   });
@@ -102,10 +76,6 @@ function sortValue(r: MemberRow, key: MemberSortKey): number | null {
       return r.onTimePct;
     case "resposta":
       return r.responseSeconds;
-    case "horas":
-      return r.seconds > 0 ? r.seconds : null;
-    case "replanejamentos":
-      return r.replans;
     case "score":
       return r.score?.dataState === "sem_dados" ? null : (r.score?.score ?? null);
     default:
@@ -129,15 +99,10 @@ export function sortMemberRows(rows: MemberRow[], sort: MemberSort): MemberRow[]
   });
 }
 
-export type MemberFilter = "atencao" | "bloqueio" | "online";
+export type MemberFilter = "atencao" | "bloqueio";
 
-export function matchesFilters(
-  r: MemberRow,
-  filters: Set<MemberFilter>,
-  isOnline: (id: string) => boolean,
-): boolean {
+export function matchesFilters(r: MemberRow, filters: Set<MemberFilter>): boolean {
   if (filters.has("atencao") && r.load.level === "normal") return false;
   if (filters.has("bloqueio") && r.stats.bloqueadas === 0) return false;
-  if (filters.has("online") && !isOnline(r.member.id)) return false;
   return true;
 }

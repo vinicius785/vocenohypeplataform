@@ -1,6 +1,4 @@
 import { useMemo, useState } from "react";
-import { ChevronRight } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Dialog,
   DialogContent,
@@ -8,11 +6,9 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { WeekdayBucket } from "@/lib/score";
 import type { DashTask, DashTaskFlat } from "@/lib/task-aggregation";
 import type { Member } from "@/components/TimeSection";
-import { avatarAccent, initialsOf } from "./member-ui";
 
 const DRILLDOWN_PREVIEW_LIMIT = 8;
 
@@ -30,27 +26,11 @@ export type DeliveryMemberRow = {
   thisWeekTasks: DashTaskFlat[];
 };
 
-type SortKey = "thisWeek" | "monthlyAvg" | "quarterlyAvg" | "yearlyAvg" | "trendPct";
-
 function formatCompletedAt(iso: string): string {
   const d = new Date(iso);
   const date = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
   const time = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   return `${date} às ${time}`;
-}
-
-function trendTone(pct: number | null): string {
-  if (pct == null) return "text-text-secondary";
-  if (pct > 5) return "text-emerald-600 dark:text-emerald-400";
-  if (pct < -5) return "text-destructive";
-  return "text-text-secondary";
-}
-
-function trendLabel(pct: number | null): string {
-  if (pct == null) return "—";
-  if (pct > 5) return `↑ ${Math.round(pct)}%`;
-  if (pct < -5) return `↓ ${Math.abs(Math.round(pct))}%`;
-  return "Estável";
 }
 
 function fmtAvg(v: number | null): string {
@@ -131,166 +111,6 @@ function DeliveryTasksDialog({
   );
 }
 
-function MemberRow({
-  row,
-  onOpenTasks,
-  onOpenMember,
-}: {
-  row: DeliveryMemberRow;
-  onOpenTasks: () => void;
-  onOpenMember: () => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const { member } = row;
-  const bestDay = row.byWeekday.reduce<{ label: string; count: number } | null>(
-    (best, d) => (d.count > 0 && (!best || d.count > best.count) ? d : best),
-    null,
-  );
-  const maxCount = Math.max(1, ...row.byWeekday.map((d) => d.count));
-  const dailyAvg = row.byWeekday.length > 0 ? row.thisWeek / row.byWeekday.length : null;
-
-  return (
-    <div className="border-t border-border first:border-t-0">
-      <div className="flex items-center gap-3 px-3 py-2">
-        <button
-          type="button"
-          onClick={() => setExpanded((e) => !e)}
-          aria-label={expanded ? `Recolher ${member.name}` : `Expandir ${member.name}`}
-          aria-expanded={expanded}
-          className="-ml-1.5 flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-text-secondary hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-        >
-          <ChevronRight
-            className={`h-4 w-4 transition-transform duration-200 motion-reduce:transition-none ${expanded ? "rotate-90" : ""}`}
-          />
-        </button>
-
-        <button
-          type="button"
-          onClick={onOpenMember}
-          className="group flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-md text-left"
-        >
-          <Avatar className="h-7 w-7 shrink-0">
-            {member.photo && <AvatarImage src={member.photo} alt={member.name} />}
-            <AvatarFallback className={`text-xs font-semibold ${avatarAccent(member.id)}`}>
-              {initialsOf(member.name, member.email)}
-            </AvatarFallback>
-          </Avatar>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-foreground group-hover:underline">
-              {member.name || "(sem nome)"}
-            </p>
-            {member.role && <p className="truncate text-xs text-text-secondary">{member.role}</p>}
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={onOpenTasks}
-          disabled={row.thisWeek === 0}
-          className="w-16 shrink-0 cursor-pointer text-right text-sm font-semibold tabular-nums text-foreground hover:underline disabled:cursor-default disabled:text-text-secondary disabled:no-underline"
-        >
-          {row.thisWeek}
-        </button>
-        <span className="hidden w-20 shrink-0 text-right text-sm tabular-nums text-text-secondary md:inline">
-          {fmtAvg(row.monthlyAvg)}
-        </span>
-        <span className="hidden w-20 shrink-0 text-right text-sm tabular-nums text-text-secondary lg:inline">
-          {fmtAvg(row.quarterlyAvg)}
-        </span>
-        <span className="hidden w-20 shrink-0 text-right text-sm tabular-nums text-text-secondary lg:inline">
-          {fmtAvg(row.yearlyAvg)}
-        </span>
-        <span className={`w-16 shrink-0 text-right text-xs font-medium ${trendTone(row.trendPct)}`}>
-          {trendLabel(row.trendPct)}
-        </span>
-      </div>
-
-      {/* Expansão inline, compacta: SÓ o que a linha não mostra — distribuição da semana e ritmo
-       * (média diária e melhor dia). As médias ficam na linha. */}
-      <div
-        className={`grid transition-[grid-template-rows] duration-200 motion-reduce:transition-none ${expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
-        aria-hidden={!expanded}
-        inert={!expanded}
-      >
-        <div className="overflow-hidden">
-          <div className="grid gap-x-10 gap-y-4 border-t border-border/60 bg-muted/20 px-4 py-3 md:grid-cols-[1.6fr_1fr]">
-            <div>
-              <p className="text-[11px] font-medium uppercase tracking-wide text-text-secondary">
-                Distribuição da semana
-              </p>
-              <ul className="mt-2 grid grid-cols-5 gap-2">
-                {row.byWeekday.map((d) => (
-                  <li key={d.label}>
-                    <span className="block text-[11px] uppercase text-text-secondary">
-                      {d.label.slice(0, 3)}
-                    </span>
-                    <span
-                      className={`block text-base font-semibold tabular-nums leading-tight ${d.count === 0 ? "text-text-secondary/60" : "text-foreground"}`}
-                    >
-                      {d.count}
-                    </span>
-                    <span className="mt-1 block h-1 w-full overflow-hidden rounded-full bg-muted">
-                      <span
-                        className="block h-full rounded-full bg-foreground/45"
-                        style={{
-                          width: `${d.count > 0 ? Math.max(10, (d.count / maxCount) * 100) : 0}%`,
-                        }}
-                      />
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div>
-              <p className="text-[11px] font-medium uppercase tracking-wide text-text-secondary">
-                Resumo da semana
-              </p>
-              <dl className="mt-2 space-y-1 text-sm">
-                <div className="flex items-baseline justify-between gap-3">
-                  <dt className="text-text-secondary">Média diária</dt>
-                  <dd className="font-semibold tabular-nums text-foreground">{fmtAvg(dailyAvg)}</dd>
-                </div>
-                <div className="flex items-baseline justify-between gap-3">
-                  <dt className="text-text-secondary">Melhor dia</dt>
-                  <dd className="font-semibold text-foreground">
-                    {bestDay ? `${bestDay.label.toLowerCase()} · ${bestDay.count}` : "—"}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SortableHeader({
-  label,
-  sortKey,
-  currentKey,
-  onSort,
-  className,
-}: {
-  label: string;
-  sortKey: SortKey;
-  currentKey: SortKey;
-  onSort: (k: SortKey) => void;
-  className?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => onSort(sortKey)}
-      className={`shrink-0 cursor-pointer text-right text-[11px] font-medium uppercase tracking-wide hover:text-foreground ${currentKey === sortKey ? "text-foreground" : "text-text-secondary"} ${className ?? ""}`}
-    >
-      {label}
-    </button>
-  );
-}
-
-/** Dia de hoje (1=segunda…5=sexta) no fuso de Brasília — só para um destaque sutil. */
 function todayWeekdayBR(): number | null {
   const wd = new Date().toLocaleDateString("en-US", {
     weekday: "short",
@@ -312,27 +132,20 @@ export function TeamDeliveriesWeek({
   weekRangeLabel,
   weekdayData,
   tasksByDay,
-  memberRows,
   /** % vs. semana anterior, já comparando só os dias equivalentes (nunca
    * semana parcial contra semana anterior completa — item 6 do pedido).
    * `null` quando a semana anterior não teve nenhuma entrega nos mesmos
    * dias (sem base pra calcular %). */
   weeklyTrendPct,
   onOpenTask,
-  onOpenMember,
 }: {
   weekRangeLabel: string;
   weekdayData: WeekdayBucket[];
   tasksByDay: Map<number, DashTaskFlat[]>;
-  memberRows: DeliveryMemberRow[];
   weeklyTrendPct: number | null;
   onOpenTask: (t: DashTask) => void;
-  onOpenMember: (m: Member, opts?: { showComposition?: boolean }) => void;
 }) {
   const [openWeekday, setOpenWeekday] = useState<WeekdayBucket | null>(null);
-  const [openMemberTasks, setOpenMemberTasks] = useState<DeliveryMemberRow | null>(null);
-  const [sortKey, setSortKey] = useState<SortKey>("thisWeek");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   const thisWeekTotal = useMemo(
     () => weekdayData.reduce((s, d) => s + d.totalCompletions, 0),
@@ -351,33 +164,15 @@ export function TeamDeliveriesWeek({
   );
   const avgDaily = weekdayData.length > 0 ? thisWeekTotal / weekdayData.length : 0;
 
-  const sortedRows = useMemo(() => {
-    const dir = sortDir === "asc" ? 1 : -1;
-    return [...memberRows].sort((a, b) => {
-      const av = a[sortKey] ?? -Infinity;
-      const bv = b[sortKey] ?? -Infinity;
-      return (av - bv) * dir;
-    });
-  }, [memberRows, sortKey, sortDir]);
-
-  const onSort = (k: SortKey) => {
-    if (k === sortKey) {
-      setSortDir((d) => (d === "desc" ? "asc" : "desc"));
-    } else {
-      setSortKey(k);
-      setSortDir("desc");
-    }
-  };
-
   const maxDay = Math.max(1, ...weekdayData.map((d) => d.totalCompletions));
   const today = todayWeekdayBR();
 
   return (
-    <div className="surface-card p-5">
+    <section aria-label="Entregas da semana" className="space-y-1">
       {/* Título + período; ao lado, o total e a comparação com a semana anterior (mesmo cálculo de sempre). */}
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
         <div>
-          <h3 className="text-[15px] font-semibold text-foreground">Entregas da Semana</h3>
+          <h3 className="text-[15px] font-semibold text-foreground">Entregas da semana</h3>
           <p className="mt-0.5 text-xs text-text-secondary">{weekRangeLabel}</p>
         </div>
         {thisWeekTotal > 0 && (
@@ -461,77 +256,6 @@ export function TeamDeliveriesWeek({
         </>
       )}
 
-      {memberRows.length > 0 && (
-        <div className="mt-5 border-t border-border/60 pt-4">
-          <h4 className="px-3 pb-2 text-xs font-semibold uppercase tracking-widest text-text-secondary">
-            Desempenho do time
-          </h4>
-          <div className="flex items-center gap-3 px-3 pb-1.5">
-            <span className="w-3.5 shrink-0" />
-            <span className="flex-1 text-[11px] font-medium uppercase tracking-wide text-text-secondary">
-              Membro
-            </span>
-            <SortableHeader
-              label="Esta semana"
-              sortKey="thisWeek"
-              currentKey={sortKey}
-              onSort={onSort}
-              className="w-16"
-            />
-            <SortableHeader
-              label="Média mensal"
-              sortKey="monthlyAvg"
-              currentKey={sortKey}
-              onSort={onSort}
-              className="hidden w-20 md:inline"
-            />
-            <UiTooltip>
-              <TooltipTrigger asChild>
-                <span className="hidden w-20 shrink-0 lg:inline">
-                  <SortableHeader
-                    label="Média trim."
-                    sortKey="quarterlyAvg"
-                    currentKey={sortKey}
-                    onSort={onSort}
-                  />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>Média semanal nos últimos 3 meses</TooltipContent>
-            </UiTooltip>
-            <UiTooltip>
-              <TooltipTrigger asChild>
-                <span className="hidden w-20 shrink-0 lg:inline">
-                  <SortableHeader
-                    label="Média anual"
-                    sortKey="yearlyAvg"
-                    currentKey={sortKey}
-                    onSort={onSort}
-                  />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>Média semanal nos últimos 12 meses</TooltipContent>
-            </UiTooltip>
-            <SortableHeader
-              label="Tendência"
-              sortKey="trendPct"
-              currentKey={sortKey}
-              onSort={onSort}
-              className="w-16"
-            />
-          </div>
-          <div className="overflow-hidden rounded-xl border border-border/60">
-            {sortedRows.map((row) => (
-              <MemberRow
-                key={row.member.id}
-                row={row}
-                onOpenTasks={() => setOpenMemberTasks(row)}
-                onOpenMember={() => onOpenMember(row.member)}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
       <DeliveryTasksDialog
         title={openWeekday ? `Entregas — ${openWeekday.label.toUpperCase()}-feira` : null}
         subtitle={`${openWeekday?.totalCompletions ?? 0} tarefa${openWeekday?.totalCompletions === 1 ? "" : "s"} concluída${openWeekday?.totalCompletions === 1 ? "" : "s"}`}
@@ -539,13 +263,6 @@ export function TeamDeliveriesWeek({
         onOpenChange={(open) => !open && setOpenWeekday(null)}
         onOpenTask={onOpenTask}
       />
-      <DeliveryTasksDialog
-        title={openMemberTasks ? `Entregas — ${openMemberTasks.member.name}` : null}
-        subtitle={`${openMemberTasks?.thisWeek ?? 0} tarefa${openMemberTasks?.thisWeek === 1 ? "" : "s"} concluída${openMemberTasks?.thisWeek === 1 ? "" : "s"} nesta semana`}
-        tasks={openMemberTasks?.thisWeekTasks ?? []}
-        onOpenChange={(open) => !open && setOpenMemberTasks(null)}
-        onOpenTask={onOpenTask}
-      />
-    </div>
+    </section>
   );
 }

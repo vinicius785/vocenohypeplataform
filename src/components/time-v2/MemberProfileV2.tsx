@@ -92,6 +92,15 @@ type Viewer = { isAdmin: boolean; meId: string | null };
 
 type Props = {
   member: Member | null;
+  /** Visão aberta ao entrar (ex.: vindo de um insight). */
+  initialView?: ViewId;
+  /** Entregas por semana deste membro (dados já calculados na página). */
+  deliveries?: {
+    thisWeek: number;
+    monthlyAvg: number | null;
+    quarterlyAvg: number | null;
+    yearlyAvg: number | null;
+  } | null;
   viewer: Viewer;
   tasksForMember: DashTask[];
   openTasksForMember: PerformanceOpenTask[];
@@ -121,7 +130,9 @@ export function MemberProfileV2({ member, onClose, ...rest }: Props) {
         side="right"
         className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:w-[92vw] sm:max-w-[640px]"
       >
-        {member && <ProfileBody key={member.id} member={member} {...rest} />}
+        {member && (
+          <ProfileBody key={`${member.id}:${rest.initialView ?? ""}`} member={member} {...rest} />
+        )}
       </SheetContent>
     </Sheet>
   );
@@ -129,6 +140,8 @@ export function MemberProfileV2({ member, onClose, ...rest }: Props) {
 
 function ProfileBody({
   member,
+  initialView,
+  deliveries,
   viewer,
   tasksForMember,
   openTasksForMember,
@@ -145,7 +158,7 @@ function ProfileBody({
     const t = todayIsoInBrasilia();
     return { from: t.slice(0, 8) + "01", to: t };
   });
-  const [view, setView] = useState<ViewId>("visao");
+  const [view, setView] = useState<ViewId>(initialView ?? "visao");
   const [infoOpen, setInfoOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const range = useMemo(() => rangeForProfilePeriod(period, custom), [period, custom]);
@@ -552,6 +565,7 @@ function ProfileBody({
                 attended: perf.attendance.length - missed,
                 expected: perf.attendance.length,
               }}
+              deliveries={deliveries}
             />
           )}
           {view === "tarefas" && (

@@ -1,13 +1,12 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
-import { AlertTriangle, CircleDot, Copy, Link2, Plus } from "lucide-react";
+import { AlertTriangle, Copy, Link2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { OPEN_STATUSES } from "@/lib/score";
 import type { ScorePeriodMode } from "@/lib/performance-engine";
-import { formatResponseDuration } from "@/lib/member-response-time";
-import { useTeamTimeEntries } from "@/lib/time-entries";
+import { useClientes } from "@/lib/clientes-store";
+import { workContextLabel } from "@/lib/home-work";
 import { todayIsoInBrasilia } from "@/lib/timezone";
-import { getStatus } from "@/components/team/member-ui";
 import { MemberDialog, type Member } from "@/components/TimeSection";
 import { useOpenMemberDeepLink, useTimeData } from "@/components/team/use-time-data";
 import { AttentionTasks, type AttentionTab } from "@/components/team/AttentionTasks";
@@ -17,6 +16,9 @@ import { PageContainer } from "@/components/shared/PageContainer";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PeriodMenu } from "@/components/shared/PeriodMenu";
 import { MemberProfileV2 } from "./MemberProfileV2";
+import type { ViewId } from "./MemberViews";
+import { TeamPerformance } from "./TeamPerformance";
+import { curateInsights, teamPerformance } from "./team-v2";
 import { TimeMembersTable } from "./TimeMembersTable";
 import {
   FilterChips,
@@ -26,7 +28,6 @@ import {
   FilterRow,
   FilterSearch,
   FilterToolbar,
-  SortMenu,
 } from "@/components/shared/FilterToolbar";
 import { TimeSummaryStrip } from "./TimeSummaryStrip";
 import { dependencyBreakdownText, dependencySummary, teamAverageOpen } from "./member-metrics";
@@ -34,14 +35,12 @@ import {
   buildMemberRows,
   DEFAULT_SORT_DIR,
   matchesFilters,
-  MEMBER_SORT_LABEL,
   sortMemberRows,
   type MemberFilter,
   type MemberSort,
   type MemberSortKey,
 } from "./member-rows";
 import { useTeamResponseTime } from "./use-response-time";
-import { totalSecondsByUser } from "./time-v2-utils";
 
 const PERIOD_GROUP_LABEL: Record<ScorePeriodMode, string> = {
   semana: "Nesta semana",
@@ -58,16 +57,14 @@ const PERIOD_OPTIONS = (Object.keys(PERIOD_GROUP_LABEL) as ScorePeriodMode[]).ma
 const FILTERS: { key: MemberFilter; label: string; icon: ReactNode }[] = [
   { key: "atencao", label: "Atenção", icon: <AlertTriangle className="h-3.5 w-3.5" /> },
   { key: "bloqueio", label: "Com bloqueio", icon: <Link2 className="h-3.5 w-3.5" /> },
-  { key: "online", label: "Online", icon: <CircleDot className="h-3.5 w-3.5" /> },
 ];
 
 /**
- * Aba Time — painel operacional + um perfil central por pessoa.
- * Cabeçalho → barra de controles (busca, período, filtros, ordenação) →
- * resumo (agora / no período) → lista central de membros (carga, prazo,
- * resposta, Score, horas — tudo no MESMO período) → tarefas que precisam
- * de atenção → entregas da semana → insights. Toda pessoa, em qualquer
- * bloco, abre o MESMO `MemberProfileV2`.
+ * Página Time (V2) — central de gestão operacional. Ordem pela pergunta que cada bloco responde:
+ * KPIs (o que está acontecendo agora e no período) → Pessoas (como o time está, comparação rápida) →
+ * Precisa de atenção (o que resolver) → Entregas da semana (produção) → Desempenho do time →
+ * Insights (poucos, relevantes). A página mostra o RESUMO; o diagnóstico fica no detalhe do membro
+ * (`MemberProfileV2`), que toda pessoa, em qualquer bloco, abre.
  */
 export function TimeV2Page() {
   const d = useTimeData();
@@ -99,6 +96,7 @@ export function TimeV2Page() {
     deliveryMemberRows,
     meetingsById,
     teamInsights,
+    insightBundles,
     membersById,
     openTask,
     handleSave: saveMember,
@@ -110,20 +108,21 @@ export function TimeV2Page() {
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<Set<MemberFilter>>(() => new Set());
   const [sort, setSort] = useState<MemberSort>({ key: "nome", dir: "asc" });
-  const [viewing, setViewing] = useState<Member | null>(null);
+  const [viewingState, setViewingState] = useState<{ member: Member; view?: ViewId } | null>(null);
+  const viewing = viewingState?.member ?? null;
+  const setViewing = (m: Member | null, view?: ViewId) =>
+    setViewingState(m ? { member: m, view } : null);
   const [editing, setEditing] = useState<Member | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [attentionTab, setAttentionTab] = useState<AttentionTab>("atrasadas");
   const attentionRef = useRef<HTMLDivElement>(null);
 
-  useOpenMemberDeepLink(members, setViewing);
+  useOpenMemberDeepLink(members, (m) => setViewing(m));
 
   const viewer = useMemo(() => ({ isAdmin, meId }), [isAdmin, meId]);
 
   // Tudo da lista e do resumo "no período" usa o MESMO período (o do
   // Score): horas, conclusões, prazo, replanejamento e tempo de resposta.
-  const { entries: periodEntries } = useTeamTimeEntries(scoreRange);
-  const secondsByUser = useMemo(() => totalSecondsByUser(periodEntries), [periodEntries]);
   const teamResponse = useTeamResponseTime(scoreRange);
 
   const allRows = useMemo(
@@ -132,7 +131,6 @@ export function TimeV2Page() {
         viewer,
         tasksByMember,
         scoreByMemberId,
-        secondsByUser,
         periodByMemberId: periodIndicatorsByMemberId,
         responseByMemberId: teamResponse.data?.byMemberId ?? null,
       }),
@@ -141,7 +139,6 @@ export function TimeV2Page() {
       viewer,
       tasksByMember,
       scoreByMemberId,
-      secondsByUser,
       periodIndicatorsByMemberId,
       teamResponse.data,
     ],
@@ -149,21 +146,19 @@ export function TimeV2Page() {
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const isOnline = (id: string) => getStatus(id) === "online";
     const visible = allRows.filter(
       (r) =>
         (!q || r.name.toLowerCase().includes(q) || r.role.toLowerCase().includes(q)) &&
-        matchesFilters(r, filters, isOnline),
+        matchesFilters(r, filters),
     );
     return sortMemberRows(visible, sort);
   }, [allRows, query, filters, sort]);
 
   const filterCounts = useMemo(() => {
-    const isOnline = (id: string) => getStatus(id) === "online";
     return Object.fromEntries(
       FILTERS.map((f) => [
         f.key,
-        allRows.filter((r) => matchesFilters(r, new Set([f.key]), isOnline)).length,
+        allRows.filter((r) => matchesFilters(r, new Set([f.key]))).length,
       ]),
     ) as Record<MemberFilter, number>;
   }, [allRows]);
@@ -200,16 +195,20 @@ export function TimeV2Page() {
   }, [allTasksFlat, scoreRange]);
   const teamAvgOpen = useMemo(() => teamAverageOpen(allRows.map((r) => r.stats)), [allRows]);
 
-  const responseLabel =
-    teamResponse.state === "loading"
-      ? "…"
-      : formatResponseDuration(teamResponse.data?.teamAverageSeconds ?? null);
-  const responseHint =
-    teamResponse.state === "error"
-      ? "Indisponível no momento"
-      : teamResponse.state === "ready" && teamResponse.data?.teamAverageSeconds == null
-        ? "Sem dados suficientes"
-        : "Chat · métrica agregada";
+  // Reutiliza os dados já carregados: insights curados, desempenho do time (janelas de 30 dias) e
+  // o contexto "Cliente · Projeto" das tarefas.
+  const curatedInsights = useMemo(() => curateInsights(teamInsights), [teamInsights]);
+  const performance = useMemo(
+    () => teamPerformance(insightBundles, allTasksFlat, todayIsoInBrasilia()),
+    [insightBundles, allTasksFlat],
+  );
+  const clientes = useClientes();
+  const clienteByCampanha = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of clientes) for (const camp of c.campanhas ?? []) m.set(camp.id, c.empresa);
+    return m;
+  }, [clientes]);
+  const periodLabel = PERIOD_GROUP_LABEL[scorePeriod];
 
   const weekRangeLabel = useMemo(() => {
     const parse = (iso: string) => {
@@ -241,7 +240,7 @@ export function TimeV2Page() {
   return (
     <TooltipProvider delayDuration={200}>
       <PageContainer variant="wide">
-        <div className="space-y-6">
+        <div className="space-y-8">
           <PageHeader
             title="Time"
             description="Visão geral da operação, produtividade, carga e indicadores do time."
@@ -322,58 +321,56 @@ export function TimeV2Page() {
             completedCount={completedInPeriod}
             onTimePct={teamOnTime.pct}
             onTimeSample={teamOnTime.completed}
-            responseLabel={responseLabel}
-            responseHint={responseHint}
-            periodLabel={PERIOD_GROUP_LABEL[scorePeriod]}
-            onOpenAberto={() => goAttention("semana")}
+            periodLabel={periodLabel}
             onOpenHoje={() => goAttention("hoje")}
             onOpenAtrasadas={() => goAttention("atrasadas")}
             onOpenBloqueadas={() => goAttention("bloqueadas")}
           />
 
-          <FilterToolbar>
-            <FilterRow>
-              <FilterSearch value={query} onChange={setQuery} placeholder="Buscar membro..." />
-              <FilterPopover
-                title="Filtrar membros"
-                activeCount={filters.size}
+          <section aria-label="Pessoas" className="space-y-3">
+            <h3 className="text-[15px] font-semibold text-foreground">
+              Pessoas
+              <span className="ml-1.5 text-xs font-normal text-text-secondary">
+                {members.length}
+                {onlineCount > 0 && ` · ${onlineCount} online`}
+              </span>
+            </h3>
+            <FilterToolbar>
+              <FilterRow>
+                <FilterSearch value={query} onChange={setQuery} placeholder="Buscar membro..." />
+                <FilterPopover
+                  title="Filtrar membros"
+                  activeCount={filters.size}
+                  onClear={() => setFilters(new Set())}
+                >
+                  <FilterGroup label="Situação">
+                    {FILTERS.map((f) => (
+                      <FilterPill
+                        key={f.key}
+                        active={filters.has(f.key)}
+                        onClick={() => toggleFilter(f.key)}
+                      >
+                        {f.label} · {filterCounts[f.key]}
+                      </FilterPill>
+                    ))}
+                  </FilterGroup>
+                </FilterPopover>
+                {/* Contexto (não é filtro): vale para os KPIs e para a tabela de membros. */}
+                <PeriodMenu
+                  value={scorePeriod}
+                  options={PERIOD_OPTIONS}
+                  onChange={setScorePeriod}
+                />
+              </FilterRow>
+              <FilterChips
+                chips={FILTERS.filter((f) => filters.has(f.key)).map((f) => ({
+                  id: f.key,
+                  label: f.label,
+                  onRemove: () => toggleFilter(f.key),
+                }))}
                 onClear={() => setFilters(new Set())}
-              >
-                <FilterGroup label="Situação">
-                  {FILTERS.map((f) => (
-                    <FilterPill
-                      key={f.key}
-                      active={filters.has(f.key)}
-                      onClick={() => toggleFilter(f.key)}
-                    >
-                      {f.label} · {filterCounts[f.key]}
-                    </FilterPill>
-                  ))}
-                </FilterGroup>
-              </FilterPopover>
-              <SortMenu
-                value={sort.key}
-                options={MEMBER_SORT_LABEL}
-                onChange={(key) => setSort({ key, dir: DEFAULT_SORT_DIR[key] })}
               />
-              {/* Contexto (não é filtro): vale para os KPIs e para a tabela de membros. */}
-              <PeriodMenu value={scorePeriod} options={PERIOD_OPTIONS} onChange={setScorePeriod} />
-            </FilterRow>
-            <FilterChips
-              chips={FILTERS.filter((f) => filters.has(f.key)).map((f) => ({
-                id: f.key,
-                label: f.label,
-                onRemove: () => toggleFilter(f.key),
-              }))}
-              onClear={() => setFilters(new Set())}
-            />
-          </FilterToolbar>
-
-          <div className="space-y-2">
-            <p className="px-1 text-[11px] font-medium text-text-secondary">
-              Membros · {members.length}
-              {onlineCount > 0 && ` · ${onlineCount} online`}
-            </p>
+            </FilterToolbar>
             <TimeMembersTable
               rows={rows}
               sort={sort}
@@ -381,9 +378,9 @@ export function TimeV2Page() {
               loading={loading}
               totalMembers={members.length}
               filtered={!!query.trim() || filters.size > 0}
-              onOpenMember={setViewing}
+              onOpenMember={(m) => setViewing(m)}
             />
-          </div>
+          </section>
 
           <div ref={attentionRef} className="scroll-mt-4">
             <AttentionTasks
@@ -392,6 +389,7 @@ export function TimeV2Page() {
               activeTab={attentionTab}
               onTabChange={setAttentionTab}
               onOpenTask={openTask}
+              context={(t) => workContextLabel(t, clienteByCampanha)}
             />
           </div>
 
@@ -399,16 +397,16 @@ export function TimeV2Page() {
             weekRangeLabel={weekRangeLabel}
             weekdayData={weekdayData}
             tasksByDay={weekdayTasksByDay}
-            memberRows={deliveryMemberRows}
             weeklyTrendPct={weeklyTrendPct}
             onOpenTask={openTask}
-            onOpenMember={setViewing}
           />
 
+          <TeamPerformance data={performance} />
+
           <TeamInsights
-            insights={teamInsights}
+            insights={curatedInsights}
             membersById={membersById}
-            onOpenMember={setViewing}
+            onOpenMember={(m, view) => setViewing(m, view)}
           />
 
           <MemberDialog
@@ -424,6 +422,22 @@ export function TimeV2Page() {
 
           <MemberProfileV2
             member={viewing}
+            initialView={viewingState?.view}
+            deliveries={
+              viewing
+                ? (() => {
+                    const r = deliveryMemberRows.find((x) => x.member.id === viewing.id);
+                    return r
+                      ? {
+                          thisWeek: r.thisWeek,
+                          monthlyAvg: r.monthlyAvg,
+                          quarterlyAvg: r.quarterlyAvg,
+                          yearlyAvg: r.yearlyAvg,
+                        }
+                      : null;
+                  })()
+                : null
+            }
             viewer={viewer}
             tasksForMember={viewing ? (tasksByMember.get(viewing.name) ?? []) : []}
             openTasksForMember={viewing ? (openTasksByMemberId.get(viewing.id) ?? []) : []}

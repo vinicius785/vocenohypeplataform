@@ -14,8 +14,8 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
 /**
  * Faixa de resumo operacional — responde de relance: quantas abertas,
  * quantas vencem hoje, quantas atrasadas, quantas bloqueadas (estado
- * ATUAL) e, no período escolhido, quantas foram concluídas, quanto saiu no
- * prazo e como está a resposta no chat. Sem ranking, sem número gigante.
+ * ATUAL) e, no período escolhido, quantas foram concluídas e quanto saiu no
+ * prazo. Resposta (comunicação) NÃO entra aqui. Sem ranking, sem número gigante.
  */
 export function TimeSummaryStrip({
   openCount,
@@ -26,10 +26,7 @@ export function TimeSummaryStrip({
   completedCount,
   onTimePct,
   onTimeSample,
-  responseLabel,
-  responseHint,
   periodLabel,
-  onOpenAberto,
   onOpenHoje,
   onOpenAtrasadas,
   onOpenBloqueadas,
@@ -42,19 +39,16 @@ export function TimeSummaryStrip({
   completedCount: number;
   onTimePct: number | null;
   onTimeSample: number;
-  responseLabel: string;
-  responseHint: string | null;
   periodLabel: string;
-  onOpenAberto: () => void;
   onOpenHoje: () => void;
   onOpenAtrasadas: () => void;
   onOpenBloqueadas: () => void;
 }) {
   return (
-    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,4fr)_minmax(0,3fr)]">
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,4fr)_minmax(0,2fr)]">
       <Group title="Agora">
         <KpiStrip aria-label="Tarefas agora">
-          <KpiCell label="Abertas" value={openCount} onClick={onOpenAberto} />
+          <KpiCell label="Abertas" value={openCount} />
           <KpiCell label="Vencem hoje" value={dueTodayCount} tone="warning" onClick={onOpenHoje} />
           <KpiCell label="Atrasadas" value={overdueCount} tone="danger" onClick={onOpenAtrasadas} />
           <KpiCell
@@ -77,7 +71,6 @@ export function TimeSummaryStrip({
                 : `${onTimeSample} ${onTimeSample === 1 ? "conclusão avaliada" : "conclusões avaliadas"}`
             }
           />
-          <KpiCell label="Resposta média" value={responseLabel} complement={responseHint} />
         </KpiStrip>
       </Group>
     </div>

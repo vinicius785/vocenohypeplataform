@@ -704,7 +704,7 @@ export function useTimeData() {
     teamAvgActiveProjects,
   ]);
 
-  const teamInsights = useMemo(() => generateInsights(insightBundles, 5), [insightBundles]);
+  const teamInsights = useMemo(() => generateInsights(insightBundles, 40), [insightBundles]);
   const membersById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
 
   // Mesmo deep-link (sessionStorage + navegação) já usado em "Meu trabalho"
@@ -820,6 +820,7 @@ export function useTimeData() {
     deliveryMemberRows,
     meetingsById,
     teamInsights,
+    insightBundles,
     membersById,
     openTask,
     handleSave,

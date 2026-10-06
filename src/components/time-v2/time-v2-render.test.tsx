@@ -30,7 +30,7 @@ const { TimeSummaryStrip } = await import("./TimeSummaryStrip");
 const { OverviewView, PerformanceView, TasksView, DependenciesView, HistoryView } =
   await import("./MemberViews");
 const { CommunicationView } = await import("./MemberCommunication");
-const { buildMemberRows, sortMemberRows } = await import("./member-rows");
+const { buildMemberRows, sortMemberRows, matchesFilters } = await import("./member-rows");
 const { assessLoad } = await import("./member-metrics");
 const { memberTaskStats } = await import("./time-v2-utils");
 const { communicationReading, scoreView, blockedRows } = await import("./member-v2");
@@ -69,7 +69,6 @@ function rowsFor(members: Member[], tasks = new Map<string, DashTask[]>()) {
     viewer,
     tasksByMember: tasks,
     scoreByMemberId: new Map(),
-    secondsByUser: new Map(),
     periodByMemberId: new Map(),
     responseByMemberId: null,
   });
@@ -164,7 +163,7 @@ describe("TimeMembersTable (dados extremos)", () => {
 });
 
 describe("TimeSummaryStrip", () => {
-  it("responde agora (abertas/hoje/atrasadas/bloqueadas) e no período (concluídas/prazo/resposta)", () => {
+  it("responde agora (abertas/hoje/atrasadas/bloqueadas) e no período (concluídas/prazo) — resposta NÃO é KPI de tarefas", () => {
     const html = renderToStaticMarkup(
       <TimeSummaryStrip
         openCount={12}
@@ -175,10 +174,7 @@ describe("TimeSummaryStrip", () => {
         completedCount={9}
         onTimePct={87.4}
         onTimeSample={15}
-        responseLabel="18 min"
-        responseHint="Chat · métrica agregada"
         periodLabel="Neste mês"
-        onOpenAberto={() => {}}
         onOpenHoje={() => {}}
         onOpenAtrasadas={() => {}}
         onOpenBloqueadas={() => {}}
@@ -194,10 +190,10 @@ describe("TimeSummaryStrip", () => {
       "Concluídas",
       "87%",
       "15 conclusões avaliadas",
-      "18 min",
     ]) {
       expect(html).toContain(s);
     }
+    expect(html).not.toMatch(/Resposta/);
   });
   it("sem conclusões no período mostra travessão, nunca 0%", () => {
     const html = renderToStaticMarkup(
@@ -210,10 +206,7 @@ describe("TimeSummaryStrip", () => {
         completedCount={0}
         onTimePct={null}
         onTimeSample={0}
-        responseLabel="—"
-        responseHint="Sem dados suficientes"
         periodLabel="Nesta semana"
-        onOpenAberto={() => {}}
         onOpenHoje={() => {}}
         onOpenAtrasadas={() => {}}
         onOpenBloqueadas={() => {}}
@@ -529,5 +522,190 @@ describe("Comunicação V2", () => {
 
   it("scoreView exportado coerente", () => {
     expect(scoreView({ score: 50, amostra: 3, dataState: "provisorio" }).mode).toBe("insuficiente");
+  });
+});
+
+describe("Time V2 — tabela: score com corte e colunas enxutas", () => {
+  const withScore = (score: unknown) => {
+    const m = member({ id: "s", name: "Sara" });
+    const rows = buildMemberRows([m], {
+      viewer,
+      tasksByMember: new Map(),
+      scoreByMemberId: new Map([["s", score as never]]),
+      periodByMemberId: new Map(),
+      responseByMemberId: null,
+    });
+    return renderToStaticMarkup(
+      <TooltipProvider>
+        <TimeMembersTable
+          rows={rows}
+          sort={{ key: "nome", dir: "asc" }}
+          onSort={() => {}}
+          loading={false}
+          totalMembers={1}
+          filtered={false}
+          onOpenMember={() => {}}
+        />
+      </TooltipProvider>,
+    );
+  };
+  it("abaixo de 20 tarefas: prévia discreta (sem cor de classificação) e nunca 'prov.'", () => {
+    const html = withScore({
+      score: 100,
+      dataState: "definitivo",
+      amostra: 12,
+      classificacao: "Excelente",
+    });
+    expect(html).toContain("100");
+    expect(html).toContain("text-text-secondary/70");
+    expect(html).not.toContain("prov.");
+  });
+  it("20+ tarefas: score normal; sem dados: travessão", () => {
+    expect(
+      withScore({ score: 87, dataState: "definitivo", amostra: 25, classificacao: "Muito bom" }),
+    ).toContain("font-semibold tabular-nums");
+    expect(withScore({ score: null, dataState: "sem_dados", amostra: 0 })).toContain("—");
+  });
+  it("sem Replan./Horas e sem filtro online na tabela", () => {
+    const html = renderTable([member({ id: "x", name: "Xis" })]);
+    expect(html).not.toContain("Replan.");
+    expect(html).not.toContain("Horas");
+  });
+  it("filtros: atenção e bloqueio", () => {
+    const m = member({ id: "f", name: "Fe" });
+    const t = new Map([
+      [
+        "Fe",
+        [task({ bucket: "atrasada" }), task({ bucket: "atrasada" }), task({ bucket: "atrasada" })],
+      ],
+    ]);
+    const [row] = rowsFor([m], t);
+    expect(matchesFilters(row, new Set(["atencao"]))).toBe(row.load.level !== "normal");
+    expect(matchesFilters(row, new Set(["bloqueio"]))).toBe(false);
+    expect(matchesFilters(row, new Set())).toBe(true);
+  });
+});
+
+const { AttentionTasks, attentionCounts } = await import("@/components/team/AttentionTasks");
+const { TeamInsights } = await import("@/components/team/TeamInsights");
+const { TeamPerformance } = await import("./TeamPerformance");
+
+describe("Time V2 — precisa de atenção", () => {
+  const flat = (over: Partial<DashTask> & { assignees?: string[] }) =>
+    ({ ...task(over), assignees: over.assignees ?? ["Ana"] }) as never;
+  const tasks = [
+    flat({
+      id: "1",
+      title: "Editar Vídeo",
+      bucket: "atrasada",
+      due: "Atrasada · 25d",
+      status: "Em andamento",
+    }),
+    flat({ id: "2", title: "Hoje A", bucket: "hoje", due: "Hoje" }),
+    flat({
+      id: "3",
+      title: "Travada",
+      status: "Bloqueada",
+      blockCategory: "aguardando_cliente",
+      bucket: "semana",
+    }),
+    flat({ id: "4", title: "Feita", bucket: "atrasada", status: "Concluído" }),
+  ];
+  const render = (tab: "atrasadas" | "hoje" | "bloqueadas", list = tasks) =>
+    renderToStaticMarkup(
+      <TooltipProvider>
+        <AttentionTasks
+          tasks={list}
+          members={[]}
+          activeTab={tab}
+          onTabChange={() => {}}
+          onOpenTask={() => {}}
+          context={(t) => `Cliente · ${t.projectName}`}
+        />
+      </TooltipProvider>,
+    );
+  it("conta só abertas, por aba; sem aba 'Esta semana'", () => {
+    expect(attentionCounts(tasks)).toEqual({ atrasadas: 1, hoje: 1, bloqueadas: 1 });
+    const html = render("atrasadas");
+    expect(html).toContain("Atrasadas · 1");
+    expect(html).toContain("Vencem hoje · 1");
+    expect(html).toContain("Bloqueadas · 1");
+    expect(html).not.toContain("Esta semana");
+  });
+  it("linha: título, responsável · cliente · projeto e status em texto; tarefa concluída fora", () => {
+    const html = render("atrasadas");
+    expect(html).toContain("Editar Vídeo");
+    expect(html).toContain("Ana · Cliente · Projeto");
+    expect(html).toContain("Em andamento");
+    expect(html).not.toContain("Feita");
+  });
+  it("bloqueadas mostram a categoria; vazio é uma linha, sem emoji", () => {
+    expect(render("bloqueadas")).toContain("Aguardando cliente");
+    const vazio = render("hoje", []);
+    expect(vazio).toContain("Nada vencendo hoje.");
+    expect(vazio).not.toContain("🎉");
+  });
+  it("mais de 8: 'Ver todas (N)'", () => {
+    const many = Array.from({ length: 11 }, (_, i) =>
+      flat({ id: `m${i}`, title: `T${i}`, bucket: "atrasada" }),
+    );
+    const html = render("atrasadas", many);
+    expect(html).toContain("Ver todas (11)");
+    expect(html).not.toContain(">T10<");
+  });
+});
+
+describe("Time V2 — insights e desempenho", () => {
+  it("insights: lista curta, vazio em uma linha", () => {
+    expect(
+      renderToStaticMarkup(
+        <TeamInsights insights={[]} membersById={new Map()} onOpenMember={() => {}} />,
+      ),
+    ).toContain("Nenhum insight relevante");
+    const html = renderToStaticMarkup(
+      <TeamInsights
+        insights={[
+          {
+            ruleId: "pontualidade_queda",
+            memberId: "a",
+            memberName: "Lucas Ragoni",
+            nature: "atencao",
+            category: "prazos",
+            priority: 85,
+            text: "A conclusão no prazo caiu de 41% para 13%.",
+          },
+        ]}
+        membersById={new Map()}
+        onOpenMember={() => {}}
+      />,
+    );
+    expect(html).toContain("Lucas Ragoni");
+    expect(html).toContain("caiu de 41% para 13%");
+  });
+  it("desempenho do time: valores com tendência e travessão sem base", () => {
+    const html = renderToStaticMarkup(
+      <TeamPerformance
+        data={{
+          onTime: { value: 50, previous: 42, sample: 20 },
+          replans: { value: 5, previous: 3 },
+          cycle: { days: 2, previousDays: 3, sample: 4 },
+        }}
+      />,
+    );
+    expect(html).toContain("50%");
+    expect(html).toContain("↑ 8 pp");
+    expect(html).toContain("↑ 2 vs 3");
+    expect(html).toContain("Antes:");
+    const vazio = renderToStaticMarkup(
+      <TeamPerformance
+        data={{
+          onTime: { value: null, previous: null, sample: 0 },
+          replans: { value: 0, previous: 0 },
+          cycle: { days: null, previousDays: null, sample: 0 },
+        }}
+      />,
+    );
+    expect(vazio).toContain("—");
+    expect(vazio).toContain("Sem conclusões avaliadas");
   });
 });

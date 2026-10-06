@@ -1,16 +1,14 @@
-import { Sparkles } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { Insight } from "@/lib/insights-engine";
 import type { Member } from "@/components/TimeSection";
+import type { ViewId } from "@/components/time-v2/MemberViews";
+import { insightTargetView } from "@/components/time-v2/team-v2";
 import { avatarAccent, initialsOf } from "./member-ui";
 import { InsightRow } from "./InsightRow";
 
-/** "Insights do Time" — item 22 do pedido: seção INDEPENDENTE de
- * "Entregas da Semana", nunca dentro do mesmo card. Responde "o que está
- * acontecendo operacionalmente com as pessoas", não repete números já
- * visíveis em outro bloco — cada frase já vem pronta de
- * `generateInsights` (`@/lib/insights-engine`), motor determinístico,
- * sem IA generativa. */
+/** "Insights": um feed curto (já filtrado por `curateInsights`: poucos, 1 por pessoa, só o que
+ * ajuda a decidir). Clicar abre o detalhe do membro no contexto do insight. Sem insight relevante,
+ * uma linha — nunca um bloco vazio. */
 export function TeamInsights({
   insights,
   membersById,
@@ -18,20 +16,15 @@ export function TeamInsights({
 }: {
   insights: Insight[];
   membersById: Map<string, Member>;
-  onOpenMember: (m: Member) => void;
+  onOpenMember: (m: Member, view: ViewId) => void;
 }) {
   return (
-    <div className="surface-card p-5">
-      <h3 className="flex items-center gap-1.5 text-[15px] font-semibold text-foreground">
-        <Sparkles className="h-3.5 w-3.5 text-foreground/70" /> Insights do Time
-      </h3>
-
+    <section aria-label="Insights" className="space-y-1">
+      <h3 className="text-[15px] font-semibold text-foreground">Insights</h3>
       {insights.length === 0 ? (
-        <p className="flex h-16 items-center justify-center text-center text-sm text-text-secondary">
-          Nenhum insight relevante neste período.
-        </p>
+        <p className="py-2 text-sm text-text-secondary">Nenhum insight relevante neste período.</p>
       ) : (
-        <div className="mt-1 divide-y divide-border">
+        <div className="divide-y divide-border/60">
           {insights.map((insight) => {
             const m = membersById.get(insight.memberId);
             return (
@@ -48,12 +41,14 @@ export function TeamInsights({
                     </AvatarFallback>
                   </Avatar>
                 }
-                onOpenMember={m ? () => onOpenMember(m) : undefined}
+                onOpenMember={
+                  m ? () => onOpenMember(m, insightTargetView(insight.ruleId)) : undefined
+                }
               />
             );
           })}
         </div>
       )}
-    </div>
+    </section>
   );
 }

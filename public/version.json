@@ -1,33 +1,29 @@
 {
-  "version": "1.346.0",
+  "version": "1.347.0",
   "releases": [
     {
-      "version": "1.346.0",
-      "summary": "Detalhe do membro V2: visão rápida, uma seção por vez e métricas mais confiáveis.",
+      "version": "1.347.0",
+      "summary": "Página Time V2: central de gestão operacional, com resumo, pessoas, atenção, produção, desempenho e poucos insights.",
       "modules": [
         {
           "name": "TIME",
-          "tagline": "Detalhe do membro",
+          "tagline": "Página Time",
           "items": [
             {
-              "title": "Visão rápida e navegação clara",
-              "description": "Cabeçalho compacto, período como contexto, 5 indicadores e as visões Visão geral, Desempenho, Tarefas, Jornada, Comunicação, Dependências e Histórico, uma por vez."
+              "title": "Resumo sem ruído",
+              "description": "“Agora” e o período com Concluídas e No prazo; a resposta média saiu dos KPIs de tarefas."
             },
             {
-              "title": "Visão geral com atenção",
-              "description": "No máximo 3 pontos de atenção/leitura, “Meu trabalho” com status editável no próprio perfil (liga o cronômetro como no Início) e resumos de Jornada e Comunicação."
+              "title": "Pessoas em uma tabela enxuta",
+              "description": "Pessoa, Carga, Abertas, Atrasadas, No prazo, Resposta e Score. O score só aparece com 20+ tarefas; antes disso, uma prévia discreta."
             },
             {
-              "title": "Score só com amostra confiável",
-              "description": "Com menos de 20 tarefas na base, mostra “Dados insuficientes para score” em vez de 100/100 com confiança baixa."
+              "title": "Precisa de atenção",
+              "description": "Atrasadas, vencem hoje e bloqueadas, com responsável, cliente/projeto, prazo e status."
             },
             {
-              "title": "Comunicação sobre velocidade",
-              "description": "Tempo médio, onde demora mais, comparação com a média do time (quando existe) e uma recomendação; sem mediana."
-            },
-            {
-              "title": "Dependências e histórico",
-              "description": "Mostra quem bloqueia quando há dependência formal; histórico em linha do tempo com filtro por projeto. “Informações do membro” foi para o menu ⋯."
+              "title": "Entregas, desempenho e insights",
+              "description": "Produção da semana por dia; desempenho do time dos últimos 30 dias com tendência; no máximo 4 insights, um por pessoa, que abrem o detalhe do membro no contexto certo."
             }
           ]
         }
