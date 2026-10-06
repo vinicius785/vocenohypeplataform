@@ -1,25 +1,25 @@
 {
-  "version": "1.342.0",
+  "version": "1.343.0",
   "releases": [
     {
-      "version": "1.342.0",
-      "summary": "Contexto da campanha virou uma ficha clara: motivo em destaque, briefing e materiais, observações e checklist.",
+      "version": "1.343.0",
+      "summary": "Contexto da campanha recomposto em três módulos: por que escolhemos, orientações e execução.",
       "modules": [
         {
           "name": "CAMPANHAS",
           "tagline": "Detalhe do influenciador · Recursos",
           "items": [
             {
-              "title": "Hierarquia por importância",
-              "description": "Motivo da escolha em destaque, depois briefing e materiais, observações e checklist, com mais respiro entre as seções."
+              "title": "Módulos em vez de campos soltos",
+              "description": "“Por que escolhemos este influenciador?” em destaque, “Orientações da campanha” (briefing + materiais) e “Execução” (observações + checklist), cada um numa superfície própria."
             },
             {
-              "title": "Material como arquivo",
-              "description": "O arquivo do briefing aparece como material, com Abrir, Substituir e Remover; texto e arquivo ficam lado a lado no desktop."
+              "title": "Materiais como documento",
+              "description": "O arquivo aparece como item de documento, com Abrir, Substituir e menu ⋯ para remover."
             },
             {
-              "title": "Edição no lugar",
-              "description": "Editar abre um campo pequeno com Cancelar e Salvar; estados vazios compactos com a ação para adicionar."
+              "title": "Estados vazios com contexto",
+              "description": "Cada módulo vazio explica o que registrar e traz a ação ali dentro."
             }
           ]
         }

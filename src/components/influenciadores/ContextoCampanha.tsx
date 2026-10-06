@@ -1,36 +1,75 @@
 import { useState, type ReactNode } from "react";
-import { FileText } from "lucide-react";
+import { FileText, MoreHorizontal, Plus } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { CockpitTitle, QuietButton } from "./InfluencerCockpit";
 
-/** Peças de apresentação do recurso "Contexto da campanha" (só layout; dados e regras de
- * visibilidade no portal continuam no board). */
+/** Composição do recurso "Contexto da campanha": MÓDULOS (uma superfície sutil cada) que agrupam
+ * o que se relaciona; dentro, blocos com rótulo em caixa-alta e a ação no próprio bloco. Só
+ * apresentação — dados, patches e regras de visibilidade no portal continuam no board. */
 
-/** Texto editável em leitura/edição contextual: o que se lê é o que fica; "Editar" abre um campo
- * pequeno com Cancelar/Salvar. `emphasis` = destaque maior (motivo da escolha). */
-export function ContextoTexto({
+export function Modulo({
   title,
-  question,
-  description,
+  subtitle,
+  prominent = false,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  /** Módulo principal: título maior e superfície um pouco mais presente. */
+  prominent?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <section
+      aria-label={title}
+      className={cn(
+        "rounded-2xl border border-border/60 p-4 sm:p-5",
+        prominent ? "bg-card" : "bg-muted/20",
+      )}
+    >
+      <header className="mb-3.5">
+        <h2
+          className={cn(
+            "font-semibold leading-snug text-foreground",
+            prominent ? "text-base" : "text-[15px]",
+          )}
+        >
+          {title}
+        </h2>
+        {subtitle && <p className="mt-0.5 text-xs text-text-secondary">{subtitle}</p>}
+      </header>
+      {children}
+    </section>
+  );
+}
+
+/** Texto em leitura/edição contextual. `label` desenha o rótulo do bloco (com a ação à direita);
+ * sem `label`, a ação fica logo abaixo do texto. Vazio: contexto + ação integrada. */
+export function ContextoTexto({
+  label,
+  ariaLabel,
   value,
   placeholder,
   emptyText,
+  emptyHint,
   addLabel,
   emphasis = false,
-  boxed = true,
-  hideTitle = false,
   onSave,
 }: {
-  title: string;
-  question?: string;
-  description?: string;
+  label?: string;
+  ariaLabel: string;
   value: string;
   placeholder?: string;
   emptyText: string;
+  emptyHint?: string;
   addLabel: string;
   emphasis?: boolean;
-  boxed?: boolean;
-  hideTitle?: boolean;
   onSave: (v: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -44,25 +83,20 @@ export function ContextoTexto({
     if (next !== value.trim()) onSave(next);
     setEditing(false);
   };
-  const action = editing ? null : (
-    <QuietButton onClick={open}>{value ? "Editar" : addLabel}</QuietButton>
+  const headerAction =
+    !editing && label && value ? <QuietButton onClick={open}>Editar</QuietButton> : null;
+  const addButton = (
+    <button
+      type="button"
+      onClick={open}
+      className="inline-flex items-center gap-1 text-xs font-medium text-text-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+    >
+      <Plus className="h-3.5 w-3.5" /> {addLabel}
+    </button>
   );
   return (
-    <section aria-label={title} className="space-y-2">
-      {hideTitle ? (
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-medium text-text-secondary">{title}</p>
-          {action}
-        </div>
-      ) : (
-        <CockpitTitle action={action}>{title}</CockpitTitle>
-      )}
-      {(question || description) && !editing && (
-        <div>
-          {question && <p className="text-sm font-medium text-foreground">{question}</p>}
-          {description && <p className="text-xs text-text-secondary">{description}</p>}
-        </div>
-      )}
+    <div className="min-w-0 space-y-2">
+      {label && <CockpitTitle action={headerAction}>{label}</CockpitTitle>}
       {editing ? (
         <div className="space-y-2">
           <textarea
@@ -70,7 +104,7 @@ export function ContextoTexto({
             value={draft}
             rows={emphasis ? 4 : 3}
             placeholder={placeholder}
-            aria-label={title}
+            aria-label={ariaLabel}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Escape") setEditing(false);
@@ -90,24 +124,89 @@ export function ContextoTexto({
           </div>
         </div>
       ) : value ? (
-        <p
-          className={cn(
-            "whitespace-pre-wrap break-words text-foreground",
-            emphasis ? "text-base leading-relaxed" : "text-sm leading-relaxed",
-            boxed && "rounded-lg bg-muted/30 px-3.5 py-3",
-          )}
-        >
-          {value}
-        </p>
+        <>
+          <p
+            className={cn(
+              "whitespace-pre-wrap break-words leading-relaxed text-foreground",
+              emphasis ? "text-base" : "text-sm",
+            )}
+          >
+            {value}
+          </p>
+          {!label && <QuietButton onClick={open}>Editar</QuietButton>}
+        </>
       ) : (
-        <p className="text-sm text-text-secondary">{emptyText}</p>
+        <div className="space-y-1.5">
+          <p className="text-sm text-text-secondary">{emptyText}</p>
+          {emptyHint && <p className="text-xs text-text-secondary">{emptyHint}</p>}
+          {addButton}
+        </div>
       )}
-    </section>
+    </div>
   );
 }
 
-/** Briefing (texto) + materiais (arquivo) lado a lado no desktop, empilhados no celular. Só mostra
- * o que existe; sem nada, um estado vazio compacto com as duas ações. */
+function ArquivoMaterial({
+  nome,
+  url,
+  onRemove,
+  renderUpload,
+}: {
+  nome: string;
+  url: string;
+  onRemove: () => void;
+  renderUpload: (label: string) => ReactNode;
+}) {
+  const ext = /\.([a-z0-9]{2,5})$/i.exec(nome)?.[1]?.toUpperCase() ?? "Arquivo";
+  return (
+    <div className="rounded-lg border border-border/60 bg-background p-3">
+      <div className="flex items-center gap-3">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-muted text-text-secondary">
+          <FileText className="h-4 w-4" strokeWidth={1.5} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-foreground" title={nome}>
+            {nome || "Anexo"}
+          </p>
+          <p className="text-[11px] text-text-secondary">{ext}</p>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label="Mais ações do material"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-text-secondary hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onSelect={onRemove}
+              className="text-destructive focus:text-destructive"
+            >
+              Remover arquivo
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+      <div className="mt-2.5 flex items-center gap-4 border-t border-border/60 pt-2.5">
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="text-xs font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+        >
+          Abrir
+        </a>
+        {renderUpload("Substituir")}
+      </div>
+    </div>
+  );
+}
+
+/** Briefing + materiais: MESMO contexto ("o que preciso saber para executar"), duas colunas com
+ * divisor no desktop e empilhados no celular. */
 export function BriefingEMateriais({
   texto,
   arquivo,
@@ -119,69 +218,38 @@ export function BriefingEMateriais({
   arquivo?: { nome: string; url: string };
   onSaveTexto: (v: string) => void;
   onRemoveArquivo: () => void;
-  /** Botão que abre o seletor e sobe o arquivo (cada chamada é uma ação "Adicionar"/"Substituir"). */
   renderUpload: (label: string) => ReactNode;
 }) {
-  const [editing, setEditing] = useState(false);
-  const vazio = !texto && !arquivo && !editing;
   return (
-    <section aria-label="Briefing e materiais" className="space-y-2">
-      <CockpitTitle>Briefing e materiais</CockpitTitle>
-      {vazio ? (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-          <p className="text-sm text-text-secondary">Nenhum briefing ou material.</p>
-          <QuietButton onClick={() => setEditing(true)}>Adicionar briefing</QuietButton>
-          {renderUpload("Adicionar arquivo")}
-        </div>
-      ) : (
-        <div
-          className={cn(
-            "grid grid-cols-1 gap-x-8 gap-y-4",
-            (texto || editing) && arquivo && "md:grid-cols-2",
-          )}
-        >
-          {(texto || editing) && (
-            <ContextoTexto
-              title="Briefing"
-              hideTitle
-              boxed={false}
-              value={texto}
-              emptyText=""
-              addLabel="Adicionar"
-              placeholder="Ex.: focar no tom descontraído, evitar mencionar concorrentes..."
-              onSave={onSaveTexto}
-            />
-          )}
-          {arquivo ? (
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-text-secondary">Materiais</p>
-              <div className="flex items-center gap-2.5 rounded-lg bg-muted/30 px-3 py-2.5">
-                <FileText className="h-5 w-5 shrink-0 text-text-secondary" strokeWidth={1.5} />
-                <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-                  {arquivo.nome || "Anexo"}
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <a
-                  href={arquivo.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs font-medium text-text-secondary underline-offset-2 hover:text-foreground hover:underline"
-                >
-                  Abrir
-                </a>
-                {renderUpload("Substituir")}
-                <QuietButton onClick={onRemoveArquivo}>Remover</QuietButton>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-text-secondary">Materiais</p>
-              {renderUpload("Adicionar arquivo")}
-            </div>
-          )}
-        </div>
-      )}
-    </section>
+    <div className="grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-0 md:divide-x md:divide-border/60">
+      <div className="md:pr-5">
+        <ContextoTexto
+          label="Briefing"
+          ariaLabel="Briefing"
+          value={texto}
+          emptyText="Ainda não há briefing para este influenciador."
+          emptyHint="O que ele precisa saber e fazer nesta campanha."
+          addLabel="Adicionar briefing"
+          placeholder="Ex.: focar no tom descontraído, evitar mencionar concorrentes..."
+          onSave={onSaveTexto}
+        />
+      </div>
+      <div className="min-w-0 space-y-2 border-t border-border/60 pt-5 md:border-t-0 md:pt-0 md:pl-5">
+        <CockpitTitle>Materiais</CockpitTitle>
+        {arquivo ? (
+          <ArquivoMaterial
+            nome={arquivo.nome}
+            url={arquivo.url}
+            onRemove={onRemoveArquivo}
+            renderUpload={renderUpload}
+          />
+        ) : (
+          <div className="space-y-1.5">
+            <p className="text-sm text-text-secondary">Nenhum material anexado.</p>
+            {renderUpload("Adicionar arquivo")}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

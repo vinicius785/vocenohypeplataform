@@ -119,7 +119,7 @@ import {
   type NextAction,
 } from "@/lib/influencer-next-action";
 import { CockpitTitle, KeyStats, QuietButton } from "./InfluencerCockpit";
-import { BriefingEMateriais, ContextoTexto } from "./ContextoCampanha";
+import { BriefingEMateriais, ContextoTexto, Modulo } from "./ContextoCampanha";
 import { AudienceInsights } from "@/components/shared/AudienceInsights";
 import {
   FileLine,
@@ -4977,54 +4977,73 @@ function ContextoCampanhaView({
   onApplyChecklistToAll: (checklist: ChecklistItem[]) => void;
 }) {
   return (
-    <div className="space-y-9">
-      <ContextoTexto
-        key={influ.id}
-        title="Motivo da escolha"
-        question="Por que este influenciador?"
-        description="Explique por que ele é interessante para esta campanha. Aparece pro cliente no portal."
-        emphasis
-        value={influ.justificativaTime ?? ""}
-        emptyText="Nenhum motivo registrado."
-        addLabel="Adicionar motivo"
-        placeholder="Ex.: Forte afinidade com o público da campanha, bom histórico de conteúdo e audiência concentrada na região..."
-        onSave={(v) => onPatch({ justificativaTime: v || undefined })}
-      />
-      <BriefingEMateriais
-        key={`${influ.id}-briefing`}
-        texto={influ.briefingPersonalizado ?? ""}
-        arquivo={
-          influ.briefingAnexoUrl
-            ? { nome: influ.briefingAnexoNome ?? "", url: influ.briefingAnexoUrl }
-            : undefined
-        }
-        onSaveTexto={(v) => onPatch({ briefingPersonalizado: v || undefined })}
-        onRemoveArquivo={() =>
-          onPatch({ briefingAnexoNome: undefined, briefingAnexoUrl: undefined })
-        }
-        renderUpload={(label) => (
-          <BriefingAnexoUploadButton
-            quiet
-            label={label}
-            onUpload={(nome, url) => onPatch({ briefingAnexoNome: nome, briefingAnexoUrl: url })}
-          />
-        )}
-      />
-      <ContextoTexto
-        key={`${influ.id}-obs`}
-        title="Observações"
-        description="Informações operacionais compartilhadas com o influenciador e a equipe (o cliente também escreve aqui)."
-        value={influ.observacoes ?? ""}
-        emptyText="Sem observações."
-        addLabel="Adicionar observação"
-        placeholder="Ex.: prefere ser contatado por WhatsApp à tarde..."
-        onSave={(v) => onPatch({ observacoes: v || undefined })}
-      />
-      <ChecklistSection
-        checklist={influ.checklist ?? []}
-        onChange={onSetChecklist}
-        onApplyToAll={onApplyChecklistToAll}
-      />
+    <div className="space-y-6">
+      <Modulo
+        prominent
+        title="Por que escolhemos este influenciador?"
+        subtitle="O motivo registrado aparece também para o cliente no portal."
+      >
+        <ContextoTexto
+          key={influ.id}
+          ariaLabel="Motivo da escolha"
+          emphasis
+          value={influ.justificativaTime ?? ""}
+          emptyText="Ainda não registramos o motivo da escolha."
+          emptyHint="Explique rapidamente por que este influenciador foi escolhido."
+          addLabel="Adicionar motivo"
+          placeholder="Ex.: Forte afinidade com o público da campanha, bom histórico de conteúdo e audiência concentrada na região..."
+          onSave={(v) => onPatch({ justificativaTime: v || undefined })}
+        />
+      </Modulo>
+      <Modulo
+        title="Orientações da campanha"
+        subtitle="Informações importantes para a execução deste trabalho."
+      >
+        <BriefingEMateriais
+          key={`${influ.id}-briefing`}
+          texto={influ.briefingPersonalizado ?? ""}
+          arquivo={
+            influ.briefingAnexoUrl
+              ? { nome: influ.briefingAnexoNome ?? "", url: influ.briefingAnexoUrl }
+              : undefined
+          }
+          onSaveTexto={(v) => onPatch({ briefingPersonalizado: v || undefined })}
+          onRemoveArquivo={() =>
+            onPatch({ briefingAnexoNome: undefined, briefingAnexoUrl: undefined })
+          }
+          renderUpload={(label) => (
+            <BriefingAnexoUploadButton
+              quiet
+              label={label}
+              onUpload={(nome, url) => onPatch({ briefingAnexoNome: nome, briefingAnexoUrl: url })}
+            />
+          )}
+        />
+      </Modulo>
+      <Modulo title="Execução" subtitle="Informações práticas para conduzir este trabalho.">
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-0 md:divide-x md:divide-border/60">
+          <div className="md:pr-5">
+            <ContextoTexto
+              key={`${influ.id}-obs`}
+              label="Observações"
+              ariaLabel="Observações"
+              value={influ.observacoes ?? ""}
+              emptyText="Nenhuma observação registrada."
+              emptyHint="O cliente também pode escrever aqui pelo portal."
+              addLabel="Adicionar observação"
+              placeholder="Ex.: prefere ser contatado por WhatsApp à tarde..."
+              onSave={(v) => onPatch({ observacoes: v || undefined })}
+            />
+          </div>
+          <div className="min-w-0 border-t border-border/60 pt-5 md:border-t-0 md:pt-0 md:pl-5">
+            <ChecklistSection
+              checklist={influ.checklist ?? []}
+              onChange={onSetChecklist}
+              onApplyToAll={onApplyChecklistToAll}
+            />
+          </div>
+        </div>
+      </Modulo>
     </div>
   );
 }
