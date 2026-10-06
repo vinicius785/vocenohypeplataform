@@ -43,6 +43,22 @@ export function ocorrenciasDoMes(items: CronogramaItem[], year: number, m0: numb
   return out;
 }
 
+/** Ocorrências de TODAS as datas visíveis na grade (inclui os dias do mês anterior/seguinte que
+ * completam as semanas). Cada evento aparece uma única vez, na sua data real. */
+export function ocorrenciasDaGrade(
+  items: CronogramaItem[],
+  cells: { date: string }[],
+): Ocorrencia[] {
+  const visiveis = new Set(cells.map((c) => c.date));
+  const meses = new Set(cells.map((c) => c.date.slice(0, 7)));
+  const out: Ocorrencia[] = [];
+  for (const ym of meses) {
+    const [y, m] = ym.split("-").map(Number);
+    for (const o of ocorrenciasDoMes(items, y, m - 1)) if (visiveis.has(o.date)) out.push(o);
+  }
+  return out;
+}
+
 const byHoraTitulo = (a: Ocorrencia, b: Ocorrencia) =>
   (a.item.hora ?? "99:99").localeCompare(b.item.hora ?? "99:99") ||
   a.item.title.localeCompare(b.item.title, "pt-BR");

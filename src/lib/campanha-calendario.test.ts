@@ -8,6 +8,7 @@ import {
   filtrarOcorrencias,
   limitarDia,
   novoEvento,
+  ocorrenciasDaGrade,
   ocorrenciasDoMes,
   tipoDe,
   visivelAoCliente,
@@ -156,5 +157,62 @@ describe("Portal do Cliente — projeção pública (segurança)", () => {
   it("time vê ambos (a lista completa continua intacta)", () => {
     expect(lista).toHaveLength(3);
     expect(filtrarOcorrencias(ocorrenciasDoMes(lista, 2026, 9), {}).length).toBe(2);
+  });
+});
+
+describe("grade mostra eventos dos dias adjacentes", () => {
+  const grade = (y: number, m0: number) => celulasDoMes(y, m0);
+  const datas = (o: { date: string }[]) => o.map((x) => x.date);
+
+  it("evento do mês atual aparece", () => {
+    const o = ocorrenciasDaGrade([ev({ date: "2026-11-10" })], grade(2026, 10));
+    expect(datas(o)).toEqual(["2026-11-10"]);
+  });
+  it("02/12 aparece ao ver novembro e 30/09 ao ver outubro (na data real)", () => {
+    expect(datas(ocorrenciasDaGrade([ev({ date: "2026-12-02" })], grade(2026, 10)))).toEqual([
+      "2026-12-02",
+    ]);
+    expect(datas(ocorrenciasDaGrade([ev({ date: "2026-09-30" })], grade(2026, 9)))).toEqual([
+      "2026-09-30",
+    ]);
+  });
+  it("fora da grade não aparece", () => {
+    expect(ocorrenciasDaGrade([ev({ date: "2026-12-20" })], grade(2026, 10))).toEqual([]);
+  });
+  it("dezembro → janeiro (virada de ano)", () => {
+    expect(datas(ocorrenciasDaGrade([ev({ date: "2027-01-02" })], grade(2026, 11)))).toEqual([
+      "2027-01-02",
+    ]);
+    expect(datas(ocorrenciasDaGrade([ev({ date: "2026-12-31" })], grade(2027, 0)))).toEqual([
+      "2026-12-31",
+    ]);
+  });
+  it("sem duplicar, inclusive recorrentes", () => {
+    const o = ocorrenciasDaGrade(
+      [ev({ id: "a", date: "2026-10-02", recurring: true }), ev({ id: "b", date: "2026-12-02" })],
+      grade(2026, 10),
+    );
+    const chaves = o.map((x) => `${x.item.id}@${x.date}`);
+    expect(new Set(chaves).size).toBe(chaves.length);
+    expect(chaves).toContain("b@2026-12-02");
+    expect(chaves).toContain("a@2026-11-02");
+  });
+  it("filtros Internos/Cliente valem nos dias adjacentes", () => {
+    const o = ocorrenciasDaGrade(
+      [
+        ev({ id: "i", date: "2026-12-02", visivelCliente: false }),
+        ev({ id: "c", date: "2026-12-03", visivelCliente: true }),
+      ],
+      grade(2026, 10),
+    );
+    expect(filtrarOcorrencias(o, { visibilidade: "internos" }).map((x) => x.item.id)).toEqual([
+      "i",
+    ]);
+    expect(filtrarOcorrencias(o, { visibilidade: "cliente" }).map((x) => x.item.id)).toEqual(["c"]);
+  });
+  it("vários eventos no dia: limita e informa o resto", () => {
+    const itens = Array.from({ length: 6 }, (_, i) => ev({ id: `e${i}`, date: "2026-12-02" }));
+    const dia = agruparPorDia(ocorrenciasDaGrade(itens, grade(2026, 10))).get("2026-12-02") ?? [];
+    expect(limitarDia(dia, 3)).toMatchObject({ rest: 3 });
   });
 });

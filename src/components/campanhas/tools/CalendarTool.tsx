@@ -45,7 +45,7 @@ import {
   filtrarOcorrencias,
   limitarDia,
   novoEvento,
-  ocorrenciasDoMes,
+  ocorrenciasDaGrade,
   tipoDe,
   visivelAoCliente,
   type FiltroVisibilidade,
@@ -60,6 +60,15 @@ const dataCurta = (iso: string) =>
   parseDia(iso).toLocaleDateString("pt-BR", { day: "numeric", month: "short", year: "numeric" });
 /** "terça-feira" */
 const diaSemana = (iso: string) => parseDia(iso).toLocaleDateString("pt-BR", { weekday: "long" });
+
+/** Indicador discreto por tipo (só um pontinho — a cor é apoio, não o componente). */
+const TIPO_DOT: Record<CronogramaTipo, string> = {
+  cronograma: "bg-text-secondary",
+  prazo: "bg-danger",
+  postagem: "bg-brand",
+  pagamento: "bg-success",
+  outro: "bg-border",
+};
 
 const DIAS_LABEL = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
 const FILTROS = [
@@ -119,13 +128,12 @@ export function CalendarTool({
   const [detalhe, setDetalhe] = useState<Ocorrencia | null>(null);
   const [diaAberto, setDiaAberto] = useState<string | null>(null);
 
+  const cells = useMemo(() => celulasDoMes(cursor.y, cursor.m), [cursor]);
   const ocorrencias = useMemo(
-    () =>
-      filtrarOcorrencias(ocorrenciasDoMes(cronograma, cursor.y, cursor.m), { busca, visibilidade }),
-    [cronograma, cursor, busca, visibilidade],
+    () => filtrarOcorrencias(ocorrenciasDaGrade(cronograma, cells), { busca, visibilidade }),
+    [cronograma, cells, busca, visibilidade],
   );
   const porDia = useMemo(() => agruparPorDia(ocorrencias), [ocorrencias]);
-  const cells = useMemo(() => celulasDoMes(cursor.y, cursor.m), [cursor]);
   const dias = useMemo(() => [...porDia.keys()].sort(), [porDia]);
   const hoje = todayIso();
   const monthLabel = new Date(cursor.y, cursor.m, 1).toLocaleDateString("pt-BR", {
@@ -161,13 +169,20 @@ export function CalendarTool({
         e.stopPropagation();
         setDetalhe(o);
       }}
-      className={`flex w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${compact ? "text-[11px]" : "text-sm"}`}
+      title={`${o.item.title}${o.item.hora ? ` · ${o.item.hora}` : ""} · ${EVENTO_TIPO_LABEL[tipoDe(o.item)]} · ${visivelAoCliente(o.item) ? "Visível para o cliente" : "Interno"}`}
+      className={`flex w-full min-w-0 items-start gap-1.5 rounded px-1 py-0.5 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${compact ? "text-[11px] leading-tight" : "text-sm"}`}
     >
-      {o.item.hora && (
-        <span className="shrink-0 tabular-nums text-text-secondary">{o.item.hora}</span>
-      )}
-      <span className="min-w-0 flex-1 truncate text-foreground">{o.item.title}</span>
-      <Visibilidade item={o.item} />
+      <span
+        aria-hidden
+        className={`mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full ${TIPO_DOT[tipoDe(o.item)]}`}
+      />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate font-medium text-foreground">{o.item.title}</span>
+        {o.item.hora && (
+          <span className="block tabular-nums text-[10px] text-text-secondary">{o.item.hora}</span>
+        )}
+      </span>
+      <Visibilidade item={o.item} className="mt-0.5" />
     </button>
   );
 
@@ -247,12 +262,19 @@ export function CalendarTool({
                 <div
                   key={cell.date}
                   onClick={() => setEditor({ date: cell.date })}
-                  className={`group min-h-[7rem] cursor-pointer space-y-0.5 border-b border-r border-border p-1.5 transition-colors hover:bg-muted/30 ${cell.inMonth ? "" : "bg-background/40 text-text-secondary"}`}
+                  className={`group min-h-[7rem] cursor-pointer space-y-0.5 border-b border-r border-border p-1.5 transition-colors hover:bg-muted/30 ${cell.inMonth ? "" : "bg-muted/20"}`}
                 >
                   <span
-                    className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] tabular-nums ${cell.date === hoje ? "bg-foreground font-semibold text-background" : ""}`}
+                    className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] tabular-nums ${cell.date === hoje ? "bg-foreground font-semibold text-background" : cell.inMonth ? "text-foreground" : "text-text-secondary/60"}`}
                   >
                     {day}
+                    {day === 1 && (
+                      <span className="ml-1 font-normal uppercase">
+                        {new Date(`${cell.date}T12:00:00`)
+                          .toLocaleDateString("pt-BR", { month: "short" })
+                          .replace(".", "")}
+                      </span>
+                    )}
                   </span>
                   {shown.map((o) => (
                     <EventoLinha key={`${o.item.id}-${o.date}`} o={o} compact />
