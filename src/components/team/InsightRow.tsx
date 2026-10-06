@@ -40,6 +40,9 @@ export function InsightRow({
         <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-text-secondary">
           {insight.reading}
         </p>
+        {insight.window && (
+          <p className="mt-0.5 text-[11px] text-text-secondary/70">{insight.window}</p>
+        )}
         {insight.caveat && (
           <p className="mt-0.5 text-[11px] italic text-text-secondary/80">{insight.caveat}</p>
         )}

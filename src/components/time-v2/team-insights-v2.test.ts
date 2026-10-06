@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   generateTeamInsights,
-  previous30Range,
   ruleAtraso,
   ruleCarga,
   ruleDependencias,
@@ -102,7 +101,7 @@ describe("carga acima do esperado e concentração de demandas", () => {
     const i = ruleCarga(t[0], t)!;
     expect(i.ruleId).toBe("carga_acima");
     expect(i.evidence).toContain("das tarefas abertas do time");
-    expect(i.evidence).toContain("das tarefas criadas nos últimos 30 dias");
+    expect(i.evidence).toContain("tarefas criadas nos últimos 30 dias");
     expect(i.caveat).toContain("reatribuições");
   });
   it("time pequeno demais para comparar → nada", () => {
@@ -117,7 +116,7 @@ describe("demanda (volume ≠ sobrecarga)", () => {
     const i = ruleDemanda(t)!;
     expect(i.ruleId).toBe("maior_volume_demandas");
     expect(i.label).toBe("Maior demanda");
-    expect(i.evidence).toContain("60% das tarefas criadas no período (12 de 20)");
+    expect(i.evidence).toContain("12 das 20 tarefas criadas nos últimos 30 dias (60%)");
     expect(`${i.evidence} ${i.reading}`.toLowerCase()).not.toContain("está sobrecarregad");
     expect(i.reading).toContain("não sobrecarga");
     expect(i.caveat).toContain("reatribuições");
@@ -370,8 +369,5 @@ describe("seleção", () => {
     const a = sig("a", { openCount: 5, overdueCount: 3 });
     expect(ruleAtraso(a)).not.toBeNull();
     expect(ruleAtraso(a, { acumuloPctAbertas: 0.9, acumuloMinAtrasadas: 5 })).toBeNull();
-  });
-  it("janela anterior de 30 dias", () => {
-    expect(previous30Range("2026-10-06")).toEqual({ from: "2026-08-08", to: "2026-09-06" });
   });
 });

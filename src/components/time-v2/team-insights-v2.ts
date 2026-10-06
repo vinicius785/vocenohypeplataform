@@ -44,6 +44,8 @@ export type TeamInsightV2 = {
   topic: string;
   /** Ordem editorial dentro da lista (menor = antes; P0 sempre vem primeiro). */
   rank: number;
+  /** Janela em que o número vale (ex.: "últimos 30 dias"), mostrada discretamente. */
+  window?: string;
   /** Rótulo curto que substitui o da categoria (ex.: "Maior demanda"). */
   label?: string;
 };
@@ -131,6 +133,8 @@ export type TeamInsightsInput = {
   members: MemberSignals[];
   edges: DependencyEdge[];
   tasks: Map<string, DependencyTask>;
+  /** Tarefas DISTINTAS criadas na janela (não a soma das atribuições). Base das % de novas demandas. */
+  newTasksTotal?: number;
 };
 
 const pct = (v: number, total: number) => (total > 0 ? Math.round((v / total) * 100) : 0);
@@ -210,11 +214,12 @@ export function ruleCarga(
   m: MemberSignals,
   all: MemberSignals[],
   o?: Partial<InsightThresholds>,
+  newTasksTotal?: number,
 ): TeamInsightV2 | null {
   const T = th(o);
   if (all.length < T.cargaMinMembros) return null;
   const totalOpen = all.reduce((s, x) => s + x.openCount, 0);
-  const totalNew = all.reduce((s, x) => s + x.newTasks, 0);
+  const totalNew = newTasksTotal ?? all.reduce((s, x) => s + x.newTasks, 0);
   const avgOpen = totalOpen / all.length;
   const openShare = totalOpen > 0 ? m.openCount / totalOpen : 0;
   const newShare = totalNew > 0 ? m.newTasks / totalNew : 0;
@@ -236,7 +241,7 @@ export function ruleCarga(
     priority: 1,
     memberId: m.id,
     memberName: m.name,
-    evidence: `${m.name} concentra ${pct(m.openCount, totalOpen)}% das tarefas abertas do time e recebeu ${pct(m.newTasks, totalNew)}% das tarefas criadas nos últimos 30 dias.`,
+    evidence: `${m.name} concentra ${pct(m.openCount, totalOpen)}% das tarefas abertas do time e recebeu ${m.newTasks} das ${totalNew} tarefas criadas nos últimos 30 dias (${pct(m.newTasks, totalNew)}%).`,
     reading:
       "As duas medidas apontam para a mesma pessoa; vale revisar se a distribuição é intencional antes que vire gargalo.",
     caveat: CAVEAT_REATRIBUICAO,
@@ -247,7 +252,7 @@ export function ruleCarga(
 }
 
 const CAVEAT_REATRIBUICAO =
-  "Considera o responsável atual das tarefas; reatribuições podem distorcer a parcela de novas demandas.";
+  "Conta tarefas (sem subtarefas) pelo responsável atual; reatribuições podem distorcer a parcela de novas demandas.";
 
 /** Demanda: quem recebeu o maior volume de tarefas novas. Separa VOLUME DE DEMANDA de sobrecarga:
  * só vira "mais demandado" (≥ 3 sinais independentes) quando outros sinais convergem — e mesmo
@@ -255,10 +260,11 @@ const CAVEAT_REATRIBUICAO =
 export function ruleDemanda(
   all: MemberSignals[],
   o?: Partial<InsightThresholds>,
+  newTasksTotal?: number,
 ): TeamInsightV2 | null {
   const T = th(o);
   if (all.length < T.cargaMinMembros) return null;
-  const totalNew = all.reduce((s, x) => s + x.newTasks, 0);
+  const totalNew = newTasksTotal ?? all.reduce((s, x) => s + x.newTasks, 0);
   if (totalNew < T.demandaMinNovas) return null;
   const max = Math.max(...all.map((m) => m.newTasks));
   const lideres = all.filter((m) => m.newTasks === max);
@@ -288,7 +294,7 @@ export function ruleDemanda(
     outros.length > 1
       ? `${outros.slice(0, -1).join(", ")} e ${outros[outros.length - 1]}`
       : outros[0];
-  const base = `${m.name} recebeu ${pct(m.newTasks, totalNew)}% das tarefas criadas no período (${m.newTasks} de ${totalNew})`;
+  const base = `${m.name} recebeu ${m.newTasks} das ${totalNew} tarefas criadas nos últimos 30 dias (${pct(m.newTasks, totalNew)}%)`;
   return mk({
     ruleId: convergente ? "mais_demandado" : "maior_volume_demandas",
     topic: "demanda",
@@ -761,6 +767,30 @@ export function ruleTendenciasTime(
 
 /* ---------------- geração + seleção ---------------- */
 
+const JANELA: Record<string, string> = {
+  atraso: "situação atual · prazo vs. 30 dias anteriores",
+  carga_acima: "situação atual · tarefas criadas nos últimos 30 dias",
+  mais_demandado: "últimos 30 dias",
+  maior_volume_demandas: "últimos 30 dias",
+  mais_abertas: "situação atual",
+  atrasos_concentrados: "situação atual",
+  replanejamento: "últimos 30 dias vs. 30 dias anteriores",
+  replanejamento_reducao: "últimos 30 dias vs. 30 dias anteriores",
+  reunioes_perdidas: "últimos 30 dias",
+  resposta_piora: "últimos 30 dias vs. 30 dias anteriores",
+  resposta_melhora: "últimos 30 dias vs. 30 dias anteriores",
+  resposta_mais_lenta: "últimos 30 dias",
+  resposta_mais_rapida: "últimos 30 dias",
+  previsibilidade: "últimos 30 dias",
+  pontualidade_melhora: "últimos 30 dias vs. 30 dias anteriores",
+  gargalo: "situação atual",
+  mais_bloqueia: "situação atual",
+  mais_bloqueado: "situação atual",
+  tendencia_tarefas: "últimos 30 dias vs. 30 dias anteriores",
+  tendencia_replanejamentos: "últimos 30 dias vs. 30 dias anteriores",
+  tendencia_resposta: "últimos 30 dias vs. 30 dias anteriores",
+};
+
 /** Todos os candidatos, sem corte (útil para testes e para o detalhe do membro). */
 export function ruleReplanReducao(
   m: MemberSignals,
@@ -796,7 +826,7 @@ export function generateTeamInsights(
   for (const m of input.members) {
     for (const r of [
       ruleAtraso(m, o),
-      ruleCarga(m, input.members, o),
+      ruleCarga(m, input.members, o, input.newTasksTotal),
       ruleReplanejamento(m, o),
       ruleReplanReducao(m, o),
       ruleReunioes(m, o),
@@ -806,7 +836,7 @@ export function generateTeamInsights(
       if (r) out.push(r);
   }
   for (const r of [
-    ruleDemanda(input.members, o),
+    ruleDemanda(input.members, o, input.newTasksTotal),
     ruleMaisAbertas(input.members, o),
     ruleAtrasosConcentrados(input.members, o),
   ])
@@ -814,7 +844,7 @@ export function generateTeamInsights(
   out.push(...ruleRespostaRelativa(input.members, o));
   out.push(...ruleDependencias(input, o));
   if (trends) out.push(...ruleTendenciasTime(trends, o));
-  return out;
+  return out.map((i) => ({ ...i, window: i.window ?? JANELA[i.ruleId] }));
 }
 
 /** Ranking: P0 primeiro; depois a ordem editorial (`rank`: risco → demanda → queda → comunicação →
@@ -848,12 +878,4 @@ export function selectTeamInsights(
     if (out.length >= T.maxInsights) break;
   }
   return out;
-}
-
-/** Janela anterior de 30 dias (60→31 dias atrás), as mesmas usadas pelos insights de hoje. */
-export function previous30Range(todayIso: string): { from: string; to: string } {
-  const [y, m, d] = todayIso.split("-").map(Number);
-  const f = (dt: Date) =>
-    `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
-  return { from: f(new Date(y, m - 1, d - 59)), to: f(new Date(y, m - 1, d - 30)) };
 }

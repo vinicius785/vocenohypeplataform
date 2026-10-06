@@ -1,3 +1,4 @@
+import { rangeLabel } from "./team-metrics";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MoreHorizontal, Pencil, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
@@ -442,6 +443,7 @@ function ProfileBody({
             onChange={setPeriod}
             options={PERIOD_OPTIONS}
           />
+          <span className="text-xs text-text-secondary tabular-nums">{rangeLabel(range)}</span>
           {period === "personalizado" && (
             <div className="flex items-center gap-1.5">
               <Input

@@ -3,6 +3,7 @@ import { previousEquivalentRange } from "@/lib/performance-engine";
 import type { DashTask } from "@/lib/task-aggregation";
 import { formatDateToIso } from "@/lib/utils";
 import { cycleTimeStats } from "./member-metrics";
+import { insightWindows } from "./team-metrics";
 import type { ViewId } from "./MemberViews";
 
 /** Regras puras da V2 da página Time (só leitura do que o motor e os hooks já entregam). */
@@ -60,9 +61,7 @@ const weighted = (pairs: { rate: number | null; sample: number }[]): number | nu
 
 /** Últimos 30 dias (terminando hoje) contra os 30 anteriores — as mesmas janelas dos insights. */
 export function last30Range(todayIso: string): { from: string; to: string } {
-  const [y, m, d] = todayIso.split("-").map(Number);
-  const from = new Date(y, m - 1, d - 29);
-  return { from: formatDateToIso(from), to: todayIso };
+  return insightWindows(todayIso).current;
 }
 
 export function teamPerformance(

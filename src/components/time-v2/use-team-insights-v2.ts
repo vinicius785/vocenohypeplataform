@@ -4,11 +4,15 @@ import type { DashTaskFlat } from "@/lib/task-aggregation";
 import { OPEN_STATUSES } from "@/lib/score";
 import { useTaskDependencies } from "@/lib/task-dependencies-store";
 import { todayIsoInBrasilia } from "@/lib/timezone";
-import { last30Range } from "./team-v2";
+import {
+  buildMemberSignals,
+  insightWindows,
+  memberIdResolver,
+  newTaskCounts,
+} from "./team-metrics";
 import { useTeamResponseTime } from "./use-response-time";
 import {
   generateTeamInsights,
-  previous30Range,
   selectTeamInsights,
   type DependencyTask,
   type MemberSignals,
@@ -23,71 +27,36 @@ export function useTeamInsightsV2(
   allTasksFlat: DashTaskFlat[],
 ): TeamInsightV2[] {
   const today = todayIsoInBrasilia();
-  const cur = useMemo(() => last30Range(today), [today]);
-  const prev = useMemo(() => previous30Range(today), [today]);
+  const { current: cur, previous: prev } = useMemo(() => insightWindows(today), [today]);
   const respCur = useTeamResponseTime(cur);
   const respPrev = useTeamResponseTime(prev);
   const deps = useTaskDependencies();
 
   return useMemo(() => {
-    const idByName = new Map(bundles.map((b) => [b.memberName, b.memberId]));
-    const newCur = new Map<string, number>();
-    const newPrev = new Map<string, number>();
-    let createdCur = 0;
-    let createdPrev = 0;
+    const resolve = memberIdResolver(bundles.map((b) => ({ id: b.memberId, name: b.memberName })));
+    const roots = allTasksFlat.map((t) => ({
+      createdAt: t.createdAt,
+      assignees: t.assignees,
+      parentTitle: t.parentTitle,
+    }));
+    const novasAtual = newTaskCounts(roots, cur, resolve);
+    const novasAnterior = newTaskCounts(roots, prev, resolve);
+
     const tasks = new Map<string, DependencyTask>();
     for (const t of allTasksFlat) {
-      const memberIds = t.assignees.map((n) => idByName.get(n)).filter((x): x is string => !!x);
-      tasks.set(t.id, {
-        id: t.id,
-        title: t.title,
-        memberIds,
-        open: OPEN_STATUSES.has(t.status),
-      });
-      if (!t.createdAt) continue;
-      const day = todayIsoInBrasilia(new Date(t.createdAt));
-      const bucket =
-        day >= cur.from && day <= cur.to
-          ? newCur
-          : day >= prev.from && day <= prev.to
-            ? newPrev
-            : null;
-      if (!bucket) continue;
-      if (bucket === newCur) createdCur += 1;
-      else createdPrev += 1;
-      for (const id of memberIds) bucket.set(id, (bucket.get(id) ?? 0) + 1);
+      const memberIds = t.assignees.map(resolve).filter((x): x is string => !!x);
+      tasks.set(t.id, { id: t.id, title: t.title, memberIds, open: OPEN_STATUSES.has(t.status) });
     }
-    const members: MemberSignals[] = bundles.map((b) => {
-      const rc = respCur.data?.byMemberId.get(b.memberId);
-      const rp = respPrev.data?.byMemberId.get(b.memberId);
-      return {
-        id: b.memberId,
-        name: b.memberName,
-        openCount: b.openTasksCount,
-        overdueCount: b.overdueCount,
-        overdueHighPriority: b.overdueHighPriorityCount,
-        overdueOld: b.overdueOlderThanThresholdCount,
-        newTasks: newCur.get(b.memberId) ?? 0,
-        newTasksPrev: newPrev.get(b.memberId) ?? 0,
-        onTimeRate: b.onTimeRateCurrent,
-        onTimeRatePrev: b.onTimeRatePrevious,
-        onTimeSample: b.onTimeSampleCurrent,
-        onTimeSamplePrev: b.onTimeSamplePrevious,
-        replans: b.replansCurrent,
-        replansPrev: b.replansPrevious,
-        criticalReplans: b.criticalReplansCurrent,
-        criticalReplansPrev: b.criticalReplansPrevious,
-        repeatedReplans: b.repeatedProblematicReplansCurrent,
-        meetingsExpected: b.meetingsExpected,
-        meetingsAttended: b.meetingsAttended,
-        responseAvg: rc?.averageSeconds ?? null,
-        responseAvgPrev: rp?.averageSeconds ?? null,
-        answered: rc?.answered ?? 0,
-        answeredPrev: rp?.answered ?? 0,
-      };
-    });
+
+    const members: MemberSignals[] = bundles.map((b) =>
+      buildMemberSignals(b, {
+        newTasks: novasAtual.byMember.get(b.memberId) ?? 0,
+        newTasksPrev: novasAnterior.byMember.get(b.memberId) ?? 0,
+        response: respCur.data?.byMemberId.get(b.memberId),
+        responsePrev: respPrev.data?.byMemberId.get(b.memberId),
+      }),
+    );
     const sum = (f: (m: MemberSignals) => number) => members.reduce((s, m) => s + f(m), 0);
-    const answered = sum((m) => m.answered);
     const all = generateTeamInsights(
       {
         members,
@@ -96,14 +65,15 @@ export function useTeamInsightsV2(
           blockedTaskId: d.blockedTaskId,
         })),
         tasks,
+        newTasksTotal: novasAtual.total,
       },
       {
-        tasksCreated: { current: createdCur, previous: createdPrev },
+        tasksCreated: { current: novasAtual.total, previous: novasAnterior.total },
         replans: { current: sum((m) => m.replans), previous: sum((m) => m.replansPrev) },
         response: {
           current: respCur.data?.teamAverageSeconds ?? null,
           previous: respPrev.data?.teamAverageSeconds ?? null,
-          answered,
+          answered: sum((m) => m.answered),
         },
       },
     );

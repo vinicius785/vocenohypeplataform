@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { loadProjetos, onProjetosChange } from "@/lib/projetos";
+import { insightWindows } from "@/components/time-v2/team-metrics";
 import { onMeetingsChange, loadMeetings } from "@/lib/reunioes-store";
 import { useClientes } from "@/lib/clientes-store";
 import { getAllCampanhaTarefas, onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
@@ -511,20 +512,12 @@ export function useTimeData() {
   // `scorePeriod` selecionado em Performance do Time), pra comparar
   // "últimos 30 dias" vs. "30 dias antes disso" pra todo mundo de uma vez
   // (1 fetch cada, não 1 por pessoa).
-  const last30Range = useMemo(() => {
-    const now = new Date();
-    const from = new Date(now);
-    from.setDate(from.getDate() - 30);
-    return { from: formatDateToIso(from), to: todayIsoInBrasilia() };
-  }, []);
-  const previous30Range = useMemo(() => {
-    const now = new Date();
-    const from = new Date(now);
-    from.setDate(from.getDate() - 60);
-    const to = new Date(now);
-    to.setDate(to.getDate() - 30);
-    return { from: formatDateToIso(from), to: formatDateToIso(to) };
-  }, []);
+  // Janela única dos Insights (`insightWindows`): 30 dias terminando hoje (Brasília) e os 30
+  // anteriores, contíguos e sem sobreposição — a MESMA usada em resposta e tarefas novas.
+  const { current: last30Range, previous: previous30Range } = useMemo(
+    () => insightWindows(todayIsoInBrasilia()),
+    [],
+  );
   const { events: events30d } = usePerformanceEvents(last30Range);
   const { events: eventsPrev30d } = usePerformanceEvents(previous30Range);
   const eventsByPersonId30d = useMemo(() => groupEventsByPerson(events30d), [events30d]);

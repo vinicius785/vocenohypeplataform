@@ -1,6 +1,30 @@
 {
-  "version": "1.357.0",
+  "version": "1.358.0",
   "releases": [
+    {
+      "version": "1.358.0",
+      "summary": "Dados do Time consistentes: mesma janela e mesma definição nos Insights e no detalhe.",
+      "modules": [
+        {
+          "name": "TIME",
+          "tagline": "Insights",
+          "items": [
+            {
+              "title": "Uma janela só",
+              "description": "Os Insights usam 30 dias terminando hoje contra os 30 anteriores (sem sobreposição), para prazo, replanejamento, reuniões, tarefas novas e resposta. Cada insight informa a janela."
+            },
+            {
+              "title": "Tarefas novas bem definidas",
+              "description": "Conta só tarefas (sem subtarefas), uma vez por tarefa, pelo responsável atual: “12 das 20 tarefas criadas nos últimos 30 dias”."
+            },
+            {
+              "title": "Perfil mostra o período",
+              "description": "O detalhe do membro exibe a faixa de datas ao lado do seletor de período."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.357.0",
       "summary": "Insights do Time em 2 colunas, até 12, com mais sinais e sem repetição.",
