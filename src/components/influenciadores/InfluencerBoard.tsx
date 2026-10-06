@@ -2805,7 +2805,7 @@ function EntregaDetailBody({
         }
       />
 
-      <div className="space-y-3.5 px-4 py-3 sm:px-5">
+      <div className="space-y-5 px-4 py-4 sm:px-5">
         <EntregaStepper
           steps={stepper.steps}
           tone={stepper.tone}
@@ -4917,7 +4917,7 @@ function WorkspaceDetailBody({
   const [feedbackAberto, setFeedbackAberto] = useState<string | null>(null);
 
   return (
-    <div className="space-y-6 px-5 py-4">
+    <div className="space-y-8 px-5 py-4">
       {/* PRÓXIMA AÇÃO — só quando existe algo a fazer (ou a esperar). */}
       {action.kind !== "nenhuma" && (
         <NextActionPanel

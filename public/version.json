@@ -1,21 +1,21 @@
 {
-  "version": "1.340.0",
+  "version": "1.341.0",
   "releases": [
     {
-      "version": "1.340.0",
-      "summary": "O histórico do influenciador agora é o mesmo componente do histórico da entrega.",
+      "version": "1.341.0",
+      "summary": "Mais respiro entre as seções e feedback sem duplicação: o histórico guarda o registro; só o feedback novo ganha aviso.",
       "modules": [
         {
           "name": "CAMPANHAS",
-          "tagline": "Detalhe do influenciador",
+          "tagline": "Detalhe do influenciador e da entrega",
           "items": [
             {
-              "title": "Mesma linha do tempo da entrega",
-              "description": "Dias, avatar, pessoa, ação, contexto e horário iguais aos da entrega; “Ver tudo (N)” expande no próprio painel."
+              "title": "Espaçamento entre seções",
+              "description": "Mais ar entre próxima ação, entregas e histórico, sem aumentar os componentes."
             },
             {
-              "title": "Feedback do cliente como evento",
-              "description": "Cada pedido de ajuste aparece com a entrega e a versão (ex.: Reels · Roteiro · Feedback V1), sem misturar entregas."
+              "title": "Feedback novo, não repetido",
+              "description": "Na lista de entregas só aparece “Feedback novo · Ver feedback →” enquanto o ajuste não foi reconhecido; depois disso o feedback fica só no Histórico."
             }
           ]
         }

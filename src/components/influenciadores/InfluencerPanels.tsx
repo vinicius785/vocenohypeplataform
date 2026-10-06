@@ -62,7 +62,7 @@ export function EntregasRows({
   onRemove,
 }: {
   entregas: Entrega[];
-  /** Feedbacks do cliente vivos; cada um aparece DENTRO da linha da entrega a que se refere. */
+  /** Feedbacks vivos; só o NOVO (ajuste ainda não reconhecido) ganha um aviso na linha — o registro fica no Histórico. */
   feedbacks?: ClientFeedback[];
   onOpen: (id: string) => void;
   onAdd: () => void;
@@ -155,7 +155,15 @@ export function EntregasRows({
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
-                {feedback && <FeedbackNote f={feedback} onOpen={onOpen} className="mb-3 ml-5" />}
+                {feedback?.phase === "solicitados" && (
+                  <p className="mb-2.5 ml-5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
+                    <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
+                      <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-warning" />
+                      Feedback novo · {feedback.etapaLabel}
+                    </span>
+                    <QuietButton onClick={() => onOpen(e.id)}>Ver feedback →</QuietButton>
+                  </p>
+                )}
               </li>
             );
           })}
