@@ -1,5 +1,6 @@
 {
   "notes": [
+    "1.345.0: Financeiro V2 (FinanceiroV2.tsx; financeNextAction/maskTail em influencer-finance.ts; EntregaHistorico com titulo; ArquivoMaterial reutilizado no contrato). Removidos FinancePendencies/FinanceActivity. Regras de pagamento, permissões e dados intactos; 'Aprovar pagamento' passa a 'Iniciar pagamento' na ação principal (Aprovar mesmo assim no ⋯).",
     "1.344.0: ContextoTexto agora é o próprio conteúdo clicável (sem CTAs Editar/Adicionar); ChecklistSection sem ações no cabeçalho (vazio clicável, '+ Adicionar item' ao fim, menu remover). Sem autosave; mesmos patches.",
     "1.343.0: Contexto da campanha recomposto em módulos (Modulo, ContextoTexto, BriefingEMateriais em ContextoCampanha.tsx). Mesmos campos, patches e visibilidade no portal.",
     "1.342.0: ContextoCampanhaView reescrita visualmente (ContextoCampanha.tsx: ContextoTexto, BriefingEMateriais); mesmos campos/patches e visibilidade no portal. Checklist: estado vazio. BriefingAnexoUploadButton ganhou prop label.",

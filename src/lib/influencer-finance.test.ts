@@ -139,3 +139,55 @@ describe("data do contrato", () => {
     ).toBeUndefined();
   });
 });
+
+import { financeNextAction, maskTail } from "./influencer-finance";
+
+describe("financeNextAction (uma única ação prioritária)", () => {
+  const ok = {
+    state: "pendente" as const,
+    hasRem: true,
+    hasBank: true,
+    hasContrato: true,
+    showRemPag: true,
+    showBank: true,
+    showContrato: true,
+    canFinanceiro: true,
+  };
+  it("segue a prioridade", () => {
+    expect(financeNextAction({ ...ok, hasRem: false, state: "nao_iniciado" })?.key).toBe(
+      "definir_remuneracao",
+    );
+    expect(financeNextAction({ ...ok, hasBank: false, hasContrato: false })?.key).toBe(
+      "cadastrar_banco",
+    );
+    expect(financeNextAction({ ...ok, hasContrato: false })?.key).toBe("anexar_contrato");
+    expect(financeNextAction(ok)?.key).toBe("iniciar_pagamento");
+    expect(financeNextAction({ ...ok, state: "recusado" })?.key).toBe("reabrir");
+    expect(financeNextAction({ ...ok, state: "vencido", hasBank: false })?.key).toBe(
+      "registrar_pagamento",
+    );
+    expect(financeNextAction({ ...ok, state: "agendado" })?.key).toBe("registrar_pagamento");
+  });
+  it("sem permissão do Financeiro não há ação de registrar; pago não tem ação", () => {
+    expect(financeNextAction({ ...ok, state: "agendado", canFinanceiro: false })).toBeNull();
+    expect(financeNextAction({ ...ok, state: "pago" })).toBeNull();
+  });
+  it("seção escondida no projeto não gera ação", () => {
+    expect(
+      financeNextAction({
+        ...ok,
+        hasBank: false,
+        showBank: false,
+        hasContrato: false,
+        showContrato: false,
+      })?.key,
+    ).toBe("iniciar_pagamento");
+  });
+});
+
+describe("maskTail", () => {
+  it("mostra só o fim", () => {
+    expect(maskTail("12345-6789")).toBe("••••6789");
+    expect(maskTail("123")).toBe("••••••");
+  });
+});

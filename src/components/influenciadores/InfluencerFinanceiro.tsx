@@ -68,39 +68,6 @@ export function FinanceSummary({ cells }: { cells: SummaryCell[] }) {
   );
 }
 
-export type PendencyItem = { key: string; text: string; tone: FinTone; actions?: ReactNode };
-
-/** PENDÊNCIAS: lista simples — descrição e a ação logo ao lado, só quando há algo a fazer. */
-export function FinancePendencies({ items }: { items: PendencyItem[] }) {
-  return (
-    <section aria-label="Pendências" className="space-y-1.5">
-      <CockpitTitle>Pendências</CockpitTitle>
-      {items.length === 0 ? (
-        <p className="text-sm text-text-secondary">Nada pendente.</p>
-      ) : (
-        <ul className="space-y-1">
-          {items.map((it) => (
-            <li
-              key={it.key}
-              className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 py-1 text-sm"
-            >
-              <span className="flex min-w-0 items-center gap-2 text-foreground">
-                <StateDot tone={it.tone} />
-                {it.text}
-              </span>
-              {it.actions && (
-                <span className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1">
-                  {it.actions}
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
 /** Bloco de detalhe (Remuneração, Pagamento, Dados bancários, Contrato): título pequeno, ação
  * contextual ao lado do título e o conteúdo logo abaixo — sem moldura. */
 export function FinanceSection({
@@ -119,42 +86,6 @@ export function FinanceSection({
       <CockpitTitle action={action}>{title}</CockpitTitle>
       {children}
     </section>
-  );
-}
-
-/** ATIVIDADE FINANCEIRA: só os eventos financeiros, uma linha cada ("05/10 · texto"). */
-export function FinanceActivity({
-  items,
-  showAll,
-  onToggleAll,
-  limit = 3,
-}: {
-  items: { id: string; day: string; text: string }[];
-  showAll: boolean;
-  onToggleAll: () => void;
-  limit?: number;
-}) {
-  if (items.length === 0) return null;
-  const visible = showAll ? items : items.slice(0, limit);
-  return (
-    <FinanceSection
-      title="Atividade financeira"
-      action={
-        items.length > limit ? (
-          <QuietButton onClick={onToggleAll}>{showAll ? "Ver menos" : "Ver tudo"}</QuietButton>
-        ) : undefined
-      }
-    >
-      <ul className="space-y-1.5 text-sm">
-        {visible.map((it) => (
-          <li key={it.id} className="text-foreground">
-            <span className="tabular-nums text-text-secondary">{it.day}</span>
-            <span className="text-text-secondary"> · </span>
-            {it.text}
-          </li>
-        ))}
-      </ul>
-    </FinanceSection>
   );
 }
 

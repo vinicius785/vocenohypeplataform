@@ -240,3 +240,86 @@ export function formatIsoDate(iso: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
 }
+
+/* ---------------- V2: próxima ação, requisitos e máscara ---------------- */
+
+export type FinanceNextKey =
+  | "registrar_pagamento"
+  | "reabrir"
+  | "definir_remuneracao"
+  | "cadastrar_banco"
+  | "anexar_contrato"
+  | "iniciar_pagamento";
+
+export type FinanceNext = { key: FinanceNextKey; title: string; hint: string; cta: string };
+
+/** A ÚNICA ação prioritária do Financeiro do influenciador (ou `null`). Só lê o estado; não decide
+ * transição. Seções escondidas no projeto (`show*`) não geram ação. */
+export function financeNextAction(i: {
+  state: PaymentStateKey;
+  hasRem: boolean;
+  hasBank: boolean;
+  hasContrato: boolean;
+  showRemPag: boolean;
+  showBank: boolean;
+  showContrato: boolean;
+  canFinanceiro: boolean;
+}): FinanceNext | null {
+  if (i.showRemPag && i.state === "vencido" && i.canFinanceiro)
+    return {
+      key: "registrar_pagamento",
+      title: "Registrar pagamento vencido",
+      hint: "O vencimento passou e o pagamento ainda não foi confirmado no Financeiro.",
+      cta: "Registrar pagamento →",
+    };
+  if (i.showRemPag && i.state === "recusado")
+    return {
+      key: "reabrir",
+      title: "Solicitação de pagamento recusada",
+      hint: "Reabra a solicitação para voltar a avaliá-la.",
+      cta: "Reabrir solicitação",
+    };
+  if (i.showRemPag && !i.hasRem)
+    return {
+      key: "definir_remuneracao",
+      title: "Definir remuneração",
+      hint: "A remuneração deste influenciador ainda não foi definida.",
+      cta: "Definir remuneração",
+    };
+  if (i.showBank && !i.hasBank)
+    return {
+      key: "cadastrar_banco",
+      title: "Cadastrar dados bancários",
+      hint: "Os dados bancários são necessários para realizar o pagamento.",
+      cta: "Cadastrar dados",
+    };
+  if (i.showContrato && !i.hasContrato)
+    return {
+      key: "anexar_contrato",
+      title: "Anexar contrato",
+      hint: "O contrato assinado precisa estar anexado.",
+      cta: "Anexar contrato",
+    };
+  if (i.showRemPag && i.state === "pendente")
+    return {
+      key: "iniciar_pagamento",
+      title: "Pronto para pagamento",
+      hint: "Iniciar lança o valor como despesa no Financeiro.",
+      cta: "Iniciar pagamento",
+    };
+  if (i.showRemPag && i.state === "agendado" && i.canFinanceiro)
+    return {
+      key: "registrar_pagamento",
+      title: "Registrar pagamento",
+      hint: "Pagamento aprovado e lançado; falta confirmar que foi pago.",
+      cta: "Registrar pagamento →",
+    };
+  return null;
+}
+
+/** Mostra só os últimos caracteres ("••••1234"); valores curtos ficam totalmente ocultos. */
+export function maskTail(v: string, keep = 4): string {
+  const t = v.trim();
+  if (t.length <= keep + 2) return "••••••";
+  return `••••${t.slice(-keep)}`;
+}

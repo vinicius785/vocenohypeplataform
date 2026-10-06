@@ -146,14 +146,20 @@ export function ContextoTexto({
   );
 }
 
-function ArquivoMaterial({
+export function ArquivoMaterial({
   nome,
   url,
+  meta,
+  onOpen,
   onRemove,
   renderUpload,
 }: {
   nome: string;
   url: string;
+  /** Linha pequena sob o nome (padrão: tipo do arquivo). */
+  meta?: string;
+  /** Abre o arquivo de um jeito próprio (ex.: `data:` URL); sem isso, link normal. */
+  onOpen?: () => void;
   onRemove: () => void;
   renderUpload: (label: string) => ReactNode;
 }) {
@@ -168,7 +174,7 @@ function ArquivoMaterial({
           <p className="truncate text-sm font-medium text-foreground" title={nome}>
             {nome || "Anexo"}
           </p>
-          <p className="text-[11px] text-text-secondary">{ext}</p>
+          <p className="text-[11px] text-text-secondary">{meta ?? ext}</p>
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -181,7 +187,11 @@ function ArquivoMaterial({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => window.open(url, "_blank", "noopener,noreferrer")}>
+            <DropdownMenuItem
+              onSelect={() =>
+                onOpen ? onOpen() : window.open(url, "_blank", "noopener,noreferrer")
+              }
+            >
               Abrir
             </DropdownMenuItem>
             <DropdownMenuItem
@@ -194,14 +204,24 @@ function ArquivoMaterial({
         </DropdownMenu>
       </div>
       <div className="mt-2.5 flex items-center gap-4 border-t border-border/60 pt-2.5">
-        <a
-          href={url}
-          target="_blank"
-          rel="noreferrer"
-          className="text-xs font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-        >
-          Abrir
-        </a>
+        {onOpen ? (
+          <button
+            type="button"
+            onClick={onOpen}
+            className="text-xs font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+          >
+            Abrir
+          </button>
+        ) : (
+          <a
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+          >
+            Abrir
+          </a>
+        )}
         {renderUpload("Substituir")}
       </div>
     </div>

@@ -1025,6 +1025,7 @@ export function EntregaHistorico({
   feedbackAberto,
   onToggleFeedback,
   limit = 6,
+  titulo = "Histórico",
   sectionRef,
 }: {
   eventos: HistoricoEvento[];
@@ -1034,6 +1035,7 @@ export function EntregaHistorico({
   feedbackAberto: string | null;
   onToggleFeedback: (id: string) => void;
   limit?: number;
+  titulo?: string;
   sectionRef?: Ref<HTMLElement>;
 }) {
   // Por padrão só os eventos relevantes (os de rotina ficam em "Ver tudo"); o ajuste que ainda
@@ -1052,7 +1054,7 @@ export function EntregaHistorico({
   }
 
   return (
-    <section aria-label="Histórico" ref={sectionRef} className="scroll-mt-16 space-y-1.5">
+    <section aria-label={titulo} ref={sectionRef} className="scroll-mt-16 space-y-1.5">
       <CockpitTitle
         action={
           eventos.length === 0 ? (
@@ -1064,7 +1066,7 @@ export function EntregaHistorico({
           ) : undefined
         }
       >
-        Histórico
+        {titulo}
       </CockpitTitle>
       {grupos.map((g) => (
         <div key={g.dia} className="space-y-1.5">

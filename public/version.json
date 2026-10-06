@@ -1,25 +1,29 @@
 {
-  "version": "1.344.0",
+  "version": "1.345.0",
   "releases": [
     {
-      "version": "1.344.0",
-      "summary": "Contexto da campanha editável direto no conteúdo: clique no texto para editar, sem botões de adicionar/editar.",
+      "version": "1.345.0",
+      "summary": "Financeiro do influenciador V2: resumo, uma próxima ação, pagamento como fluxo, dados bancários, contrato e atividade.",
       "modules": [
         {
           "name": "CAMPANHAS",
           "tagline": "Detalhe do influenciador · Recursos",
           "items": [
             {
-              "title": "Clique para editar",
-              "description": "Motivo, briefing e observações viram edição no próprio bloco, com Salvar e Cancelar só durante a edição e um aviso discreto ao salvar."
+              "title": "Uma próxima ação",
+              "description": "Sem a lista de pendências: a tela mostra só a ação prioritária (definir remuneração, cadastrar dados, anexar contrato, iniciar ou registrar pagamento)."
             },
             {
-              "title": "Checklist direto",
-              "description": "Clique em “Nenhum item no checklist.” para criar o primeiro item; depois, “+ Adicionar item”, marcar, editar o texto e remover pelo menu."
+              "title": "Pagamento como fluxo",
+              "description": "Estado em destaque com os requisitos (remuneração, dados bancários, contrato) e as ações secundárias no menu ⋯."
             },
             {
-              "title": "Materiais",
-              "description": "O botão de adicionar arquivo permanece; o menu ⋯ ganhou “Abrir”."
+              "title": "Dados bancários protegidos e contrato como arquivo",
+              "description": "Conta, agência, CPF/CNPJ e PIX aparecem parcialmente ocultos (Mostrar/Ocultar); o contrato vira um item de documento."
+            },
+            {
+              "title": "Atividade financeira",
+              "description": "Mesma linha do tempo do histórico das entregas, só com eventos financeiros."
             }
           ]
         }
