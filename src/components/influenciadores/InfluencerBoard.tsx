@@ -685,12 +685,9 @@ export function InfluencerBoard({
 }) {
   const fields = allowedFields ?? ALL_INFLUENCER_FIELDS;
   const access = useMyAccess();
-  // Dados bancários (PIX/conta) exigem a permissão dedicada
-  // "influenciadores:bancario", separada da geral "influenciadores" — todo
-  // render site que hoje já checa `has("bancario")` fica automaticamente
-  // gated de verdade, sem precisar tocar em cada um.
-  const has = (k: InfluencerFieldKey) =>
-    fields.includes(k) && (k !== "bancario" || hasPermission(access, "influenciadores:bancario"));
+  // Dados bancários: todo o time cadastra e edita (decisão de produto, 2026-10-06 — antes exigiam
+  // "influenciadores:bancario"). A tela continua mascarando conta/PIX/CPF até "Mostrar".
+  const has = (k: InfluencerFieldKey) => fields.includes(k);
   const { confirm, confirmDialog } = useConfirm();
 
   const [creating, setCreating] = useState(false);

@@ -1,6 +1,22 @@
 {
-  "version": "1.359.0",
+  "version": "1.360.0",
   "releases": [
+    {
+      "version": "1.360.0",
+      "summary": "Todo o time agora cadastra dados bancários dos influenciadores.",
+      "modules": [
+        {
+          "name": "INFLUENCIADORES",
+          "tagline": "Financeiro",
+          "items": [
+            {
+              "title": "Dados bancários para todos",
+              "description": "A seção “Dados bancários” e o “Cadastrar dados” aparecem para qualquer pessoa do time. Conta, PIX e CPF/CNPJ continuam mascarados até clicar em “Mostrar”."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.359.0",
       "summary": "Insights do Time agora comparam este mês com o mesmo período do mês passado.",

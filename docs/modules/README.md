@@ -78,7 +78,7 @@ Todos vivem sob `/time?section=<chave>` (exceto detalhes de cliente e projeto e 
 
 ## Influenciadores
 
-`influenciadores-v2/InfluencerBancoV2Page`: banco com filtros, card, drawer e avaliação; dados bancários só com `influenciadores:bancario`. Alimenta campanhas e e-mail marketing (picker).
+`influenciadores-v2/InfluencerBancoV2Page`: banco com filtros, card, drawer e avaliação; dados bancários liberados a todo o time (cadastro/edição; exibição mascarada até "Mostrar"). Alimenta campanhas e e-mail marketing (picker).
 
 ## Metas
 

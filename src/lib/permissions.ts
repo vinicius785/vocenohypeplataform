@@ -100,7 +100,6 @@ export const PERMISSION_GROUPS: { label: string; items: { key: Permission; label
   {
     label: "Dados sensíveis",
     items: [
-      { key: "influenciadores:bancario", label: "Dados bancários de influenciadores" },
       // "senhas" já existia no tipo `Permission` mas nunca aparecia em
       // nenhum grupo — só fica exposta aqui (não é enforced em nenhuma
       // tela hoje, igual a "membros"); não inventa permissão nova.
