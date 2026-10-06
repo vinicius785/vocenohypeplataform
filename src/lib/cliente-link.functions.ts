@@ -671,7 +671,9 @@ export async function buildClienteLinkData(clienteId: string, cliente: Cliente) 
       // aprovação (ou mais adiante no funil) — INSCRITO/EM_CURADORIA é
       // planejamento interno, ainda não decidido/comunicado.
       const influencers = ((rows ?? []) as { data: Influ; campaign_cycle_id: string | null }[])
-        .filter((r) => VISIBLE_TO_CLIENT.has(normalizedInfluStatus(r.data)))
+        .filter(
+          (r) => !r.data.ocultoDoCliente && VISIBLE_TO_CLIENT.has(normalizedInfluStatus(r.data)),
+        )
         .map((r) => toPublicInfluencer({ ...r.data, campaignCycleId: r.campaign_cycle_id }));
       const planejado = c.linhas.reduce((sum, l) => sum + (l.quantidade || 0), 0);
 
@@ -769,7 +771,9 @@ export async function loadInfluRow(campanhaId: string, influencerId: string): Pr
     .eq("id", influencerId)
     .eq("campanha_id", campanhaId)
     .maybeSingle();
-  if (error || !row) throw new Error("Influenciador não encontrado nesta campanha.");
+  // Oculto do portal = inexistente para o cliente (nem por id adivinhado).
+  if (error || !row || (row.data as Influ).ocultoDoCliente)
+    throw new Error("Influenciador não encontrado nesta campanha.");
   return row.data as Influ;
 }
 

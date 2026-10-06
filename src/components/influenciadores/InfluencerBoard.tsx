@@ -36,6 +36,7 @@ import {
   X,
   Music2,
   Eye,
+  EyeOff,
   Image as ImageIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -124,6 +125,7 @@ import {
   type NextAction,
 } from "@/lib/influencer-next-action";
 import { CockpitTitle, KeyStats, QuietButton } from "./InfluencerCockpit";
+import { PortalVisibilityDialog } from "./PortalVisibilityDialog";
 import { ArquivoMaterial, BriefingEMateriais, ContextoTexto, Modulo } from "./ContextoCampanha";
 import { FinanceNextCard, PaymentFlow, type Requisito } from "./FinanceiroV2";
 import { AudienceInsights } from "@/components/shared/AudienceInsights";
@@ -703,6 +705,7 @@ export function InfluencerBoard({
   const viewMenu = useDropdown();
   const [query, setQuery] = useState("");
   const [hideReprovados, setHideReprovados] = useState(false);
+  const [visOpen, setVisOpen] = useState(false);
 
   // Sempre aponta pro `influs` mais recente, mesmo entre dois handlers que
   // disparam no mesmo tick (ex: blur de um campo + clique em outro logo
@@ -719,6 +722,27 @@ export function InfluencerBoard({
   };
 
   const pushActivity = logInfluActivity;
+
+  // Portal do cliente: oculta/mostra influenciadores (só o time os vê quando ocultos). Um único
+  // patch com a mudança e o registro na Atividade.
+  const setPortalVisibility = (ids: string[], hide: boolean) => {
+    if (ids.length === 0) return;
+    const set = new Set(ids);
+    const next = latestInflusRef.current.map((x) =>
+      set.has(x.id)
+        ? pushActivity(
+            { ...x, ocultoDoCliente: hide ? true : undefined },
+            hide ? "ocultou do portal do cliente" : "voltou a exibir no portal do cliente",
+          )
+        : x,
+    );
+    applyInflusChange(next);
+    toast.success(
+      hide
+        ? `${ids.length} oculto${ids.length === 1 ? "" : "s"} do portal do cliente.`
+        : `${ids.length} exibido${ids.length === 1 ? "" : "s"} no portal do cliente.`,
+    );
+  };
 
   // Usado pelo drag-and-drop do kanban e pelo dropdown de status do card —
   // os dois únicos lugares fora do perfil (`setInfluStatusFromResumo`, que
@@ -1054,6 +1078,12 @@ export function InfluencerBoard({
 
   return (
     <section className="space-y-4">
+      <PortalVisibilityDialog
+        open={visOpen}
+        onOpenChange={setVisOpen}
+        influs={influs}
+        onApply={setPortalVisibility}
+      />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           {!hideTitle && (
@@ -1159,6 +1189,22 @@ export function InfluencerBoard({
                     </button>
                   </>
                 )}
+                <div className="my-1 border-t border-border" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    viewMenu.setOpen(false);
+                    setVisOpen(true);
+                  }}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-muted-foreground hover:bg-muted"
+                >
+                  <EyeOff className="h-3.5 w-3.5" /> Visibilidade no portal do cliente
+                  {influs.some((i) => i.ocultoDoCliente) && (
+                    <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-semibold">
+                      {influs.filter((i) => i.ocultoDoCliente).length} ocultos
+                    </span>
+                  )}
+                </button>
                 <div className="my-1 border-t border-border" />
                 <p className="px-2 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Ordenar por

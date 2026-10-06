@@ -1,29 +1,21 @@
 {
-  "version": "1.347.0",
+  "version": "1.348.0",
   "releases": [
     {
-      "version": "1.347.0",
-      "summary": "Página Time V2: central de gestão operacional, com resumo, pessoas, atenção, produção, desempenho e poucos insights.",
+      "version": "1.348.0",
+      "summary": "Ocultar influenciadores do portal do cliente (e mostrar de volta) pelo menu Visualização.",
       "modules": [
         {
-          "name": "TIME",
-          "tagline": "Página Time",
+          "name": "CAMPANHAS",
+          "tagline": "Influenciadores",
           "items": [
             {
-              "title": "Resumo sem ruído",
-              "description": "“Agora” e o período com Concluídas e No prazo; a resposta média saiu dos KPIs de tarefas."
+              "title": "Visibilidade no portal do cliente",
+              "description": "Em Visualização, escolha influenciadores para ocultar do portal do cliente — eles continuam na plataforma do time — e mostre de volta quando quiser."
             },
             {
-              "title": "Pessoas em uma tabela enxuta",
-              "description": "Pessoa, Carga, Abertas, Atrasadas, No prazo, Resposta e Score. O score só aparece com 20+ tarefas; antes disso, uma prévia discreta."
-            },
-            {
-              "title": "Precisa de atenção",
-              "description": "Atrasadas, vencem hoje e bloqueadas, com responsável, cliente/projeto, prazo e status."
-            },
-            {
-              "title": "Entregas, desempenho e insights",
-              "description": "Produção da semana por dia; desempenho do time dos últimos 30 dias com tendência; no máximo 4 insights, um por pessoa, que abrem o detalhe do membro no contexto certo."
+              "title": "Filtrado no servidor",
+              "description": "O influenciador oculto não aparece nem pode ser acessado pelo cliente; a mudança fica registrada na Atividade."
             }
           ]
         }

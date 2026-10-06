@@ -890,6 +890,8 @@ export type Influ = {
   /** Checklist livre do influenciador (texto qualquer, marcar feito) — pode
    * ser aplicado de um influ pros outros todos da campanha de uma vez. */
   checklist?: ChecklistItem[];
+  /** Escondido do Portal do Cliente (só o time vê). O servidor filtra — nunca só o front. Reversível. */
+  ocultoDoCliente?: boolean;
   /** Preenchido quando o cliente reprova a seleção deste influ pelo link
    * público (`status` vira RECUSADO junto) — motivo fica aqui pro time ver
    * antes de reenviar (mudar o status manualmente já limpa este campo). */
