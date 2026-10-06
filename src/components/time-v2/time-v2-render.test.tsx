@@ -673,7 +673,7 @@ describe("Time V2 — insights e desempenho", () => {
             category: "atencao",
             priority: 0,
             evidence: "A conclusão no prazo caiu de 41% para 13%.",
-            reading: "O ritmo piorou frente aos 30 dias anteriores.",
+            reading: "O ritmo piorou frente ao mês passado.",
             caveat: "Considera o responsável atual das tarefas.",
             view: "tarefas",
             actionLabel: "Ver tarefas de Lucas",

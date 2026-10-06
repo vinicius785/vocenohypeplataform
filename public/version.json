@@ -1,6 +1,22 @@
 {
-  "version": "1.358.0",
+  "version": "1.359.0",
   "releases": [
+    {
+      "version": "1.359.0",
+      "summary": "Insights do Time agora comparam este mês com o mesmo período do mês passado.",
+      "modules": [
+        {
+          "name": "TIME",
+          "tagline": "Insights",
+          "items": [
+            {
+              "title": "Este mês x mês passado",
+              "description": "Todos os insights (prazo, replanejamento, reuniões, tarefas novas, resposta e tendências) usam o mês corrente até hoje contra o mesmo trecho do mês passado, e dizem isso no texto. O bloco Desempenho do time usa a mesma janela."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.358.0",
       "summary": "Dados do Time consistentes: mesma janela e mesma definição nos Insights e no detalhe.",

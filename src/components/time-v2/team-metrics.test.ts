@@ -11,20 +11,28 @@ import {
 } from "./team-metrics";
 import { last30Range } from "./team-v2";
 
-describe("janelas dos Insights", () => {
-  it("30 dias terminando hoje, e os 30 anteriores contíguos e sem sobreposição", () => {
+describe("janelas dos Insights (este mês x mês passado)", () => {
+  it("mês até hoje contra o mesmo trecho do mês passado", () => {
     const w = insightWindows("2026-10-06");
-    expect(w.current).toEqual({ from: "2026-09-07", to: "2026-10-06" });
-    expect(w.previous).toEqual({ from: "2026-08-08", to: "2026-09-06" });
+    expect(w.current).toEqual({ from: "2026-10-01", to: "2026-10-06" });
+    expect(w.previous).toEqual({ from: "2026-09-01", to: "2026-09-06" });
+  });
+  it("dia 31 contra mês de 30 dias: limita ao último dia do mês passado", () => {
+    const w = insightWindows("2026-10-31");
+    expect(w.previous).toEqual({ from: "2026-09-01", to: "2026-09-30" });
+    expect(insightWindows("2026-03-30").previous).toEqual({ from: "2026-02-01", to: "2026-02-28" });
+  });
+  it("virada de ano", () => {
+    expect(insightWindows("2027-01-05")).toEqual({
+      current: { from: "2027-01-01", to: "2027-01-05" },
+      previous: { from: "2026-12-01", to: "2026-12-05" },
+    });
+  });
+  it("as duas janelas têm o MESMO tamanho (exceto quando o mês passado é menor)", () => {
     const dias = (r: { from: string; to: string }) =>
       (Date.parse(r.to) - Date.parse(r.from)) / 86_400_000 + 1;
-    expect(dias(w.current)).toBe(30);
-    expect(dias(w.previous)).toBe(30);
-    expect(Date.parse(w.current.from) - Date.parse(w.previous.to)).toBe(86_400_000);
-  });
-  it("virada de ano e de mês", () => {
-    expect(insightWindows("2027-01-05").current.from).toBe("2026-12-07");
-    expect(insightWindows("2026-03-01").previous.to).toBe("2026-01-30");
+    const w = insightWindows("2026-10-17");
+    expect(dias(w.current)).toBe(dias(w.previous));
   });
   it("a janela do `team-v2` é a MESMA (uma só definição)", () => {
     expect(last30Range("2026-10-06")).toEqual(insightWindows("2026-10-06").current);
@@ -196,8 +204,8 @@ describe("consistência: mesma pessoa, mesma janela, mesma definição", () => {
       null,
     );
     const d = out.find((i) => i.ruleId === "maior_volume_demandas")!;
-    expect(d.evidence).toContain("12 das 16 tarefas criadas nos últimos 30 dias (75%)");
-    expect(d.window).toBe("últimos 30 dias");
+    expect(d.evidence).toContain("12 das 16 tarefas criadas neste mês (75%)");
+    expect(d.window).toBe("este mês");
     expect(d.caveat).toContain("sem subtarefas");
   });
   it("dados insuficientes: sem tarefas novas, nada de demanda", () => {

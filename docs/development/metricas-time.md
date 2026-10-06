@@ -1,6 +1,6 @@
 # Métricas da página Time (definições únicas)
 
-Fuso de **todas** as métricas: America/Sao_Paulo (UTC−03:00). Dia, semana, mês e "30 dias" são
+Fuso de **todas** as métricas: America/Sao_Paulo (UTC−03:00). Dia, semana, mês e "mês" são
 calculados em Brasília (`todayIsoInBrasilia`); o banco recebe a janela como `…T00:00:00-03:00`
 (`isoRangeToTimestamps`).
 
@@ -10,9 +10,12 @@ Identidade da pessoa: id do membro. Tarefas guardam o responsável como **nome**
 ## Janelas
 | Nome | Definição | Onde |
 |---|---|---|
-| Janela dos Insights | 30 dias terminando hoje (inclusive) | `insightWindows().current` |
-| Janela anterior | os 30 dias imediatamente antes, sem sobreposição | `insightWindows().previous` |
+| Janela dos Insights | **este mês**: dia 1 até hoje (inclusive) | `insightWindows().current` |
+| Janela anterior | **mesmo trecho do mês passado**: dia 1 até o mesmo dia (limitado ao último dia daquele mês) | `insightWindows().previous` |
 | Período do Time / do perfil | seletor da tela (padrão "Mês" = dia 1 até hoje/fim do mês) | `rangeForScorePeriod` / `rangeForProfilePeriod` |
+
+Por que o mesmo trecho e não o mês passado inteiro: comparar um mês parcial com um mês completo
+distorce toda contagem (tarefas, replanejamentos). O recorte tem o mesmo tamanho nos dois lados.
 
 Os Insights **sempre** usam a janela dos Insights (e dizem isso no próprio texto). O perfil e a
 tabela do Time usam o período selecionado — por isso o perfil mostra a faixa de datas ao lado do

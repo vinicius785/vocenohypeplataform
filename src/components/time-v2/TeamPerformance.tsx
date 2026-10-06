@@ -25,8 +25,8 @@ function Indicador({
 const arrow = (cur: number, prev: number) =>
   cur === prev ? "igual" : `${cur > prev ? "↑" : "↓"} ${Math.abs(cur - prev)}`;
 
-/** Desempenho do time: resultado, tendência e leitura — só o que o motor já calcula, nas janelas
- * de 30 dias (contra os 30 anteriores) que os insights também usam. */
+/** Desempenho do time: resultado, tendência e leitura — só o que o motor já calcula, na mesma
+ * janela dos insights (este mês contra o mesmo trecho do mês passado). */
 export function TeamPerformance({ data }: { data: Data }) {
   const { onTime, replans, cycle } = data;
   const onTimeTrend = trendPP(onTime.value, onTime.previous);
@@ -34,7 +34,9 @@ export function TeamPerformance({ data }: { data: Data }) {
     <section aria-label="Desempenho do time" className="space-y-4">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
         <h3 className="text-[15px] font-semibold text-foreground">Desempenho do time</h3>
-        <span className="text-xs text-text-secondary">Últimos 30 dias · vs 30 dias anteriores</span>
+        <span className="text-xs text-text-secondary">
+          Este mês · vs mesmo período do mês passado
+        </span>
       </div>
       <div className="grid grid-cols-3 gap-4 sm:gap-8">
         <Indicador

@@ -83,8 +83,8 @@ describe("teamPerformance", () => {
     expect(r.cycle.days).toBeCloseTo(2, 5);
     expect(r.cycle.previousDays).toBeCloseTo(2, 5);
   });
-  it("janela de 30 dias termina hoje", () => {
-    expect(last30Range("2026-10-06")).toEqual({ from: "2026-09-07", to: "2026-10-06" });
+  it("a janela é o mês corrente até hoje", () => {
+    expect(last30Range("2026-10-06")).toEqual({ from: "2026-10-01", to: "2026-10-06" });
   });
 });
 

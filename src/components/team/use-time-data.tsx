@@ -512,8 +512,8 @@ export function useTimeData() {
   // `scorePeriod` selecionado em Performance do Time), pra comparar
   // "últimos 30 dias" vs. "30 dias antes disso" pra todo mundo de uma vez
   // (1 fetch cada, não 1 por pessoa).
-  // Janela única dos Insights (`insightWindows`): 30 dias terminando hoje (Brasília) e os 30
-  // anteriores, contíguos e sem sobreposição — a MESMA usada em resposta e tarefas novas.
+  // Janela única dos Insights (`insightWindows`): este mês até hoje (Brasília) contra o mesmo
+  // trecho do mês passado — a MESMA usada em resposta e tarefas novas.
   const { current: last30Range, previous: previous30Range } = useMemo(
     () => insightWindows(todayIsoInBrasilia()),
     [],
@@ -669,7 +669,7 @@ export function useTimeData() {
         noOverdueForDays: noLateInLast14 ? INSIGHT_THRESHOLDS.semAtrasoDias : null,
         scoreNow: scoreNowResult.score.score,
         scorePrevious: scorePreviousResult.score.score,
-        scorePeriodLabel: "nos últimos 30 dias",
+        scorePeriodLabel: "neste mês (contra o mesmo período do mês passado)",
         openTasksCount: openTasksForMember.length,
         activeProjectsCount,
         teamAvgActiveProjects,

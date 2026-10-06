@@ -44,7 +44,7 @@ export type TeamInsightV2 = {
   topic: string;
   /** Ordem editorial dentro da lista (menor = antes; P0 sempre vem primeiro). */
   rank: number;
-  /** Janela em que o número vale (ex.: "últimos 30 dias"), mostrada discretamente. */
+  /** Janela em que o número vale (ex.: "este mês"), mostrada discretamente. */
   window?: string;
   /** Rótulo curto que substitui o da categoria (ex.: "Maior demanda"). */
   label?: string;
@@ -190,7 +190,7 @@ export function ruleAtraso(m: MemberSignals, o?: Partial<InsightThresholds>): Te
   const reading =
     acumulo || altaPrioridade
       ? "O acúmulo vem de tarefas que não foram concluídas, não de volume novo — vale destravar as mais antigas antes de redistribuir."
-      : "O ritmo de entrega no prazo piorou frente aos 30 dias anteriores; vale entender o que mudou nas tarefas dela.";
+      : "O ritmo de entrega no prazo piorou frente ao mês passado; vale entender o que mudou nas tarefas dela.";
   const p0 = altaPrioridade || m.overdueOld > 0 || drop >= T.pontualidadeQuedaForteP0;
   return mk({
     ruleId: "atraso",
@@ -241,7 +241,7 @@ export function ruleCarga(
     priority: 1,
     memberId: m.id,
     memberName: m.name,
-    evidence: `${m.name} concentra ${pct(m.openCount, totalOpen)}% das tarefas abertas do time e recebeu ${m.newTasks} das ${totalNew} tarefas criadas nos últimos 30 dias (${pct(m.newTasks, totalNew)}%).`,
+    evidence: `${m.name} concentra ${pct(m.openCount, totalOpen)}% das tarefas abertas do time e recebeu ${m.newTasks} das ${totalNew} tarefas criadas neste mês (${pct(m.newTasks, totalNew)}%).`,
     reading:
       "As duas medidas apontam para a mesma pessoa; vale revisar se a distribuição é intencional antes que vire gargalo.",
     caveat: CAVEAT_REATRIBUICAO,
@@ -294,7 +294,7 @@ export function ruleDemanda(
     outros.length > 1
       ? `${outros.slice(0, -1).join(", ")} e ${outros[outros.length - 1]}`
       : outros[0];
-  const base = `${m.name} recebeu ${m.newTasks} das ${totalNew} tarefas criadas nos últimos 30 dias (${pct(m.newTasks, totalNew)}%)`;
+  const base = `${m.name} recebeu ${m.newTasks} das ${totalNew} tarefas criadas neste mês (${pct(m.newTasks, totalNew)}%)`;
   return mk({
     ruleId: convergente ? "mais_demandado" : "maior_volume_demandas",
     topic: "demanda",
@@ -437,7 +437,7 @@ export function ruleReplanejamento(
   if (aumento < T.replanejamentoAlta && m.repeatedReplans <= 0) return null;
   const evidence =
     aumento >= T.replanejamentoAlta
-      ? `${m.name} replanejou ${plural(m.criticalReplans, "tarefa", "tarefas")} no dia ou após o vencimento nos últimos 30 dias (eram ${m.criticalReplansPrev} antes).`
+      ? `${m.name} replanejou ${plural(m.criticalReplans, "tarefa", "tarefas")} no dia ou após o vencimento neste mês (eram ${m.criticalReplansPrev} antes).`
       : `${m.name} alterou o prazo da mesma tarefa mais de uma vez, no dia ou após o vencimento.`;
   return mk({
     ruleId: "replanejamento",
@@ -565,7 +565,7 @@ export function ruleDestaque(
       memberId: m.id,
       memberName: m.name,
       evidence: `A conclusão no prazo de ${m.name} subiu de ${Math.round(m.onTimeRatePrev)}% para ${Math.round(m.onTimeRate)}%.`,
-      reading: "Melhora consistente frente aos 30 dias anteriores — vale reconhecer.",
+      reading: "Melhora consistente frente ao mês passado — vale reconhecer.",
       view: "desempenho",
       actionLabel: `Ver ${first(m.name)}`,
       weight: m.onTimeRate - m.onTimeRatePrev,
@@ -711,7 +711,7 @@ export function ruleTendenciasTime(
           rank: 11,
           category: "tendencia",
           priority: 2,
-          evidence: `O time recebeu ${Math.abs(c)}% ${c > 0 ? "mais" : "menos"} tarefas nos últimos 30 dias (${t.tasksCreated.current} contra ${t.tasksCreated.previous}).`,
+          evidence: `O time recebeu ${Math.abs(c)}% ${c > 0 ? "mais" : "menos"} tarefas neste mês (${t.tasksCreated.current} contra ${t.tasksCreated.previous}).`,
           reading:
             c > 0
               ? "A entrada de demanda cresceu; vale conferir se a capacidade acompanha."
@@ -768,27 +768,27 @@ export function ruleTendenciasTime(
 /* ---------------- geração + seleção ---------------- */
 
 const JANELA: Record<string, string> = {
-  atraso: "situação atual · prazo vs. 30 dias anteriores",
-  carga_acima: "situação atual · tarefas criadas nos últimos 30 dias",
-  mais_demandado: "últimos 30 dias",
-  maior_volume_demandas: "últimos 30 dias",
+  atraso: "situação atual · prazo: este mês vs. mês passado",
+  carga_acima: "situação atual · tarefas criadas neste mês",
+  mais_demandado: "este mês",
+  maior_volume_demandas: "este mês",
   mais_abertas: "situação atual",
   atrasos_concentrados: "situação atual",
-  replanejamento: "últimos 30 dias vs. 30 dias anteriores",
-  replanejamento_reducao: "últimos 30 dias vs. 30 dias anteriores",
-  reunioes_perdidas: "últimos 30 dias",
-  resposta_piora: "últimos 30 dias vs. 30 dias anteriores",
-  resposta_melhora: "últimos 30 dias vs. 30 dias anteriores",
-  resposta_mais_lenta: "últimos 30 dias",
-  resposta_mais_rapida: "últimos 30 dias",
-  previsibilidade: "últimos 30 dias",
-  pontualidade_melhora: "últimos 30 dias vs. 30 dias anteriores",
+  replanejamento: "este mês vs. mesmo período do mês passado",
+  replanejamento_reducao: "este mês vs. mesmo período do mês passado",
+  reunioes_perdidas: "este mês",
+  resposta_piora: "este mês vs. mesmo período do mês passado",
+  resposta_melhora: "este mês vs. mesmo período do mês passado",
+  resposta_mais_lenta: "este mês",
+  resposta_mais_rapida: "este mês",
+  previsibilidade: "este mês",
+  pontualidade_melhora: "este mês vs. mesmo período do mês passado",
   gargalo: "situação atual",
   mais_bloqueia: "situação atual",
   mais_bloqueado: "situação atual",
-  tendencia_tarefas: "últimos 30 dias vs. 30 dias anteriores",
-  tendencia_replanejamentos: "últimos 30 dias vs. 30 dias anteriores",
-  tendencia_resposta: "últimos 30 dias vs. 30 dias anteriores",
+  tendencia_tarefas: "este mês vs. mesmo período do mês passado",
+  tendencia_replanejamentos: "este mês vs. mesmo período do mês passado",
+  tendencia_resposta: "este mês vs. mesmo período do mês passado",
 };
 
 /** Todos os candidatos, sem corte (útil para testes e para o detalhe do membro). */
@@ -809,7 +809,7 @@ export function ruleReplanReducao(
     memberId: m.id,
     memberName: m.name,
     evidence: `${m.name} reduziu os replanejamentos no dia ou após o vencimento de ${m.criticalReplansPrev} para ${m.criticalReplans}.`,
-    reading: "Os prazos estão se sustentando melhor do que nos 30 dias anteriores.",
+    reading: "Os prazos estão se sustentando melhor do que no mês passado.",
     view: "desempenho",
     actionLabel: `Ver desempenho de ${first(m.name)}`,
     weight: queda,

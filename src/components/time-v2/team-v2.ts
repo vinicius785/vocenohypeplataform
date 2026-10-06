@@ -1,5 +1,4 @@
 import type { Insight, MemberInsightBundle } from "@/lib/insights-engine";
-import { previousEquivalentRange } from "@/lib/performance-engine";
 import type { DashTask } from "@/lib/task-aggregation";
 import { formatDateToIso } from "@/lib/utils";
 import { cycleTimeStats } from "./member-metrics";
@@ -45,7 +44,7 @@ export function insightTargetView(ruleId: string): ViewId {
   return "desempenho";
 }
 
-/* ---------------- Desempenho do time (janelas de 30 dias já existentes) ---------------- */
+/* ---------------- Desempenho do time (mesma janela dos insights: este mês x mesmo trecho do mês passado) ---------------- */
 
 export type TeamPerformance = {
   onTime: { value: number | null; previous: number | null; sample: number };
@@ -59,7 +58,7 @@ const weighted = (pairs: { rate: number | null; sample: number }[]): number | nu
   return base > 0 ? ok.reduce((s, p) => s + (p.rate as number) * p.sample, 0) / base : null;
 };
 
-/** Últimos 30 dias (terminando hoje) contra os 30 anteriores — as mesmas janelas dos insights. */
+/** Este mês (dia 1 até hoje) — a mesma janela dos insights (nome histórico). */
 export function last30Range(todayIso: string): { from: string; to: string } {
   return insightWindows(todayIso).current;
 }
@@ -78,8 +77,7 @@ export function teamPerformance(
   todayIso: string,
 ): TeamPerformance {
   const cur = last30Range(todayIso);
-  const prevRaw = previousEquivalentRange(cur);
-  const prev = { from: prevRaw.from ?? cur.from, to: prevRaw.to ?? cur.from };
+  const prev = insightWindows(todayIso).previous;
   const cycleNow = cycleTimeStats(tasks, cur);
   const cyclePrev = cycleTimeStats(tasks, prev);
   return {

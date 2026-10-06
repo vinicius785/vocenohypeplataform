@@ -14,21 +14,21 @@ const iso = (y: number, m0: number, d: number) => {
   const dt = new Date(Date.UTC(y, m0, d));
   return dt.toISOString().slice(0, 10);
 };
-const shift = (todayIso: string, days: number) => {
-  const [y, m, d] = todayIso.split("-").map(Number);
-  return iso(y, m - 1, d + days);
-};
 
-/** Janela dos Insights: os 30 dias terminando HOJE (Brasília), inclusive, e os 30 anteriores —
- * contíguos e SEM sobreposição. Usada por conclusão no prazo, replanejamentos, reuniões, score,
- * tarefas novas e tempo de resposta. */
+/** Janela dos Insights: ESTE MÊS (dia 1 até hoje, Brasília) contra o MESMO TRECHO do mês passado
+ * (dia 1 até o mesmo dia do mês; limitado ao último dia daquele mês). Comparar um mês parcial com o
+ * mês passado inteiro distorceria toda contagem (tarefas, replanejamentos), por isso o recorte é
+ * do mesmo tamanho. Usada por conclusão no prazo, replanejamentos, reuniões, score, tarefas novas
+ * e tempo de resposta. */
 export function insightWindows(todayIso: string = todayIsoInBrasilia()): {
   current: IsoRange;
   previous: IsoRange;
 } {
+  const [y, m, d] = todayIso.split("-").map(Number);
+  const prevMonthLast = new Date(Date.UTC(y, m - 1, 0)).getUTCDate();
   return {
-    current: { from: shift(todayIso, -29), to: todayIso },
-    previous: { from: shift(todayIso, -59), to: shift(todayIso, -30) },
+    current: { from: iso(y, m - 1, 1), to: todayIso },
+    previous: { from: iso(y, m - 2, 1), to: iso(y, m - 2, Math.min(d, prevMonthLast)) },
   };
 }
 
