@@ -167,6 +167,7 @@ import {
   ChecklistItem,
   DemographicEntry,
   ENTREGA_ACTION_LOG,
+  type ActivityMeta,
   Entrega,
   EntregaAnexo,
   EntregaAnexoCategoria,
@@ -809,6 +810,17 @@ export function InfluencerBoard({
         return x;
       }
       const label = entrega.titulo ? `${entrega.tipo} · ${entrega.titulo}` : entrega.tipo;
+      const material: EntregaAnexoCategoria | null = action.endsWith("roteiro")
+        ? "Roteiro"
+        : action.endsWith("conteudo")
+          ? "Conteúdo final"
+          : null;
+      const versao = material
+        ? (anexos ?? []).reduce(
+            (m, a) => (a.categoria === material ? Math.max(m, a.versao ?? 1) : m),
+            0,
+          )
+        : 0;
       return pushActivity(
         {
           ...x,
@@ -816,6 +828,8 @@ export function InfluencerBoard({
         },
         `${ENTREGA_ACTION_LOG[action]} — "${label}"`,
         entregaId,
+        undefined,
+        material ? { material, ...(versao > 0 ? { versao } : {}) } : undefined,
       );
     });
     applyInflusChange(next);
@@ -2423,7 +2437,7 @@ function EntregaDetailBody({
   onBack?: () => void;
   /** Fecha o painel (o cabeçalho desenha o próprio X). */
   onClose?: () => void;
-  onChange: (patch: Partial<Entrega>, log?: string) => void;
+  onChange: (patch: Partial<Entrega>, log?: string, meta?: ActivityMeta) => void;
   onRunAction: (action: EntregaEngineActionKind, opts?: EntregaActionOpts) => void;
   onSetStage: (coluna: EntregaFaseColuna) => void;
   onRemove: () => void;
@@ -2593,6 +2607,7 @@ function EntregaDetailBody({
           versao,
           entregaNome(atual),
         ),
+        { material: categoria, versao },
       );
     }
     if (falhas.length > 0) {
@@ -2633,6 +2648,7 @@ function EntregaDetailBody({
       onChangeRef.current(
         { anexos: substituirArquivo(atual.anexos ?? [], alvo.id, { nome: file.name, url }) },
         entregaLog.arquivoSubstituido(categoria, versao, alvo.nome, file.name, entregaNome(atual)),
+        { material: categoria, versao },
       );
     } catch (err) {
       setArquivosError(
@@ -3287,13 +3303,21 @@ function InfluencerWorkspaceSheet({
                 influActivity={influ.activity ?? []}
                 onBack={backToDetail}
                 onClose={() => onOpenChange(false)}
-                onChange={(patch, log) =>
+                onChange={(patch, log, meta) =>
                   onPatch({
                     entregas: influ.entregas.map((x) =>
                       x.id === selectedEntrega.id ? { ...x, ...patch } : x,
                     ),
                     ...(log
-                      ? { activity: logInfluActivity(influ, log, selectedEntrega.id).activity }
+                      ? {
+                          activity: logInfluActivity(
+                            influ,
+                            log,
+                            selectedEntrega.id,
+                            undefined,
+                            meta,
+                          ).activity,
+                        }
                       : {}),
                   })
                 }

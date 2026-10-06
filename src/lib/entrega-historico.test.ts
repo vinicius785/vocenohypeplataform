@@ -47,7 +47,7 @@ describe("classificar a linha da Atividade", () => {
   it("ações da equipe: motor, arquivos, prazo, legenda, publicação", () => {
     expect(classificarAcao('reconheceu os ajustes pedidos no roteiro — "Reels"')).toMatchObject({
       kind: "reconhecido",
-      texto: "reconheceu os ajustes",
+      texto: "reconheceu os ajustes solicitados",
     });
     expect(classificarAcao('enviou o roteiro pra aprovação do cliente — "Reels"')).toMatchObject({
       kind: "enviado",

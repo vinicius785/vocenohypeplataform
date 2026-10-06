@@ -71,8 +71,11 @@ export type InfluActivity = {
   entregaId?: string;
   /** Marca eventos de uma área (hoje só "financeiro"), para a linha do tempo daquela área. */
   area?: "financeiro";
+  /** Material e versão do arquivo a que o evento se refere (só eventos novos; os antigos não têm). */
+  meta?: ActivityMeta;
   createdAt: string;
 };
+export type ActivityMeta = { material: EntregaAnexoCategoria; versao?: number };
 
 /**
  * Modelo tipado de histórico (substitui gradualmente o texto-livre de
@@ -170,6 +173,7 @@ export function logInfluActivity(
   action: string,
   entregaId?: string,
   area?: "financeiro",
+  meta?: ActivityMeta,
 ): Influ {
   const me = getCurrentAuthor();
   return {
@@ -185,6 +189,7 @@ export function logInfluActivity(
         action,
         entregaId,
         ...(area ? { area } : {}),
+        ...(meta ? { meta } : {}),
         createdAt: new Date().toISOString(),
       },
     ],

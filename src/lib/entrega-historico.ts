@@ -51,6 +51,12 @@ export type HistoricoEvento = {
   versao?: number;
   /** Texto do feedback do cliente (só `feedback`). */
   motivo?: string;
+  /** Material do evento ("Roteiro", "Conteúdo final"…): do registro novo ou da etapa. */
+  material?: string;
+  /** Versão do ARQUIVO no momento (só eventos gravados com `meta`; nunca inferida). */
+  arquivoVersao?: number;
+  /** Evento de rotina (prazo, legenda, arquivo avulso…): só aparece em "Ver tudo". */
+  menor?: boolean;
   /** Feedback que ainda pede trabalho da equipe (ajuste aberto, não reenviado). */
   pendente?: boolean;
 };
@@ -82,7 +88,12 @@ export function classificarAcao(action: string): Classe {
     return { kind: "aprovado", etapa, texto: `aprovou ${objeto(etapa)}` };
   }
   m = /^reconheceu os ajustes pedidos no (roteiro|conteúdo)/.exec(txt);
-  if (m) return { kind: "reconhecido", etapa: etapaDe(m[1]), texto: "reconheceu os ajustes" };
+  if (m)
+    return {
+      kind: "reconhecido",
+      etapa: etapaDe(m[1]),
+      texto: "reconheceu os ajustes solicitados",
+    };
   m = /^enviou (o roteiro|o conteúdo final) pra aprovação/.exec(txt);
   if (m) {
     const etapa = etapaDe(m[1]);
@@ -110,7 +121,13 @@ export function historicoEventos(
   const itens: HistoricoEvento[] = historicoDaEntrega(activity, e)
     .slice()
     .reverse()
-    .map((a) => ({ id: a.id, at: a.createdAt, autor: a.author, ...classificarAcao(a.action) }));
+    .map((a) => ({
+      id: a.id,
+      at: a.createdAt,
+      autor: a.author,
+      ...(a.meta ? { material: a.meta.material, arquivoVersao: a.meta.versao } : {}),
+      ...classificarAcao(a.action),
+    }));
 
   // Garantia de "feedback antigo continua aparecendo": se o carimbo vivo do cliente não tem a linha
   // correspondente na Atividade, o evento é montado a partir do próprio carimbo.
@@ -133,6 +150,15 @@ export function historicoEventos(
     });
   }
   itens.sort((a, b) => cmp(a.at, b.at));
+  for (const it of itens) {
+    if (!it.material && it.etapa) it.material = HISTORICO_ETAPA_LABEL[it.etapa];
+    it.menor = !(
+      ["feedback", "aprovado", "reconhecido", "enviado", "reenviado", "publicado"].includes(
+        it.kind,
+      ) ||
+      (it.kind === "anexo" && /^anexou/.test(it.texto))
+    );
+  }
 
   // V1, V2, V3… por etapa (cada decisão do cliente conta) e "reenviou" = envio depois de um ajuste.
   const contador: Record<HistoricoEtapa, number> = { roteiro: 0, conteudo: 0 };

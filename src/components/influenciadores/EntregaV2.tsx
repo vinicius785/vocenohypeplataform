@@ -2,7 +2,6 @@ import { useState, type ReactNode, type Ref } from "react";
 import {
   AlignLeft,
   ArrowLeft,
-  Check,
   Clapperboard,
   FileText,
   Loader2,
@@ -30,7 +29,7 @@ import {
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { EditorialCaption } from "@/components/marketing/editorial/EditorialCaption";
 import { overdueLabel } from "@/components/tasks/task-ui";
-import { formatActivityWhen } from "@/lib/activity-time";
+import { useTeamMembers } from "@/components/tasks/task-people";
 import { feedbackExcerpt } from "@/lib/entrega-ajustes";
 import {
   ARQUIVO_CATEGORIA_LABEL,
@@ -49,7 +48,7 @@ import {
   type PrazoCampo,
   type StepperStep,
 } from "@/lib/entrega-detail";
-import { HISTORICO_ETAPA_LABEL, type HistoricoEvento } from "@/lib/entrega-historico";
+import { type HistoricoEvento } from "@/lib/entrega-historico";
 import type { Entrega, EntregaAnexo, EntregaAnexoCategoria } from "@/lib/influencer-model";
 import type { EntregaTone } from "@/lib/influencer-next-action";
 import type { EditorialChannel } from "@/lib/marketing-editorial";
@@ -912,10 +911,56 @@ export function EntregaArquivos({
 }
 
 /* ============================================================
- * Histórico — tudo o que aconteceu, inclusive o feedback do cliente (versionado)
+ * Histórico — a história da entrega: quem fez o quê, em qual material, quando
  * ============================================================ */
 
-function EventoFeedback({
+function PessoaAvatar({ nome, iniciais }: { nome: string; iniciais: string }) {
+  const membros = useTeamMembers();
+  const foto = membros.find(
+    (m) => m.name.trim().toLowerCase() === nome.trim().toLowerCase(),
+  )?.photo;
+  return (
+    <span
+      title={nome}
+      className="relative z-10 flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-[9px] font-semibold text-text-secondary ring-2 ring-background"
+    >
+      {foto ? <img src={foto} alt="" className="h-full w-full object-cover" /> : iniciais}
+    </span>
+  );
+}
+
+const iniciaisDe = (nome: string) =>
+  nome
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("") || "?";
+
+/** "Roteiro · V2" (arquivo), "Roteiro · Feedback V1" (feedback) ou só "Roteiro". */
+function metadadoDoEvento(e: HistoricoEvento): string | null {
+  if (e.kind === "feedback") {
+    const mat = e.material ?? "";
+    return [mat, `Feedback V${e.versao ?? 1}`].filter(Boolean).join(" · ");
+  }
+  if (!e.material) return null;
+  return e.arquivoVersao ? `${e.material} · V${e.arquivoVersao}` : e.material;
+}
+
+function diaRotulo(iso: string, agora = new Date()): string {
+  const d = new Date(iso);
+  const chave = (x: Date) => `${x.getFullYear()}-${x.getMonth()}-${x.getDate()}`;
+  const ontem = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate() - 1);
+  if (chave(d) === chave(agora)) return "Hoje";
+  if (chave(d) === chave(ontem)) return "Ontem";
+  return `${String(d.getDate()).padStart(2, "0")} ${["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"][d.getMonth()]}`;
+}
+const horaDe = (iso: string) => {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
+
+function EventoLinha({
   evento,
   expandido,
   onToggle,
@@ -924,42 +969,48 @@ function EventoFeedback({
   expandido: boolean;
   onToggle: () => void;
 }) {
-  const etapa = evento.etapa ? HISTORICO_ETAPA_LABEL[evento.etapa] : "";
+  const meta = metadadoDoEvento(evento);
+  const feedback = evento.kind === "feedback";
   const motivo = evento.motivo?.trim() ?? "";
   const resumo = feedbackExcerpt(motivo, 140);
   return (
-    <li
-      data-evento-id={evento.id}
-      className={cn(
-        "border-l-2 py-0.5 pl-3",
-        evento.pendente ? "border-orange-500" : "border-border",
-      )}
-    >
-      <div className="flex items-baseline justify-between gap-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground">
-          Feedback V{evento.versao ?? 1}
-          {etapa && ` · ${etapa}`}
-        </p>
-        <span className="shrink-0 text-xs tabular-nums text-text-secondary">
-          {formatActivityWhen(evento.at)}
-        </span>
-      </div>
-      {motivo ? (
-        <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-snug text-foreground">
-          “{expandido ? motivo : resumo.text}”
-        </p>
-      ) : (
-        <p className="mt-1 text-sm text-text-secondary">Sem comentário do cliente.</p>
-      )}
-      <div className="mt-1 flex items-center justify-between gap-3">
-        <span className="min-w-0 truncate text-xs text-text-secondary">
-          {evento.autor}
-          {evento.pendente && " · pendente"}
-        </span>
-        {(resumo.truncated || expandido) && (
-          <QuietButton onClick={onToggle}>
-            {expandido ? "Ocultar feedback" : "Ver feedback completo →"}
-          </QuietButton>
+    <li data-evento-id={evento.id} className="relative flex gap-2.5 pb-2.5 last:pb-0">
+      <PessoaAvatar nome={evento.autor} iniciais={iniciaisDe(evento.autor)} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline justify-between gap-3">
+          <p className="min-w-0 text-sm leading-snug">
+            <span className="font-medium text-foreground">{evento.autor}</span>{" "}
+            <span className="text-foreground">{evento.texto}</span>
+          </p>
+          <span className="shrink-0 text-[11px] tabular-nums text-text-secondary">
+            {horaDe(evento.at)}
+          </span>
+        </div>
+        {meta && <p className="text-[11px] leading-snug text-text-secondary">{meta}</p>}
+        {feedback && (
+          <div
+            className={cn(
+              "mt-1.5 rounded-lg border px-2.5 py-2",
+              evento.pendente
+                ? "border-warning-border/70 bg-warning-soft/40"
+                : "border-border/60 bg-muted/30",
+            )}
+          >
+            {motivo ? (
+              <p className="whitespace-pre-wrap break-words text-sm leading-snug text-foreground">
+                “{expandido ? motivo : resumo.text}”
+              </p>
+            ) : (
+              <p className="text-sm text-text-secondary">Sem comentário do cliente.</p>
+            )}
+            {(resumo.truncated || expandido) && (
+              <div className="mt-1">
+                <QuietButton onClick={onToggle}>
+                  {expandido ? "Ocultar feedback" : "Ver feedback completo →"}
+                </QuietButton>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </li>
@@ -972,7 +1023,7 @@ export function EntregaHistorico({
   onToggleAll,
   feedbackAberto,
   onToggleFeedback,
-  limit = 3,
+  limit = 6,
   sectionRef,
 }: {
   eventos: HistoricoEvento[];
@@ -984,10 +1035,21 @@ export function EntregaHistorico({
   limit?: number;
   sectionRef?: Ref<HTMLElement>;
 }) {
-  // O ajuste que ainda espera a equipe nunca fica escondido atrás do "Ver tudo".
-  const corte = Math.max(limit, eventos.findIndex((e) => e.pendente) + 1);
-  const visiveis = showAll ? eventos : eventos.slice(0, corte);
-  const temMais = eventos.length > corte;
+  // Por padrão só os eventos relevantes (os de rotina ficam em "Ver tudo"); o ajuste que ainda
+  // espera a equipe nunca fica escondido.
+  const relevantes = eventos.filter((e) => !e.menor || e.pendente);
+  const corte = Math.max(limit, relevantes.findIndex((e) => e.pendente) + 1);
+  const lista = showAll ? eventos : relevantes.slice(0, corte);
+  const temMais = showAll || eventos.length > lista.length;
+
+  const grupos: { dia: string; itens: HistoricoEvento[] }[] = [];
+  for (const e of lista) {
+    const dia = diaRotulo(e.at);
+    const ultimo = grupos[grupos.length - 1];
+    if (ultimo?.dia === dia) ultimo.itens.push(e);
+    else grupos.push({ dia, itens: [e] });
+  }
+
   return (
     <section aria-label="Histórico" ref={sectionRef} className="scroll-mt-16 space-y-1.5">
       <CockpitTitle
@@ -995,45 +1057,29 @@ export function EntregaHistorico({
           eventos.length === 0 ? (
             <span className="text-xs text-text-secondary">Nenhum evento registrado ainda.</span>
           ) : temMais ? (
-            <QuietButton onClick={onToggleAll}>
-              {showAll ? "Ver menos" : `Ver tudo (${eventos.length})`}
-            </QuietButton>
+            <QuietButton onClick={onToggleAll}>{showAll ? "Ver menos" : "Ver tudo"}</QuietButton>
           ) : undefined
         }
       >
         Histórico
       </CockpitTitle>
-      {eventos.length > 0 && (
-        <ul className="space-y-1.5">
-          {visiveis.map((e) =>
-            e.kind === "feedback" ? (
-              <EventoFeedback
+      {grupos.map((g) => (
+        <div key={g.dia} className="space-y-1.5">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-text-secondary">
+            {g.dia}
+          </p>
+          <ul className="relative before:absolute before:bottom-2 before:left-2.5 before:top-2 before:w-px before:-translate-x-1/2 before:bg-border/70">
+            {g.itens.map((e) => (
+              <EventoLinha
                 key={e.id}
                 evento={e}
                 expandido={feedbackAberto === e.id}
                 onToggle={() => onToggleFeedback(e.id)}
               />
-            ) : (
-              <li key={e.id} data-evento-id={e.id} className="text-sm leading-snug">
-                <span className="mr-2 text-xs tabular-nums text-text-secondary">
-                  {formatActivityWhen(e.at)}
-                </span>
-                {(e.kind === "aprovado" || e.kind === "publicado") && (
-                  <Check
-                    aria-hidden
-                    className="mr-1 inline h-3 w-3 -translate-y-px text-emerald-600 dark:text-emerald-400"
-                  />
-                )}
-                <span className="font-medium text-foreground">{e.autor}</span>{" "}
-                <span className="text-text-secondary">
-                  {e.texto}
-                  {e.kind === "aprovado" && e.versao ? ` · V${e.versao}` : ""}
-                </span>
-              </li>
-            ),
-          )}
-        </ul>
-      )}
+            ))}
+          </ul>
+        </div>
+      ))}
     </section>
   );
 }

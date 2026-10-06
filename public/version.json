@@ -1,37 +1,25 @@
 {
-  "version": "1.337.0",
+  "version": "1.338.0",
   "releases": [
     {
-      "version": "1.337.0",
-      "summary": "Detalhe da entrega refeito, bem mais simples: cabeçalho, progresso, próxima ação, arquivos e histórico — com o feedback do cliente dentro do histórico.",
+      "version": "1.338.0",
+      "summary": "Histórico da entrega como história de trabalho: dias, linha do tempo, pessoas e material com versão.",
       "modules": [
         {
           "name": "CAMPANHAS",
           "tagline": "Detalhe da entrega",
           "items": [
             {
-              "title": "Cabeçalho e próxima ação mais enxutos",
-              "description": "O influenciador aparece primeiro; a entrega e “1 unidade” ficam em segundo plano. Uma única caixa diz o que fazer agora (ou que o cliente está analisando), com o botão da ação."
+              "title": "Linha do tempo por dia",
+              "description": "Eventos agrupados em Hoje, Ontem e datas, com a pessoa em destaque, a ação e o horário discreto."
             },
             {
-              "title": "Arquivos em quadradinhos, com versões",
-              "description": "Roteiro, gravação, conteúdo final e legenda lado a lado. No menu de cada um: abrir, adicionar nova versão (V1, V2, V3…), substituir o arquivo, ver as versões e remover — nada é sobrescrito sem aviso."
+              "title": "Material e versão em cada evento",
+              "description": "Ex.: “Roteiro · V2” ou “Roteiro · Feedback V1”; os registros novos passam a guardar a versão do arquivo."
             },
             {
-              "title": "Feedback do cliente dentro do histórico",
-              "description": "Cada pedido de ajuste vira “Feedback V1 · Roteiro”, “V2”… com o texto e “Ver feedback completo”; as aprovações também entram na contagem. Não há mais uma seção separada de feedback."
-            },
-            {
-              "title": "Progresso fino e prazos editáveis",
-              "description": "As quatro etapas com a data de cada uma e aviso de atraso na publicação; “Editar prazos” registra a mudança no histórico."
-            },
-            {
-              "title": "Publicação sem ocupar espaço",
-              "description": "Depois de publicada, a mesma caixa mostra a data e as métricas e abre o post; o link e as métricas se editam num modal pequeno, pelo menu ⋮."
-            },
-            {
-              "title": "Painel bem menor",
-              "description": "Entre 17% e 36% mais curto que a versão anterior, sem rolagem horizontal; no celular os quadrados quebram de linha."
+              "title": "Feedback como evento",
+              "description": "O pedido de ajuste ganha uma pequena superfície com a citação e “Ver feedback completo”; eventos de rotina ficam em “Ver tudo”."
             }
           ]
         }

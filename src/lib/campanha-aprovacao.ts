@@ -1,4 +1,10 @@
-import type { Influ, Entrega, ClienteVeredito, InfluActivityEvent } from "@/lib/influencer-model";
+import type {
+  Influ,
+  Entrega,
+  ClienteVeredito,
+  InfluActivityEvent,
+  ActivityMeta,
+} from "@/lib/influencer-model";
 import { canReopenInfluApproval } from "@/lib/campanha-status";
 
 /**
@@ -21,7 +27,12 @@ function initialsFor(name: string): string {
  * do usuário logado). O link público antigo (V1, sem login individual)
  * passa `undefined`, e o rótulo genérico "Cliente" é usado — nunca um nome
  * inventado nem uma suposição de quem foi. */
-function clientActivity(action: string, entregaId?: string, actorName?: string) {
+function clientActivity(
+  action: string,
+  entregaId?: string,
+  actorName?: string,
+  meta?: ActivityMeta,
+) {
   const name = actorName?.trim() || "Cliente";
   return {
     id: crypto.randomUUID(),
@@ -30,6 +41,7 @@ function clientActivity(action: string, entregaId?: string, actorName?: string) 
     color: "bg-slate-500 text-white",
     action,
     entregaId,
+    ...(meta ? { meta } : {}),
     createdAt: new Date().toISOString(),
   };
 }
@@ -183,6 +195,11 @@ export function applyEntregaApproval(
     throw new Error("É necessário um comentário explicando os ajustes solicitados.");
   }
   const isRoteiro = entrega.stage === "ROTEIRO_APROVACAO";
+  const fileVersion = (entrega.anexos ?? []).reduce(
+    (m, a) =>
+      a.categoria === (isRoteiro ? "Roteiro" : "Conteúdo final") ? Math.max(m, a.versao ?? 1) : m,
+    0,
+  );
 
   const entregas = influ.entregas.map((e): Entrega => {
     if (e.id !== entregaId) return e;
@@ -219,7 +236,13 @@ export function applyEntregaApproval(
       status,
       at,
     },
-    activity: [...(influ.activity ?? []), clientActivity(action, entregaId, actorName)],
+    activity: [
+      ...(influ.activity ?? []),
+      clientActivity(action, entregaId, actorName, {
+        material: isRoteiro ? "Roteiro" : "Conteúdo final",
+        ...(fileVersion > 0 ? { versao: fileVersion } : {}),
+      }),
+    ],
     activityEvents: [
       ...(influ.activityEvents ?? []),
       clientActivityEvent(
