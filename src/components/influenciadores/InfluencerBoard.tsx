@@ -4538,12 +4538,40 @@ function FinanceiroContratoSection({
       : state.key === "agendado"
         ? "Aprovado · aguardando pagamento"
         : state.label;
-  const payDetail = [
-    state.amount > 0 ? money(state.amount) : "",
-    state.key === "pago" ? (state.paidOn ? `pago em ${formatIsoDate(state.paidOn)}` : "") : "",
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const podeEditarVenc = !!pag && state.key !== "recusado" && state.key !== "pago";
+  const FIN_LINK = "text-foreground/80 hover:text-foreground";
+  // Valor + vencimento juntos, logo abaixo do estado: a data fica ao lado do status do pagamento.
+  const payDetail = (
+    <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      {state.amount > 0 && <span className="tabular-nums">{money(state.amount)}</span>}
+      {state.key === "pago" ? (
+        state.paidOn ? (
+          <span>· pago em {formatIsoDate(state.paidOn)}</span>
+        ) : null
+      ) : podeEditarVenc && dueOpen && pag ? (
+        <span className="w-44">
+          <DateField
+            autoOpen
+            value={pag.data ?? undefined}
+            onChange={(v) => void saveDue(v)}
+            ariaLabel="Vencimento do pagamento"
+            className="text-xs"
+          />
+        </span>
+      ) : (
+        <>
+          <span className="tabular-nums">
+            · {state.due ? `vence em ${formatIsoDate(state.due)}` : "sem vencimento"}
+          </span>
+          {podeEditarVenc && (
+            <QuietButton onClick={() => setDueOpen(true)}>
+              {state.due ? "Editar vencimento" : "Definir vencimento"}
+            </QuietButton>
+          )}
+        </>
+      )}
+    </span>
+  );
 
   const aprovar = () =>
     pag &&
@@ -4700,7 +4728,9 @@ function FinanceiroContratoSection({
             title="Remuneração"
             action={
               rem && editing !== "rem" ? (
-                <QuietButton onClick={startRem}>Editar</QuietButton>
+                <QuietButton className={FIN_LINK} onClick={startRem}>
+                  Editar
+                </QuietButton>
               ) : undefined
             }
           >
@@ -4708,32 +4738,28 @@ function FinanceiroContratoSection({
               <div className="space-y-3">
                 <PagamentoEditor value={remDraft} onChange={setRemDraft} parts="remuneracao" />
                 <div className="flex justify-end gap-3">
-                  <QuietButton onClick={() => setEditing(null)}>Cancelar</QuietButton>
+                  <QuietButton className={FIN_LINK} onClick={() => setEditing(null)}>
+                    Cancelar
+                  </QuietButton>
                   <button type="button" onClick={saveRem} className={solid}>
                     Salvar remuneração
                   </button>
                 </div>
               </div>
             ) : rem ? (
-              <div className="space-y-1">
-                {rem.total != null && (
-                  <p className="text-xl font-semibold tabular-nums text-foreground">
-                    {money(rem.total)}
-                  </p>
-                )}
-                {rem.lines.length > 1 || rem.total == null ? (
-                  <ul className="space-y-0.5 text-sm">
-                    {rem.lines.map((l, i) => (
-                      <li key={i}>
-                        <span className="text-text-secondary">{l.label} · </span>
-                        <span className="text-foreground">{l.value}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-sm text-text-secondary">{rem.tipoLabel}</p>
-                )}
-              </div>
+              rem.lines.length > 1 || rem.total == null ? (
+                <ul className="space-y-0.5 text-sm">
+                  {rem.lines.map((l, i) => (
+                    <li key={i}>
+                      <span className="text-text-secondary">{l.label} · </span>
+                      <span className="text-foreground">{l.value}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                // O valor já está no resumo do topo; aqui só a modalidade (e o Editar).
+                <p className="text-sm text-foreground">{rem.tipoLabel}</p>
+              )
             ) : (
               <p className="text-sm text-text-secondary">Nenhuma remuneração definida.</p>
             )}
@@ -4763,31 +4789,6 @@ function FinanceiroContratoSection({
             requisitos={state.key === "pago" ? [] : requisitos}
             menu={payMenu}
           >
-            {pag && state.key !== "recusado" && state.key !== "pago" && (
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                <span className="text-text-secondary">Vencimento</span>
-                {dueOpen ? (
-                  <div className="w-44">
-                    <DateField
-                      autoOpen
-                      value={pag.data ?? undefined}
-                      onChange={(v) => void saveDue(v)}
-                      ariaLabel="Vencimento do pagamento"
-                      className="text-xs"
-                    />
-                  </div>
-                ) : (
-                  <>
-                    <span className="tabular-nums text-foreground">
-                      {pag.data ? formatIsoDate(pag.data) : "—"}
-                    </span>
-                    <QuietButton onClick={() => setDueOpen(true)}>
-                      {pag.data ? "Editar" : "Definir"}
-                    </QuietButton>
-                  </>
-                )}
-              </div>
-            )}
             {pag?.comprovanteUrl ? (
               <FileLine
                 name={pag.comprovanteNome || "Comprovante"}
@@ -4819,18 +4820,21 @@ function FinanceiroContratoSection({
       )}
 
       {(showBanco || showContrato) && (
-        <div className="grid grid-cols-1 gap-x-10 gap-y-8 md:grid-cols-2">
+        <FinanceSection title="Documentos" className="space-y-5">
           {showBanco && (
-            <div ref={bankRef} className={editing === "bank" ? "md:col-span-2" : undefined}>
+            <div ref={bankRef}>
               <FinanceSection
+                sub
                 title="Dados bancários"
                 action={
                   temBanco && editing !== "bank" ? (
                     <span className="flex items-center gap-3">
-                      <QuietButton onClick={() => setShowBank((v) => !v)}>
+                      <QuietButton className={FIN_LINK} onClick={() => setShowBank((v) => !v)}>
                         {showBank ? "Ocultar" : "Mostrar"}
                       </QuietButton>
-                      <QuietButton onClick={startBank}>Editar</QuietButton>
+                      <QuietButton className={FIN_LINK} onClick={startBank}>
+                        Editar
+                      </QuietButton>
                     </span>
                   ) : undefined
                 }
@@ -4839,7 +4843,9 @@ function FinanceiroContratoSection({
                   <div className="space-y-3">
                     <BankFields value={bankDraft} onChange={setBankDraft} compact />
                     <div className="flex justify-end gap-3">
-                      <QuietButton onClick={() => setEditing(null)}>Cancelar</QuietButton>
+                      <QuietButton className={FIN_LINK} onClick={() => setEditing(null)}>
+                        Cancelar
+                      </QuietButton>
                       <button type="button" onClick={saveBank} className={solid}>
                         Salvar dados
                       </button>
@@ -4864,7 +4870,9 @@ function FinanceiroContratoSection({
                 ) : (
                   <div className="space-y-1.5">
                     <p className="text-sm text-text-secondary">Nenhum dado bancário cadastrado.</p>
-                    <QuietButton onClick={startBank}>Cadastrar dados</QuietButton>
+                    <QuietButton className={FIN_LINK} onClick={startBank}>
+                      Cadastrar dados
+                    </QuietButton>
                   </div>
                 )}
               </FinanceSection>
@@ -4872,65 +4880,78 @@ function FinanceiroContratoSection({
           )}
 
           {showContrato && (
-            <FinanceSection title="Contrato">
-              {contrato.present ? (
-                <ArquivoMaterial
-                  nome={contrato.name}
-                  url={influ.contrato!}
-                  meta={`${contrato.kind === "pdf" ? "PDF" : contrato.kind === "imagem" ? "Imagem" : "Arquivo"}${contratoEm ? ` · anexado em ${new Date(contratoEm).toLocaleDateString("pt-BR")}` : " · versão atual"}`}
-                  onOpen={() => openFileUrl(influ.contrato!)}
-                  onRemove={() =>
-                    commit({ contrato: undefined, contratoNome: undefined }, "removeu o contrato")
-                  }
-                  renderUpload={(label) => (
-                    <QuietButton onClick={() => contratoRef.current?.click()}>
-                      {busy ? "Enviando..." : label}
-                    </QuietButton>
+            <div className="grid grid-cols-1 gap-x-8 gap-y-5 md:grid-cols-2">
+              {showContrato && (
+                <FinanceSection sub title="Contrato">
+                  {contrato.present ? (
+                    <ArquivoMaterial
+                      nome={contrato.name}
+                      url={influ.contrato!}
+                      meta={`${contrato.kind === "pdf" ? "PDF" : contrato.kind === "imagem" ? "Imagem" : "Arquivo"}${contratoEm ? ` · anexado em ${new Date(contratoEm).toLocaleDateString("pt-BR")}` : " · versão atual"}`}
+                      onOpen={() => openFileUrl(influ.contrato!)}
+                      onRemove={() =>
+                        commit(
+                          { contrato: undefined, contratoNome: undefined },
+                          "removeu o contrato",
+                        )
+                      }
+                      renderUpload={(label) => (
+                        <QuietButton
+                          className={FIN_LINK}
+                          onClick={() => contratoRef.current?.click()}
+                        >
+                          {busy ? "Enviando..." : label}
+                        </QuietButton>
+                      )}
+                    />
+                  ) : (
+                    <div className="space-y-1.5">
+                      <p className="text-sm text-text-secondary">Nenhum contrato anexado.</p>
+                      <QuietButton
+                        className={FIN_LINK}
+                        onClick={() => contratoRef.current?.click()}
+                      >
+                        {busy ? "Enviando..." : "Anexar contrato"}
+                      </QuietButton>
+                    </div>
                   )}
-                />
-              ) : (
-                <div className="space-y-1.5">
-                  <p className="text-sm text-text-secondary">Nenhum contrato anexado.</p>
-                  <QuietButton onClick={() => contratoRef.current?.click()}>
-                    {busy ? "Enviando..." : "Anexar contrato"}
-                  </QuietButton>
-                </div>
+                  {fileError && <p className="text-xs text-destructive">{fileError}</p>}
+                </FinanceSection>
               )}
-              {fileError && <p className="text-xs text-destructive">{fileError}</p>}
-            </FinanceSection>
-          )}
 
-          {showContrato && (
-            <FinanceSection title="Nota fiscal">
-              {nota.present ? (
-                <ArquivoMaterial
-                  nome={nota.name}
-                  url={influ.notaFiscal!}
-                  meta={`${nota.kind === "pdf" ? "PDF" : nota.kind === "imagem" ? "Imagem" : "Arquivo"}${notaEm ? ` · anexada em ${new Date(notaEm).toLocaleDateString("pt-BR")}` : " · versão atual"}`}
-                  onOpen={() => openFileUrl(influ.notaFiscal!)}
-                  onRemove={() =>
-                    commit(
-                      { notaFiscal: undefined, notaFiscalNome: undefined },
-                      "removeu a nota fiscal",
-                    )
-                  }
-                  renderUpload={(label) => (
-                    <QuietButton onClick={() => notaRef.current?.click()}>
-                      {busy ? "Enviando..." : label}
-                    </QuietButton>
+              {showContrato && (
+                <FinanceSection sub title="Nota fiscal">
+                  {nota.present ? (
+                    <ArquivoMaterial
+                      nome={nota.name}
+                      url={influ.notaFiscal!}
+                      meta={`${nota.kind === "pdf" ? "PDF" : nota.kind === "imagem" ? "Imagem" : "Arquivo"}${notaEm ? ` · anexada em ${new Date(notaEm).toLocaleDateString("pt-BR")}` : " · versão atual"}`}
+                      onOpen={() => openFileUrl(influ.notaFiscal!)}
+                      onRemove={() =>
+                        commit(
+                          { notaFiscal: undefined, notaFiscalNome: undefined },
+                          "removeu a nota fiscal",
+                        )
+                      }
+                      renderUpload={(label) => (
+                        <QuietButton className={FIN_LINK} onClick={() => notaRef.current?.click()}>
+                          {busy ? "Enviando..." : label}
+                        </QuietButton>
+                      )}
+                    />
+                  ) : (
+                    <div className="space-y-1.5">
+                      <p className="text-sm text-text-secondary">Nenhuma nota fiscal anexada.</p>
+                      <QuietButton className={FIN_LINK} onClick={() => notaRef.current?.click()}>
+                        {busy ? "Enviando..." : "Anexar nota fiscal"}
+                      </QuietButton>
+                    </div>
                   )}
-                />
-              ) : (
-                <div className="space-y-1.5">
-                  <p className="text-sm text-text-secondary">Nenhuma nota fiscal anexada.</p>
-                  <QuietButton onClick={() => notaRef.current?.click()}>
-                    {busy ? "Enviando..." : "Anexar nota fiscal"}
-                  </QuietButton>
-                </div>
+                </FinanceSection>
               )}
-            </FinanceSection>
+            </div>
           )}
-        </div>
+        </FinanceSection>
       )}
 
       <EntregaHistorico

@@ -1,6 +1,30 @@
 {
-  "version": "1.361.0",
+  "version": "1.362.0",
   "releases": [
+    {
+      "version": "1.362.0",
+      "summary": "Aba Financeiro do influenciador mais limpa: menos repetição, pagamento e vencimento juntos, documentos agrupados.",
+      "modules": [
+        {
+          "name": "INFLUENCIADORES",
+          "tagline": "Financeiro",
+          "items": [
+            {
+              "title": "Resumo e remuneração",
+              "description": "O valor ganha destaque no topo e não se repete na seção Remuneração."
+            },
+            {
+              "title": "Pagamento como unidade",
+              "description": "Estado, valor, vencimento (com “Editar vencimento”), requisitos e comprovante no mesmo bloco."
+            },
+            {
+              "title": "Documentos",
+              "description": "Dados bancários, contrato e nota fiscal num único grupo, com os dois arquivos lado a lado."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.361.0",
       "summary": "Financeiro do influenciador: nota fiscal e vencimento que confirma a gravação.",

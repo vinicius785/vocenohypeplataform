@@ -55,11 +55,11 @@ export function FinanceSummary({ cells }: { cells: SummaryCell[] }) {
           <p
             className={cn(
               "mt-1 flex items-center gap-1.5 font-semibold tabular-nums text-foreground",
-              c.emphasis ? "text-xl" : "text-base",
+              c.emphasis ? "text-[22px] leading-7" : "text-base",
             )}
           >
             <StateDot tone={c.tone} />
-            <span className="truncate">{c.value}</span>
+            <span className={c.emphasis ? undefined : "truncate"}>{c.value}</span>
           </p>
           {c.caption && <p className="mt-0.5 truncate text-xs text-text-secondary">{c.caption}</p>}
         </div>
@@ -74,16 +74,26 @@ export function FinanceSection({
   title,
   action,
   className,
+  sub,
   children,
 }: {
   title: string;
   action?: ReactNode;
   className?: string;
+  /** Subtítulo dentro de um grupo (ex.: cada documento em "Documentos"): menor peso que o grupo. */
+  sub?: boolean;
   children: ReactNode;
 }) {
   return (
     <section aria-label={title} className={cn("min-w-0 space-y-2", className)}>
-      <CockpitTitle action={action}>{title}</CockpitTitle>
+      {sub ? (
+        <div className="flex items-center justify-between gap-3">
+          <h4 className="text-sm font-medium text-foreground">{title}</h4>
+          {action}
+        </div>
+      ) : (
+        <CockpitTitle action={action}>{title}</CockpitTitle>
+      )}
       {children}
     </section>
   );

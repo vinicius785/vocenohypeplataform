@@ -65,7 +65,7 @@ export function PaymentFlow({
 }: {
   label: string;
   tone: PaymentTone;
-  detail?: string;
+  detail?: ReactNode;
   hint?: string;
   requisitos: Requisito[];
   /** Itens do menu ⋯ (ações secundárias); sem itens, sem menu. */
@@ -80,7 +80,7 @@ export function PaymentFlow({
             <StateDot tone={tone} />
             {label}
           </p>
-          {detail && <p className="text-sm text-text-secondary">{detail}</p>}
+          {detail && <div className="mt-0.5 text-sm text-text-secondary">{detail}</div>}
         </div>
         {menu.length > 0 && (
           <DropdownMenu>
