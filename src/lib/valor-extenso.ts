@@ -42,6 +42,11 @@ export function formatCents(cents: number): string {
   return `${neg ? "-" : ""}${String(reais).replace(/\B(?=(\d{3})+(?!\d))/g, ".")},${c}`;
 }
 
+/** Como o template escreve valores redondos ("R$ 100.000"): sem ",00" quando não há centavos. */
+export function formatReaisCompact(cents: number): string {
+  return cents % 100 === 0 ? formatCents(cents).replace(/,00$/, "") : formatCents(cents);
+}
+
 const UNIDADES = [
   "zero",
   "um",

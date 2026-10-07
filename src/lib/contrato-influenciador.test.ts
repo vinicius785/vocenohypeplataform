@@ -3,7 +3,9 @@ import type { Campaign } from "@/components/VincularCampanhaDialog";
 import type { BankInflu } from "@/lib/banco-influs-store";
 import type { Entrega, Influ } from "@/lib/influencer-model";
 import {
+  CONTRATO_DEFAULTS,
   CONTRATO_TEMPLATE_VERSION,
+  TEXTO_SEM_EXCLUSIVIDADE,
   anexoGroupKey,
   buildContratoDraft,
   evaluateContrato,
@@ -287,9 +289,17 @@ describe("evaluateContrato — caminho feliz", () => {
     expect(v.pagamento_dados).toBe("CPF: 529.982.247-25");
     expect(v.pagamento_parcela_valor).toBe("3.500,00");
     expect(v.pagamento_prazo_dias_uteis).toBe("30");
+    expect(v.exclusividade_possui).toBe("SIM");
     expect(v.exclusividade_periodo).toBe("30 dias a partir da data de assinatura");
     expect(v.uso_conteudo_meses).toBe("6");
-    expect(v.midia_paga_autorizada).toBe("SIM");
+    expect(v.uso_midia_paga).toBe("SIM");
+    // Valores iniciais dos antigos `[100.000]`, `[365]` e `[7]`, agora variáveis do contrato.
+    expect(v.multa_publicacao_irregular).toBe("100.000");
+    expect(v.multa_publicacao_irregular_extenso).toBe("cem mil reais");
+    expect(v.multa_confidencialidade).toBe("100.000");
+    expect(v.multa_confidencialidade_extenso).toBe("cem mil reais");
+    expect(v.vigencia_dias_apos_entregas).toBe("365");
+    expect(v.briefing_antecedencia_dias).toBe("7");
     expect(v.anexo_i).toEqual([
       {
         tipo: "Reels",
@@ -301,7 +311,7 @@ describe("evaluateContrato — caminho feliz", () => {
     expect(v.anexo_i_total_valor).toBe("3.500,00");
   });
 
-  it("mídia paga = NÃO quando a campanha não lista uso pago", () => {
+  it("uso de mídia paga = NÃO não bloqueia nem apaga nada: só muda o SIM/NÃO da linha", () => {
     const src = source({
       campanha: campanha({
         direitosImagem: {
@@ -314,8 +324,12 @@ describe("evaluateContrato — caminho feliz", () => {
       }),
     });
     const r = evaluateContrato(completar(buildContratoDraft(src)), src);
-    expect(r.variables?.midia_paga_autorizada).toBe("NÃO");
+    expect(r.ok).toBe(true);
+    expect(r.issues).toEqual([]);
+    expect(r.variables?.uso_midia_paga).toBe("NÃO");
+    // O restante do bloco de direitos de imagem continua preenchido (a cláusula permanece no documento).
     expect(r.variables?.uso_conteudo_meses).toBe("3");
+    expect(r.variables).toHaveProperty("uso_midia_paga");
   });
 
   it("o valor pode ter sido digitado de vários jeitos", () => {
@@ -558,10 +572,26 @@ describe("evaluateContrato — exclusividade e direitos de imagem", () => {
     },
   });
 
-  it("PMR-3: 'sem exclusividade' bloqueia enquanto o texto jurídico não for aprovado", () => {
+  it("sem exclusividade é uma condição VÁLIDA: o contrato declara que não há exclusividade", () => {
     const r = com(di({ exclusividade: false }));
-    expect(codes(r)).toContain("PMR-3");
-    expect(r.issues.find((i) => i.code === "PMR-3")?.message).toMatch(/redação jurídica/);
+    expect(r.ok).toBe(true);
+    expect(r.issues).toEqual([]);
+    expect(r.variables?.exclusividade_possui).toBe("NÃO");
+    expect(r.variables?.exclusividade_periodo).toBe(TEXTO_SEM_EXCLUSIVIDADE);
+    expect(r.variables?.exclusividade_periodo).toBe("Não há exclusividade");
+  });
+
+  it("nunca deixa o campo de exclusividade vazio", () => {
+    for (const patch of [{ exclusividade: false }, {}]) {
+      const r = com(di(patch));
+      expect(r.variables?.exclusividade_periodo.trim()).not.toBe("");
+    }
+  });
+
+  it("os dias digitados antes de escolher 'nenhuma' não vazam para o texto", () => {
+    const r = com(di({}), { exclusividadeModo: "nenhuma", exclusividadeDias: "90" });
+    expect(r.variables?.exclusividade_periodo).toBe("Não há exclusividade");
+    expect(r.variables?.exclusividade_possui).toBe("NÃO");
   });
 
   it("exclusividade em dias exige número; sem confirmação, pede confirmação", () => {
@@ -668,6 +698,85 @@ describe("evaluateContrato — Anexo I", () => {
         valor_correspondente: "3.500,00",
       },
     ]);
+  });
+});
+
+describe("parâmetros que antes eram constantes entre colchetes ([100.000], [365], [7])", () => {
+  const com = (patch: Partial<ContratoDraft>) => {
+    const src = source();
+    return evaluateContrato({ ...completar(buildContratoDraft(src)), ...patch }, src);
+  };
+
+  it("o rascunho nasce com os valores atuais do template, só como ponto de partida", () => {
+    const d = buildContratoDraft(source());
+    expect(d.multaPublicacaoIrregular).toBe(CONTRATO_DEFAULTS.multaPublicacaoIrregular);
+    expect(d.multaConfidencialidade).toBe(CONTRATO_DEFAULTS.multaConfidencialidade);
+    expect(d.vigenciaDiasAposEntregas).toBe(CONTRATO_DEFAULTS.vigenciaDiasAposEntregas);
+    expect(d.briefingAntecedenciaDias).toBe(CONTRATO_DEFAULTS.briefingAntecedenciaDias);
+    expect(CONTRATO_DEFAULTS).toEqual({
+      multaPublicacaoIrregular: "100.000",
+      multaConfidencialidade: "100.000",
+      vigenciaDiasAposEntregas: "365",
+      briefingAntecedenciaDias: "7",
+    });
+  });
+
+  it("o texto final usa o que está no rascunho, nunca os números antigos", () => {
+    const r = com({
+      multaPublicacaoIrregular: "250.000",
+      multaConfidencialidade: "1.234,56",
+      vigenciaDiasAposEntregas: "400",
+      briefingAntecedenciaDias: "10",
+    });
+    expect(r.ok).toBe(true);
+    const v = r.variables!;
+    expect(v.multa_publicacao_irregular).toBe("250.000");
+    expect(v.multa_publicacao_irregular_extenso).toBe("duzentos e cinquenta mil reais");
+    expect(v.multa_confidencialidade).toBe("1.234,56");
+    expect(v.multa_confidencialidade_extenso).toBe(
+      "mil duzentos e trinta e quatro reais e cinquenta e seis centavos",
+    );
+    expect(v.vigencia_dias_apos_entregas).toBe("400");
+    expect(v.briefing_antecedencia_dias).toBe("10");
+    const json = JSON.stringify(v);
+    expect(json).not.toContain('"100.000"');
+    expect(json).not.toContain('"365"');
+  });
+
+  it("as duas multas são independentes", () => {
+    const v = com({ multaPublicacaoIrregular: "50.000" }).variables!;
+    expect(v.multa_publicacao_irregular).toBe("50.000");
+    expect(v.multa_confidencialidade).toBe("100.000");
+  });
+
+  it("valor redondo sai sem ',00'; com centavos mantém", () => {
+    expect(com({ multaConfidencialidade: "100.000,00" }).variables?.multa_confidencialidade).toBe(
+      "100.000",
+    );
+    const v = com({ multaConfidencialidade: "1.000,50" }).variables!;
+    expect(v.multa_confidencialidade).toBe("1.000,50");
+    expect(v.multa_confidencialidade_extenso).toBe("mil reais e cinquenta centavos");
+  });
+
+  it("vazio, zero ou inválido BLOQUEIA: nunca cai silenciosamente no valor padrão", () => {
+    for (const bad of ["", "   ", "0", "abc", "-5"]) {
+      expect(codes(com({ multaPublicacaoIrregular: bad })), `V25 ${bad}`).toContain("V25");
+      expect(codes(com({ multaConfidencialidade: bad })), `V26 ${bad}`).toContain("V26");
+      expect(codes(com({ vigenciaDiasAposEntregas: bad })), `V27 ${bad}`).toContain("V27");
+      expect(codes(com({ briefingAntecedenciaDias: bad })), `V28 ${bad}`).toContain("V28");
+    }
+    const r = com({ vigenciaDiasAposEntregas: "" });
+    expect(r.ok).toBe(false);
+    expect(r.variables).toBeNull();
+  });
+
+  it("limites: multa até R$ 99.999.999,99, vigência até 3650 dias, briefing até 60 dias", () => {
+    expect(com({ multaPublicacaoIrregular: "99.999.999,99" }).ok).toBe(true);
+    expect(codes(com({ multaPublicacaoIrregular: "100.000.000" }))).toContain("V25");
+    expect(com({ vigenciaDiasAposEntregas: "3650" }).ok).toBe(true);
+    expect(codes(com({ vigenciaDiasAposEntregas: "3651" }))).toContain("V27");
+    expect(com({ briefingAntecedenciaDias: "60" }).ok).toBe(true);
+    expect(codes(com({ briefingAntecedenciaDias: "61" }))).toContain("V28");
   });
 });
 

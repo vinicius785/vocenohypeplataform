@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { formatCents, numeroPorExtenso, parseMoneyCents, valorPorExtenso } from "./valor-extenso";
+import {
+  formatCents,
+  formatReaisCompact,
+  numeroPorExtenso,
+  parseMoneyCents,
+  valorPorExtenso,
+} from "./valor-extenso";
 
 describe("parseMoneyCents", () => {
   it("formatos brasileiros e simples", () => {
@@ -72,5 +78,16 @@ describe("valorPorExtenso", () => {
   it("milhões redondos levam 'de reais'", () => {
     expect(valorPorExtenso(100_000_000)).toBe("um milhão de reais");
     expect(valorPorExtenso(200_000_050)).toBe("dois milhões de reais e cinquenta centavos");
+  });
+});
+
+describe("formatReaisCompact", () => {
+  it("valor redondo sem ',00' (como o template escreve R$ 100.000); com centavos mantém", () => {
+    expect(formatReaisCompact(10_000_000)).toBe("100.000");
+    expect(formatReaisCompact(350_000)).toBe("3.500");
+    expect(formatReaisCompact(123_456)).toBe("1.234,56");
+    expect(formatReaisCompact(100_050)).toBe("1.000,50");
+    expect(formatReaisCompact(5)).toBe("0,05");
+    expect(formatReaisCompact(0)).toBe("0");
   });
 });

@@ -1,5 +1,5 @@
 /**
- * Contrato de influenciador (D4Sign) — Fase 2: mapeador e validadores PUROS.
+ * Contrato de influenciador (D4Sign) — Fases 2 e 2.1: mapeador e validadores PUROS.
  *
  * Sem rede, sem banco, sem D4Sign, sem UI. Referência: `docs/modules/contrato-influenciador-dicionario.md`
  * (fonte oficial: o DOCX "Contrato de Participação em Campanha"). Fluxo:
@@ -23,20 +23,39 @@ import {
   normalizeUf,
   type PixTipo,
 } from "@/lib/documento-br";
-import { formatCents, parseMoneyCents, valorPorExtenso } from "@/lib/valor-extenso";
+import {
+  formatCents,
+  formatReaisCompact,
+  parseMoneyCents,
+  valorPorExtenso,
+} from "@/lib/valor-extenso";
 
 /* ------------------------------------------------------------------ */
 /* Configuração do template                                             */
 /* ------------------------------------------------------------------ */
 
-export const CONTRATO_TEMPLATE_VERSION = "2026-10-v1";
+/** v2 (Fase 2.1): multas, vigência e antecedência do briefing viram variáveis; `midia_paga_autorizada`
+ * passa a `uso_midia_paga`; "sem exclusividade" é um valor válido; numeração das cláusulas corrigida. */
+export const CONTRATO_TEMPLATE_VERSION = "2026-10-v2";
 
-/** Redação aprovada pelo jurídico para "sem exclusividade". `null` = ainda não aprovada: enquanto for
- * `null`, o mapeador BLOQUEIA (PMR-3) em vez de inventar texto. */
-export const TEXTO_SEM_EXCLUSIVIDADE: string | null = null;
+/** Decisão jurídica: sem exclusividade, o contrato DECLARA que não há exclusividade (nunca campo vazio
+ * nem cláusula omitida). É o valor da variável `exclusividade_periodo` nesse caso. */
+export const TEXTO_SEM_EXCLUSIVIDADE = "Não há exclusividade";
 
 /** Valor padrão que o próprio template traz entre colchetes em "[30] dias úteis após o envio da NF". */
 export const PRAZO_PAGAMENTO_PADRAO_DIAS = 30;
+
+/** Valores INICIAIS dos parâmetros que o template trazia entre colchetes (`[100.000]`, `[365]`, `[7]`).
+ * Só pré-preenchem o rascunho: o texto final usa sempre o que está no rascunho, nunca estes números. */
+export const CONTRATO_DEFAULTS = {
+  multaPublicacaoIrregular: "100.000",
+  multaConfidencialidade: "100.000",
+  vigenciaDiasAposEntregas: "365",
+  briefingAntecedenciaDias: "7",
+} as const;
+
+/** Teto de sanidade de uma multa: R$ 99.999.999,99. */
+const MULTA_MAX_CENTS = 9_999_999_999;
 
 /* ------------------------------------------------------------------ */
 /* Tipos                                                                */
@@ -90,8 +109,17 @@ export type ContratoDraft = {
   pagamentoForma: PagamentoForma;
   pagamentoDados: string;
   pagamentoPrazoDiasUteis: string;
+  /** "nenhuma" é uma condição VÁLIDA do contrato (declara que não há exclusividade); "" = por confirmar. */
   exclusividadeModo: "" | "nenhuma" | "dias";
   exclusividadeDias: string;
+  /** Multa por publicação irregular (cláusula 26), em R$ — texto digitado, ex.: "100.000". */
+  multaPublicacaoIrregular: string;
+  /** Multa por violação de confidencialidade (cláusula 34), em R$. */
+  multaConfidencialidade: string;
+  /** Vigência: dias após a realização de todas as entregas (cláusula 29). */
+  vigenciaDiasAposEntregas: string;
+  /** Antecedência mínima, em dias, com que a CONTRATANTE fornece o briefing (cláusula 20, item a). */
+  briefingAntecedenciaDias: string;
   entregas: ContratoEntregaRow[];
   /** Peso (%) por grupo do Anexo I; chave = `anexoGroupKey`. */
   anexoPesos: Record<string, string>;
@@ -135,9 +163,19 @@ export type ContratoVariables = {
   pagamento_dados: string;
   pagamento_parcela_valor: string;
   pagamento_prazo_dias_uteis: string;
+  exclusividade_possui: "SIM" | "NÃO";
+  /** "N dias a partir da data de assinatura" ou, sem exclusividade, `TEXTO_SEM_EXCLUSIVIDADE`. */
   exclusividade_periodo: string;
   uso_conteudo_meses: string;
-  midia_paga_autorizada: "SIM" | "NÃO";
+  /** SIM/NÃO refletido na linha "Uso em mídia paga autorizado?". A cláusula de mídia paga permanece no
+   * documento nos dois casos: não existe lógica que a remova. */
+  uso_midia_paga: "SIM" | "NÃO";
+  multa_publicacao_irregular: string;
+  multa_publicacao_irregular_extenso: string;
+  multa_confidencialidade: string;
+  multa_confidencialidade_extenso: string;
+  vigencia_dias_apos_entregas: string;
+  briefing_antecedencia_dias: string;
   anexo_i: {
     tipo: string;
     plataforma: string;
@@ -331,6 +369,10 @@ export function buildContratoDraft(src: ContratoSource): ContratoDraft {
     exclusividadeModo: di ? (di.exclusividade ? "dias" : "nenhuma") : "",
     exclusividadeDias:
       di?.exclusividade && di.exclusividadeDias ? String(di.exclusividadeDias) : "",
+    multaPublicacaoIrregular: CONTRATO_DEFAULTS.multaPublicacaoIrregular,
+    multaConfidencialidade: CONTRATO_DEFAULTS.multaConfidencialidade,
+    vigenciaDiasAposEntregas: CONTRATO_DEFAULTS.vigenciaDiasAposEntregas,
+    briefingAntecedenciaDias: CONTRATO_DEFAULTS.briefingAntecedenciaDias,
     entregas: entregasContratadas(influ).map((e) => {
       const unit = e.grupoId && e.titulo ? UNIT_SUFFIX_RE.exec(e.titulo)?.[1] : undefined;
       const tipo = clean(e.tipo) + (unit ? ` (${unit})` : "");
@@ -521,26 +563,55 @@ export function evaluateContrato(draft: ContratoDraft, src: ContratoSource): Con
 
   /* --- exclusividade --- */
   let exclusividadeTexto = "";
+  let exclusividadePossui: "SIM" | "NÃO" = "NÃO";
   if (draft.exclusividadeModo === "dias") {
     const dias = toPositiveInt(draft.exclusividadeDias, 3650);
     if (!dias) add("V22", "exclusividadeDias", "Informe os dias de exclusividade (1 a 3650).");
-    else exclusividadeTexto = `${dias} dias a partir da data de assinatura`;
-  } else if (draft.exclusividadeModo === "nenhuma") {
-    if (TEXTO_SEM_EXCLUSIVIDADE) exclusividadeTexto = TEXTO_SEM_EXCLUSIVIDADE;
     else {
-      add(
-        "PMR-3",
-        "exclusividade",
-        'A redação jurídica para "sem exclusividade" ainda não foi aprovada, então o contrato não pode ser gerado sem exclusividade.',
-      );
+      exclusividadeTexto = `${dias} dias a partir da data de assinatura`;
+      exclusividadePossui = "SIM";
     }
+  } else if (draft.exclusividadeModo === "nenhuma") {
+    // Condição válida: o contrato declara explicitamente que não há exclusividade.
+    exclusividadeTexto = TEXTO_SEM_EXCLUSIVIDADE;
   } else {
     add("V22", "exclusividade", "Confirme a exclusividade (sem exclusividade ou número de dias).");
   }
 
+  /* --- parâmetros que antes eram constantes entre colchetes ([100.000], [365], [7]) --- */
+  const multaPublicacao = parseMoneyCents(draft.multaPublicacaoIrregular);
+  if (multaPublicacao == null || multaPublicacao <= 0 || multaPublicacao > MULTA_MAX_CENTS) {
+    add(
+      "V25",
+      "multaPublicacaoIrregular",
+      "Informe o valor da multa por publicação irregular (R$, maior que zero).",
+    );
+  }
+  const multaConfidencial = parseMoneyCents(draft.multaConfidencialidade);
+  if (multaConfidencial == null || multaConfidencial <= 0 || multaConfidencial > MULTA_MAX_CENTS) {
+    add(
+      "V26",
+      "multaConfidencialidade",
+      "Informe o valor da multa por violação de confidencialidade (R$, maior que zero).",
+    );
+  }
+  const vigenciaDias = toPositiveInt(draft.vigenciaDiasAposEntregas, 3650);
+  if (!vigenciaDias) {
+    add("V27", "vigenciaDiasAposEntregas", "Informe a vigência após as entregas (1 a 3650 dias).");
+  }
+  const briefingAntecedencia = toPositiveInt(draft.briefingAntecedenciaDias, 60);
+  if (!briefingAntecedencia) {
+    add(
+      "V28",
+      "briefingAntecedenciaDias",
+      "Informe a antecedência do briefing da CONTRATANTE (1 a 60 dias).",
+    );
+  }
+
   /* --- direitos de imagem (somente leitura: vêm da campanha) --- */
   let meses = 0;
-  let midiaPaga: "SIM" | "NÃO" = "NÃO";
+  // Mídia paga NÃO não remove a cláusula: só muda o SIM/NÃO da linha correspondente.
+  let usoMidiaPaga: "SIM" | "NÃO" = "NÃO";
   const di = campanha.direitosImagem;
   if (!di || !di.permitido) {
     add(
@@ -549,7 +620,7 @@ export function evaluateContrato(draft: ContratoDraft, src: ContratoSource): Con
       "A campanha não autoriza uso de imagem, e a cláusula 17 do contrato é uma cessão. Ajuste os direitos de imagem da campanha ou o modelo.",
     );
   } else {
-    midiaPaga = di.usos.some((u) => /^pago/i.test(u)) ? "SIM" : "NÃO";
+    usoMidiaPaga = di.usos.some((u) => /^pago/i.test(u)) ? "SIM" : "NÃO";
     if (di.duracaoDias == null) {
       add(
         "PMR-5",
@@ -645,9 +716,16 @@ export function evaluateContrato(draft: ContratoDraft, src: ContratoSource): Con
     pagamento_dados: dados,
     pagamento_parcela_valor: formatCents(totalCents!),
     pagamento_prazo_dias_uteis: String(prazoPag!),
+    exclusividade_possui: exclusividadePossui,
     exclusividade_periodo: exclusividadeTexto,
     uso_conteudo_meses: String(meses),
-    midia_paga_autorizada: midiaPaga,
+    uso_midia_paga: usoMidiaPaga,
+    multa_publicacao_irregular: formatReaisCompact(multaPublicacao!),
+    multa_publicacao_irregular_extenso: valorPorExtenso(multaPublicacao!),
+    multa_confidencialidade: formatReaisCompact(multaConfidencial!),
+    multa_confidencialidade_extenso: valorPorExtenso(multaConfidencial!),
+    vigencia_dias_apos_entregas: String(vigenciaDias!),
+    briefing_antecedencia_dias: String(briefingAntecedencia!),
     anexo_i: anexoOut,
     anexo_i_total_valor: anexoTotal,
   };
