@@ -50,3 +50,12 @@ describe("blog do portal V2", () => {
     expect(artigoSummary({ content: "a".repeat(300) }, 50).length).toBe(50);
   });
 });
+
+import { artigoDateLongLabel } from "../lib/blog-artigos";
+describe("data editorial", () => {
+  it("formata 'DD mês. AAAA'", () => {
+    expect(artigoDateLongLabel("2026-10-07")).toBe("07 out. 2026");
+    expect(artigoDateLongLabel("2026-01-02T10:00:00Z")).toBe("02 jan. 2026");
+    expect(artigoDateLongLabel(undefined)).toBeUndefined();
+  });
+});

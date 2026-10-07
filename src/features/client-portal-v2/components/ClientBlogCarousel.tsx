@@ -1,9 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { BookOpen, ChevronLeft, ChevronRight } from "lucide-react";
 import { Card, CardHeader } from "@/components/shared/SectionCard";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { ArticleReader } from "@/components/marketing/blog/ArticleReader";
-import { renderMarkdownLite } from "@/components/marketing/blog/markdown";
+import { ClientArticleReader } from "./ClientArticleReader";
 import type { PublicArticle } from "@/lib/portal-types";
 import { artigoDateLabel, findArtigo, sortArtigos } from "../lib/blog-artigos";
 
@@ -88,22 +86,7 @@ export function ClientBlogCarousel({ artigos }: { artigos: readonly PublicArticl
         </div>
       </Card>
 
-      <Dialog open={!!reading} onOpenChange={(o) => !o && setOpenId(null)}>
-        <DialogContent mobileFullScreen className="max-h-[90vh] max-w-3xl overflow-y-auto">
-          <DialogTitle className="sr-only">{reading?.title ?? "Conteúdo"}</DialogTitle>
-          <DialogDescription className="sr-only">Leitura do conteúdo.</DialogDescription>
-          {reading && (
-            <ArticleReader
-              cover={reading.cover}
-              category={reading.category}
-              title={reading.title}
-              authorLabel={reading.authorName || "Você no Hype"}
-              dateLabel={artigoDateLabel(reading.publishDate)}
-              contentHtml={renderMarkdownLite(reading.content ?? reading.excerpt ?? "")}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      <ClientArticleReader artigo={reading} onClose={() => setOpenId(null)} />
     </>
   );
 }

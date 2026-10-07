@@ -159,6 +159,7 @@ export type PublicArticle = {
   excerpt?: string;
   content?: string;
   authorName?: string;
+  authorAvatar?: string;
   publishDate?: string;
 };
 export type ClienteLinkData = {

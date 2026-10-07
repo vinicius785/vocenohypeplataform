@@ -1,6 +1,22 @@
 {
-  "version": "1.371.0",
+  "version": "1.372.0",
   "releases": [
+    {
+      "version": "1.372.0",
+      "summary": "Portal do cliente: novo leitor de artigos, mais largo e com a foto do autor.",
+      "modules": [
+        {
+          "name": "PORTAL DO CLIENTE",
+          "tagline": "Conteúdos",
+          "items": [
+            {
+              "title": "Leitor editorial",
+              "description": "Os artigos abrem num leitor mais largo, com cabeçalho próprio, capa em proporção melhor, foto e nome do autor com a data, e texto em coluna de leitura confortável."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.371.0",
       "summary": "Portal do cliente: carrossel de Conteúdos no Início com os artigos publicados para você.",

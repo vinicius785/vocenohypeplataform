@@ -37,3 +37,11 @@ export function artigoSummary(a: Pick<PublicArticle, "excerpt" | "content">, max
     .trim();
   return raw.length > max ? `${raw.slice(0, max - 1).trimEnd()}…` : raw;
 }
+
+const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+/** "2026-10-07" ou ISO com hora → "07 out. 2026". */
+export function artigoDateLongLabel(publishDate: string | undefined): string | undefined {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(publishDate ?? "");
+  const mes = m ? MESES[Number(m[2]) - 1] : undefined;
+  return m && mes ? `${m[3]} ${mes}. ${m[1]}` : undefined;
+}

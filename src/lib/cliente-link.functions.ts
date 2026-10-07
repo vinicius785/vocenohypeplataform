@@ -432,6 +432,8 @@ const _ArticlePublic = z.object({
   excerpt: z.string().optional(),
   content: z.string().optional(),
   authorName: z.string().optional(),
+  /** Foto do autor (membro do time) — resolvida no servidor; nunca o id nem outros dados dele. */
+  authorAvatar: z.string().optional(),
   publishDate: z.string().optional(),
 });
 
@@ -440,11 +442,11 @@ const _ArticlePublic = z.object({
  * rascunho/revisão/arquivado nunca aparecem no link público. */
 export async function findArtigosDoCliente(
   clienteId: string,
-): Promise<z.infer<typeof _ArticlePublic>[]> {
+): Promise<(z.infer<typeof _ArticlePublic> & { authorId?: string })[]> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: rows, error } = await supabaseAdmin.from("projetos").select("data");
   if (error) throwSafeDbError(error);
-  const artigos: z.infer<typeof _ArticlePublic>[] = [];
+  const artigos: (z.infer<typeof _ArticlePublic> & { authorId?: string })[] = [];
   for (const row of (rows ?? []) as { data: Project }[]) {
     for (const post of (row.data.blog ?? []) as BlogPost[]) {
       if (post.status !== "publicado") continue;
@@ -458,11 +460,44 @@ export async function findArtigosDoCliente(
         content: post.content,
         authorName: post.authorName,
         publishDate: post.publishDate,
+        authorId: post.authorId,
       });
     }
   }
   artigos.sort((a, b) => (b.publishDate ?? "").localeCompare(a.publishDate ?? ""));
   return artigos;
+}
+
+/** Resolve o autor de cada artigo (UMA consulta para todos) e devolve ao cliente só nome + foto —
+ * o `authorId` interno é removido e nada além de `full_name`/`photo_url` é lido. Autor não
+ * encontrado (ou texto livre) mantém `authorName` e fica sem foto. */
+export async function attachArtigoAuthors(
+  artigos: (z.infer<typeof _ArticlePublic> & { authorId?: string })[],
+): Promise<z.infer<typeof _ArticlePublic>[]> {
+  const ids = [...new Set(artigos.map((a) => a.authorId).filter((x): x is string => !!x))];
+  const byId = new Map<string, { name?: string; avatar?: string }>();
+  if (ids.length > 0) {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin
+      .from("profiles")
+      .select("id, full_name, photo_url")
+      .in("id", ids);
+    if (error) throwSafeDbError(error);
+    for (const p of data ?? []) {
+      byId.set(p.id, {
+        name: (p.full_name ?? "").trim() || undefined,
+        avatar: p.photo_url || undefined,
+      });
+    }
+  }
+  return artigos.map(({ authorId, ...a }) => {
+    const author = authorId ? byId.get(authorId) : undefined;
+    return {
+      ...a,
+      authorName: author?.name ?? a.authorName,
+      ...(author?.avatar ? { authorAvatar: author.avatar } : {}),
+    };
+  });
 }
 
 // Tokens são gerados como `crypto.randomUUID().replace(/-/g, "")` (32 hex
@@ -746,7 +781,7 @@ export async function buildClienteLinkData(clienteId: string, cliente: Cliente) 
     }),
   );
 
-  const artigos = await findArtigosDoCliente(clienteId);
+  const artigos = await attachArtigoAuthors(await findArtigosDoCliente(clienteId));
 
   return {
     clienteNome: cliente.empresa,
