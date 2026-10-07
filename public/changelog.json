@@ -1,5 +1,6 @@
 {
   "notes": [
+    "1.371.0: Portal V2 ganha /portal-v2/blog e /portal-v2/blog/$postId (somente leitura) sobre data.artigos de getPortalDataForSession (projetos.data.blog filtrado por publicado + portalClienteIds); item Blog no menu só com ao menos 1 artigo; ArticleReader com engagement opcional. Causa: o V2 nunca consumiu artigos.",
     "1.370.0: time_entries.session_id (migration 20261008000000_time_sessions.sql) agrupa linhas de uma sessão compartilhada; time-sessions.ts (agrupamento, esforço vs tempo da sessão, planManualSession); RPCs ensure/add/create_manual/stop; TimeTrackingPanel reescrito.",
     "1.369.0: TaskBoard (columnLimit) — expandedCols por coluna + columnView() em kanban-limit.ts; KanbanVerMais (Sheet) deixa de ser usado nas tarefas e segue só no PipelineBoard de oportunidades.",
     "1.368.0: OPERATIONAL_SCORE_VERSION=3 — pesos 50/25/15/10; effectivePerformanceDueDate = último prazo definido (sem congelar); approval-flow.ts (transições reais de status → Fluxo sem retrabalho, mínimo 3 avaliáveis); combineScoreV2 com 4ª dimensão e maior resto em 4; score-explanation.ts; ScoreOperacionalPanel compacto (4 linhas + frase); insights fluxo_eficiente/fluxo_ajustes_altos/carga_boa_execucao/tendencia_fluxo; collectRawFlowNodes. Sem migration.",

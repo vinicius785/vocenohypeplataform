@@ -1,6 +1,22 @@
 {
-  "version": "1.370.0",
+  "version": "1.371.0",
   "releases": [
+    {
+      "version": "1.371.0",
+      "summary": "Portal do cliente: nova área Blog com os conteúdos publicados para você.",
+      "modules": [
+        {
+          "name": "PORTAL DO CLIENTE",
+          "tagline": "Blog",
+          "items": [
+            {
+              "title": "Conteúdos no menu",
+              "description": "Quando a Você no Hype publica um artigo para o seu portal, o item Blog aparece no menu com a lista de conteúdos e a leitura completa de cada artigo."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.370.0",
       "summary": "Controle de tempo V2: sessões compartilhadas com vários participantes e registro manual por início e fim.",

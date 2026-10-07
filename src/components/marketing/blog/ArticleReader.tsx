@@ -281,12 +281,15 @@ export function ArticleReader({
   metaExtra?: string;
   dateLabel?: string;
   contentHtml: string;
-  engagement: ArticleEngagementProps;
+  /** Ausente = leitura pura (sem curtir/comentar, coluna única) — Portal Cliente V2. */
+  engagement?: ArticleEngagementProps;
   /** Slot livre acima do título (ex.: botão Voltar do Portal). */
   headerExtra?: ReactNode;
 }) {
   return (
-    <div className="grid grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_320px] md:items-start">
+    <div
+      className={`grid grid-cols-1 gap-6 ${engagement ? "md:grid-cols-[minmax(0,1fr)_320px] md:items-start" : ""}`}
+    >
       <article className="min-w-0">
         {headerExtra}
         {cover && (
@@ -331,9 +334,11 @@ export function ArticleReader({
           dangerouslySetInnerHTML={{ __html: contentHtml }}
         />
       </article>
-      <aside className="md:sticky md:top-4">
-        <ArticleCommentsPanel {...engagement} />
-      </aside>
+      {engagement && (
+        <aside className="md:sticky md:top-4">
+          <ArticleCommentsPanel {...engagement} />
+        </aside>
+      )}
     </div>
   );
 }
