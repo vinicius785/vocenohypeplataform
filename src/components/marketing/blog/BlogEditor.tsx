@@ -1,3 +1,4 @@
+import { editorialDate, formatEditorialDate } from "@/lib/blog-publication";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Check, Eye, Loader2, SlidersHorizontal } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
@@ -28,9 +29,13 @@ function StatusHeader({ post }: { post: BlogPost }) {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
         🟢 Publicado
-        {post.publishedAt && (
+        {editorialDate(post) && (
           <span className="text-emerald-700/70 dark:text-emerald-400/70">
-            · {fmtDateTime(post.publishedAt)}
+            · {formatEditorialDate(editorialDate(post))}
+            {post.publishedAt &&
+            formatEditorialDate(post.publishedAt) !== formatEditorialDate(editorialDate(post))
+              ? ` · republicado em ${formatEditorialDate(post.publishedAt)}`
+              : ""}
           </span>
         )}
       </span>
@@ -437,7 +442,7 @@ function ArticlePreview({ post: p, authorPhoto }: { post: BlogPost; authorPhoto?
           </span>
         )}
         <span className="font-medium text-foreground">{p.authorName || "Sem autor"}</span>
-        {p.publishDate && <span>· {new Date(p.publishDate).toLocaleDateString("pt-BR")}</span>}
+        {editorialDate(p) && <span>· {formatEditorialDate(editorialDate(p))}</span>}
       </div>
       {p.excerpt && <p className="mt-4 text-base italic text-text-secondary">{p.excerpt}</p>}
       <div

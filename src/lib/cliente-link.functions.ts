@@ -21,6 +21,7 @@ import {
   PERFIL_REJEICAO_MOTIVOS,
 } from "@/lib/campanha-status";
 import type { BlogPost, Project } from "@/lib/projetos";
+import { editorialDate } from "@/lib/blog-publication";
 import type { Task } from "@/components/tasks/TaskBoard";
 
 /** Status "prontos pra ver" pelo cliente — INSCRITO/EM_CURADORIA são
@@ -459,7 +460,9 @@ export async function findArtigosDoCliente(
         excerpt: post.excerpt,
         content: post.content,
         authorName: post.authorName,
-        publishDate: post.publishDate,
+        // Data EDITORIAL = primeira publicação (não a última republicação). O nome do campo
+        // `publishDate` é mantido por compatibilidade com o payload do portal.
+        publishDate: editorialDate(post),
         authorId: post.authorId,
       });
     }

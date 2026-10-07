@@ -325,6 +325,10 @@ export type BlogPost = {
    * que o header do editor mostra como "Publicado em". Campo novo,
    * opcional, não quebra artigos antigos (cai no fallback de exibição). */
   publishedAt?: string;
+  /** Primeira publicação — a data EDITORIAL exibida (cliente e time). Gravada uma única vez e nunca
+   * alterada por despublicar/republicar/editar (ver `src/lib/blog-publication.ts`). Artigos
+   * anteriores a este campo caem para `publishedAt`/`publishDate` na leitura. */
+  firstPublishedAt?: string;
   excerpt?: string;
   content?: string;
   /** Um artigo pode ir pra mais de um destino ao mesmo tempo (ex: Site +

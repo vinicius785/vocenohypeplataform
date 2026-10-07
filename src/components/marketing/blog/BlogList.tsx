@@ -21,6 +21,7 @@ import { useConfirm } from "@/hooks/use-confirm";
 import { BlogEditor } from "./BlogEditor";
 import { destinoLabel, statusInfo, STATUS } from "./types";
 import { Button } from "@/components/ui/button";
+import { editorialDate, formatEditorialDate, reconcilePublication } from "@/lib/blog-publication";
 import { EmptyState } from "@/components/shared/EmptyState";
 import {
   FilterChips,
@@ -109,7 +110,7 @@ export function BlogPanel({
     setPosts(
       posts.map((p) => {
         if (p.id !== id) return p;
-        updated = { ...p, ...patch };
+        updated = reconcilePublication(p, { ...p, ...patch }, new Date().toISOString());
         return updated;
       }),
     );
@@ -338,10 +339,10 @@ export function BlogPanel({
                     </p>
                     <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
                       <span className="truncate">{p.authorName || "Sem autor"}</span>
-                      {p.status === "publicado" && p.publishedAt && (
+                      {p.status === "publicado" && editorialDate(p) && (
                         <span className="inline-flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
-                          {new Date(p.publishedAt).toLocaleDateString("pt-BR")}
+                          {formatEditorialDate(editorialDate(p))}
                         </span>
                       )}
                     </div>

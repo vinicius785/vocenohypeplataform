@@ -1,6 +1,22 @@
 {
-  "version": "1.374.0",
+  "version": "1.375.0",
   "releases": [
+    {
+      "version": "1.375.0",
+      "summary": "Blog: a data do artigo passa a ser a da primeira publicação, mesmo quando republicado.",
+      "modules": [
+        {
+          "name": "BLOG",
+          "tagline": "Publicação",
+          "items": [
+            {
+              "title": "Data original preservada",
+              "description": "Despublicar e republicar um artigo não troca mais a data exibida para o cliente nem para o time: vale sempre a primeira publicação. O editor mostra “republicado em” separadamente."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.374.0",
       "summary": "Portal do cliente: leitor de artigos com capa inteira, curtidas e comentários.",

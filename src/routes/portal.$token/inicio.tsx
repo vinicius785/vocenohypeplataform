@@ -1,3 +1,4 @@
+import { formatEditorialDate } from "@/lib/blog-publication";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
@@ -128,7 +129,7 @@ function PortalInicioPage() {
             category={reading.category}
             title={reading.title}
             authorLabel={reading.authorName || "Sem autor"}
-            dateLabel={reading.publishDate ? fmtDate(reading.publishDate) : undefined}
+            dateLabel={formatEditorialDate(reading.publishDate)}
             contentHtml={renderMarkdownLite(reading.content ?? reading.excerpt ?? "")}
             headerExtra={
               <BackButton
@@ -459,7 +460,9 @@ function PortalInicioPage() {
                   )}
                   <p className="truncate text-xs font-semibold text-foreground">{a.title}</p>
                   {a.publishDate && (
-                    <p className="text-[11px] text-muted-foreground">{fmtDate(a.publishDate)}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {formatEditorialDate(a.publishDate)}
+                    </p>
                   )}
                 </div>
               </button>

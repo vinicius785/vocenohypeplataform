@@ -59,3 +59,14 @@ describe("data editorial", () => {
     expect(artigoDateLongLabel(undefined)).toBeUndefined();
   });
 });
+
+describe("Portal: data editorial no cliente", () => {
+  it("usa a primeira publicação mesmo com republicação depois", () => {
+    // O servidor já entrega `publishDate` = editorialDate(post); aqui só a formatação.
+    expect(artigoDateLabel("2026-03-15T13:00:00.000Z")).toBe("15/03/2026");
+    expect(artigoDateLongLabel("2026-03-15T13:00:00.000Z")).toBe("15 mar. 2026");
+  });
+  it("noite no Brasil não vira o dia seguinte (UTC)", () => {
+    expect(artigoDateLabel("2026-10-08T02:30:00.000Z")).toBe("07/10/2026");
+  });
+});

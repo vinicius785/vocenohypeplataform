@@ -1,3 +1,4 @@
+import { formatEditorialDate } from "@/lib/blog-publication";
 import type { PublicArticle } from "@/lib/portal-types";
 
 /** Blog do Portal V2 — regras puras. A elegibilidade (publicado + cliente em `portalClienteIds`)
@@ -21,10 +22,9 @@ export function findArtigo(
   return artigos.find((a) => a.id === postId) ?? null;
 }
 
-/** "2026-09-03" ou ISO com hora → "03/09/2026". Sem data válida → undefined. */
+/** "2026-09-03" ou ISO com hora → "03/09/2026" (instantes são lidos no fuso do Brasil). */
 export function artigoDateLabel(publishDate: string | undefined): string | undefined {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(publishDate ?? "");
-  return m ? `${m[3]}/${m[2]}/${m[1]}` : undefined;
+  return formatEditorialDate(publishDate);
 }
 
 /** Resumo da lista: `excerpt`, ou o começo do texto sem marcações de markdown. */
@@ -39,9 +39,9 @@ export function artigoSummary(a: Pick<PublicArticle, "excerpt" | "content">, max
 }
 
 const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
-/** "2026-10-07" ou ISO com hora → "07 out. 2026". */
+/** "07 out. 2026" — mesma regra de data editorial do restante do portal. */
 export function artigoDateLongLabel(publishDate: string | undefined): string | undefined {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(publishDate ?? "");
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(formatEditorialDate(publishDate) ?? "");
   const mes = m ? MESES[Number(m[2]) - 1] : undefined;
-  return m && mes ? `${m[3]} ${mes}. ${m[1]}` : undefined;
+  return m && mes ? `${m[1]} ${mes}. ${m[3]}` : undefined;
 }

@@ -1,3 +1,4 @@
+import { editorialDate, formatEditorialDate } from "@/lib/blog-publication";
 import { stageComercialTask } from "@/lib/comercial-task-link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
@@ -1501,8 +1502,7 @@ function HeaderIndicatorCell({
  * completo (posts novos, ver comentário do campo em `projetos.ts`) — sempre
  * exibe só a data, no formato pt-BR, igual ao editor do post. */
 function fmtPublishDate(publishDate: string): string {
-  const d = new Date(publishDate);
-  return Number.isNaN(d.getTime()) ? publishDate : d.toLocaleDateString("pt-BR");
+  return formatEditorialDate(publishDate) ?? publishDate;
 }
 
 function MuralNovidades() {
@@ -1532,7 +1532,7 @@ function MuralNovidades() {
           }
         }
       }
-      all.sort((a, b) => (b.publishDate ?? "").localeCompare(a.publishDate ?? ""));
+      all.sort((a, b) => (editorialDate(b) ?? "").localeCompare(editorialDate(a) ?? ""));
       setItems(all);
     };
     load();
@@ -1643,7 +1643,7 @@ function MuralNovidades() {
             <div className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground">
               <span>{featured.authorName || "Sem autor"}</span>
               <span>· {featured.projectName}</span>
-              {featured.publishDate && <span>· {fmtPublishDate(featured.publishDate)}</span>}
+              {editorialDate(featured) && <span>· {fmtPublishDate(editorialDate(featured)!)}</span>}
             </div>
           </div>
         </div>
@@ -1668,7 +1668,7 @@ function MuralNovidades() {
                 <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
                   <span>{p.authorName || "Sem autor"}</span>
                   <span>· {p.projectName}</span>
-                  {p.publishDate && <span>· {fmtPublishDate(p.publishDate)}</span>}
+                  {editorialDate(p) && <span>· {fmtPublishDate(editorialDate(p)!)}</span>}
                 </div>
               </button>
               <IconButton
@@ -1699,7 +1699,7 @@ function MuralNovidades() {
                     authorLabel={openArticle.authorName || "Sem autor"}
                     authorPhoto={authorPhoto}
                     metaExtra={openArticle.projectName}
-                    dateLabel={openArticle.publishDate}
+                    dateLabel={fmtPublishDate(editorialDate(openArticle) ?? "") || undefined}
                     contentHtml={renderMarkdownLite(
                       openArticle.content ?? openArticle.excerpt ?? "",
                     )}
