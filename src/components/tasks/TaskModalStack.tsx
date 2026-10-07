@@ -1,4 +1,4 @@
-import { useTaskModalStack, popTaskModal } from "@/lib/task-modal-stack";
+import { useTaskModalStack, popTaskModal, pushTaskModal } from "@/lib/task-modal-stack";
 import { findTaskContext } from "@/lib/task-directory";
 import { lazy, Suspense } from "react";
 
@@ -25,6 +25,20 @@ export function TaskModalStack() {
     return null;
   }
 
+  // Subtarefa aberta sozinha (sem a mãe por baixo, como no board): o item da mãe no
+  // caminho superior troca o topo da pilha pela mãe — a subtarefa salva e fecha antes,
+  // então o que havia embaixo continua embaixo ("voltar" segue funcionando).
+  const parent = ctx.parent;
+  const ancestors = parent
+    ? [
+        {
+          title: parent.title,
+          isAvailable: () => findTaskContext(parent.id) !== null,
+          open: () => pushTaskModal(parent.id),
+        },
+      ]
+    : undefined;
+
   return (
     <Suspense fallback={null}>
       <TaskDialog
@@ -33,6 +47,7 @@ export function TaskModalStack() {
         initial={ctx.task}
         scope={ctx.scope}
         breadcrumb={ctx.breadcrumb}
+        ancestors={ancestors}
         onSave={ctx.save}
         // Fechar aqui é só `onOpenChange` (linha acima) — `ctx.save` nunca
         // fecha nada sozinho, então é seguro reaproveitar pro autosave.

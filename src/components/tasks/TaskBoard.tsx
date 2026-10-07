@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   Calendar,
   ChevronRight,
@@ -2225,12 +2225,23 @@ export function TaskBoard({
  * Task dialog — ClickUp-style (shared)
  * ============================================================ */
 
+/** Um nível acima da tarefa aberta, mostrado como item clicável no caminho do topo.
+ * A relação vem sempre da própria hierarquia (`Task.subtasks`), nunca duplicada. */
+export type TaskAncestor = {
+  title: string;
+  /** Traz esta tarefa para frente. Roda DEPOIS que o diálogo atual já salvou e fechou. */
+  open: () => void;
+  /** `false` = a tarefa-mãe não existe mais: a navegação é recusada sem fechar o diálogo atual. */
+  isAvailable?: () => boolean;
+};
+
 export function TaskDialog({
   open,
   onOpenChange,
   initial,
   defaultStatus,
   parentTitle,
+  ancestors,
   scope,
   breadcrumb,
   onSave,
@@ -2244,6 +2255,9 @@ export function TaskDialog({
   initial?: Task;
   defaultStatus?: TaskStatus;
   parentTitle?: string;
+  /** Tarefas-mãe (da raiz até o pai direto) — viram itens navegáveis no caminho do topo.
+   * Sem isto o caminho fica exatamente como era (só texto). */
+  ancestors?: TaskAncestor[];
   scope?: TaskBoardScope;
   breadcrumb?: string;
   onSave: (t: Task) => void;
@@ -2396,6 +2410,12 @@ export function TaskDialog({
   const [newSubtaskPriority, setNewSubtaskPriority] = useState<TaskPriority>("Normal");
   const [showSubtaskInput, setShowSubtaskInput] = useState(false);
   const [editSubtask, setEditSubtask] = useState<Task | null>(null);
+  // Navegação pelo caminho do topo: o que rodar assim que ESTE diálogo salvar e fechar
+  // (`closeSelf`), e o pedido de um diálogo-filho para que este também salve e feche
+  // (subir mais de um nível). Pedido por estado — e não chamada direta — para o
+  // `attemptSave` rodar já com a subtarefa que o filho acabou de gravar (closure nova).
+  const afterCloseRef = useRef<(() => void) | null>(null);
+  const [closeRequest, setCloseRequest] = useState<{ then: () => void } | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [activity, setActivity] = useState<Activity[]>([]);
   const [commentText, setCommentText] = useState("");
@@ -3269,6 +3289,15 @@ export function TaskDialog({
    * inline do Activity) — se ainda houver uma pendência não confirmada
    * nesse momento, ela é descartada (revertida) e o resto da edição
    * salva normalmente, sem bloquear nada (item 14 do pedido). */
+  /** Único jeito de fechar depois de salvar: fecha e, se alguém pediu (clique num item do
+   * caminho do topo), segue para a tarefa-mãe. Cancelar/Excluir não passam por aqui. */
+  const closeSelf = () => {
+    onOpenChange(false);
+    const next = afterCloseRef.current;
+    afterCloseRef.current = null;
+    next?.();
+  };
+
   const doSave = (closeAfter: boolean) => {
     // `pendingDeadlineChange` só reverte via `setState` (assíncrono) —
     // `save()` não pode confiar em `dueDate` já refletir isso quando
@@ -3276,10 +3305,11 @@ export function TaskDialog({
     const dueDateOverride = pendingDeadlineChange?.from;
     discardPendingDeadlineChange();
     save(dueDateOverride);
-    if (closeAfter) onOpenChange(false);
+    if (closeAfter) closeSelf();
   };
 
-  const attemptSave = async (closeAfter: boolean) => {
+  /** Devolve `false` só quando a pessoa desistiu de fechar (descartar o questionário). */
+  const attemptSave = async (closeAfter: boolean): Promise<boolean> => {
     // Questionário de bloqueio/resolução aberto com dados digitados —
     // avisa antes de fechar (exigência explícita do pedido de bloqueio,
     // diferente do formulário de replanejamento que descarta em
@@ -3293,11 +3323,11 @@ export function TaskDialog({
         { title: "Descartar questionário?", confirmLabel: "Descartar", destructive: true },
       ))
     ) {
-      return;
+      return false;
     }
     if (!canSave) {
-      if (closeAfter) onOpenChange(false);
-      return;
+      if (closeAfter) closeSelf();
+      return true;
     }
     // Dependência não bloqueia a conclusão de verdade — só avisa. Uma
     // tarefa com dependência ainda pendente sendo marcada "Concluído"
@@ -3306,10 +3336,35 @@ export function TaskDialog({
     if (status === "Concluído" && dependsOnPending.length > 0) {
       setPendingSaveCloseAfter(closeAfter);
       setShowCompleteConfirm(true);
-      return;
+      return true;
     }
     doSave(closeAfter);
+    return true;
   };
+
+  /** Clique num item do caminho do topo: salva esta tarefa, fecha e abre o nível escolhido
+   * (mesmo caminho de "fechar clicando fora/Esc", então nada digitado se perde). */
+  const goToAncestor = async (a: TaskAncestor) => {
+    if (a.isAvailable && !a.isAvailable()) {
+      toast.error("A tarefa-mãe não está mais disponível.");
+      return;
+    }
+    afterCloseRef.current = a.open;
+    const proceeded = await attemptSave(true);
+    if (!proceeded) afterCloseRef.current = null;
+  };
+
+  // Um diálogo-filho pediu para subir além de mim: salvo e fecho também, depois sigo a cadeia.
+  useEffect(() => {
+    if (!closeRequest) return;
+    const { then } = closeRequest;
+    setCloseRequest(null);
+    afterCloseRef.current = then;
+    void attemptSave(true).then((proceeded) => {
+      if (!proceeded) afterCloseRef.current = null;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `attemptSave` é recriado a cada render; só o pedido dispara.
+  }, [closeRequest]);
 
   const addSubtask = () => {
     const t = newSubtaskTitle.trim();
@@ -3549,31 +3604,54 @@ export function TaskDialog({
               aria-label="Localização da tarefa"
               className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden"
             >
-              <span className="shrink-0">{rootLabel}</span>
-              {scopeName && (
-                <>
-                  <span aria-hidden className="opacity-50">
-                    /
-                  </span>
-                  <span className="min-w-0 truncate" title={scopeName}>
-                    {scopeName}
-                  </span>
-                </>
-              )}
-              <span aria-hidden className="opacity-50">
-                /
+              {/* Contexto da raiz (origem/projeto/"Tarefas"). No celular, com tarefas-mãe no
+                  caminho, some para os itens clicáveis terem espaço (senão viram 10–20px). */}
+              <span
+                className={`contents ${ancestors && ancestors.length > 0 ? "max-sm:hidden" : ""}`}
+              >
+                <span className="shrink-0">{rootLabel}</span>
+                {scopeName && (
+                  <>
+                    <span aria-hidden className="opacity-50">
+                      /
+                    </span>
+                    <span className="min-w-0 truncate" title={scopeName}>
+                      {scopeName}
+                    </span>
+                  </>
+                )}
+                <span aria-hidden className="opacity-50">
+                  /
+                </span>
+                <span className="shrink-0">Tarefas</span>
               </span>
-              <span className="shrink-0">Tarefas</span>
-              {parentTitle && (
-                <>
-                  <span aria-hidden className="opacity-50">
-                    /
-                  </span>
-                  <span className="min-w-0 truncate" title={parentTitle}>
-                    {parentTitle}
-                  </span>
-                </>
-              )}
+              {ancestors && ancestors.length > 0
+                ? ancestors.map((a, i) => (
+                    <Fragment key={`${i}-${a.title}`}>
+                      <span aria-hidden className={`opacity-50 ${i === 0 ? "max-sm:hidden" : ""}`}>
+                        /
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => void goToAncestor(a)}
+                        title={a.title}
+                        aria-label={`Abrir tarefa-mãe: ${a.title}`}
+                        className="-my-2 min-w-0 cursor-pointer truncate rounded-sm py-2 text-left transition-colors hover:text-foreground hover:underline hover:underline-offset-2 focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        {a.title}
+                      </button>
+                    </Fragment>
+                  ))
+                : parentTitle && (
+                    <>
+                      <span aria-hidden className="opacity-50">
+                        /
+                      </span>
+                      <span className="min-w-0 truncate" title={parentTitle}>
+                        {parentTitle}
+                      </span>
+                    </>
+                  )}
               {!initial && (
                 <>
                   <span aria-hidden className="opacity-50">
@@ -4785,7 +4863,19 @@ export function TaskDialog({
             onOpenChange={(o) => !o && setEditSubtask(null)}
             initial={editSubtask ?? undefined}
             scope={scope}
+            breadcrumb={breadcrumb}
             parentTitle={title || "Tarefa mãe"}
+            ancestors={[
+              // Meus próprios ancestrais: subir até eles exige que EU também salve e feche
+              // (o filho já terá salvo/fechado a si mesmo antes de chamar `open`).
+              ...(ancestors ?? []).map((a) => ({
+                title: a.title,
+                isAvailable: a.isAvailable,
+                open: () => setCloseRequest({ then: a.open }),
+              })),
+              // Eu mesmo: ao fechar o filho eu já fico à frente, não há mais nada a fazer.
+              { title: title || "Tarefa mãe", open: () => {} },
+            ]}
             onSave={(t) => {
               setSubtasks((prev) => prev.map((s) => (s.id === t.id ? t : s)));
               setActivity((a) => pushActivity(a, `atualizou subtarefa "${t.title}"`));
@@ -4807,7 +4897,11 @@ export function TaskDialog({
       {deleteConfirmDialog}
       <AlertDialog
         open={showCompleteConfirm}
-        onOpenChange={(o) => !o && setShowCompleteConfirm(false)}
+        onOpenChange={(o) => {
+          if (o) return;
+          setShowCompleteConfirm(false);
+          afterCloseRef.current = null;
+        }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -4825,7 +4919,12 @@ export function TaskDialog({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setShowCompleteConfirm(false)}>
+            <AlertDialogCancel
+              onClick={() => {
+                setShowCompleteConfirm(false);
+                afterCloseRef.current = null;
+              }}
+            >
               Cancelar
             </AlertDialogCancel>
             <AlertDialogAction

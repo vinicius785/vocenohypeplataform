@@ -355,7 +355,11 @@ export type TaskContext = {
   task: Task;
   /** Ausente nas tarefas do Comercial (o board delas não tem escopo). */
   scope?: TaskBoardScope;
+  /** Origem da tarefa (projeto/campanha/…). Nunca inclui o nome da tarefa-mãe: numa
+   * subtarefa ele vem em `parent`, que o detalhe mostra como item navegável. */
   breadcrumb: string;
+  /** Só em subtarefa: a tarefa-mãe (o id é resolvível por `findTaskContext`). */
+  parent?: { id: string; title: string };
   save: (t: Task) => void;
   remove: () => void;
 };
@@ -401,7 +405,8 @@ export function findTaskContext(taskId: string): TaskContext | null {
         return {
           task: sub,
           scope: { kind: "projeto", id: p.id },
-          breadcrumb: `${p.name} · ${parent.title}`,
+          breadcrumb: p.name,
+          parent: { id: parent.id, title: parent.title },
           save: (t) => {
             const nextParent = {
               ...parent,
@@ -462,7 +467,8 @@ export function findTaskContext(taskId: string): TaskContext | null {
         return {
           task: sub,
           scope: { kind: "campanha", id: campanhaId },
-          breadcrumb: `Campanha · ${parent.title}`,
+          breadcrumb: "Campanha",
+          parent: { id: parent.id, title: parent.title },
           save: (t) => {
             const nextParent = {
               ...parent,
@@ -510,7 +516,8 @@ export function findTaskContext(taskId: string): TaskContext | null {
       return {
         task: sub,
         scope: { kind: "marketing" },
-        breadcrumb: `Marketing · ${parent.title}`,
+        breadcrumb: "Marketing",
+        parent: { id: parent.id, title: parent.title },
         save: (t) => {
           const nextSubs = subs.map((x) => (x.id === taskId ? t : x));
           updateStandalone(
@@ -553,7 +560,8 @@ export function findTaskContext(taskId: string): TaskContext | null {
         );
       return {
         task: sub,
-        breadcrumb: `Comercial · ${parent.title}`,
+        breadcrumb: "Comercial",
+        parent: { id: parent.id, title: parent.title },
         save: (t) => write(subs.map((x) => (x.id === taskId ? t : x))),
         remove: () => {
           write(subs.filter((x) => x.id !== taskId));

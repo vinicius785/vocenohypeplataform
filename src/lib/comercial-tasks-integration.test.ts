@@ -206,10 +206,13 @@ describe("diretório (@menção, dependências, modal)", () => {
     const root = findTaskContext("t1")!;
     expect(root.breadcrumb).toBe("Comercial");
     expect(root.scope).toBeUndefined();
+    expect(root.parent).toBeUndefined();
     const sub = findTaskContext("s1")!;
     root.save({ ...(root.task as object), title: "Novo título" } as never);
     expect((state.saved.at(-1)![0] as { title: string }).title).toBe("Novo título");
-    expect(sub.breadcrumb).toBe("Comercial · Ligar para a Rodonaves");
+    // A mãe sai do texto da origem e vira `parent` (item navegável no caminho do detalhe).
+    expect(sub.breadcrumb).toBe("Comercial");
+    expect(sub.parent).toEqual({ id: "t1", title: "Ligar para a Rodonaves" });
     sub.remove();
     expect((state.saved.at(-1)![0] as { subtasks: unknown[] }).subtasks).toEqual([]);
   });
