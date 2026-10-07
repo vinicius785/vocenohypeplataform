@@ -34,9 +34,18 @@ import {
 /* Configuração do template                                             */
 /* ------------------------------------------------------------------ */
 
-/** v2 (Fase 2.1): multas, vigência e antecedência do briefing viram variáveis; `midia_paga_autorizada`
- * passa a `uso_midia_paga`; "sem exclusividade" é um valor válido; numeração das cláusulas corrigida. */
-export const CONTRATO_TEMPLATE_VERSION = "2026-10-v2";
+/** v3 (Fase 2.2): tabela de entregas com 5 linhas e Anexo I com 3 grupos (limites estruturais do template,
+ * `LIM-*`), entregas iguais agrupadas numa linha só, `DATA_ASSINATURA` fora das variáveis de geração.
+ * v2 (Fase 2.1): multas, vigência e antecedência do briefing viram variáveis; `uso_midia_paga`;
+ * "sem exclusividade" válido; numeração das cláusulas corrigida. */
+export const CONTRATO_TEMPLATE_VERSION = "2026-10-v3";
+
+/** Linhas físicas da tabela de entregas do template (cláusula 3). Uma linha = um tipo/formato com a mesma data,
+ * horário e permanência: "Stories × 3" ocupa UMA linha, não três. */
+export const MAX_LINHAS_ENTREGAS = 5;
+
+/** Linhas físicas do Anexo I (peso por tipo de entrega/plataforma). */
+export const MAX_GRUPOS_ANEXO = 3;
 
 /** Decisão jurídica: sem exclusividade, o contrato DECLARA que não há exclusividade (nunca campo vazio
  * nem cláusula omitida). É o valor da variável `exclusividade_periodo` nesse caso. */
@@ -183,6 +192,9 @@ export type ContratoVariables = {
     valor_correspondente: string;
   }[];
   anexo_i_total_valor: string;
+  /** Placeholders fixos do template: `E1_*`..`E5_*` (tabela de entregas) e `A1_*`..`A3_*` (Anexo I).
+   * Sempre com 5 e 3 posições; as não usadas ficam com strings vazias. */
+  slots: Record<string, string>;
 };
 
 export type ContratoEvaluation = {
@@ -191,6 +203,33 @@ export type ContratoEvaluation = {
   /** Só preenchido quando `ok`. */
   variables: ContratoVariables | null;
 };
+
+/** Monta os placeholders de posição fixa: `E1_TIPO`, `E1_QTD`, `E1_PLATAFORMA`, `E1_DATA_HORARIO`,
+ * `E1_PERMANENCIA` (…`E5_*`) e `A1_TIPO`, `A1_PLATAFORMA`, `A1_PESO`, `A1_VALOR` (…`A3_*`). */
+export function buildContratoSlots(
+  entregas: ContratoVariables["entregas"],
+  anexo: ContratoVariables["anexo_i"],
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (let i = 0; i < MAX_LINHAS_ENTREGAS; i++) {
+    const e = entregas[i];
+    const n = i + 1;
+    out[`E${n}_TIPO`] = e?.tipo ?? "";
+    out[`E${n}_QTD`] = e?.quantidade ?? "";
+    out[`E${n}_PLATAFORMA`] = e?.formato_plataforma ?? "";
+    out[`E${n}_DATA_HORARIO`] = e?.data_horario ?? "";
+    out[`E${n}_PERMANENCIA`] = e?.permanencia ?? "";
+  }
+  for (let i = 0; i < MAX_GRUPOS_ANEXO; i++) {
+    const a = anexo[i];
+    const n = i + 1;
+    out[`A${n}_TIPO`] = a?.tipo ?? "";
+    out[`A${n}_PLATAFORMA`] = a?.plataforma ?? "";
+    out[`A${n}_PESO`] = a?.peso_percentual ?? "";
+    out[`A${n}_VALOR`] = a?.valor_correspondente ?? "";
+  }
+  return out;
+}
 
 /* ------------------------------------------------------------------ */
 /* Utilitários                                                          */
@@ -494,7 +533,9 @@ export function evaluateContrato(draft: ContratoDraft, src: ContratoSource): Con
   const rows = draft.entregas;
   if (rows.length === 0)
     add("V14", "entregas", "O contrato precisa de pelo menos uma entrega combinada.");
-  const entregasOut: ContratoVariables["entregas"] = [];
+  // Linha do contrato = mesmo tipo + formato + data/horário + permanência (a quantidade soma). Unidades de uma
+  // entrega dividida (`Stories (1/3)`, `(2/3)`…) com a mesma data e horário viram "Stories × 3" numa linha só.
+  const linhas = new Map<string, ContratoVariables["entregas"][number]>();
   for (const row of rows) {
     const label = clean(row.tipo) || "entrega";
     const falta: string[] = [];
@@ -508,13 +549,34 @@ export function evaluateContrato(draft: ContratoDraft, src: ContratoSource): Con
       add("V14", "entregas", `${label} — falta: ${falta.join(", ")}.`, row.entregaId);
       continue;
     }
-    entregasOut.push({
-      tipo: clean(row.tipo),
-      quantidade: String(Number(row.quantidade)),
-      formato_plataforma: clean(row.formato),
-      data_horario: `${brDate(row.data)} – ${row.horario.trim()}`,
-      permanencia: clean(row.permanencia),
-    });
+    const tipoBase = clean(row.tipo.replace(UNIT_SUFFIX_RE, ""));
+    const dataHorario = `${brDate(row.data)} – ${row.horario.trim()}`;
+    const key = [
+      normKey(tipoBase),
+      normKey(row.formato),
+      dataHorario,
+      normKey(row.permanencia),
+    ].join("|");
+    const existente = linhas.get(key);
+    if (existente) {
+      existente.quantidade = String(Number(existente.quantidade) + Number(row.quantidade));
+    } else {
+      linhas.set(key, {
+        tipo: tipoBase,
+        quantidade: String(Number(row.quantidade)),
+        formato_plataforma: clean(row.formato),
+        data_horario: dataHorario,
+        permanencia: clean(row.permanencia),
+      });
+    }
+  }
+  const entregasOut = [...linhas.values()];
+  if (entregasOut.length > MAX_LINHAS_ENTREGAS) {
+    add(
+      "LIM-1",
+      "entregas",
+      `O contrato suporta no máximo ${MAX_LINHAS_ENTREGAS} tipos de entrega. Ajuste as entregas antes de gerar. (Há ${entregasOut.length} linhas: entregas do mesmo tipo só dividem uma linha quando têm o mesmo formato, data, horário e permanência.)`,
+    );
   }
 
   const antecedencia = toPositiveInt(draft.aprovacaoAntecedenciaDias, 60);
@@ -652,7 +714,13 @@ export function evaluateContrato(draft: ContratoDraft, src: ContratoSource): Con
     if (!groups.has(key))
       groups.set(key, { tipo: anexoTipoLabel(row.tipo), plataforma: clean(row.formato) });
   }
-  if (groups.size > 0 && totalCents != null) {
+  if (groups.size > MAX_GRUPOS_ANEXO) {
+    add(
+      "LIM-2",
+      "anexoPesos",
+      `O Anexo I suporta no máximo ${MAX_GRUPOS_ANEXO} grupos de tipo/plataforma (há ${groups.size}). Ajuste as entregas antes de gerar.`,
+    );
+  } else if (groups.size > 0 && totalCents != null) {
     const parsed: { key: string; bps: number | null }[] = [...groups.keys()].map((key) => ({
       key,
       bps: parseBasisPoints(draft.anexoPesos[key] ?? ""),
@@ -728,6 +796,7 @@ export function evaluateContrato(draft: ContratoDraft, src: ContratoSource): Con
     briefing_antecedencia_dias: String(briefingAntecedencia!),
     anexo_i: anexoOut,
     anexo_i_total_valor: anexoTotal,
+    slots: buildContratoSlots(entregasOut, anexoOut),
   };
   return { ok: true, issues: [], variables };
 }

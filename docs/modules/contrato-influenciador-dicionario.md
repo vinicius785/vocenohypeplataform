@@ -3,7 +3,7 @@
 Status: **Fases 1, 2 e 2.1 concluídas** (mapeamento, mapeador/validadores puros e atualização jurídica).
 Código: `src/lib/contrato-influenciador.ts`, `src/lib/documento-br.ts`, `src/lib/valor-extenso.ts` (com testes).
 **Sem integração D4Sign, sem tabelas, sem server functions, sem webhook, sem UI.**
-Versão do template refletida no código: `2026-10-v2`. Data: 2026-10-07.
+Versão do template refletida no código: `2026-10-v3` (Fase 2.2). Data: 2026-10-07.
 
 **Fonte oficial:** `Modelo de contrato influenciador 2026 - Vcnohype.docx` ("Contrato de Participação em
 Campanha", 15 seções, 2 tabelas, Anexo I). Todo item abaixo vem de um placeholder `[...]` real desse arquivo.
@@ -43,6 +43,15 @@ onde as decisões jurídicas abaixo mandam.
 | 3 | **`[100.000]`, `[365]`, `[7]`** | Deixam de ser constantes e viram **variáveis do contrato** (V25 a V28), com os valores atuais só como ponto de partida (`CONTRATO_DEFAULTS`). Nenhum desses números fica escrito no texto final. |
 | 4 | **Numeração** | Numeração contínua, sem criar cláusula 19 artificial. Ver a seção 1. |
 | 5 | **Representante** | Padronizado como **Rodrigo Cesar da Silva** (sem acento), no bloco de qualificação e na assinatura. |
+
+### Rodada 4 — template atualizado (Fase 2.2)
+| # | Decisão | Efeito |
+|---|---|---|
+| 1 | **Dois prazos distintos** | `[DIAS_APROVACAO]` (cláusula 6, V15) e `[DIAS_ANTECEDENCIA_BRIEFING]` (cláusula 20 item a, V28). Antes os dois usavam `[DIAS_ANTECEDENCIA]`. |
+| 2 | **Sem `[DATA_ASSINATURA]`** | Deixa de ser variável de geração: não se usa a data de criação nem de envio. A data da assinatura é a registrada pela D4Sign; a linha sai do corpo ou fica sem preenchimento. TI-4 encerrada. |
+| 3 | **Entregas: máx. 5 linhas** | Tabela da cláusula 3 com posições fixas `E1_*`..`E5_*`. Uma linha = tipo + formato + data/horário + permanência; a quantidade soma ("Stories × 3" ocupa **uma** linha). Mais de 5 bloqueia (`LIM-1`): "O contrato suporta no máximo 5 tipos de entrega. Ajuste as entregas antes de gerar." |
+| 4 | **Anexo I: máx. 3 grupos** | Posições fixas `A1_*`..`A3_*` (`TIPO`, `PLATAFORMA`, `PESO`, `VALOR`), agrupadas por tipo/plataforma. Mais de 3 bloqueia (`LIM-2`). |
+| 5 | **Linhas não usadas** | Os slots sobrando saem como string vazia (`slots` em `ContratoVariables`). |
 
 Fluxo da V1: **influenciador aprovado → gerar contrato → pré-preencher → completar → validar → visualizar → enviar.**
 
@@ -118,7 +127,7 @@ referência numérica a cláusula é "artigo 22 ou 23". Ela é a que precisa ser
 | ID | Variável | Placeholder | Origem | Obrig. | Regra | Validação | Ausente |
 |---|---|---|---|---|---|---|---|
 | V14 | `entregas` (tabela) | tabela da cláusula 3 | Ver T1 | Sim | Uma linha por entrega | ≥ 1 linha completa | BLOQUEIA |
-| V15 | `aprovacao_antecedencia_dias` | `[X]` na cláusula 6 ("em até [X] dias antes da data de publicação") | **SEM ORIGEM**; sem padrão no template | Sim | Inteiro | 1 a 60 | BLOQUEIA |
+| V15 | `aprovacao_antecedencia_dias` | `[DIAS_APROVACAO]` na cláusula 6 ("em até [X] dias antes da data de publicação") | **SEM ORIGEM**; sem padrão no template | Sim | Inteiro | 1 a 60 | BLOQUEIA |
 
 ### D. Pagamento (seção V)
 
@@ -147,7 +156,7 @@ referência numérica a cláusula é "artigo 22 ou 23". Ela é a que precisa ser
 | V25 | `multa_publicacao_irregular` + `multa_publicacao_irregular_extenso` | **26** (antiga 25): "multa de R$ `[100.000]` (cem mil reais) por publicação irregular" | `100.000` | Sim | Em R$; sai sem ",00" quando redondo; o extenso acompanha ("cem mil reais") | Maior que zero e até R$ 99.999.999,99 | BLOQUEIA (não cai no valor inicial) |
 | V26 | `multa_confidencialidade` + `multa_confidencialidade_extenso` | **34** (antiga 33): "multa contratual de R$ `[100.000]` (cem mil reais) por evento de violação" | `100.000` | Sim | Idem V25; **independente** de V25 | Idem V25 | BLOQUEIA |
 | V27 | `vigencia_dias_apos_entregas` | **29** (antiga 28): "permanece vigente até `[365]` dias após a realização de todas as entregas" | `365` | Sim | Inteiro | 1 a 3650 | BLOQUEIA |
-| V28 | `briefing_antecedencia_dias` | **20, item a)** (antiga 8.2 a): "com pelo menos `[7]` dias de antecedência da data de publicação" | `7` | Sim | Inteiro; **distinto de V15** (aprovação do conteúdo) | 1 a 60 | BLOQUEIA |
+| V28 | `briefing_antecedencia_dias` (placeholder `[DIAS_ANTECEDENCIA_BRIEFING]`) | **20, item a)** (antiga 8.2 a): "com pelo menos `[7]` dias de antecedência da data de publicação" | `7` | Sim | Inteiro; **distinto de V15** (aprovação do conteúdo) | 1 a 60 | BLOQUEIA |
 
 Os valores iniciais estão em `CONTRATO_DEFAULTS` e só pré-preenchem o rascunho. O texto final usa sempre o valor do
 rascunho: vazio ou inválido bloqueia em vez de cair no padrão.
@@ -156,11 +165,14 @@ rascunho: vazio ou inválido bloqueia em vez de cair no padrão.
 
 - **Dados da CONTRATANTE** (razão social, CNPJ, endereço, representante): fixos no template e no cabeçalho. O representante é **Rodrigo Cesar da Silva**, igual na qualificação e na assinatura.
 - **Signatário da CONTRATANTE**: configuração (nome, e-mail, CPF para a D4Sign), fora do template.
-- **Linha de data da assinatura** ("São Paulo/SP, ____ de ____ de 202___"): em branco no template; ver TI-4.
+- **Data da assinatura**: não é variável de geração (TI-4 encerrada). Vem da D4Sign; a linha "São Paulo/SP, ____ de ____ de 202___" sai do corpo ou fica sem preenchimento.
 
 ## 4. Tabelas repetidas
 
-### T1 — Entregas (cláusula 3): uma linha por `Influ.entregas[]`
+### T1 — Entregas (cláusula 3): até 5 linhas (`E1_*`..`E5_*`)
+
+Placeholders por posição: `En_TIPO`, `En_QTD`, `En_PLATAFORMA`, `En_DATA_HORARIO`, `En_PERMANENCIA`. Unidades de uma entrega dividida com o mesmo formato, data, horário e permanência viram uma linha só.
+
 
 | Coluna | Origem | Regra / validação | Ausente |
 |---|---|---|---|
@@ -172,7 +184,10 @@ rascunho: vazio ou inválido bloqueia em vez de cair no padrão.
 
 Ordem por data. Entram `combinado` e `publicado`; `orcado` bloqueia (PMR-8).
 
-### T2 — Anexo I (peso das entregas): uma linha por grupo (tipo + plataforma)
+### T2 — Anexo I (peso das entregas): até 3 grupos (`A1_*`..`A3_*`)
+
+Placeholders por posição: `An_TIPO`, `An_PLATAFORMA`, `An_PESO`, `An_VALOR` (antes reaproveitava `E1`..`E3`).
+
 
 | Coluna | Origem | Regra / validação | Ausente |
 |---|---|---|---|
@@ -206,16 +221,16 @@ As cláusulas 14 e 24 (antiga 23) dependem do Anexo I.
 | TI-1 | Remover os avisos "⚠ Campos acima editáveis…", "⚠ ATENÇÃO: Esta seção define…", "⚠ Preencher a tabela acima…", "— fim do documento —", os rótulos `[Ex: …]` e as linhas de exemplo. | **A aplicar no DOCX** |
 | TI-2 | Numeração contínua (seção 1) e referência "artigo 22 ou 23" → "artigo 23 ou 24". | **Decidida; a aplicar no DOCX** |
 | TI-3 | Representante como "Rodrigo Cesar da Silva" nos dois locais. | **Decidida; a aplicar no DOCX** (a qualificação ainda tem a grafia com acento) |
-| TI-4 | Linha de data da assinatura em branco; manter ou remover. | Aberta |
+| TI-4 | Data da assinatura. | **Encerrada:** não é variável de geração (D4Sign registra) |
 | TI-5 | Colchetes `[100.000]`, `[365]`, `[7]`. | **Decidida:** viram placeholders das variáveis V25 a V28; **a aplicar no DOCX** |
-| TI-6 | Linhas repetidas nas tabelas (entregas, Anexo I) na D4Sign. | Aberta (confirmar capacidade) |
+| TI-6 | Linhas repetidas nas tabelas na D4Sign. | **Encerrada:** posições fixas (5 e 3), sobras vazias; sem linhas dinâmicas |
 
 ## 7. O que ainda impede o início da Fase 3
 
 1. **Aplicar no DOCX/template da D4Sign** as decisões já tomadas: renumeração (TI-2), grafia do representante (TI-3), placeholders de V25 a V28 no lugar dos três colchetes (TI-5) e limpeza dos avisos e exemplos (TI-1). Sem o template final não dá para criá-lo na D4Sign.
 2. **Confirmar a abordagem de renumeração.** Fiz cada parágrafo numerado virar cláusula (8.1 → 19, 8.2 → 20, demais +1). A alternativa seria manter 20 a 41 e tornar os dois blocos "19.1" e "19.2". Essa leitura não precisa de nenhuma referência atualizada, mas exigiria um "19" sem texto. Preciso do aceite do jurídico antes de aplicar.
-3. **Confirmar com a D4Sign** o suporte a linhas repetidas nas duas tabelas (TI-6) e a sintaxe dos placeholders.
-4. Definir TI-4 (linha de data da assinatura).
+3. **Confirmar com a D4Sign** a sintaxe dos placeholders (delimitador de colchetes e `@` em `[@ARROBA]`).
+4. Remover do DOCX o resíduo "— fim do documento —" (TI-1).
 
 Não bloqueiam o início, mas limitam quais campanhas geram contrato hoje: PMR-1, PMR-2, PMR-4 e PMR-5.
 Também fica o seletor de exclusividade na tela da campanha (rodada 2).

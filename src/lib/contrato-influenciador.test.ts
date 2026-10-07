@@ -5,6 +5,8 @@ import type { Entrega, Influ } from "@/lib/influencer-model";
 import {
   CONTRATO_DEFAULTS,
   CONTRATO_TEMPLATE_VERSION,
+  MAX_GRUPOS_ANEXO,
+  MAX_LINHAS_ENTREGAS,
   TEXTO_SEM_EXCLUSIVIDADE,
   anexoGroupKey,
   buildContratoDraft,
@@ -103,6 +105,11 @@ function completar(draft: ContratoDraft): ContratoDraft {
     ),
   };
 }
+
+const stories = (n: number) =>
+  Array.from({ length: n }, (_, i) =>
+    entrega({ id: `s${i}`, tipo: "Stories", grupoId: "g", titulo: `(${i + 1}/${n})` }),
+  );
 
 const codes = (r: ReturnType<typeof evaluateContrato>) => r.issues.map((i) => i.code);
 
@@ -623,11 +630,6 @@ describe("evaluateContrato — exclusividade e direitos de imagem", () => {
 });
 
 describe("evaluateContrato — Anexo I", () => {
-  const stories = (n: number) =>
-    Array.from({ length: n }, (_, i) =>
-      entrega({ id: `s${i}`, tipo: "Stories", grupoId: "g", titulo: `(${i + 1}/${n})` }),
-    );
-
   it("pesos ausentes são apontados pelo nome da entrega (PMR-10)", () => {
     const src = source({
       influ: influ({ entregas: [entrega({ id: "r" }), entrega({ id: "s", tipo: "Stories" })] }),
@@ -685,11 +687,8 @@ describe("evaluateContrato — Anexo I", () => {
     const src = source({ influ: influ({ entregas: stories(3) }) });
     const r = evaluateContrato(completar(buildContratoDraft(src)), src);
     expect(r.ok).toBe(true);
-    expect(r.variables!.entregas.map((e) => e.tipo)).toEqual([
-      "Stories (1/3)",
-      "Stories (2/3)",
-      "Stories (3/3)",
-    ]);
+    // Fase 2.2: as 3 unidades (mesma data/horário/permanência) ocupam UMA linha do contrato.
+    expect(r.variables!.entregas.map((e) => [e.tipo, e.quantidade])).toEqual([["Stories", "3"]]);
     expect(r.variables!.anexo_i).toEqual([
       {
         tipo: "Stories (conjunto)",
@@ -787,5 +786,83 @@ describe("evaluateContrato — nunca devolve variáveis incompletas", () => {
     expect(r.ok).toBe(false);
     expect(r.variables).toBeNull();
     expect(r.issues.length).toBeGreaterThan(0);
+  });
+});
+
+describe("Fase 2.2 — limites do template e posições fixas", () => {
+  const comPerm = (d: ContratoDraft): ContratoDraft => ({
+    ...d,
+    entregas: d.entregas.map((r) => ({
+      ...r,
+      permanencia: r.permanencia || "Permanente",
+      formato: r.formato || `Plataforma ${r.tipo}`,
+    })),
+  });
+  const tipos = ["Reels", "Feed", "Carrossel", "TikTok", "YouTube", "Shorts"];
+  const entregasDistintas = (n: number) =>
+    tipos.slice(0, n).map((t, i) => entrega({ id: `e${i}`, tipo: t }));
+
+  it("5 tipos de entrega cabem; slots E1..E5 preenchidos e A1..A3 sobrando vazios", () => {
+    const src = source({ influ: influ({ entregas: entregasDistintas(5) }) });
+    const draft = comPerm(completar(buildContratoDraft(src)));
+    draft.anexoPesos = Object.fromEntries(Object.keys(draft.anexoPesos).map((k) => [k, "20"]));
+    const r = evaluateContrato(draft, src);
+    expect(codes(r)).toContain("LIM-2"); // 5 grupos no Anexo, mas as 5 linhas de entregas cabem
+    expect(codes(r)).not.toContain("LIM-1");
+  });
+
+  it("mais de 5 linhas de entrega bloqueia com a mensagem do contrato", () => {
+    const src = source({ influ: influ({ entregas: entregasDistintas(6) }) });
+    const r = evaluateContrato(comPerm(completar(buildContratoDraft(src))), src);
+    expect(r.ok).toBe(false);
+    expect(MAX_LINHAS_ENTREGAS).toBe(5);
+    expect(r.issues.find((i) => i.code === "LIM-1")?.message).toContain(
+      "O contrato suporta no máximo 5 tipos de entrega. Ajuste as entregas antes de gerar.",
+    );
+  });
+
+  it("Stories × 3 ocupa uma linha só", () => {
+    const src = source({ influ: influ({ entregas: stories(3) }) });
+    const r = evaluateContrato(comPerm(completar(buildContratoDraft(src))), src);
+    expect(r.variables!.slots.E1_TIPO).toBe("Stories");
+    expect(r.variables!.slots.E1_QTD).toBe("3");
+    expect(r.variables!.slots.E2_TIPO).toBe("");
+  });
+
+  it("mais de 3 grupos no Anexo I bloqueia (LIM-2)", () => {
+    const src = source({ influ: influ({ entregas: entregasDistintas(4) }) });
+    const draft = comPerm(completar(buildContratoDraft(src)));
+    draft.anexoPesos = Object.fromEntries(Object.keys(draft.anexoPesos).map((k) => [k, "25"]));
+    const r = evaluateContrato(draft, src);
+    expect(MAX_GRUPOS_ANEXO).toBe(3);
+    expect(codes(r)).toContain("LIM-2");
+    expect(codes(r)).not.toContain("LIM-1");
+    expect(r.ok).toBe(false);
+  });
+
+  it("slots do Anexo A1..A3: usados preenchidos, sobras vazias; 5+3 posições sempre presentes", () => {
+    const src = source({ influ: influ({ entregas: entregasDistintas(2) }) });
+    const draft = comPerm(completar(buildContratoDraft(src)));
+    const r = evaluateContrato(draft, src);
+    expect(r.issues).toEqual([]);
+    const sl = r.variables!.slots;
+    expect(sl.A1_TIPO).toBe("Reels");
+    expect(sl.A2_TIPO).toBe("Feed");
+    expect(sl.A3_TIPO).toBe("");
+    expect(sl.A3_PESO).toBe("");
+    expect(sl.A3_VALOR).toBe("");
+    expect(Object.keys(sl)).toHaveLength(5 * 5 + 3 * 4);
+  });
+
+  it("não há variável de data de assinatura; prazos de aprovação e briefing são separados", () => {
+    const src = source();
+    const r = evaluateContrato(comPerm(completar(buildContratoDraft(src))), src);
+    const keys = Object.keys(r.variables!);
+    expect(keys.some((k) => /assinatura/i.test(k) && k !== "exclusividade_periodo")).toBe(false);
+    expect(Object.keys(r.variables!.slots).some((k) => /ASSINATURA/.test(k))).toBe(false);
+    expect(r.variables!.aprovacao_antecedencia_dias).toBe("3");
+    expect(r.variables!.briefing_antecedencia_dias).toBe(
+      CONTRATO_DEFAULTS.briefingAntecedenciaDias,
+    );
   });
 });
