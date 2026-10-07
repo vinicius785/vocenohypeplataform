@@ -1,6 +1,22 @@
 {
-  "version": "1.376.0",
+  "version": "1.377.0",
   "releases": [
+    {
+      "version": "1.377.0",
+      "summary": "Portal do cliente: capas dos conteúdos na Home com a mesma altura e a arte inteira.",
+      "modules": [
+        {
+          "name": "PORTAL DO CLIENTE",
+          "tagline": "Conteúdos",
+          "items": [
+            {
+              "title": "Capas alinhadas",
+              "description": "Os cards da seção Conteúdos agora têm miniaturas na mesma proporção (16:9), sem cortar a arte da capa. O leitor do artigo continua mostrando a capa completa."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.376.0",
       "summary": "Artigos: curtidas e comentários agora carregam também na visualização do portal pelo time.",

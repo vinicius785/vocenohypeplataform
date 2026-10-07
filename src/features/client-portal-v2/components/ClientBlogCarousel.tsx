@@ -64,20 +64,23 @@ export function ClientBlogCarousel({ artigos }: { artigos: readonly PublicArticl
                 onClick={() => setOpenId(a.id)}
                 className="group w-64 shrink-0 cursor-pointer snap-start text-left focus-visible:outline-none"
               >
-                <span className="block aspect-video overflow-hidden rounded-lg bg-muted group-focus-visible:ring-2 group-focus-visible:ring-ring">
+                {/* Miniatura SEMPRE 16:9 e com a arte inteira (a capa tem texto embutido): a imagem é
+                 * ajustada por dentro (`contain`), nunca recortada; o que sobra fica no fundo neutro.
+                 * A altura vem do container, não da imagem — o resto do card não se mexe. */}
+                <span className="flex aspect-video w-full items-center justify-center overflow-hidden rounded-lg bg-muted group-focus-visible:ring-2 group-focus-visible:ring-ring">
                   {a.cover && (
                     <img
                       src={a.cover}
                       alt=""
                       loading="lazy"
-                      className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
+                      className="h-full w-full object-contain transition-opacity group-hover:opacity-90"
                     />
                   )}
                 </span>
-                <span className="mt-2 block text-xs text-text-secondary">
+                <span className="mt-2 block h-4 truncate text-xs leading-4 text-text-secondary">
                   {[a.category, date].filter(Boolean).join(" · ")}
                 </span>
-                <span className="mt-0.5 line-clamp-2 block text-sm font-medium text-foreground group-hover:underline">
+                <span className="mt-0.5 line-clamp-2 block min-h-10 text-sm font-medium leading-5 text-foreground group-hover:underline">
                   {a.title}
                 </span>
               </button>
