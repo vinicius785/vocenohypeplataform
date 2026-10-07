@@ -7,7 +7,6 @@ import {
   hasBlogArtigos,
   sortArtigos,
 } from "../lib/blog-artigos";
-import { makePortalPaths } from "../runtime/portal-runtime";
 
 const a = (
   id: string,
@@ -21,7 +20,7 @@ const a = (
 });
 
 describe("blog do portal V2", () => {
-  it("menu só aparece com ao menos um artigo", () => {
+  it("hasBlogArtigos: só com ao menos um artigo", () => {
     expect(hasBlogArtigos([])).toBe(false);
     expect(hasBlogArtigos(undefined)).toBe(false);
     expect(hasBlogArtigos([a("1")])).toBe(true);
@@ -49,11 +48,5 @@ describe("blog do portal V2", () => {
       "Título texto link",
     );
     expect(artigoSummary({ content: "a".repeat(300) }, 50).length).toBe(50);
-  });
-  it("caminhos: real e demo", () => {
-    expect(makePortalPaths("/portal-v2").blog()).toBe("/portal-v2/blog");
-    expect(makePortalPaths("/portal-v2").artigo("p 1")).toBe("/portal-v2/blog/p%201");
-    expect(makePortalPaths("/portal-v2").isActive("/portal-v2/blog/x", "blog")).toBe(true);
-    expect(makePortalPaths("/demo/T").artigo("p")).toBe("/demo/T/blog/p");
   });
 });

@@ -3,15 +3,15 @@
   "releases": [
     {
       "version": "1.371.0",
-      "summary": "Portal do cliente: nova área Blog com os conteúdos publicados para você.",
+      "summary": "Portal do cliente: carrossel de Conteúdos no Início com os artigos publicados para você.",
       "modules": [
         {
           "name": "PORTAL DO CLIENTE",
-          "tagline": "Blog",
+          "tagline": "Início",
           "items": [
             {
-              "title": "Conteúdos no menu",
-              "description": "Quando a Você no Hype publica um artigo para o seu portal, o item Blog aparece no menu com a lista de conteúdos e a leitura completa de cada artigo."
+              "title": "Carrossel de Conteúdos",
+              "description": "Quando a Você no Hype publica um artigo para o seu portal, ele aparece num carrossel no Início. Clique para ler o conteúdo completo."
             }
           ]
         }

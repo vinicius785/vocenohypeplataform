@@ -61,8 +61,6 @@ import { Route as DemoTokenConteudosRouteImport } from './routes/demo.$token/con
 import { Route as DemoTokenInicioRouteImport } from './routes/demo.$token/inicio'
 import { Route as DemoTokenRelatoriosRouteImport } from './routes/demo.$token/relatorios'
 import { Route as EmailDescadastroTokenRouteImport } from './routes/email.descadastro.$token'
-import { Route as PortalV2BlogIndexRouteImport } from './routes/portal-v2/blog.index'
-import { Route as PortalV2BlogPostIdRouteImport } from './routes/portal-v2/blog.$postId'
 import { Route as PortalV2CampanhasIndexRouteImport } from './routes/portal-v2/campanhas.index'
 import { Route as PortalV2CampanhasCampanhaIdRouteImport } from './routes/portal-v2/campanhas.$campanhaId'
 import { Route as PortalV2ConfiguracoesIndexRouteImport } from './routes/portal-v2/configuracoes.index'
@@ -365,16 +363,6 @@ const EmailDescadastroTokenRoute = EmailDescadastroTokenRouteImport.update({
   path: '/email/descadastro/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PortalV2BlogIndexRoute = PortalV2BlogIndexRouteImport.update({
-  id: '/blog/',
-  path: '/blog/',
-  getParentRoute: () => PortalV2RouteRoute,
-} as any)
-const PortalV2BlogPostIdRoute = PortalV2BlogPostIdRouteImport.update({
-  id: '/blog/$postId',
-  path: '/blog/$postId',
-  getParentRoute: () => PortalV2RouteRoute,
-} as any)
 const PortalV2CampanhasIndexRoute = PortalV2CampanhasIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -622,7 +610,6 @@ export interface FileRoutesByFullPath {
   '/demo/$token/inicio': typeof DemoTokenInicioRoute
   '/demo/$token/relatorios': typeof DemoTokenRelatoriosRoute
   '/email/descadastro/$token': typeof EmailDescadastroTokenRoute
-  '/portal-v2/blog/$postId': typeof PortalV2BlogPostIdRoute
   '/portal-v2/campanhas/$campanhaId': typeof PortalV2CampanhasCampanhaIdRouteWithChildren
   '/portal-v2/configuracoes/acessos': typeof PortalV2ConfiguracoesAcessosRoute
   '/portal-v2/configuracoes/perfil': typeof PortalV2ConfiguracoesPerfilRoute
@@ -633,7 +620,6 @@ export interface FileRoutesByFullPath {
   '/portal/$token/solicitacoes': typeof PortalTokenSolicitacoesRoute
   '/chat-v2/': typeof AuthenticatedChatV2IndexRoute
   '/demo/$token/': typeof DemoTokenIndexRoute
-  '/portal-v2/blog/': typeof PortalV2BlogIndexRoute
   '/portal-v2/campanhas/': typeof PortalV2CampanhasIndexRoute
   '/portal-v2/configuracoes/': typeof PortalV2ConfiguracoesIndexRoute
   '/portal/$token/': typeof PortalTokenIndexRoute
@@ -703,7 +689,6 @@ export interface FileRoutesByTo {
   '/demo/$token/inicio': typeof DemoTokenInicioRoute
   '/demo/$token/relatorios': typeof DemoTokenRelatoriosRoute
   '/email/descadastro/$token': typeof EmailDescadastroTokenRoute
-  '/portal-v2/blog/$postId': typeof PortalV2BlogPostIdRoute
   '/portal-v2/campanhas/$campanhaId': typeof PortalV2CampanhasCampanhaIdRouteWithChildren
   '/portal-v2/configuracoes/acessos': typeof PortalV2ConfiguracoesAcessosRoute
   '/portal-v2/configuracoes/perfil': typeof PortalV2ConfiguracoesPerfilRoute
@@ -714,7 +699,6 @@ export interface FileRoutesByTo {
   '/portal/$token/solicitacoes': typeof PortalTokenSolicitacoesRoute
   '/chat-v2': typeof AuthenticatedChatV2IndexRoute
   '/demo/$token': typeof DemoTokenIndexRoute
-  '/portal-v2/blog': typeof PortalV2BlogIndexRoute
   '/portal-v2/campanhas': typeof PortalV2CampanhasIndexRoute
   '/portal-v2/configuracoes': typeof PortalV2ConfiguracoesIndexRoute
   '/portal/$token': typeof PortalTokenIndexRoute
@@ -793,7 +777,6 @@ export interface FileRoutesById {
   '/demo/$token/inicio': typeof DemoTokenInicioRoute
   '/demo/$token/relatorios': typeof DemoTokenRelatoriosRoute
   '/email/descadastro/$token': typeof EmailDescadastroTokenRoute
-  '/portal-v2/blog/$postId': typeof PortalV2BlogPostIdRoute
   '/portal-v2/campanhas/$campanhaId': typeof PortalV2CampanhasCampanhaIdRouteWithChildren
   '/portal-v2/configuracoes/acessos': typeof PortalV2ConfiguracoesAcessosRoute
   '/portal-v2/configuracoes/perfil': typeof PortalV2ConfiguracoesPerfilRoute
@@ -804,7 +787,6 @@ export interface FileRoutesById {
   '/portal/$token/solicitacoes': typeof PortalTokenSolicitacoesRoute
   '/_authenticated/chat-v2/': typeof AuthenticatedChatV2IndexRoute
   '/demo/$token/': typeof DemoTokenIndexRoute
-  '/portal-v2/blog/': typeof PortalV2BlogIndexRoute
   '/portal-v2/campanhas/': typeof PortalV2CampanhasIndexRoute
   '/portal-v2/configuracoes/': typeof PortalV2ConfiguracoesIndexRoute
   '/portal/$token/': typeof PortalTokenIndexRoute
@@ -884,7 +866,6 @@ export interface FileRouteTypes {
     | '/demo/$token/inicio'
     | '/demo/$token/relatorios'
     | '/email/descadastro/$token'
-    | '/portal-v2/blog/$postId'
     | '/portal-v2/campanhas/$campanhaId'
     | '/portal-v2/configuracoes/acessos'
     | '/portal-v2/configuracoes/perfil'
@@ -895,7 +876,6 @@ export interface FileRouteTypes {
     | '/portal/$token/solicitacoes'
     | '/chat-v2/'
     | '/demo/$token/'
-    | '/portal-v2/blog/'
     | '/portal-v2/campanhas/'
     | '/portal-v2/configuracoes/'
     | '/portal/$token/'
@@ -965,7 +945,6 @@ export interface FileRouteTypes {
     | '/demo/$token/inicio'
     | '/demo/$token/relatorios'
     | '/email/descadastro/$token'
-    | '/portal-v2/blog/$postId'
     | '/portal-v2/campanhas/$campanhaId'
     | '/portal-v2/configuracoes/acessos'
     | '/portal-v2/configuracoes/perfil'
@@ -976,7 +955,6 @@ export interface FileRouteTypes {
     | '/portal/$token/solicitacoes'
     | '/chat-v2'
     | '/demo/$token'
-    | '/portal-v2/blog'
     | '/portal-v2/campanhas'
     | '/portal-v2/configuracoes'
     | '/portal/$token'
@@ -1054,7 +1032,6 @@ export interface FileRouteTypes {
     | '/demo/$token/inicio'
     | '/demo/$token/relatorios'
     | '/email/descadastro/$token'
-    | '/portal-v2/blog/$postId'
     | '/portal-v2/campanhas/$campanhaId'
     | '/portal-v2/configuracoes/acessos'
     | '/portal-v2/configuracoes/perfil'
@@ -1065,7 +1042,6 @@ export interface FileRouteTypes {
     | '/portal/$token/solicitacoes'
     | '/_authenticated/chat-v2/'
     | '/demo/$token/'
-    | '/portal-v2/blog/'
     | '/portal-v2/campanhas/'
     | '/portal-v2/configuracoes/'
     | '/portal/$token/'
@@ -1484,20 +1460,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EmailDescadastroTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/portal-v2/blog/': {
-      id: '/portal-v2/blog/'
-      path: '/blog'
-      fullPath: '/portal-v2/blog/'
-      preLoaderRoute: typeof PortalV2BlogIndexRouteImport
-      parentRoute: typeof PortalV2RouteRoute
-    }
-    '/portal-v2/blog/$postId': {
-      id: '/portal-v2/blog/$postId'
-      path: '/blog/$postId'
-      fullPath: '/portal-v2/blog/$postId'
-      preLoaderRoute: typeof PortalV2BlogPostIdRouteImport
-      parentRoute: typeof PortalV2RouteRoute
-    }
     '/portal-v2/campanhas/': {
       id: '/portal-v2/campanhas/'
       path: '/'
@@ -1915,8 +1877,6 @@ interface PortalV2RouteRouteChildren {
   PortalV2RelatoriosRoute: typeof PortalV2RelatoriosRoute
   PortalV2SegurancaRoute: typeof PortalV2SegurancaRoute
   PortalV2IndexRoute: typeof PortalV2IndexRoute
-  PortalV2BlogPostIdRoute: typeof PortalV2BlogPostIdRoute
-  PortalV2BlogIndexRoute: typeof PortalV2BlogIndexRoute
 }
 
 const PortalV2RouteRouteChildren: PortalV2RouteRouteChildren = {
@@ -1933,8 +1893,6 @@ const PortalV2RouteRouteChildren: PortalV2RouteRouteChildren = {
   PortalV2RelatoriosRoute: PortalV2RelatoriosRoute,
   PortalV2SegurancaRoute: PortalV2SegurancaRoute,
   PortalV2IndexRoute: PortalV2IndexRoute,
-  PortalV2BlogPostIdRoute: PortalV2BlogPostIdRoute,
-  PortalV2BlogIndexRoute: PortalV2BlogIndexRoute,
 }
 
 const PortalV2RouteRouteWithChildren = PortalV2RouteRoute._addFileChildren(

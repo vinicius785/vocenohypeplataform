@@ -13,6 +13,7 @@ import { ClientHomeHeader, HeaderStatCell } from "../components/ClientHomeHeader
 import { ClientAttentionList } from "../components/ClientAttentionList";
 import { ClientCampaignProgressList } from "../components/ClientCampaignProgressList";
 import { ClientActivityList } from "../components/ClientActivityList";
+import { ClientBlogCarousel } from "../components/ClientBlogCarousel";
 
 const WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
@@ -90,6 +91,8 @@ export function InicioV2() {
       />
 
       <ClientAttentionList items={attentionItems} />
+
+      <ClientBlogCarousel artigos={data.artigos ?? []} />
 
       <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-2">
         <ClientCampaignProgressList campaigns={activeCampaigns} />

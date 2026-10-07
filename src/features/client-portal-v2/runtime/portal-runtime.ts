@@ -17,7 +17,7 @@ import type {
  * exatamente como era — `paths.rebase` é a identidade e as ações são as funções `*Session`.
  */
 
-export type PortalNavItem = "inicio" | "campanhas" | "blog" | "relatorios" | "arquivos";
+export type PortalNavItem = "inicio" | "campanhas" | "relatorios" | "arquivos";
 
 export type PortalPaths = {
   /** `/portal-v2` ou `/demo/<token>`. */
@@ -27,8 +27,6 @@ export type PortalPaths = {
   inicio: () => string;
   campanhas: () => string;
   campanha: (id: string) => string;
-  blog: () => string;
-  artigo: (id: string) => string;
   relatorios: () => string;
   arquivos: () => string;
   /** O caminho atual pertence ao item de navegação? */
@@ -50,8 +48,6 @@ export function makePortalPaths(base: string): PortalPaths {
     inicio: () => `${base}/inicio`,
     campanhas: () => `${base}/campanhas`,
     campanha: (id) => `${base}/campanhas/${id}`,
-    blog: () => `${base}/blog`,
-    artigo: (id) => `${base}/blog/${encodeURIComponent(id)}`,
     relatorios: () => `${base}/relatorios`,
     arquivos: () => `${base}/arquivos`,
     isActive: (pathname, item) => pathname.startsWith(paths[item]()),

@@ -7,7 +7,6 @@ import {
   FolderOpen,
   Menu,
   X,
-  BookOpen,
   ChevronsLeft,
   ChevronsRight,
 } from "lucide-react";
@@ -18,7 +17,6 @@ import { NotificationsPopover } from "../components/NotificationsPopover";
 import { ClientThemeMenu } from "../components/ClientThemeMenu";
 import { ClientSidebarProfile, CLIENT_ROLE_LABEL } from "../components/ClientSidebarProfile";
 import { PendingNpsGate } from "../components/PendingNpsGate";
-import { hasBlogArtigos } from "../lib/blog-artigos";
 import {
   usePortalIdentity,
   usePortalNavigate,
@@ -49,7 +47,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 const NAV_ITEMS = [
   { key: "inicio", label: "Início", icon: Home, href: "/portal-v2/inicio" },
   { key: "campanhas", label: "Campanhas", icon: Megaphone, href: "/portal-v2/campanhas" },
-  { key: "blog", label: "Blog", icon: BookOpen, href: "/portal-v2/blog" },
   { key: "relatorios", label: "Relatórios", icon: FileBarChart, href: "/portal-v2/relatorios" },
   { key: "arquivos", label: "Arquivos", icon: FolderOpen, href: "/portal-v2/arquivos" },
 ] as const satisfies ReadonlyArray<{
@@ -150,21 +147,19 @@ function SidebarContent({
       />
 
       <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3">
-        {NAV_ITEMS.filter((item) => item.key !== "blog" || hasBlogArtigos(data.artigos)).map(
-          (item) => (
-            <NavButton
-              key={item.key}
-              active={paths.isActive(currentPath, item.key)}
-              collapsed={collapsed}
-              icon={item.icon}
-              label={item.label}
-              onClick={() => {
-                navigate({ to: paths[item.key]() });
-                onNavigate?.();
-              }}
-            />
-          ),
-        )}
+        {NAV_ITEMS.map((item) => (
+          <NavButton
+            key={item.key}
+            active={paths.isActive(currentPath, item.key)}
+            collapsed={collapsed}
+            icon={item.icon}
+            label={item.label}
+            onClick={() => {
+              navigate({ to: paths[item.key]() });
+              onNavigate?.();
+            }}
+          />
+        ))}
       </nav>
 
       <div className="shrink-0 border-t border-border p-3">
@@ -357,7 +352,7 @@ export function PortalV2ShellBackdrop() {
           </div>
         </div>
         <nav className="flex-1 space-y-1 px-3">
-          {NAV_ITEMS.filter((item) => item.key !== "blog").map((item) => (
+          {NAV_ITEMS.map((item) => (
             <NavButton
               key={item.key}
               active={item.key === active.key}
