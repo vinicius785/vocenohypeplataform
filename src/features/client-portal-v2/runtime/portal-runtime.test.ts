@@ -65,3 +65,12 @@ describe("makePortalPaths — demonstração", () => {
     expect(real.isActive("/portal-v2/relatorios", "relatorios")).toBe(true);
   });
 });
+
+import { PreviewPortalRuntime } from "./preview-runtime";
+import { DemoPortalRuntime } from "./demo-runtime";
+describe("runtimes expõem a API de artigos", () => {
+  it("preview e demo existem como componentes (contrato PortalApi checado pelo typecheck)", () => {
+    expect(typeof PreviewPortalRuntime).toBe("function");
+    expect(typeof DemoPortalRuntime).toBe("function");
+  });
+});

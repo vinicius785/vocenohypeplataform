@@ -561,6 +561,42 @@ const _ArtigoEngagementPublic = z.object({
   ),
 });
 
+/** Leitura de curtidas + comentários de um artigo JÁ AUTORIZADO para o cliente (quem chama confere
+ * a posse com `assertArtigoDoCliente*` antes). Núcleo único: token, sessão e visualização do time. */
+export async function readArtigoEngagement(
+  clienteId: string,
+  postId: string,
+): Promise<z.infer<typeof _ArtigoEngagementPublic>> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const likerKey = `cliente:${clienteId}`;
+  const [likesRes, commentsRes] = await Promise.all([
+    supabaseAdmin.from("blog_likes").select("liker_key").eq("post_id", postId),
+    supabaseAdmin
+      .from("blog_comments")
+      .select("id, author_label, author_kind, body, created_at")
+      .eq("post_id", postId)
+      .order("created_at", { ascending: true }),
+  ]);
+  if (likesRes.error) throwSafeDbError(likesRes.error, "blog_likes");
+  if (commentsRes.error) throwSafeDbError(commentsRes.error, "blog_comments");
+  return {
+    likeCount: likesRes.data.length,
+    likedByMe: likesRes.data.some((r) => r.liker_key === likerKey),
+    comments: commentsRes.data.map((r) => ({
+      id: r.id,
+      authorLabel: r.author_label,
+      authorKind: r.author_kind === "cliente" ? ("cliente" as const) : ("team" as const),
+      body: r.body,
+      createdAt: r.created_at,
+    })),
+  };
+}
+
+/** Posse do artigo (publicado + cliente em `portalClienteIds`) — também para a visualização do time. */
+export async function assertArtigoVisivelAoCliente(clienteId: string, postId: string) {
+  await assertArtigoDoCliente(clienteId, postId);
+}
+
 /** Público, sem auth — curtidas/comentários de um artigo, carregados sob
  * demanda ao abrir a leitura (não vem junto com `getClienteLinkData`, pra
  * não inflar o payload da lista de artigos). */
@@ -570,29 +606,7 @@ export const loadArtigoEngagement = createServerFn({ method: "GET" })
     const found = await findClienteByToken(data.token);
     if (!found) throw new Error("Link não encontrado.");
     await assertArtigoDoCliente(found.clienteId, data.postId);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const likerKey = `cliente:${found.clienteId}`;
-    const [likesRes, commentsRes] = await Promise.all([
-      supabaseAdmin.from("blog_likes").select("liker_key").eq("post_id", data.postId),
-      supabaseAdmin
-        .from("blog_comments")
-        .select("id, author_label, author_kind, body, created_at")
-        .eq("post_id", data.postId)
-        .order("created_at", { ascending: true }),
-    ]);
-    if (likesRes.error) throwSafeDbError(likesRes.error);
-    if (commentsRes.error) throwSafeDbError(commentsRes.error);
-    return {
-      likeCount: likesRes.data.length,
-      likedByMe: likesRes.data.some((r) => r.liker_key === likerKey),
-      comments: commentsRes.data.map((r) => ({
-        id: r.id,
-        authorLabel: r.author_label,
-        authorKind: r.author_kind === "cliente" ? ("cliente" as const) : ("team" as const),
-        body: r.body,
-        createdAt: r.created_at,
-      })),
-    };
+    return readArtigoEngagement(found.clienteId, data.postId);
   });
 
 /** Público, sem auth — curtir/descurtir um artigo. Identidade é o nome do

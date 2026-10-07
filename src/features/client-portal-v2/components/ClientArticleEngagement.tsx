@@ -1,14 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { Heart, MessageCircle, Send } from "lucide-react";
-import { useServerFn } from "@tanstack/react-start";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePortalSessionData } from "@/components/portal/portal-session-context";
-import {
-  addArtigoComentarioSession,
-  loadArtigoEngagementSession,
-  toggleArtigoLikeSession,
-} from "@/lib/portal-auth.functions";
+import { usePortalRuntime } from "../runtime/portal-runtime";
 import { colorFor, initialsOf, type BlogEngagement } from "@/lib/blog-engagement";
 import {
   COMMENT_MAX,
@@ -24,9 +19,10 @@ import {
  * `client_viewer` são revalidados no servidor). O artigo aparece primeiro; isto carrega depois. */
 export function ClientArticleEngagement({ postId }: { postId: string }) {
   const { data, readOnly } = usePortalSessionData();
-  const loadFn = useServerFn(loadArtigoEngagementSession);
-  const likeFn = useServerFn(toggleArtigoLikeSession);
-  const commentFn = useServerFn(addArtigoComentarioSession);
+  const { api, capabilities } = usePortalRuntime();
+  const loadFn = api.loadArtigoEngagement;
+  const likeFn = api.toggleArtigoLike;
+  const commentFn = api.addArtigoComentario;
 
   const [eng, setEng] = useState<BlogEngagement | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -41,7 +37,7 @@ export function ClientArticleEngagement({ postId }: { postId: string }) {
   const load = useCallback(async () => {
     setLoadError(false);
     try {
-      const next = await loadFn({ data: { postId } });
+      const next = await loadFn(postId);
       if (currentPost.current === postId) setEng(next);
     } catch {
       if (currentPost.current === postId) setLoadError(true);
@@ -64,7 +60,7 @@ export function ClientArticleEngagement({ postId }: { postId: string }) {
     setLikeError(false);
     setEng(toggleLikeOptimistic(before));
     try {
-      await likeFn({ data: { postId } });
+      await likeFn(postId);
     } catch {
       setEng(before);
       setLikeError(true);
@@ -86,7 +82,7 @@ export function ClientArticleEngagement({ postId }: { postId: string }) {
     setDraft("");
     listRef.current?.scrollTo({ top: 0 });
     try {
-      await commentFn({ data: { postId, body } });
+      await commentFn(postId, body);
       await load();
     } catch {
       setEng(before);
@@ -107,6 +103,11 @@ export function ClientArticleEngagement({ postId }: { postId: string }) {
       sending={sending}
       sendError={sendError}
       readOnly={readOnly}
+      readOnlyMessage={
+        capabilities.teamPreview
+          ? "Visualização do time: curtir e comentar são do cliente, pelo portal dele."
+          : undefined
+      }
       clienteNome={data.clienteNome}
       clienteFoto={data.clienteFoto}
       listRef={listRef}
@@ -127,6 +128,8 @@ export type EngagementViewProps = {
   sending: boolean;
   sendError: string | null;
   readOnly: boolean;
+  /** Texto do rodapé quando somente leitura (padrão: acesso somente leitura do cliente). */
+  readOnlyMessage?: string;
   clienteNome: string;
   clienteFoto?: string;
   listRef?: RefObject<HTMLUListElement | null>;
@@ -146,6 +149,7 @@ export function EngagementView({
   sending,
   sendError,
   readOnly,
+  readOnlyMessage,
   clienteNome,
   clienteFoto,
   listRef,
@@ -275,7 +279,9 @@ export function EngagementView({
         }}
       >
         {readOnly ? (
-          <p className="text-xs text-text-secondary">Seu acesso é somente leitura.</p>
+          <p className="text-xs text-text-secondary">
+            {readOnlyMessage ?? "Seu acesso é somente leitura."}
+          </p>
         ) : (
           <>
             <div className="flex items-center gap-2">

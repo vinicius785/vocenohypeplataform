@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
+import type { BlogEngagement } from "@/lib/blog-engagement";
 import type {
   AddComentarioInputT,
   ReportUrlInputT,
@@ -60,6 +61,10 @@ export type PortalApi = {
   respondEntrega: (input: RespondEntregaInputT) => Promise<unknown>;
   addComentario: (input: AddComentarioInputT) => Promise<unknown>;
   freshRelatorioUrl: (input: ReportUrlInputT) => Promise<{ url: string }>;
+  /** Curtidas/comentários de artigo — cada contexto (real, visualização do time, demo) decide a origem. */
+  loadArtigoEngagement: (postId: string) => Promise<BlogEngagement>;
+  toggleArtigoLike: (postId: string) => Promise<unknown>;
+  addArtigoComentario: (postId: string, body: string) => Promise<unknown>;
 };
 
 export type PortalCapabilities = {
@@ -67,6 +72,8 @@ export type PortalCapabilities = {
   accountMenu: boolean;
   /** Troca de ambiente (quem tem mais de uma organização). */
   environmentSwitch: boolean;
+  /** Visualização do time: o painel de artigos explica que quem interage é o cliente. */
+  teamPreview?: boolean;
 };
 
 export type PortalIdentity = { name: string; secondary: string; email: string };

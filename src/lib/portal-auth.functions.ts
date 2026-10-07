@@ -39,6 +39,7 @@ import {
   assertCampanhaInCliente,
   notifyTeamEntregaResponse,
   findArtigosDoCliente,
+  readArtigoEngagement,
   assertAllowedUploadContentType,
 } from "@/lib/cliente-link.functions";
 import {
@@ -736,29 +737,7 @@ export const loadArtigoEngagementSession = createServerFn({ method: "GET" })
   .handler(async ({ data, context }) => {
     const { clienteId } = await resolveClienteForSession(context);
     await assertArtigoDoClienteSession(clienteId, data.postId);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const likerKey = `cliente:${clienteId}`;
-    const [likesRes, commentsRes] = await Promise.all([
-      supabaseAdmin.from("blog_likes").select("liker_key").eq("post_id", data.postId),
-      supabaseAdmin
-        .from("blog_comments")
-        .select("id, author_label, author_kind, body, created_at")
-        .eq("post_id", data.postId)
-        .order("created_at", { ascending: true }),
-    ]);
-    if (likesRes.error) throwSafeDbError(likesRes.error);
-    if (commentsRes.error) throwSafeDbError(commentsRes.error);
-    return {
-      likeCount: likesRes.data.length,
-      likedByMe: likesRes.data.some((r) => r.liker_key === likerKey),
-      comments: commentsRes.data.map((r) => ({
-        id: r.id,
-        authorLabel: r.author_label,
-        authorKind: r.author_kind === "cliente" ? ("cliente" as const) : ("team" as const),
-        body: r.body,
-        createdAt: r.created_at,
-      })),
-    };
+    return readArtigoEngagement(clienteId, data.postId);
   });
 
 export const toggleArtigoLikeSession = createServerFn({ method: "POST" })

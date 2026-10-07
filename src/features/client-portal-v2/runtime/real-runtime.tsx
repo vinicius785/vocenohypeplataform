@@ -1,8 +1,11 @@
 import { useMemo, type ReactNode } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import {
+  addArtigoComentarioSession,
   addInfluClienteComentario,
   getFreshRelatorioUrlSession,
+  loadArtigoEngagementSession,
+  toggleArtigoLikeSession,
   respondCampanhaEntregaSession,
   respondCampanhaInfluSession,
 } from "@/lib/portal-auth.functions";
@@ -17,6 +20,9 @@ export function RealPortalRuntime({ children }: { children: ReactNode }) {
   const respondEntrega = useServerFn(respondCampanhaEntregaSession);
   const addComentario = useServerFn(addInfluClienteComentario);
   const freshRelatorioUrl = useServerFn(getFreshRelatorioUrlSession);
+  const loadEngagement = useServerFn(loadArtigoEngagementSession);
+  const toggleLike = useServerFn(toggleArtigoLikeSession);
+  const addArtigoComment = useServerFn(addArtigoComentarioSession);
 
   const value = useMemo<PortalRuntime>(() => {
     const api: PortalApi = {
@@ -24,6 +30,9 @@ export function RealPortalRuntime({ children }: { children: ReactNode }) {
       respondEntrega: (data) => respondEntrega({ data }),
       addComentario: (data) => addComentario({ data }),
       freshRelatorioUrl: (data) => freshRelatorioUrl({ data }),
+      loadArtigoEngagement: (postId) => loadEngagement({ data: { postId } }),
+      toggleArtigoLike: (postId) => toggleLike({ data: { postId } }),
+      addArtigoComentario: (postId, body) => addArtigoComment({ data: { postId, body } }),
     };
     return {
       paths: REAL_PATHS,
@@ -32,7 +41,15 @@ export function RealPortalRuntime({ children }: { children: ReactNode }) {
       identity: null,
       banner: null,
     };
-  }, [respondInflu, respondEntrega, addComentario, freshRelatorioUrl]);
+  }, [
+    respondInflu,
+    respondEntrega,
+    addComentario,
+    freshRelatorioUrl,
+    loadEngagement,
+    toggleLike,
+    addArtigoComment,
+  ]);
 
   return <PortalRuntimeProvider value={value}>{children}</PortalRuntimeProvider>;
 }

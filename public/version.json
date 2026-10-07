@@ -1,6 +1,22 @@
 {
-  "version": "1.375.0",
+  "version": "1.376.0",
   "releases": [
+    {
+      "version": "1.376.0",
+      "summary": "Artigos: curtidas e comentários agora carregam também na visualização do portal pelo time.",
+      "modules": [
+        {
+          "name": "PORTAL DO CLIENTE",
+          "tagline": "Conteúdos",
+          "items": [
+            {
+              "title": "Interações na visualização do time",
+              "description": "Ao ver o portal como o cliente (visualização do time), o painel de um artigo mostra as curtidas e os comentários reais do cliente, em somente leitura, em vez de um erro."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.375.0",
       "summary": "Blog: a data do artigo passa a ser a da primeira publicação, mesmo quando republicado.",

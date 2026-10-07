@@ -21,12 +21,17 @@ export function DemoPortalRuntime({ token, children }: { token: string; children
   const freshRelatorioUrl = useServerFn(getDemoRelatorioUrl);
 
   const value = useMemo<PortalRuntime>(() => {
+    const noArtigos = () => Promise.reject(new Error("Conteúdos não fazem parte da demonstração."));
     const api: PortalApi = {
       respondInflu: (data) => respondInflu({ data: { token, ...data } }),
       respondEntrega: (data) => respondEntrega({ data: { token, ...data } }),
       addComentario: (data) => addComentario({ data: { token, ...data } }),
       freshRelatorioUrl: (data) =>
         freshRelatorioUrl({ data: { token, ...data } }) as Promise<{ url: string }>,
+      // A Demo não tem artigos (`artigos: []`): nada a carregar nem a gravar.
+      loadArtigoEngagement: noArtigos,
+      toggleArtigoLike: noArtigos,
+      addArtigoComentario: noArtigos,
     };
     return {
       paths: makePortalPaths(`/demo/${token}`),

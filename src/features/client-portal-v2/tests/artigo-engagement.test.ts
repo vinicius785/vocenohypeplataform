@@ -108,6 +108,14 @@ describe("EngagementView", () => {
     expect(h).toContain("somente leitura");
     expect(h).not.toContain("Escreva um comentário");
   });
+  it("visualização do time: mensagem própria, não a do acesso do cliente", () => {
+    const h = html({
+      readOnly: true,
+      readOnlyMessage: "Visualização do time: curtir e comentar são do cliente.",
+    });
+    expect(h).toContain("Visualização do time");
+    expect(h).not.toContain("Seu acesso é somente leitura");
+  });
   it("lista comentários e rotula o campo", () => {
     const h = html({ eng: { ...eng, comments: [c("a", "2026-10-01T10:00:00Z", "Muito bom")] } });
     expect(h).toContain("Muito bom");

@@ -1,5 +1,7 @@
 import { useMemo, type ReactNode } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { Badge } from "@/components/ui/badge";
+import { getPortalPreviewArtigoEngagement } from "@/lib/portal-preview.functions";
 import { PortalRuntimeProvider } from "./portal-runtime-provider";
 import { makePortalPaths, type PortalApi, type PortalRuntime } from "./portal-runtime";
 
@@ -20,6 +22,7 @@ export function PreviewPortalRuntime({
   clienteId: string;
   children: ReactNode;
 }) {
+  const loadEngagement = useServerFn(getPortalPreviewArtigoEngagement);
   const value = useMemo<PortalRuntime>(() => {
     const api: PortalApi = {
       respondInflu: READ_ONLY,
@@ -27,11 +30,15 @@ export function PreviewPortalRuntime({
       addComentario: READ_ONLY,
       // Relatórios já vêm com URL assinada nos dados; renovar exigiria uma função por sessão.
       freshRelatorioUrl: READ_ONLY as PortalApi["freshRelatorioUrl"],
+      // Leitura: o time vê as curtidas/comentários reais do cliente. Escrever é recusado.
+      loadArtigoEngagement: (postId) => loadEngagement({ data: { clienteId, postId } }),
+      toggleArtigoLike: READ_ONLY,
+      addArtigoComentario: READ_ONLY,
     };
     return {
       paths: makePortalPaths(`/preview-cliente/${clienteId}`),
       api,
-      capabilities: { accountMenu: false, environmentSwitch: false },
+      capabilities: { accountMenu: false, environmentSwitch: false, teamPreview: true },
       identity: { name: "Cliente", secondary: "Visualização do time", email: "" },
       banner: (
         <Badge
@@ -42,6 +49,6 @@ export function PreviewPortalRuntime({
         </Badge>
       ),
     };
-  }, [clienteId]);
+  }, [clienteId, loadEngagement]);
   return <PortalRuntimeProvider value={value}>{children}</PortalRuntimeProvider>;
 }

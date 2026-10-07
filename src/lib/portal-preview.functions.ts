@@ -32,3 +32,20 @@ export const getPortalPreviewData = createServerFn({ method: "GET" })
     const base = await buildClienteLinkData(row.id, row.data as never);
     return { ...base, role: "client_viewer" };
   });
+
+const PreviewArtigoInput = z.object({ clienteId: z.string().uuid(), postId: z.string().min(1) });
+
+/** Curtidas e comentários de um artigo, vistos pelo TIME na visualização do cliente. Somente
+ * leitura; confere a permissão do time e que o artigo é MESMO visível a esse cliente. */
+export const getPortalPreviewArtigoEngagement = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((raw: unknown) => PreviewArtigoInput.parse(raw))
+  .handler(async ({ data, context }) => {
+    await assertCanPreviewClientPortal(
+      context as unknown as Parameters<typeof assertCanPreviewClientPortal>[0],
+    );
+    const { assertArtigoVisivelAoCliente, readArtigoEngagement } =
+      await import("@/lib/cliente-link.functions");
+    await assertArtigoVisivelAoCliente(data.clienteId, data.postId);
+    return readArtigoEngagement(data.clienteId, data.postId);
+  });
