@@ -1,5 +1,6 @@
 {
   "notes": [
+    "1.374.0: ClientArticleReader V3 — capa h-auto (sem crop), duas colunas (artigo rola; engajamento ao lado, comentários com scroll interno e campo fixo no rodapé), mobile em coluna única com barra Curtidas e comentários. ClientArticleEngagement usa loadArtigoEngagementSession/toggleArtigoLikeSession/addArtigoComentarioSession (inalteradas); curtida é por cliente (liker_key cliente:<id>), comentário rotulado pela empresa; client_viewer só lê.",
     "1.373.0: Relatórios/Arquivos V2 — PortalFilterToolbar (+PortalSearchField/PortalFilterSelect) compartilhada; modelos puros arquivos-model.ts (buildFileRows/filterFiles) e relatorios-model.ts; ícone por tipo em file-kind-icon.ts. Causa dos selects enormes: NativeSelect é w-full e recebia portalFieldBase no contêiner (borda dupla).",
     "1.372.0: ClientArticleReader (leitor editorial do Portal V2); attachArtigoAuthors resolve authorId→profiles (id, full_name, photo_url) em UMA consulta no servidor e entrega só authorName+authorAvatar em PublicArticle (authorId nunca vai ao cliente).",
     "1.371.0: Início do Portal V2 ganha ClientBlogCarousel (últimos 8 de data.artigos — projetos.data.blog filtrado no servidor por publicado + portalClienteIds); leitura em diálogo com ArticleReader (engagement opcional). Sem aba/rota de Blog. Causa: o V2 nunca consumia artigos.",

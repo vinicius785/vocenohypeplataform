@@ -1,6 +1,26 @@
 {
-  "version": "1.373.0",
+  "version": "1.374.0",
   "releases": [
+    {
+      "version": "1.374.0",
+      "summary": "Portal do cliente: leitor de artigos com capa inteira, curtidas e comentários.",
+      "modules": [
+        {
+          "name": "PORTAL DO CLIENTE",
+          "tagline": "Conteúdos",
+          "items": [
+            {
+              "title": "Capa sem corte",
+              "description": "A capa agora aparece inteira, na proporção original, sem recortes."
+            },
+            {
+              "title": "Curtidas e comentários",
+              "description": "Ao lado do artigo, uma coluna fixa permite curtir e comentar sem sair da leitura. No celular, ela aparece abaixo do texto."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.373.0",
       "summary": "Portal do cliente: Relatórios e Arquivos mais compactos, com filtros em uma única linha.",
