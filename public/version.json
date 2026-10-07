@@ -1,6 +1,26 @@
 {
-  "version": "1.372.0",
+  "version": "1.373.0",
   "releases": [
+    {
+      "version": "1.373.0",
+      "summary": "Portal do cliente: Relatórios e Arquivos mais compactos, com filtros em uma única linha.",
+      "modules": [
+        {
+          "name": "PORTAL DO CLIENTE",
+          "tagline": "Relatórios e Arquivos",
+          "items": [
+            {
+              "title": "Filtros em uma linha",
+              "description": "Busca, campanha, tipo e ordenação agora ficam numa barra compacta, com a lista logo abaixo. Em Arquivos, a busca ignora acentos e os filtros funcionam juntos, com “Limpar filtros” quando há algum ativo."
+            },
+            {
+              "title": "Listas mais densas",
+              "description": "Linhas menores com ícone do tipo do arquivo, campanha e data na mesma linha, e títulos de mês mais discretos."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.372.0",
       "summary": "Portal do cliente: novo leitor de artigos, mais largo e com a foto do autor.",

@@ -12,40 +12,17 @@ import {
 import { usePortalSessionData } from "@/components/portal/portal-session-context";
 import { PortalPageHeader } from "../components/shared/PortalPageHeader";
 import { PortalListPanel, PortalListRow } from "../components/shared/PortalListPanel";
-import { portalFieldBase } from "../components/shared/portal-field-styles";
+import { PortalFilterSelect, PortalFilterToolbar } from "../components/shared/PortalFilterToolbar";
 import { ClientFileViewer } from "../components/files/ClientFileViewer";
 import type { ClientFile } from "../types/files";
-import { NativeSelect } from "@/components/ui/native-select";
-
-type ReportRow = {
-  id: string;
-  campanhaId: string;
-  campanhaNome: string;
-  nome: string;
-  mes: string;
-  uploadedAt: string;
-  url: string | null;
-};
-
-function competenceLabel(mes: string): string {
-  const [year, month] = mes.split("-");
-  const MONTHS = [
-    "Janeiro",
-    "Fevereiro",
-    "Março",
-    "Abril",
-    "Maio",
-    "Junho",
-    "Julho",
-    "Agosto",
-    "Setembro",
-    "Outubro",
-    "Novembro",
-    "Dezembro",
-  ];
-  const idx = Number(month) - 1;
-  return idx >= 0 && idx < 12 ? `${MONTHS[idx]} de ${year}` : mes;
-}
+import {
+  competenceLabel,
+  dateBR,
+  filterAndSortReports,
+  groupByMonth,
+  type ReportRow,
+  type ReportSort,
+} from "../lib/relatorios-model";
 
 /**
  * Central de relatórios — mesmo sistema visual de `CampanhasV2.tsx`
@@ -63,7 +40,7 @@ export function RelatoriosV2({ openFileId }: { openFileId?: string }) {
   const navigate = usePortalNavigate();
   const { api } = usePortalRuntime();
   const [campaignFilter, setCampaignFilter] = useState<string>("todas");
-  const [sortBy, setSortBy] = useState<"recentes" | "antigos" | "campanha">("recentes");
+  const [sortBy, setSortBy] = useState<ReportSort>("recentes");
 
   const reports: ReportRow[] = useMemo(() => {
     return data.campanhas.flatMap((c) =>
@@ -79,26 +56,12 @@ export function RelatoriosV2({ openFileId }: { openFileId?: string }) {
     );
   }, [data]);
 
-  const filtered =
-    campaignFilter === "todas" ? reports : reports.filter((r) => r.campanhaId === campaignFilter);
-  const sorted = [...filtered].sort((a, b) => {
-    if (sortBy === "campanha") return a.campanhaNome.localeCompare(b.campanhaNome);
-    return sortBy === "recentes"
-      ? b.uploadedAt.localeCompare(a.uploadedAt)
-      : a.uploadedAt.localeCompare(b.uploadedAt);
-  });
-
-  const groups = useMemo(() => {
-    const map = new Map<string, ReportRow[]>();
-    for (const r of sorted) {
-      const list = map.get(r.mes) ?? [];
-      list.push(r);
-      map.set(r.mes, list);
-    }
-    return Array.from(map.entries());
-  }, [sorted]);
-
-  const mostRecentId = sorted[0]?.id;
+  const sorted = useMemo(
+    () => filterAndSortReports(reports, campaignFilter, sortBy),
+    [reports, campaignFilter, sortBy],
+  );
+  const groups = useMemo(() => groupByMonth(sorted), [sorted]);
+  const campaignsWithReports = data.campanhas.filter((c) => c.relatorios.length > 0);
 
   const toClientFile = (r: ReportRow): ClientFile => ({
     id: r.id,
@@ -123,77 +86,74 @@ export function RelatoriosV2({ openFileId }: { openFileId?: string }) {
   const activeReport = sorted.find((r) => r.id === openFileId);
 
   return (
-    <PageContainer className="space-y-6">
+    <PageContainer className="max-w-4xl space-y-5">
       <PortalPageHeader
         title="Relatórios"
         description="Acompanhe os resultados das suas campanhas."
       />
 
       {reports.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          <NativeSelect
-            value={campaignFilter}
-            onChange={(e) => setCampaignFilter(e.target.value)}
-            className={portalFieldBase}
-          >
-            <option value="todas">Todas as campanhas</option>
-            {data.campanhas.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nome}
-              </option>
-            ))}
-          </NativeSelect>
-          <NativeSelect
+        <PortalFilterToolbar
+          onClear={campaignFilter !== "todas" ? () => setCampaignFilter("todas") : undefined}
+        >
+          {campaignsWithReports.length > 1 && (
+            <PortalFilterSelect
+              label="Filtrar por campanha"
+              value={campaignFilter}
+              onChange={setCampaignFilter}
+            >
+              <option value="todas">Todas as campanhas</option>
+              {campaignsWithReports.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nome}
+                </option>
+              ))}
+            </PortalFilterSelect>
+          )}
+          <PortalFilterSelect
+            label="Ordenar relatórios"
             value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-            className={portalFieldBase}
+            onChange={(v) => setSortBy(v as ReportSort)}
           >
             <option value="recentes">Mais recentes</option>
             <option value="antigos">Mais antigos</option>
             <option value="campanha">Campanha A–Z</option>
-          </NativeSelect>
-        </div>
+          </PortalFilterSelect>
+        </PortalFilterToolbar>
       )}
 
       {reports.length === 0 ? (
         <EmptyState
+          compact
           icon={<FileText className="h-5 w-5" />}
           title="Nenhum relatório disponível"
-          description="Os relatórios das suas campanhas aparecerão aqui quando forem publicados."
+          description="Os relatórios das suas campanhas aparecerão aqui."
         />
       ) : sorted.length === 0 ? (
         <EmptyState
+          compact
           icon={<FileText className="h-5 w-5" />}
-          title="Nenhum relatório corresponde aos filtros selecionados."
+          title="Nenhum relatório corresponde ao filtro selecionado."
           secondaryAction={{ label: "Limpar filtros", onClick: () => setCampaignFilter("todas") }}
         />
       ) : (
-        <div className="space-y-8">
+        <div className="space-y-5">
           {groups.map(([mes, items]) => (
-            <div key={mes}>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+            <section key={mes} aria-label={competenceLabel(mes)}>
+              <p className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
                 {competenceLabel(mes)}
               </p>
               <PortalListPanel>
                 {items.map((r) => (
                   <PortalListRow
                     key={`${r.campanhaId}:${r.id}`}
-                    icon={<FileText className="h-4.5 w-4.5" />}
+                    icon={<FileText className="h-4 w-4" />}
                     onClick={() => r.url && openFile(r.id)}
-                    title={
-                      <span className="flex items-center gap-1.5">
-                        {r.nome}
-                        {r.id === mostRecentId && (
-                          <span className="shrink-0 rounded-full bg-brand-subtle px-1.5 py-0.5 text-[11px] font-semibold text-text-brand">
-                            Mais recente
-                          </span>
-                        )}
-                      </span>
-                    }
+                    title={r.nome}
                     meta={
                       <>
-                        {r.campanhaNome} · Disponibilizado em{" "}
-                        {new Date(r.uploadedAt).toLocaleDateString("pt-BR")}
+                        {r.campanhaNome}
+                        {dateBR(r.uploadedAt) ? ` · Disponível em ${dateBR(r.uploadedAt)}` : ""}
                       </>
                     }
                     trailing={
@@ -203,7 +163,7 @@ export function RelatoriosV2({ openFileId }: { openFileId?: string }) {
                             <button
                               type="button"
                               aria-label={`Mais ações para ${r.nome}`}
-                              className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                             >
                               <MoreVertical className="h-4 w-4" />
                             </button>
@@ -221,7 +181,7 @@ export function RelatoriosV2({ openFileId }: { openFileId?: string }) {
                   />
                 ))}
               </PortalListPanel>
-            </div>
+            </section>
           ))}
         </div>
       )}

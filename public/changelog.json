@@ -1,5 +1,6 @@
 {
   "notes": [
+    "1.373.0: Relatórios/Arquivos V2 — PortalFilterToolbar (+PortalSearchField/PortalFilterSelect) compartilhada; modelos puros arquivos-model.ts (buildFileRows/filterFiles) e relatorios-model.ts; ícone por tipo em file-kind-icon.ts. Causa dos selects enormes: NativeSelect é w-full e recebia portalFieldBase no contêiner (borda dupla).",
     "1.372.0: ClientArticleReader (leitor editorial do Portal V2); attachArtigoAuthors resolve authorId→profiles (id, full_name, photo_url) em UMA consulta no servidor e entrega só authorName+authorAvatar em PublicArticle (authorId nunca vai ao cliente).",
     "1.371.0: Início do Portal V2 ganha ClientBlogCarousel (últimos 8 de data.artigos — projetos.data.blog filtrado no servidor por publicado + portalClienteIds); leitura em diálogo com ArticleReader (engagement opcional). Sem aba/rota de Blog. Causa: o V2 nunca consumia artigos.",
     "1.370.0: time_entries.session_id (migration 20261008000000_time_sessions.sql) agrupa linhas de uma sessão compartilhada; time-sessions.ts (agrupamento, esforço vs tempo da sessão, planManualSession); RPCs ensure/add/create_manual/stop; TimeTrackingPanel reescrito.",
