@@ -59,6 +59,7 @@ import { taskDeadlineHealth, type TaskDeadlineHealthLike } from "@/lib/performan
 import { TASK_BLOCK_CATEGORY_LABEL } from "@/lib/task-blocks-rules";
 import type { TaskBlockedState } from "@/lib/projetos";
 import type { DashTask } from "@/lib/task-aggregation";
+import { formatDateToIso, formatIsoDate, parseIsoDateLocal } from "@/lib/utils";
 
 const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 
@@ -436,7 +437,7 @@ export const overdueLabel = (days: number) => `Atrasada · ${Math.max(1, days)}d
 export function deadlineViewFromTask(
   task: TaskDeadlineHealthLike & { blockedState?: TaskBlockedState | null },
   cutoffHour: number,
-  opts: { dateLabel?: string } = {},
+  opts: { dateLabel?: string; now?: Date } = {},
 ): DeadlineView {
   if (task.status === "Bloqueada" && task.blockedState?.pausesDeadline) {
     return {
@@ -445,7 +446,7 @@ export function deadlineViewFromTask(
       title: "O prazo está pausado enquanto o bloqueio estiver ativo.",
     };
   }
-  const h = taskDeadlineHealth(task, undefined, cutoffHour);
+  const h = taskDeadlineHealth(task, opts.now, cutoffHour);
   switch (h.health) {
     case "atrasada":
       return { state: "atrasada", label: overdueLabel(h.delayDays ?? 1) };
@@ -507,6 +508,109 @@ export function TaskDeadlineBadge({
         />
       )}
       {view.label}
+    </span>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* PRAZO COMO DATA + COR (tabela de subtarefas)                         */
+/* ------------------------------------------------------------------ */
+
+/** Quantos dias antes do vencimento a data já pede atenção suave (1 = só "amanhã", o mesmo
+ * "amanhã" que os agrupamentos de tarefas da plataforma já usam). Só apresentação. */
+export const NEAR_DEADLINE_DAYS = 1;
+
+export type DeadlineDateTone =
+  | "success"
+  | "danger"
+  | "warning"
+  | "warning_soft"
+  | "neutral"
+  | "muted";
+
+export type DeadlineDateView = {
+  /** Sempre a data (`dd/mm/aaaa`), nunca "Hoje"/"Amanhã"/"Atrasada"; `—` sem prazo. */
+  text: string;
+  tone: DeadlineDateTone;
+  /** Estado completo em texto, para tooltip e leitor de tela ("07/10/2026 · vence hoje"). */
+  title: string;
+};
+
+const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+
+/** Dias de calendário (local) de hoje até `iso`; negativo = já passou. */
+function calendarDaysUntil(iso: string, now: Date): number {
+  const today = parseIsoDateLocal(formatDateToIso(now));
+  return Math.round((parseIsoDateLocal(iso).getTime() - today.getTime()) / 86_400_000);
+}
+
+/** Prazo de uma tarefa como DATA + COR. Nenhuma regra de prazo nova: o estado vem inteiro de
+ * `deadlineViewFromTask` (que usa `taskDeadlineHealth`: prazo vigente, replanejamento,
+ * concluída no prazo × com atraso). Aqui só se escolhe a cor e se monta o texto acessível. */
+export function deadlineDateViewFromTask(
+  task: TaskDeadlineHealthLike & { blockedState?: TaskBlockedState | null },
+  cutoffHour: number,
+  now: Date = new Date(),
+): DeadlineDateView {
+  const iso = task.dueDate ?? task.performanceDueDate;
+  const view = deadlineViewFromTask(task, cutoffHour, { now });
+  if (!iso || view.state === "sem_prazo") {
+    return { text: "—", tone: "muted", title: "Sem prazo" };
+  }
+  const text = formatIsoDate(iso);
+  const withState = (state: string) => `${text} · ${state}`;
+
+  switch (view.state) {
+    case "concluida_no_prazo":
+      return { text, tone: "success", title: withState(lowerFirst(view.label)) };
+    case "concluida_com_atraso":
+    case "atrasada":
+      return { text, tone: "danger", title: withState(lowerFirst(view.label)) };
+    case "vence_hoje":
+      return { text, tone: "warning", title: withState("vence hoje") };
+    case "no_prazo": {
+      const days = calendarDaysUntil(task.performanceDueDate ?? iso, now);
+      if (days >= 0 && days <= NEAR_DEADLINE_DAYS) {
+        return {
+          text,
+          tone: "warning_soft",
+          title: withState(days === 0 ? "vence hoje" : "vence amanhã"),
+        };
+      }
+      return { text, tone: "neutral", title: withState("no prazo") };
+    }
+    default:
+      return { text, tone: "neutral", title: withState(lowerFirst(view.label)) };
+  }
+}
+
+const DEADLINE_DATE_TONE_CLASS: Record<DeadlineDateTone, string> = {
+  success: "font-medium text-success-soft-foreground",
+  danger: "font-semibold text-danger-soft-foreground",
+  warning: "font-semibold text-warning-soft-foreground",
+  warning_soft: "font-medium text-warning-soft-foreground/75",
+  neutral: "font-medium text-foreground",
+  muted: "text-muted-foreground",
+};
+
+/** Só a data, colorida pelo estado — sem ponto, selo nem texto de status (a informação
+ * completa vai em `view.title`, que quem usa liga a `title`/`aria-label`). */
+export function TaskDeadlineDate({
+  view,
+  className,
+}: {
+  view: DeadlineDateView;
+  className?: string;
+}) {
+  return (
+    <span
+      className={cx(
+        "whitespace-nowrap text-xs tabular-nums",
+        DEADLINE_DATE_TONE_CLASS[view.tone],
+        className,
+      )}
+    >
+      {view.text}
     </span>
   );
 }

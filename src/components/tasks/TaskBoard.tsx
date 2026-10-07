@@ -206,12 +206,14 @@ import {
   TaskBlockIndicator,
   TaskBlockPanel,
   TaskDeadlineBadge,
+  TaskDeadlineDate,
   TaskDependencyIndicator,
   TaskEmptyLine,
   TaskPriorityFlag,
   TaskPrioritySelect,
   TaskSectionHeader,
   TaskStatusSelect,
+  deadlineDateViewFromTask,
   deadlineViewFromTask,
   TASK_CHIP,
 } from "@/components/tasks/task-ui";
@@ -3366,6 +3368,25 @@ export function TaskDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `attemptSave` é recriado a cada render; só o pedido dispara.
   }, [closeRequest]);
 
+  /** Botão do prazo de uma subtarefa: só a data, colorida pelo estado (verde concluída no
+   * prazo, vermelho atrasada, âmbar hoje/amanhã, neutro distante). O estado por extenso vai
+   * em `title` e `aria-label`, para a cor nunca ser a única informação. É uma função (não um
+   * componente) para o `<button>` seguir sendo filho direto do `PopoverTrigger asChild`. */
+  const renderSubtaskDeadlineButton = (s: Task) => {
+    const dv = deadlineDateViewFromTask(s, performanceSettings.deadlineCutoffHour);
+    return (
+      <button
+        type="button"
+        onClick={(e) => e.stopPropagation()}
+        title={dv.title}
+        aria-label={`Prazo: ${dv.title}. Alterar prazo`}
+        className="rounded px-1 py-0.5 transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <TaskDeadlineDate view={dv} />
+      </button>
+    );
+  };
+
   const addSubtask = () => {
     const t = newSubtaskTitle.trim();
     if (!t) return;
@@ -4341,13 +4362,7 @@ export function TaskDialog({
                                           (s.dueDate || s.performanceDueDate) && (
                                             <Popover>
                                               <PopoverTrigger asChild>
-                                                <button
-                                                  type="button"
-                                                  onClick={(e) => e.stopPropagation()}
-                                                  className="rounded px-1 py-0.5 hover:bg-muted/60"
-                                                >
-                                                  <CardDeadlineBadge task={s} />
-                                                </button>
+                                                {renderSubtaskDeadlineButton(s)}
                                               </PopoverTrigger>
                                               <PopoverContent
                                                 align="start"
@@ -4395,9 +4410,19 @@ export function TaskDialog({
                                                 <button
                                                   type="button"
                                                   onClick={(e) => e.stopPropagation()}
-                                                  className="rounded px-1 py-0.5 text-[11px] text-muted-foreground hover:bg-muted/60 focus-visible:opacity-100 group-hover:opacity-100 sm:opacity-0"
+                                                  title="Sem prazo"
+                                                  aria-label="Sem prazo. Definir prazo"
+                                                  className="group/add rounded px-1 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                                 >
-                                                  + Prazo
+                                                  {/* `—` em repouso; "+ Prazo" ao passar o mouse na
+                                                      linha ou focar o botão (no celular, que não tem
+                                                      hover, o texto de adicionar fica sempre visível). */}
+                                                  <span className="max-sm:hidden group-hover:hidden group-focus-visible/add:hidden">
+                                                    —
+                                                  </span>
+                                                  <span className="text-[11px] sm:hidden sm:group-hover:inline group-focus-visible/add:inline">
+                                                    + Prazo
+                                                  </span>
                                                 </button>
                                               </PopoverTrigger>
                                               <PopoverContent

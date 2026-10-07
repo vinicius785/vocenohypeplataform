@@ -5,10 +5,12 @@ import type { TaskBlockedState } from "@/lib/projetos";
 import {
   TaskBlockIndicator,
   TaskDeadlineBadge,
+  TaskDeadlineDate,
   TaskPriorityFlag,
   TaskStatusBadge,
   blockHeadline,
   blockKindOf,
+  deadlineDateViewFromTask,
   deadlineViewFromDashTask,
   deadlineViewFromTask,
   overdueLabel,
@@ -124,5 +126,138 @@ describe("bloqueio", () => {
   it("indicador compacto mostra o porquê", () => {
     const html = renderToStaticMarkup(<TaskBlockIndicator blocked={block({})} />);
     expect(html).toContain("Aguardando cliente");
+  });
+});
+
+describe("prazo como data + cor (tabela de subtarefas)", () => {
+  // 07/10/2026, 10h (local) — antes do corte das 19h.
+  const now = new Date(2026, 9, 7, 10, 0, 0);
+  const CUTOFF = 19;
+  const at = (y: number, m: number, d: number, h = 12) => new Date(y, m - 1, d, h).toISOString();
+  const view = (task: Parameters<typeof deadlineDateViewFromTask>[0], when = now) =>
+    deadlineDateViewFromTask(task, CUTOFF, when);
+
+  it("concluída no prazo = verde, com a data (nunca o texto do estado)", () => {
+    const v = view({ status: "Concluído", dueDate: "2026-10-09", completedAt: at(2026, 10, 8) });
+    expect(v).toEqual({
+      text: "09/10/2026",
+      tone: "success",
+      title: "09/10/2026 · concluída no prazo",
+    });
+  });
+
+  it("concluída atrasada = vermelho", () => {
+    const v = view({
+      status: "Concluído",
+      dueDate: "2026-10-05",
+      completedAt: at(2026, 10, 6, 10),
+    });
+    expect(v.text).toBe("05/10/2026");
+    expect(v.tone).toBe("danger");
+    expect(v.title).toBe("05/10/2026 · concluída com atraso · +1d");
+  });
+
+  it("data passada concluída NO prazo continua verde (não fica vermelha por já ter passado)", () => {
+    const v = view({
+      status: "Concluído",
+      dueDate: "2026-10-05",
+      completedAt: at(2026, 10, 5, 15),
+    });
+    expect(v.tone).toBe("success");
+    expect(v.text).toBe("05/10/2026");
+  });
+
+  it("data passada concluída DEPOIS do prazo é vermelha", () => {
+    const v = view({ status: "Concluído", dueDate: "2026-10-05", completedAt: at(2026, 10, 6, 9) });
+    expect(v.tone).toBe("danger");
+  });
+
+  it("concluída sem `completedAt` (legado): verde e sem afirmar 'no prazo'", () => {
+    const v = view({ status: "Concluído", dueDate: "2026-10-01" });
+    expect(v.tone).toBe("success");
+    expect(v.title).toBe("01/10/2026 · concluída");
+  });
+
+  it("vence hoje = amarelo", () => {
+    const v = view({ status: "Aberto", dueDate: "2026-10-07" });
+    expect(v).toEqual({ text: "07/10/2026", tone: "warning", title: "07/10/2026 · vence hoje" });
+  });
+
+  it("vence hoje, mas depois do corte das 19h, já é atrasada (regra da engine)", () => {
+    const v = view({ status: "Aberto", dueDate: "2026-10-07" }, new Date(2026, 9, 7, 20, 0, 0));
+    expect(v.tone).toBe("danger");
+  });
+
+  it("vence amanhã = amarelo suave", () => {
+    const v = view({ status: "Aberto", dueDate: "2026-10-08" });
+    expect(v).toEqual({
+      text: "08/10/2026",
+      tone: "warning_soft",
+      title: "08/10/2026 · vence amanhã",
+    });
+  });
+
+  it("vence em vários dias = neutro", () => {
+    const v = view({ status: "Aberto", dueDate: "2026-10-15" });
+    expect(v).toEqual({ text: "15/10/2026", tone: "neutral", title: "15/10/2026 · no prazo" });
+  });
+
+  it("atrasada = vermelho", () => {
+    const v = view({ status: "Aberto", dueDate: "2026-10-06" });
+    expect(v).toEqual({
+      text: "06/10/2026",
+      tone: "danger",
+      title: "06/10/2026 · atrasada · 1d",
+    });
+  });
+
+  it("aberta replanejada DEPOIS de vencer: vale o último prazo, não fica atrasada", () => {
+    const v = view({
+      status: "Em andamento",
+      dueDate: "2026-10-12",
+      performanceDueDate: "2026-10-12",
+      originalDueDate: "2026-10-05",
+      deadlineHistory: [
+        {
+          from: "2026-10-05",
+          to: "2026-10-12",
+          changedAt: at(2026, 10, 6, 21),
+          isCritical: true,
+          exemptFromResponsibility: false,
+        },
+      ],
+    });
+    expect(v.text).toBe("12/10/2026");
+    expect(v.tone).toBe("neutral");
+  });
+
+  it("sem prazo = traço neutro", () => {
+    expect(view({ status: "Aberto" })).toEqual({ text: "—", tone: "muted", title: "Sem prazo" });
+  });
+
+  it("meses diferentes: mostra a data completa; a virada de mês conta como 'amanhã'", () => {
+    expect(view({ status: "Aberto", dueDate: "2026-11-03" }).text).toBe("03/11/2026");
+    const v = view({ status: "Aberto", dueDate: "2026-11-01" }, new Date(2026, 9, 31, 10, 0, 0));
+    expect(v.tone).toBe("warning_soft");
+  });
+
+  it("prazo pausado por bloqueio não vira verde/vermelho", () => {
+    const v = view({
+      status: "Bloqueada",
+      dueDate: "2026-10-06",
+      blockedState: block({ pausesDeadline: true }),
+    });
+    expect(v.tone).toBe("neutral");
+    expect(v.title).toBe("06/10/2026 · prazo pausado");
+  });
+
+  it("a célula renderiza só a data, sem selo, ponto nem texto de estado", () => {
+    const html = renderToStaticMarkup(
+      <TaskDeadlineDate view={view({ status: "Aberto", dueDate: "2026-10-06" })} />,
+    );
+    expect(html).toContain("06/10/2026");
+    expect(html).toContain("text-danger-soft-foreground");
+    expect(html).not.toMatch(/Atrasada|Vence|Hoje|Amanhã|Concluíd|<svg/);
+    expect(html).not.toContain("rounded-full");
   });
 });
