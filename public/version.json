@@ -1,6 +1,26 @@
 {
-  "version": "1.369.0",
+  "version": "1.370.0",
   "releases": [
+    {
+      "version": "1.370.0",
+      "summary": "Controle de tempo V2: sessões compartilhadas com vários participantes e registro manual por início e fim.",
+      "modules": [
+        {
+          "name": "TAREFAS",
+          "tagline": "Controle de tempo",
+          "items": [
+            {
+              "title": "Sessões compartilhadas",
+              "description": "Adicione pessoas ao cronômetro em andamento (“Começar agora” ou “Aplicar desde o início”, com confirmação). O histórico mostra uma sessão com seus participantes e o esforço total em horas-pessoa."
+            },
+            {
+              "title": "Registro manual",
+              "description": "Data, início e fim com duração calculada, participantes com intervalo próprio e edição da sessão inteira."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.369.0",
       "summary": "Kanban de tarefas do Comercial: “Ver mais” agora expande dentro da própria coluna.",

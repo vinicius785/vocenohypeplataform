@@ -32,6 +32,8 @@ export type TimeEntry = {
   editedAt: string | null;
   originalStartedAt: string | null;
   originalEndedAt: string | null;
+  /** Sessão compartilhada (null = sessão de uma pessoa só: histórico antigo e timer solo). */
+  sessionId?: string | null;
 };
 
 type TimeEntryRow = {
@@ -49,6 +51,7 @@ type TimeEntryRow = {
   edited_at: string | null;
   original_started_at: string | null;
   original_ended_at: string | null;
+  session_id?: string | null;
 };
 
 function fromRow(row: TimeEntryRow): TimeEntry {
@@ -67,6 +70,7 @@ function fromRow(row: TimeEntryRow): TimeEntry {
     editedAt: row.edited_at,
     originalStartedAt: row.original_started_at,
     originalEndedAt: row.original_ended_at,
+    sessionId: row.session_id ?? null,
   };
 }
 
@@ -423,4 +427,145 @@ export function useTeamTimeEntries(
   }, [range.from, range.to, userId]);
 
   return { entries, loading };
+}
+
+/* ------------------------------------------------------------------ */
+/* Sessões compartilhadas (v2). Solo continua usando as funções acima. */
+/* ------------------------------------------------------------------ */
+
+const rpc = async <T>(name: string, args: Record<string, unknown>) =>
+  (await supabase.rpc(name as never, args as never)) as unknown as {
+    data: T | null;
+    error: { message: string; code?: string } | null;
+  };
+
+const MIGRATION_HINT = "Recurso de tempo compartilhado indisponível (migration pendente).";
+
+function friendlyError(error: { message: string; code?: string }): string {
+  const m = error.message ?? "";
+  if (/time_entries_one_running_per_user/.test(m))
+    return "Essa pessoa já está cronometrando outra tarefa.";
+  if (/time_entries_session_user_uniq/.test(m)) return "Essa pessoa já participa desta sessão.";
+  if (/participante fora do time/.test(m)) return "Essa pessoa não faz parte do time.";
+  if (/forbidden/.test(m)) return "Você não participa desta sessão.";
+  if (/intervalo inválido/.test(m))
+    return "Intervalo inválido: o fim não pode ser antes do início.";
+  if (/function .* does not exist|Could not find the function/.test(m)) return MIGRATION_HINT;
+  return m;
+}
+
+/** Garante o id da sessão da linha do próprio usuário (criado na primeira vez que alguém entra). */
+export async function ensureSession(
+  entry: TimeEntry,
+): Promise<{ sessionId: string | null; error: string | null }> {
+  if (entry.sessionId) return { sessionId: entry.sessionId, error: null };
+  const { data, error } = await rpc<string>("ensure_time_session", { p_entry: entry.id });
+  if (error || !data)
+    return { sessionId: null, error: friendlyError(error ?? { message: MIGRATION_HINT }) };
+  return { sessionId: data, error: null };
+}
+
+/** Adiciona alguém à sessão. Sem `endedAt`, a pessoa entra cronometrando (respeita um timer por pessoa). */
+export async function addParticipant(input: {
+  sessionId: string;
+  userId: string;
+  startedAt: string;
+  endedAt?: string | null;
+}): Promise<{ entry: TimeEntry | null; error: string | null }> {
+  const { data, error } = await rpc<TimeEntryRow>("add_time_participant", {
+    p_session: input.sessionId,
+    p_user: input.userId,
+    p_started: input.startedAt,
+    p_ended: input.endedAt ?? null,
+  });
+  if (error || !data)
+    return { entry: null, error: friendlyError(error ?? { message: MIGRATION_HINT }) };
+  emitTimerChanged();
+  return { entry: fromRow(data), error: null };
+}
+
+/** Registro manual compartilhado (tudo ou nada). Um participante só = linha comum, sem sessão. */
+export async function createManualSession(input: {
+  taskId: string;
+  taskOrigin: TaskOrigin;
+  note?: string;
+  rows: { userId: string; startedAt: string; endedAt: string }[];
+}): Promise<{ error: string | null }> {
+  const me = getMe();
+  if (!isValidUuid(me.id)) return { error: "Usuário não identificado." };
+  if (input.rows.length === 1 && input.rows[0].userId === me.id) {
+    const r = input.rows[0];
+    const { error } = await createManualEntry({
+      taskId: input.taskId,
+      taskOrigin: input.taskOrigin,
+      startedAt: r.startedAt,
+      endedAt: r.endedAt,
+      note: input.note,
+    });
+    return { error };
+  }
+  const { error } = await rpc<string>("create_manual_time_session", {
+    p_task: input.taskId,
+    p_origin: input.taskOrigin,
+    p_note: input.note ?? "",
+    p_participants: input.rows.map((r) => ({
+      user_id: r.userId,
+      started_at: r.startedAt,
+      ended_at: r.endedAt,
+    })),
+  });
+  if (error) return { error: friendlyError(error) };
+  emitTimerChanged();
+  return { error: null };
+}
+
+/** Para a sessão inteira (relógio do servidor, idempotente). Sem sessão, para só a própria linha. */
+export async function stopSession(entry: TimeEntry): Promise<{ error: string | null }> {
+  if (!entry.sessionId) {
+    const { error } = await stopTimer(entry.id, entry.startedAt);
+    return { error };
+  }
+  const { error } = await rpc<number>("stop_time_session", { p_session: entry.sessionId });
+  if (error) return { error: friendlyError(error) };
+  emitTimerChanged();
+  return { error: null };
+}
+
+/** Edita horários/observação de uma linha. Linha de OUTRA pessoa grava a auditoria de correção. */
+export async function editEntryRow(
+  id: string,
+  patch: { startedAt: string; endedAt: string; note?: string | null },
+  opts: { foreign: boolean },
+): Promise<{ error: string | null }> {
+  if (Date.parse(patch.endedAt) < Date.parse(patch.startedAt))
+    return { error: "O fim não pode ser antes do início." };
+  const { data: current, error: readError } = await supabase
+    .from("time_entries")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (readError || !current) return { error: readError?.message ?? "Registro não encontrado." };
+  const row = current as unknown as TimeEntryRow;
+  const update: Partial<TimeEntryRow> = {
+    started_at: patch.startedAt,
+    ended_at: patch.endedAt,
+    duration_seconds: durationBetween(patch.startedAt, patch.endedAt),
+    note: patch.note === undefined ? row.note : patch.note,
+  };
+  if (opts.foreign) {
+    const me = getMe();
+    update.edited_by = me.id;
+    update.edited_at = new Date().toISOString();
+    if (row.original_started_at == null) {
+      update.original_started_at = row.started_at;
+      update.original_ended_at = row.ended_at;
+    }
+  }
+  const { error } = await supabase
+    .from("time_entries")
+    .update(update as never)
+    .eq("id", id);
+  if (error) return { error: error.message };
+  emitTimerChanged();
+  return { error: null };
 }
