@@ -71,6 +71,9 @@ export type DireitosImagem = {
   usos: string[];
   duracaoDias?: number; // vazio = indeterminado
   exclusividade: boolean;
+  /** Duração da exclusividade em dias, a partir da assinatura do contrato do influenciador. Ausente em
+   * campanhas antigas; o contrato pré-preenche com isto e permite ajustar antes do envio. */
+  exclusividadeDias?: number;
   exclusividadeSegmento?: string;
   observacoes?: string;
 };
