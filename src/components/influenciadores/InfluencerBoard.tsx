@@ -54,6 +54,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { loadBank, saveBank, type BankInflu } from "@/lib/banco-influs-store";
 import { findExistingBankInfluMatch } from "@/lib/bank-influ-match";
 import { useConfirm } from "@/hooks/use-confirm";
+import { describeStorageUploadError } from "@/lib/storage-upload-error";
 import { entregaAjusteView } from "@/lib/entrega-ajustes";
 import {
   ARQUIVO_CATEGORIA_LABEL,
@@ -6142,7 +6143,7 @@ async function uploadEntregaAnexo(file: File): Promise<string> {
   });
   if (error) {
     console.warn("[entrega-anexos] upload failed", error);
-    throw new Error("Falha ao subir o arquivo. Tente de novo.");
+    throw new Error(describeStorageUploadError(error, file));
   }
   const { data: signed } = await supabase.storage
     .from("entrega-anexos")
