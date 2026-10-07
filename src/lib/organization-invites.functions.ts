@@ -331,7 +331,10 @@ export const inviteClientUser = createServerFn({ method: "POST" })
       throw new Error("Muitas tentativas. Tente novamente em alguns minutos.");
     }
 
-    const { data: org, error: orgErr } = await context.supabase
+    // Leituras com service-role: o gate acima já autorizou; a RLS de `organizations` só mostra a organização
+    // a admin/membros, então com o cliente do usuário a organização "sumia" para quem só tem a permissão.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: org, error: orgErr } = await supabaseAdmin
       .from("organizations")
       .select("id, type")
       .eq("id", data.organizationId)
@@ -344,11 +347,10 @@ export const inviteClientUser = createServerFn({ method: "POST" })
     // A organização de uma DEMONSTRAÇÃO nunca recebe convite (defesa em profundidade: a
     // interface já esconde a Demo e a organização é `suspended`, sem membros).
     await assertOrganizationIsNotDemo(
-      context.supabase as unknown as Parameters<typeof assertOrganizationIsNotDemo>[0],
+      supabaseAdmin as unknown as Parameters<typeof assertOrganizationIsNotDemo>[0],
       org.id,
     );
 
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const invited = await inviteClientUserCore(supabaseAdmin, context.userId, data);
     const email = await sendPortalAccessInviteEmail(supabaseAdmin, {
       actorUserId: context.userId,
