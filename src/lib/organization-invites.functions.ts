@@ -33,6 +33,24 @@ import { buildPortalAccessEmail, type PortalAccessRole } from "@/lib/portal-acce
 export const ClientRoleEnum = z.enum(["client_standard", "client_viewer"]);
 const assertAdmin = assertAdminShared;
 
+/** Criar/reenviar convite de acesso ao Portal e listar os acessos de um cliente: admin OU membro interno com a
+ * permissão `clientes` (a mesma que libera a aba). Suspender, remover e mudar papel continuam só admin. */
+async function assertClientesAccess(supabase: SupabaseClient<Database>, userId: string) {
+  const { data: isAdmin, error: adminErr } = await supabase.rpc("is_admin", { _user_id: userId });
+  if (adminErr) throw new Error(adminErr.message);
+  if (isAdmin) return;
+  const { data: internal, error: internalErr } = await supabase.rpc("is_internal_team_member", {
+    _user_id: userId,
+  });
+  if (internalErr) throw new Error(internalErr.message);
+  const { data: allowed, error: permErr } = await supabase.rpc("has_permission", {
+    _user_id: userId,
+    _permission: "clientes",
+  });
+  if (permErr) throw new Error(permErr.message);
+  if (!internal || !allowed) throw new Error("Você não tem permissão para gerenciar acessos de clientes.");
+}
+
 /** Writes one row to `access_audit_log` via `supabaseAdmin` (bypasses RLS —
  * intentional, see migration `20260918170000_access_audit_log.sql`).
  * Best-effort logging failures never block the underlying mutation, which
@@ -302,7 +320,7 @@ export const inviteClientUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => InviteInput.parse(raw))
   .handler(async ({ data, context }) => {
-    await assertAdmin(context.supabase, context.userId);
+    await assertClientesAccess(context.supabase, context.userId);
 
     // Piece C (rate limiting, see CLAUDE.md): ~20/hour per admin — generous,
     // anti-abuse floor only. Fails open (via checkRateLimit's own
@@ -363,7 +381,7 @@ export const listOrganizationMembers = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => z.object({ organizationId: z.string().uuid() }).parse(raw))
   .handler(async ({ data, context }) => {
-    await assertAdmin(context.supabase, context.userId);
+    await assertClientesAccess(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: members, error } = await supabaseAdmin
       .from("organization_members")
@@ -410,7 +428,7 @@ export const listOrganizationCampaigns = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => z.object({ organizationId: z.string().uuid() }).parse(raw))
   .handler(async ({ data, context }) => {
-    await assertAdmin(context.supabase, context.userId);
+    await assertClientesAccess(context.supabase, context.userId);
     const { data: cliente, error } = await context.supabase
       .from("clientes")
       .select("data")
@@ -432,7 +450,7 @@ export const resendClientInvite = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => OrgMemberIdInput.parse(raw))
   .handler(async ({ data, context }) => {
-    await assertAdmin(context.supabase, context.userId);
+    await assertClientesAccess(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const membership = await loadMembershipWithOrg(supabaseAdmin, data.organizationMemberId);
     if (membership.status !== "invited") {
