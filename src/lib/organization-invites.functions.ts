@@ -48,7 +48,8 @@ async function assertClientesAccess(supabase: SupabaseClient<Database>, userId: 
     _permission: "clientes",
   });
   if (permErr) throw new Error(permErr.message);
-  if (!internal || !allowed) throw new Error("Você não tem permissão para gerenciar acessos de clientes.");
+  if (!internal || !allowed)
+    throw new Error("Você não tem permissão para gerenciar acessos de clientes.");
 }
 
 /** Writes one row to `access_audit_log` via `supabaseAdmin` (bypasses RLS —
