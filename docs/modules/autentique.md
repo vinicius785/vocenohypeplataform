@@ -238,3 +238,21 @@ Assinaturas devolvidas que não casam com nenhum e-mail esperado ficam em
 `unmatchedSignatures` — apenas diagnóstico, **sem papel atribuído**: não se afirma que seja o dono da
 conta, um registro técnico ou qualquer outra coisa. Não influenciam o estado e não são tratadas como
 signatário do contrato. A identidade dessa assinatura continua **não determinada**.
+
+## 20. Fase 3 — persistência e webhook (implementado)
+
+**Auditoria:** a participação é `campanha_influenciadores` (pk uuid). Não havia entidade reutilizável de contrato de influenciador, signatários ou eventos (`contratos` é o contrato comercial do cliente).
+
+**Migration** `20261011000000_contratos_influenciador.sql` (aplicar manualmente no SQL Editor):
+- `contratos_influenciador`: FK `participacao_id` (RESTRICT), `provider` (default `autentique`), `external_id`, `status`, `sent_at/completed_at/rejected_at/cancelled_at`. Índice único parcial: no máximo um contrato em `aguardando|parcial|assinado` por participação (recusado/cancelado liberam novo). Sem versionamento. "Ainda não enviado" = `sent_at` e `external_id` nulos.
+- `contratos_influenciador_signatarios`: só `CONTRATADO`/`CONTRATANTE`, e-mail + `email_normalizado`, `external_id` da assinatura, status derivado, `viewed_at/signed_at/rejected_at`.
+- `contratos_influenciador_eventos`: `UNIQUE(provider, event_id)`, `tipo`, ids do documento/assinatura, `payload` mínimo (tipo e data; nunca corpo cru, links ou token), `recebido_at`, `processado_at`, `erro`.
+- RLS: escrita só `service_role`; `authenticated` só lê (admin, ou interno com permissão `campanhas`; eventos só admin). Conta de cliente do portal não passa.
+
+**Estado:** `aguardando|parcial|assinado|recusado|cancelado`, calculado só por `snapshotFromDocument` → `deriveDocumentState` sobre os signatários esperados (e-mail normalizado). Recusa vence; `viewed` e `files.signed` nunca decidem; assinatura extra nunca vira signatário nem altera estado. O webhook não confia no tipo do evento: sempre reconcilia com `getDocument(externalId, expectedEmails)`, então eventos fora de ordem convergem.
+
+**Webhook** `POST /api/webhooks/autentique` (`AUTENTIQUE_WEBHOOK_SECRET`): segredo configurado → HMAC-SHA256 do corpo cru (401 se inválido) → parse (400) → processamento idempotente. Relevantes: `document.finished`, `signature.accepted`, `signature.rejected`; os demais só são registrados. Documento desconhecido e assinatura extra: registro técnico, 200. Falha transitória: 500 e `processado_at` nulo, o retry do Autentique reprocessa o mesmo `event_id`. Duplicata já concluída: 200 sem reprocessar.
+
+**Criação** (`createInfluencerContract`, só serviço, sem UI): grava a linha antes da chamada externa (barra duplo envio), nome do documento `VNH-<id>`; erro definitivo cancela a linha; timeout/indisponível (ambíguo) mantém pendente para reconciliação; falha de persistência após o envio gera `ContractPersistError` com o id externo (uma nova tentativa antes). `reconcileContract` repara contrato/eventos perdidos sob demanda (sem polling).
+
+**Limitações:** sem job de reconciliação de órfãos; a resposta de criação traz ids/links de assinatura e a de consulta não, por isso os ids de assinatura são gravados na criação e completados na reconciliação; identidade da 3ª assinatura segue ignorada. Evidências dos dois smoke tests: §17–19.

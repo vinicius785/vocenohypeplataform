@@ -53,6 +53,7 @@ import { Route as ApiCronEmailFlowsRouteImport } from './routes/api/cron/email-f
 import { Route as ApiCronGoogleCalendarSyncRouteImport } from './routes/api/cron/google-calendar-sync'
 import { Route as ApiGoogleOauthCallbackRouteImport } from './routes/api/google/oauth-callback'
 import { Route as ApiPublicLeadsRouteImport } from './routes/api/public/leads'
+import { Route as ApiWebhooksAutentiqueRouteImport } from './routes/api/webhooks/autentique'
 import { Route as ApiWebhooksResendRouteImport } from './routes/api/webhooks/resend'
 import { Route as DemoTokenIndexRouteImport } from './routes/demo.$token/index'
 import { Route as DemoTokenArquivosRouteImport } from './routes/demo.$token/arquivos'
@@ -321,6 +322,11 @@ const ApiGoogleOauthCallbackRoute = ApiGoogleOauthCallbackRouteImport.update({
 const ApiPublicLeadsRoute = ApiPublicLeadsRouteImport.update({
   id: '/api/public/leads',
   path: '/api/public/leads',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiWebhooksAutentiqueRoute = ApiWebhooksAutentiqueRouteImport.update({
+  id: '/api/webhooks/autentique',
+  path: '/api/webhooks/autentique',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiWebhooksResendRoute = ApiWebhooksResendRouteImport.update({
@@ -603,6 +609,7 @@ export interface FileRoutesByFullPath {
   '/api/cron/google-calendar-sync': typeof ApiCronGoogleCalendarSyncRoute
   '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
   '/api/public/leads': typeof ApiPublicLeadsRoute
+  '/api/webhooks/autentique': typeof ApiWebhooksAutentiqueRoute
   '/api/webhooks/resend': typeof ApiWebhooksResendRoute
   '/demo/$token/arquivos': typeof DemoTokenArquivosRoute
   '/demo/$token/campanhas': typeof DemoTokenCampanhasRouteWithChildren
@@ -683,6 +690,7 @@ export interface FileRoutesByTo {
   '/api/cron/google-calendar-sync': typeof ApiCronGoogleCalendarSyncRoute
   '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
   '/api/public/leads': typeof ApiPublicLeadsRoute
+  '/api/webhooks/autentique': typeof ApiWebhooksAutentiqueRoute
   '/api/webhooks/resend': typeof ApiWebhooksResendRoute
   '/demo/$token/arquivos': typeof DemoTokenArquivosRoute
   '/demo/$token/conteudos': typeof DemoTokenConteudosRoute
@@ -770,6 +778,7 @@ export interface FileRoutesById {
   '/api/cron/google-calendar-sync': typeof ApiCronGoogleCalendarSyncRoute
   '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
   '/api/public/leads': typeof ApiPublicLeadsRoute
+  '/api/webhooks/autentique': typeof ApiWebhooksAutentiqueRoute
   '/api/webhooks/resend': typeof ApiWebhooksResendRoute
   '/demo/$token/arquivos': typeof DemoTokenArquivosRoute
   '/demo/$token/campanhas': typeof DemoTokenCampanhasRouteWithChildren
@@ -859,6 +868,7 @@ export interface FileRouteTypes {
     | '/api/cron/google-calendar-sync'
     | '/api/google/oauth-callback'
     | '/api/public/leads'
+    | '/api/webhooks/autentique'
     | '/api/webhooks/resend'
     | '/demo/$token/arquivos'
     | '/demo/$token/campanhas'
@@ -939,6 +949,7 @@ export interface FileRouteTypes {
     | '/api/cron/google-calendar-sync'
     | '/api/google/oauth-callback'
     | '/api/public/leads'
+    | '/api/webhooks/autentique'
     | '/api/webhooks/resend'
     | '/demo/$token/arquivos'
     | '/demo/$token/conteudos'
@@ -1025,6 +1036,7 @@ export interface FileRouteTypes {
     | '/api/cron/google-calendar-sync'
     | '/api/google/oauth-callback'
     | '/api/public/leads'
+    | '/api/webhooks/autentique'
     | '/api/webhooks/resend'
     | '/demo/$token/arquivos'
     | '/demo/$token/campanhas'
@@ -1090,6 +1102,7 @@ export interface RootRouteChildren {
   ApiCronGoogleCalendarSyncRoute: typeof ApiCronGoogleCalendarSyncRoute
   ApiGoogleOauthCallbackRoute: typeof ApiGoogleOauthCallbackRoute
   ApiPublicLeadsRoute: typeof ApiPublicLeadsRoute
+  ApiWebhooksAutentiqueRoute: typeof ApiWebhooksAutentiqueRoute
   ApiWebhooksResendRoute: typeof ApiWebhooksResendRoute
   EmailDescadastroTokenRoute: typeof EmailDescadastroTokenRoute
 }
@@ -1402,6 +1415,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/leads'
       fullPath: '/api/public/leads'
       preLoaderRoute: typeof ApiPublicLeadsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/webhooks/autentique': {
+      id: '/api/webhooks/autentique'
+      path: '/api/webhooks/autentique'
+      fullPath: '/api/webhooks/autentique'
+      preLoaderRoute: typeof ApiWebhooksAutentiqueRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/webhooks/resend': {
@@ -1996,6 +2016,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCronGoogleCalendarSyncRoute: ApiCronGoogleCalendarSyncRoute,
   ApiGoogleOauthCallbackRoute: ApiGoogleOauthCallbackRoute,
   ApiPublicLeadsRoute: ApiPublicLeadsRoute,
+  ApiWebhooksAutentiqueRoute: ApiWebhooksAutentiqueRoute,
   ApiWebhooksResendRoute: ApiWebhooksResendRoute,
   EmailDescadastroTokenRoute: EmailDescadastroTokenRoute,
 }
