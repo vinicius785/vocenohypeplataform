@@ -1,6 +1,30 @@
 {
-  "version": "1.378.0",
+  "version": "1.379.0",
   "releases": [
+    {
+      "version": "1.379.0",
+      "summary": "Acessos ao portal: agora separam “pode acessar?” de “já acessou?”, e o último acesso passa a ser registrado de verdade.",
+      "modules": [
+        {
+          "name": "CLIENTES",
+          "tagline": "Acessos ao portal",
+          "items": [
+            {
+              "title": "Acesso e atividade em colunas separadas",
+              "description": "Cada pessoa mostra o estado do acesso (Ativo, Convite pendente, Suspenso, Revogado) e, à parte, a atividade (Nunca acessou, Acessou há 2 dias, Convite enviado há 3 dias)."
+            },
+            {
+              "title": "Último acesso real",
+              "description": "O portal passa a registrar quando a pessoa entra. Antes o último acesso quase nunca era gravado, então “Nunca acessou” aparecia mesmo para quem usava o portal."
+            },
+            {
+              "title": "Menu por estado",
+              "description": "Cada acesso só oferece as ações possíveis para o seu estado; convites pendentes podem ser reenviados ou revogados."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.378.0",
       "summary": "Clientes: a página do cliente virou uma central, com visão geral, operação, acessos e histórico.",

@@ -31,6 +31,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { throwSafeDbError } from "@/lib/portal-db-error";
+import { recordPortalAccessCore } from "@/lib/portal-access-record";
 import {
   findClienteByOrganizationId,
   buildClienteLinkData,
@@ -866,5 +867,23 @@ export const submitNpsSession = createServerFn({ method: "POST" })
       { onConflict: "campanha_id,reference_month", ignoreDuplicates: true },
     );
     if (error) throwSafeDbError(error);
+    return { ok: true };
+  });
+
+/**
+ * Registra o ACESSO ao portal (`organization_members.last_access_at`). Antes só o seletor de ambiente
+ * gravava isso, pelo cliente, e a RLS só deixa admin atualizar — então na prática ninguém tinha
+ * "último acesso". Aqui o servidor grava só a linha do próprio usuário. Melhor esforço: nunca
+ * derruba a entrada no portal (quem chama ignora o erro).
+ */
+export const recordPortalAccess = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((raw: unknown) => z.object({ organizationId: z.string().uuid() }).parse(raw))
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await recordPortalAccessCore(supabaseAdmin, {
+      userId: context.userId,
+      organizationId: data.organizationId,
+    });
     return { ok: true };
   });

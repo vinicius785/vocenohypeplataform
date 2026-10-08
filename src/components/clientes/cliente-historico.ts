@@ -34,6 +34,8 @@ const AUDIT_TEXT: Record<string, (who: string | null) => string> = {
     w ? `Acesso ao portal concedido a ${w}` : "Convite de acesso ao portal enviado",
   invite_sent_existing_account: (w) =>
     w ? `Acesso ao portal concedido a ${w}` : "Acesso ao portal concedido",
+  invite_accepted: (w) =>
+    w ? `${w} entrou no portal pela primeira vez` : "Primeiro acesso ao portal",
   invite_resent: (w) => (w ? `Convite reenviado a ${w}` : "Convite de acesso reenviado"),
   invite_revoked: (w) => (w ? `Convite de ${w} revogado` : "Convite de acesso revogado"),
   role_changed: (w) => (w ? `Função de ${w} no portal alterada` : "Função de acesso alterada"),

@@ -1,10 +1,9 @@
 import { useConfirm } from "@/hooks/use-confirm";
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { MoreHorizontal, UserPlus2, Users } from "lucide-react";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,10 +33,16 @@ import {
   updateClientMemberCampaigns,
   updateClientMemberRole,
 } from "@/lib/organization-invites.functions";
-import { isInviteCosmeticallyExpired } from "@/lib/access-audit-labels";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ClienteSection } from "./ClienteSection";
+import {
+  accessActivity,
+  accessState,
+  memberActions,
+  removeActionLabel,
+  type AccessTone,
+} from "./portal-access-ui";
 import { initialsOf } from "./cliente-ui";
 import type { ClientePortalData, PortalMember } from "./use-cliente-portal-members";
 
@@ -50,54 +55,12 @@ import type { ClientePortalData, PortalMember } from "./use-cliente-portal-membe
 type ClientRole = "client_standard" | "client_viewer";
 
 type Member = PortalMember;
-type Campaign = { id: string; nome: string };
-
 const ROLE_LABELS: Record<string, string> = {
   client_standard: "Acesso padrão",
   client_viewer: "Somente visualização",
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  invited: "Convite pendente",
-  active: "Ativo",
-  suspended: "Suspenso",
-  removed: "Convite revogado",
-};
-
-const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
-  invited: "outline",
-  active: "default",
-  suspended: "secondary",
-  removed: "destructive",
-};
-
-/** Cosmetic-only "Convite expirado" label — see `isInviteCosmeticallyExpired`
- * in `access-audit-labels.ts` for why this is NOT server-enforced. */
-function statusLabel(m: Member): string {
-  if (isInviteCosmeticallyExpired(m)) return "Convite expirado";
-  return STATUS_LABELS[m.status] ?? m.status;
-}
-function statusVariant(m: Member): "default" | "secondary" | "outline" | "destructive" {
-  if (isInviteCosmeticallyExpired(m)) return "secondary";
-  return STATUS_VARIANT[m.status] ?? "outline";
-}
-
-function formatDate(value: string | null): string {
-  if (!value) return "—";
-  try {
-    return new Date(value).toLocaleDateString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
-  } catch {
-    return "—";
-  }
-}
-
-/** Row action menu, shared by the desktop table row and the mobile card
- * (spec: "actions grouped in menu" on both). Pure presentational wrapper
- * around the same handlers `PortalAccessSection` already owned. */
+/** Menu de ações da linha: só as ações possíveis para o estado do acesso (`memberActions`). */
 function MemberRowMenu({
   m,
   rowBusyId,
@@ -117,36 +80,76 @@ function MemberRowMenu({
   onReactivate: (m: Member) => void;
   onRemove: (m: Member) => void;
 }) {
+  const actions = memberActions(m.status);
+  // Revogado é final no domínio atual: sem menu, em vez de um botão que não faz nada.
+  if (actions.length === 0) return <span className="h-9 w-9 shrink-0" aria-hidden="true" />;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" disabled={rowBusyId === m.id}>
+        <Button
+          variant="ghost"
+          size="icon"
+          disabled={rowBusyId === m.id}
+          aria-label={`Ações para ${m.fullName || m.email || "este acesso"}`}
+        >
           <MoreHorizontal className="h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem disabled={m.status !== "invited"} onClick={() => onResend(m)}>
-          Reenviar convite
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onRole(m)}>Alterar função</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onCampaigns(m)}>
-          Alterar campanhas liberadas
-        </DropdownMenuItem>
-        {m.status === "active" && (
-          <DropdownMenuItem onClick={() => onSuspend(m)}>Suspender</DropdownMenuItem>
+        {actions.includes("resend") && (
+          <DropdownMenuItem onClick={() => onResend(m)}>Reenviar convite</DropdownMenuItem>
         )}
-        {m.status === "suspended" && (
-          <DropdownMenuItem onClick={() => onReactivate(m)}>Reativar</DropdownMenuItem>
+        {actions.includes("reactivate") && (
+          <DropdownMenuItem onClick={() => onReactivate(m)}>Reativar acesso</DropdownMenuItem>
         )}
-        <DropdownMenuItem
-          className="text-destructive focus:text-destructive"
-          disabled={m.status === "removed"}
-          onClick={() => onRemove(m)}
-        >
-          Remover acesso
-        </DropdownMenuItem>
+        {actions.includes("role") && (
+          <DropdownMenuItem onClick={() => onRole(m)}>Alterar função</DropdownMenuItem>
+        )}
+        {actions.includes("campaigns") && (
+          <DropdownMenuItem onClick={() => onCampaigns(m)}>
+            Alterar campanhas liberadas
+          </DropdownMenuItem>
+        )}
+        {actions.includes("suspend") && (
+          <DropdownMenuItem onClick={() => onSuspend(m)}>Suspender acesso</DropdownMenuItem>
+        )}
+        {actions.includes("remove") && (
+          <DropdownMenuItem
+            className="text-destructive focus:text-destructive"
+            onClick={() => onRemove(m)}
+          >
+            {removeActionLabel(m.status)}
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+const TONE_DOT: Record<AccessTone, string> = {
+  success: "bg-emerald-500",
+  warning: "bg-amber-500",
+  danger: "bg-red-500",
+  muted: "bg-muted-foreground/50",
+};
+const TONE_TEXT: Record<AccessTone, string> = {
+  success: "text-foreground",
+  warning: "text-foreground",
+  danger: "text-destructive",
+  muted: "text-text-secondary",
+};
+
+/** Estado do acesso ("pode acessar?"): ponto semântico + rótulo; o texto vale mesmo sem a cor. */
+function AccessStateLabel({ status }: { status: string }) {
+  const st = accessState(status);
+  return (
+    <span
+      title={st.hint}
+      className={`inline-flex items-center gap-1.5 text-sm font-medium ${TONE_TEXT[st.tone]}`}
+    >
+      <span className={`h-2 w-2 shrink-0 rounded-full ${TONE_DOT[st.tone]}`} aria-hidden="true" />
+      {st.label}
+    </span>
   );
 }
 
@@ -191,11 +194,6 @@ export function PortalAccessSection({
   const [roleDialogValue, setRoleDialogValue] = useState<ClientRole>("client_standard");
   const [campaignsDialogMember, setCampaignsDialogMember] = useState<Member | null>(null);
   const [campaignsDialogSelected, setCampaignsDialogSelected] = useState<Set<string>>(new Set());
-
-  const campaignNameById = useMemo(
-    () => new Map(campaigns.map((c) => [c.id, c.nome])),
-    [campaigns],
-  );
 
   const refreshMembers = async (_orgId: string) => {
     await portal.refreshMembers();
@@ -559,71 +557,86 @@ export function PortalAccessSection({
       {rowError && <p className="mb-2 text-xs text-destructive">{rowError}</p>}
 
       {members && members.length > 0 ? (
-        <ul className="divide-y divide-border/60">
-          {members.map((m) => {
-            const name = m.fullName || m.email || "Sem nome";
-            const restricted = m.campaignIds.length > 0;
-            return (
-              <li key={m.id} className={`py-3 ${rowBusyId === m.id ? "opacity-60" : ""}`}>
-                <div className="flex items-center gap-3 md:grid md:grid-cols-[auto_minmax(0,1.1fr)_minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,0.8fr)_auto]">
-                  <Avatar className="h-8 w-8 shrink-0">
-                    <AvatarFallback className="bg-muted text-[11px] font-semibold text-text-secondary">
-                      {initialsOf(name) || "?"}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0 flex-1 md:contents">
-                    <p className="truncate text-sm font-medium text-foreground">
-                      {m.fullName || "Sem nome"}
+        <div>
+          <div
+            aria-hidden="true"
+            className="hidden border-b border-border/60 pb-2 text-[11px] font-medium uppercase tracking-wide text-text-secondary md:grid md:grid-cols-[2rem_minmax(0,1.1fr)_minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,1fr)_2.25rem] md:gap-x-3"
+          >
+            <span />
+            <span>Pessoa</span>
+            <span>E-mail</span>
+            <span>Função</span>
+            <span>Acesso</span>
+            <span>Atividade</span>
+            <span />
+          </div>
+          <ul className="divide-y divide-border/60">
+            {members.map((m) => {
+              const name = m.fullName || m.email || "Sem nome";
+              const restricted = m.campaignIds.length > 0;
+              const activity = accessActivity(m);
+              const roleLabel = ROLE_LABELS[m.role] ?? m.role;
+              const scope = restricted
+                ? `${m.campaignIds.length} ${m.campaignIds.length === 1 ? "campanha" : "campanhas"}`
+                : null;
+              return (
+                <li key={m.id} className={`py-3 ${rowBusyId === m.id ? "opacity-60" : ""}`}>
+                  <div className="flex items-center gap-3 md:grid md:grid-cols-[2rem_minmax(0,1.1fr)_minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,1fr)_2.25rem] md:gap-x-3">
+                    <Avatar className="h-8 w-8 shrink-0">
+                      <AvatarFallback className="bg-muted text-[11px] font-semibold text-text-secondary">
+                        {initialsOf(name) || "?"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1 md:contents">
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {m.fullName || "Sem nome"}
+                      </p>
+                      <p className="truncate text-xs text-text-secondary md:text-sm">
+                        {m.email || "—"}
+                      </p>
+                      <p className="hidden truncate text-sm text-text-secondary md:block">
+                        {roleLabel}
+                        {scope && <span className="block text-xs">{scope}</span>}
+                      </p>
+                      <p className="hidden md:block">
+                        <AccessStateLabel status={m.status} />
+                      </p>
+                      <p
+                        title={activity.title}
+                        className="hidden truncate text-sm text-text-secondary md:block"
+                      >
+                        {activity.text}
+                      </p>
+                    </div>
+                    <MemberRowMenu
+                      m={m}
+                      rowBusyId={rowBusyId}
+                      onResend={handleResend}
+                      onRole={openRoleDialog}
+                      onCampaigns={openCampaignsDialog}
+                      onSuspend={handleSuspend}
+                      onReactivate={handleReactivate}
+                      onRemove={handleRemove}
+                    />
+                  </div>
+                  {/* Mobile: duas linhas separadas — estado do acesso e atividade. */}
+                  <div className="mt-1.5 space-y-0.5 pl-11 md:hidden">
+                    <p className="flex flex-wrap items-center gap-x-2 text-xs text-text-secondary">
+                      <AccessStateLabel status={m.status} />
+                      <span>
+                        {roleLabel}
+                        {scope ? ` · ${scope}` : ""}
+                      </span>
                     </p>
-                    <p className="truncate text-xs text-text-secondary md:text-sm">
-                      {m.email || "—"}
-                    </p>
-                    <p className="hidden truncate text-sm text-text-secondary md:block">
-                      {ROLE_LABELS[m.role] ?? m.role}
-                      {restricted && (
-                        <span className="block text-xs">
-                          {m.campaignIds.length}{" "}
-                          {m.campaignIds.length === 1 ? "campanha" : "campanhas"}
-                        </span>
-                      )}
-                    </p>
-                    <p className="hidden md:block">
-                      <Badge variant={statusVariant(m)}>{statusLabel(m)}</Badge>
-                    </p>
-                    <p className="hidden truncate text-sm text-text-secondary md:block">
-                      {m.last_access_at ? formatDate(m.last_access_at) : "Nunca acessou"}
+                    <p title={activity.title} className="text-xs text-text-secondary">
+                      {activity.text}
                     </p>
                   </div>
-                  <MemberRowMenu
-                    m={m}
-                    rowBusyId={rowBusyId}
-                    onResend={handleResend}
-                    onRole={openRoleDialog}
-                    onCampaigns={openCampaignsDialog}
-                    onSuspend={handleSuspend}
-                    onReactivate={handleReactivate}
-                    onRemove={handleRemove}
-                  />
-                </div>
-                {/* Mobile: o resto da linha, compacto (status · função · último acesso). */}
-                <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 pl-11 text-xs text-text-secondary md:hidden">
-                  <Badge variant={statusVariant(m)}>{statusLabel(m)}</Badge>
-                  <span>{ROLE_LABELS[m.role] ?? m.role}</span>
-                  {restricted && (
-                    <span>
-                      · {m.campaignIds.length}{" "}
-                      {m.campaignIds.length === 1 ? "campanha" : "campanhas"}
-                    </span>
-                  )}
-                  <span>
-                    ·{" "}
-                    {m.last_access_at ? `Acesso ${formatDate(m.last_access_at)}` : "Nunca acessou"}
-                  </span>
-                </p>
-              </li>
-            );
-          })}
-        </ul>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       ) : (
         <EmptyState
           compact

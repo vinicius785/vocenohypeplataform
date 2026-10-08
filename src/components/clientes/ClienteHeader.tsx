@@ -12,17 +12,7 @@ import { TYPOGRAPHY } from "@/lib/design-tokens";
 import { ClienteLogo } from "./ClienteLogo";
 import { ClienteStatusControl } from "./ClienteStatusControl";
 import { CLIENTE_STATUS_LABEL, clienteStatus } from "./cliente-ui";
-
-/** "Responsável · Cliente desde 12/03/2025" — só os pedaços que existem. */
-export function clienteSubtitle(c: Pick<Cliente, "responsavel" | "clienteDesde">): string {
-  const parts: string[] = [];
-  if (c.responsavel?.trim()) parts.push(c.responsavel.trim());
-  if (c.clienteDesde) {
-    const d = new Date(c.clienteDesde);
-    if (!Number.isNaN(d.getTime())) parts.push(`Cliente desde ${d.toLocaleDateString("pt-BR")}`);
-  }
-  return parts.join(" · ");
-}
+import { clienteSubtitle } from "./cliente-overview";
 
 /** Cabeçalho da Central do Cliente: identidade + status à esquerda, ações à direita. Sem moldura. */
 export function ClienteHeader({

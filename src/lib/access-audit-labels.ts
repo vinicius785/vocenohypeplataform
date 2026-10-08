@@ -18,6 +18,7 @@ export const ACCESS_AUDIT_ACTION_LABELS: Record<string, string> = {
   token_deactivated: "Link antigo desativado",
   invite_sent: "Convite enviado",
   invite_sent_existing_account: "Convite enviado (conta existente vinculada)",
+  invite_accepted: "Primeiro acesso (convite aceito)",
   invite_resent: "Convite reenviado",
   invite_revoked: "Convite revogado",
   role_changed: "Função alterada",

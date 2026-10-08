@@ -43,10 +43,18 @@ function SelecionarAmbientePage() {
   }, [navigate]);
 
   const handleSelect = async (env: AvailableEnvironment) => {
-    await supabase
-      .from("organization_members")
-      .update({ last_access_at: new Date().toISOString() })
-      .eq("organization_id", env.organizationId);
+    // Só a linha do próprio usuário (antes filtrava só pela organização: para um admin isso marcava
+    // TODOS os membros da organização como "acessou agora"). Para cliente, o registro real é feito
+    // pelo servidor ao entrar no portal (`recordPortalAccess`).
+    const { data: sessionNow } = await supabase.auth.getSession();
+    const selfId = sessionNow.session?.user.id;
+    if (selfId) {
+      await supabase
+        .from("organization_members")
+        .update({ last_access_at: new Date().toISOString() })
+        .eq("organization_id", env.organizationId)
+        .eq("user_id", selfId);
+    }
     if (env.type === "client") {
       // Persiste qual das (possivelmente várias) organizações de cliente
       // ativas do usuário é a "atual" — lido pelo guard de `/portal-app/**`

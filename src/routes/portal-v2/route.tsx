@@ -1,7 +1,11 @@
 import { createFileRoute, Outlet, redirect, useRouter } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveUserEnvironment } from "@/lib/user-environment.server";
-import { getPendingNpsSession, getPortalDataForSession } from "@/lib/portal-auth.functions";
+import {
+  getPendingNpsSession,
+  getPortalDataForSession,
+  recordPortalAccess,
+} from "@/lib/portal-auth.functions";
 import { shouldRequireMfaChallenge } from "@/lib/mfa.functions";
 import { acceptPendingInvites } from "@/lib/accept-invite.functions";
 import {
@@ -12,6 +16,15 @@ import { PortalV2Shell } from "@/features/client-portal-v2/layouts/PortalV2Shell
 import { RealPortalRuntime } from "@/features/client-portal-v2/runtime/real-runtime";
 import { NpsForm, NpsGateError } from "@/features/client-portal-v2/components/PendingNpsGate";
 import { decideNpsGuard, NPS_ROUTE } from "@/features/client-portal-v2/nps-guard";
+
+const ACCESS_RECORD_TAB_MS = 30 * 60 * 1000;
+const lastRecordedByOrg = new Map<string, number>();
+function shouldRecordAccess(organizationId: string): boolean {
+  const last = lastRecordedByOrg.get(organizationId) ?? 0;
+  if (Date.now() - last < ACCESS_RECORD_TAB_MS) return false;
+  lastRecordedByOrg.set(organizationId, Date.now());
+  return true;
+}
 
 type NpsBlockedData = {
   npsBlocked: true;
@@ -80,6 +93,12 @@ export const Route = createFileRoute("/portal-v2")({
 
     if (!organizationId) {
       throw redirect({ to: env.redirectTo });
+    }
+
+    // "Último acesso" real: a entrada no portal é registrada (no máx. 1x por 30 min por aba; o servidor
+    // ainda limita a 1x/hora). Melhor esforço — nunca bloqueia nem derruba a navegação.
+    if (shouldRecordAccess(organizationId)) {
+      void recordPortalAccess({ data: { organizationId } }).catch(() => {});
     }
 
     const mustChangePassword = await checkMustChangePassword(userId);

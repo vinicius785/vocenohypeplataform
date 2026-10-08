@@ -1,3 +1,4 @@
+type ClienteBasics = { responsavel?: string; clienteDesde?: string };
 import type { Campaign } from "@/components/VincularCampanhaDialog";
 import { campanhaStatus } from "@/components/campanhas/campanha-ui";
 import { dueBucket, kpiTotals, todayISO } from "@/lib/financeiro-entries";
@@ -51,4 +52,15 @@ export function hasComercialData(c: {
   return Boolean(
     c.proximoPasso?.trim() || c.previsaoFechamento?.trim() || c.observacaoNegociacao?.trim(),
   );
+}
+
+/** "Responsável · Cliente desde 12/03/2025" — só os pedaços que existem. */
+export function clienteSubtitle(c: Pick<ClienteBasics, "responsavel" | "clienteDesde">): string {
+  const parts: string[] = [];
+  if (c.responsavel?.trim()) parts.push(c.responsavel.trim());
+  if (c.clienteDesde) {
+    const d = new Date(c.clienteDesde);
+    if (!Number.isNaN(d.getTime())) parts.push(`Cliente desde ${d.toLocaleDateString("pt-BR")}`);
+  }
+  return parts.join(" · ");
 }
