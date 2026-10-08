@@ -1,63 +1,56 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
-import {
-  ArrowLeft,
-  Building2,
-  ChevronDown,
-  Mail,
-  MessageCircle,
-  MoreVertical,
-  Pencil,
-  Megaphone,
-  Trash2,
-  History,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Building2 } from "lucide-react";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageContainer } from "@/components/shared/PageContainer";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { useConfirm } from "@/hooks/use-confirm";
 import { useMyAccess, hasPermission } from "@/lib/permissions";
 import { clientesStore, useClientes, type Cliente } from "@/lib/clientes-store";
 import type { Campaign } from "@/components/VincularCampanhaDialog";
 import { VincularCampanhaDialog } from "@/components/VincularCampanhaDialog";
 import { ClienteFormSheet } from "./ClienteFormSheet";
-import { ClienteLogo } from "./ClienteLogo";
-import { ClienteStatusControl } from "./ClienteStatusControl";
 import { PortalAccessSection } from "./PortalAccessSection";
 import { ClienteContratosSection } from "./ClienteContratosSection";
-import { ClienteFinancialSummary } from "./ClienteFinancialSummary";
-import {
-  waLink,
-  mailtoLink,
-  campanhaCreatedActivityEntry,
-  clienteStatus,
-  CLIENTE_STATUS_LABEL,
-} from "./cliente-ui";
-import { listAuditLog } from "@/lib/audit-log.functions";
-import {
-  getClienteOrganizationId,
-  listOrganizationMembers,
-} from "@/lib/organization-invites.functions";
-import { accessAuditActionLabel } from "@/lib/access-audit-labels";
-import { cn, formatIsoDate } from "@/lib/utils";
-import { SURFACE, TYPOGRAPHY } from "@/lib/design-tokens";
+import { ClienteHeader } from "./ClienteHeader";
+import { ClienteOverview } from "./ClienteOverview";
+import { ClienteCampanhasSection } from "./ClienteCampanhasSection";
+import { ClienteComercialSection } from "./ClienteComercialSection";
+import { ClienteHistorico } from "./ClienteHistorico";
+import { useClientePortalData } from "./use-cliente-portal-members";
+import { hasComercialData } from "./cliente-overview";
+import { campanhaCreatedActivityEntry, clienteStatus, CLIENTE_STATUS_LABEL } from "./cliente-ui";
 
 /**
- * Full client-detail page (Part 2 of the client-detail-page rebuild — Part 1
- * was the backend/DB work in `organization-invites.functions.ts`, already
- * committed). The surface where campaigns/access/editing happen;
- * `ClientesSection.tsx`'s row click navigates here. See
- * CLAUDE.md's routing conventions — this is the one other real nested route
- * in Clientes, mirroring `projeto.$id.tsx`'s "not found" + header pattern.
+ * Central do Cliente (`/clientes/$id`). Composição, de cima para baixo: cabeçalho → overview
+ * (Campanhas | Contato | Financeiro) → operação (Comercial, Campanhas, Contratos) → relacionamento
+ * (Acessos ao portal) → Histórico. Seções planas, separadas por divisor — sem card dentro de card.
+ * Dados: o store de clientes (campanhas/contato/status/activity), Financeiro, Contratos e UMA busca
+ * compartilhada de organização/membros do portal (`useClientePortalData`).
  */
+function CentralSkeleton() {
+  return (
+    <PageContainer className="space-y-8 py-6" aria-busy="true">
+      <div className="flex items-center gap-4">
+        <Skeleton className="h-16 w-16 rounded-2xl" />
+        <div className="space-y-2">
+          <Skeleton className="h-7 w-56" />
+          <Skeleton className="h-4 w-40" />
+        </div>
+      </div>
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="space-y-2">
+            <Skeleton className="h-3 w-20" />
+            <Skeleton className="h-7 w-28" />
+            <Skeleton className="h-4 w-24" />
+          </div>
+        ))}
+      </div>
+      <Skeleton className="h-40 w-full" />
+    </PageContainer>
+  );
+}
 
 export function ClienteDetailPage({ clienteId }: { clienteId: string }) {
   const navigate = useNavigate();
@@ -65,12 +58,8 @@ export function ClienteDetailPage({ clienteId }: { clienteId: string }) {
   const cliente = clientes.find((c) => c.id === clienteId) ?? null;
   const access = useMyAccess();
   const canManage = hasPermission(access, "clientes");
-  // Item 8/10 da reconstrução do domínio Comercial/Clientes/Campanhas/
-  // Contratos/Financeiro: "Se estiver Encerrado ou Arquivado, bloquear
-  // nova campanha e explicar o motivo." Captação/Ativo permitem (a
-  // diferença entre os dois — campanha nasce "planning" pra Captação e
-  // pode nascer "planning" ou "active" pra Ativo — já é decidida dentro do
-  // próprio `VincularCampanhaDialog`/`CampanhaActivationDialog`, não aqui).
+  const isAdmin = Boolean(access?.isAdmin);
+  // Encerrado/Arquivado bloqueiam nova campanha (regra já existente, só reaproveitada aqui).
   const canCreateCampanha =
     canManage &&
     cliente !== null &&
@@ -79,40 +68,9 @@ export function ClienteDetailPage({ clienteId }: { clienteId: string }) {
   const [editOpen, setEditOpen] = useState(false);
   const [campanhaOpen, setCampanhaOpen] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
-  const [historyOpen, setHistoryOpen] = useState(false);
+  const [campanhasExpanded, setCampanhasExpanded] = useState(false);
   const { confirm, confirmDialog } = useConfirm();
-
-  const getOrgIdFn = useServerFn(getClienteOrganizationId);
-  const listAuditFn = useServerFn(listAuditLog);
-  const [organizationId, setOrganizationId] = useState<string | null>(null);
-  const [historyRows, setHistoryRows] = useState<
-    Awaited<ReturnType<typeof listAuditLog>>["rows"] | null
-  >(null);
-  const [historyError, setHistoryError] = useState<string | null>(null);
-  const [historyLoading, setHistoryLoading] = useState(false);
-
-  const loadHistory = async () => {
-    setHistoryLoading(true);
-    setHistoryError(null);
-    try {
-      let orgId = organizationId;
-      if (!orgId) {
-        const res = await getOrgIdFn({ data: { clienteId } });
-        orgId = res.organizationId;
-        setOrganizationId(orgId);
-      }
-      if (!orgId) {
-        setHistoryRows([]);
-        return;
-      }
-      const res = await listAuditFn({ data: { organizationId: orgId, page: 0, pageSize: 50 } });
-      setHistoryRows(res.rows);
-    } catch (e) {
-      setHistoryError(e instanceof Error ? e.message : "Erro ao carregar histórico.");
-    } finally {
-      setHistoryLoading(false);
-    }
-  };
+  const portal = useClientePortalData(clienteId);
 
   const goBack = () => void navigate({ to: "/time", search: { section: "clientes" } });
 
@@ -123,10 +81,6 @@ export function ClienteDetailPage({ clienteId }: { clienteId: string }) {
     setEditOpen(false);
   };
 
-  // Troca de status (Fase 3) — UPDATE de um cliente existente pelo mesmo
-  // `clientesStore.set` já usado em `saveCliente` (edição já faz UPDATE de
-  // verdade em `table-array-store.ts`, sem o problema de `organization_id`
-  // que só afetava CRIAÇÃO).
   const applyStatusPatch = (patch: Partial<Cliente>) => {
     if (!cliente) return;
     clientesStore.set((prev) => prev.map((c) => (c.id === cliente.id ? { ...c, ...patch } : c)));
@@ -163,44 +117,26 @@ export function ClienteDetailPage({ clienteId }: { clienteId: string }) {
     goBack();
   };
 
-  const campanhas = cliente?.campanhas ?? [];
+  const openNovaCampanha = () => {
+    setEditingCampaign(null);
+    setCampanhaOpen(true);
+  };
 
-  const [portalUsersCount, setPortalUsersCount] = useState<number | null>(null);
-  const listMembersFn = useServerFn(listOrganizationMembers);
+  const openFinanceiro = () => {
+    window.dispatchEvent(new CustomEvent("nav:section", { detail: "financeiro" }));
+    void navigate({ to: "/time", search: { section: "financeiro" } });
+  };
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const { organizationId: orgId } = await getOrgIdFn({ data: { clienteId } });
-        if (cancelled) return;
-        setOrganizationId(orgId);
-        if (!orgId) {
-          setPortalUsersCount(0);
-          return;
-        }
-        const members = await listMembersFn({ data: { organizationId: orgId } });
-        if (!cancelled) setPortalUsersCount(members.length);
-      } catch {
-        if (!cancelled) setPortalUsersCount(null);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clienteId]);
+  const verCampanhas = () => {
+    setCampanhasExpanded(true);
+    document
+      .getElementById("campanhas-do-cliente")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   if (clientes.length === 0) {
-    // Store ainda não hidratou (primeiro load) — evita mostrar "não
-    // encontrado" antes da hora.
-    return (
-      <PageContainer className="space-y-4 py-10">
-        <Skeleton className="h-6 w-40" />
-        <Skeleton className="h-24 w-full rounded-2xl" />
-        <Skeleton className="h-40 w-full rounded-2xl" />
-      </PageContainer>
-    );
+    // Store ainda não hidratou (primeiro load) — evita "não encontrado" antes da hora.
+    return <CentralSkeleton />;
   }
 
   if (!cliente) {
@@ -221,7 +157,7 @@ export function ClienteDetailPage({ clienteId }: { clienteId: string }) {
       <PageContainer className="py-16">
         <EmptyState
           icon={<Building2 className="h-5 w-5" />}
-          title="Sem permissão para administrar acessos"
+          title="Sem permissão para ver este cliente"
           description="Você não tem a permissão de Clientes necessária para ver esta página."
           primaryAction={{ label: "Voltar", onClick: goBack }}
         />
@@ -229,333 +165,62 @@ export function ClienteDetailPage({ clienteId }: { clienteId: string }) {
     );
   }
 
+  const campanhas = cliente.campanhas ?? [];
+  const status = clienteStatus(cliente);
+
   return (
     <>
-      <PageContainer className="space-y-6 md:space-y-8">
-        {/* Breadcrumb simples (mesmo padrão de "Voltar para X" de
-         * projeto.$id.tsx — não existe componente de breadcrumb dedicado). */}
-        <button
-          type="button"
-          onClick={goBack}
-          className="flex items-center gap-1.5 text-sm font-medium text-text-secondary hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" /> Clientes
-          <span className="text-text-secondary">/</span>
-          <span className="text-foreground">{cliente.empresa}</span>
-        </button>
+      <PageContainer className="space-y-8">
+        <ClienteHeader
+          cliente={cliente}
+          canManage={canManage}
+          isAdmin={isAdmin}
+          canCreateCampanha={canCreateCampanha}
+          onBack={goBack}
+          onNovaCampanha={openNovaCampanha}
+          onEdit={() => setEditOpen(true)}
+          onDelete={() => void requestDelete()}
+          onStatusApply={applyStatusPatch}
+        />
 
-        {/* ===== Cabeçalho ===== */}
-        <div className={cn(SURFACE.card, "p-5 md:p-6")}>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex min-w-0 items-start gap-3">
-              <ClienteLogo photo={cliente.photo} empresa={cliente.empresa} size="lg" />
-              <div className="min-w-0">
-                <p
-                  role="heading"
-                  aria-level={1}
-                  className={cn("truncate", TYPOGRAPHY.pageHeading, "text-foreground")}
-                >
-                  {cliente.empresa}
-                </p>
-                <p className="truncate text-sm text-text-secondary">
-                  {cliente.responsavel || "Contato não informado"}
-                </p>
-                <div className="mt-1.5">
-                  <ClienteStatusControl
-                    cliente={cliente}
-                    canChange={canManage}
-                    canArchiveOrRestore={Boolean(access?.isAdmin)}
-                    onApply={applyStatusPatch}
-                  />
-                </div>
-              </div>
-            </div>
+        <ClienteOverview
+          cliente={cliente}
+          onVerCampanhas={verCampanhas}
+          onVerFinanceiro={openFinanceiro}
+          onEditarContato={() => setEditOpen(true)}
+        />
 
-            <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
-              <Button
-                variant="primary"
-                size="comfortable"
-                className="w-full gap-1.5 sm:w-auto"
-                disabled={!canCreateCampanha}
-                title={
-                  canCreateCampanha
-                    ? undefined
-                    : `Cliente ${CLIENTE_STATUS_LABEL[clienteStatus(cliente)]} não permite novas campanhas.`
-                }
-                onClick={() => {
-                  setEditingCampaign(null);
-                  setCampanhaOpen(true);
-                }}
-              >
-                <Megaphone className="h-4 w-4" /> Nova campanha
-              </Button>
-              <Button
-                variant="outline"
-                size="comfortable"
-                className="w-full gap-1.5 sm:w-auto"
-                onClick={() => setEditOpen(true)}
-              >
-                <Pencil className="h-4 w-4" /> Editar cliente
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label="Mais ações"
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-text-secondary hover:bg-muted hover:text-foreground"
-                  >
-                    <MoreVertical className="h-4 w-4" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    onSelect={() => {
-                      const el = document.getElementById("acessos-ao-portal");
-                      el?.scrollIntoView({ behavior: "smooth", block: "start" });
-                    }}
-                  >
-                    Gerenciar acesso antigo
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onSelect={() => void requestDelete()}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" /> Excluir cliente
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
-
-          <dl className="mt-5 grid grid-cols-2 gap-4 border-t border-border/60 pt-4 text-xs sm:grid-cols-4">
-            <div>
-              <dt className="font-medium uppercase tracking-wide text-text-secondary">
-                Responsável interno
-              </dt>
-              <dd className="mt-0.5 text-sm text-foreground">
-                {cliente.responsavelInterno || "—"}
-              </dd>
-            </div>
-            <div>
-              <dt className="font-medium uppercase tracking-wide text-text-secondary">Campanhas</dt>
-              <dd className="mt-0.5 text-sm text-foreground">{campanhas.length}</dd>
-            </div>
-            <div>
-              <dt className="font-medium uppercase tracking-wide text-text-secondary">
-                Usuários com acesso
-              </dt>
-              <dd className="mt-0.5 text-sm text-foreground">{portalUsersCount ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="font-medium uppercase tracking-wide text-text-secondary">
-                Cliente desde
-              </dt>
-              <dd className="mt-0.5 text-sm text-foreground">
-                {cliente.clienteDesde
-                  ? new Date(cliente.clienteDesde).toLocaleDateString("pt-BR")
-                  : "—"}
-              </dd>
-            </div>
-          </dl>
-        </div>
-
-        {/* ===== Informações do cliente ===== */}
-        <section className={cn(SURFACE.card, "p-5 md:p-6")}>
-          <h2 className="text-sm font-semibold text-foreground">Informações do cliente</h2>
-          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <InfoField label="Contato principal" value={cliente.responsavel || "Não informado"} />
-            <InfoField
-              label="E-mail"
-              value={cliente.email || "E-mail não informado"}
-              href={cliente.email ? mailtoLink(cliente.email) : null}
-              icon={<Mail className="h-3.5 w-3.5" />}
-            />
-            <InfoField
-              label="WhatsApp"
-              value={cliente.whatsapp || "WhatsApp não informado"}
-              href={cliente.whatsapp ? waLink(cliente.whatsapp) : null}
-              icon={<MessageCircle className="h-3.5 w-3.5" />}
-            />
-            <InfoField
-              label="Responsável interno"
-              value={cliente.responsavelInterno || "Sem responsável interno"}
-            />
-            <InfoField
-              label="Cliente desde"
-              value={
-                cliente.clienteDesde
-                  ? new Date(cliente.clienteDesde).toLocaleDateString("pt-BR")
-                  : "Data não informada"
-              }
-            />
-          </div>
-        </section>
-
-        {/* ===== Comercial (só pra clientes em Captação — item 3/7 do pedido
-         * de reconstrução do domínio Comercial/Clientes/Campanhas/Contratos/
-         * Financeiro) ===== */}
-        {clienteStatus(cliente) === "capture" && (
-          <section className={cn(SURFACE.card, "p-5 md:p-6")}>
-            <h2 className="text-sm font-semibold text-foreground">Comercial</h2>
-            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <InfoField label="Próximo passo" value={cliente.proximoPasso || "Não definido"} />
-              <InfoField
-                label="Previsão de fechamento"
-                value={
-                  cliente.previsaoFechamento
-                    ? new Date(cliente.previsaoFechamento).toLocaleDateString("pt-BR")
-                    : "Não definida"
-                }
-              />
-              <InfoField
-                label="Observação"
-                value={cliente.observacaoNegociacao || "Nenhuma observação"}
-              />
-            </div>
-            <p className="mt-3 text-[11px] text-text-secondary">
-              Estimativa comercial — nenhum valor aqui é receita confirmada.
-            </p>
-          </section>
+        {status === "capture" && hasComercialData(cliente) && (
+          <ClienteComercialSection cliente={cliente} />
         )}
 
-        {/* ===== Campanhas ===== */}
-        <section className={cn(SURFACE.card, "p-5 md:p-6")}>
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-foreground">Campanhas</h2>
-            <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-text-secondary">
-              {campanhas.length}
-            </span>
-          </div>
-          {campanhas.length === 0 ? (
-            <EmptyState
-              icon={<Megaphone className="h-5 w-5" />}
-              compact
-              title="Nenhuma campanha criada para este cliente."
-              description={
-                canCreateCampanha
-                  ? "Crie a primeira campanha para começar a operação."
-                  : `Cliente ${cliente ? CLIENTE_STATUS_LABEL[clienteStatus(cliente)] : ""} não permite novas campanhas.`
-              }
-              primaryAction={
-                canCreateCampanha
-                  ? {
-                      label: "Nova campanha",
-                      onClick: () => {
-                        setEditingCampaign(null);
-                        setCampanhaOpen(true);
-                      },
-                    }
-                  : undefined
-              }
-            />
-          ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {campanhas.map((camp) => (
-                <button
-                  key={camp.id}
-                  type="button"
-                  onClick={() => {
-                    setEditingCampaign(camp);
-                    setCampanhaOpen(true);
-                  }}
-                  className="flex items-start gap-3 rounded-xl border border-border/60 bg-background p-3 text-left transition-colors hover:bg-accent/40"
-                >
-                  <ClienteLogo photo={cliente.photo} empresa={cliente.empresa} size="sm" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-foreground">{camp.nome}</p>
-                    <p className="truncate text-xs text-text-secondary">
-                      {camp.prazo ? `Prazo ${formatIsoDate(camp.prazo)}` : "Sem prazo"}
-                    </p>
-                    <p className="mt-1 text-xs text-text-secondary">
-                      {(camp.linhas ?? []).reduce((s, l) => s + (l.quantidade || 0), 0)}{" "}
-                      influenciador(es) planejado(s)
-                    </p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
+        <ClienteCampanhasSection
+          campanhas={campanhas}
+          expanded={campanhasExpanded}
+          onToggleExpanded={() => setCampanhasExpanded((v) => !v)}
+          canCreate={canCreateCampanha}
+          disabledReason={`Cliente ${CLIENTE_STATUS_LABEL[status]} não permite novas campanhas.`}
+          onOpen={(c) => {
+            setEditingCampaign(c);
+            setCampanhaOpen(true);
+          }}
+        />
 
-        {/* ===== Contratos ===== */}
         <ClienteContratosSection
           clienteId={cliente.id}
           canManage={canManage}
           campanhas={campanhas}
         />
 
-        {/* ===== Financeiro ===== */}
-        <ClienteFinancialSummary clienteId={cliente.id} />
+        <PortalAccessSection portal={portal} clienteNome={cliente.empresa} />
 
-        {/* ===== Acessos ao portal ===== */}
-        <section id="acessos-ao-portal" className={cn(SURFACE.card, "p-5 md:p-6")}>
-          <PortalAccessSection clienteId={cliente.id} clienteNome={cliente.empresa} />
-        </section>
-
-        {/* ===== Histórico (colapsável, fechado por padrão) ===== */}
-        <section className={cn(SURFACE.card, "p-5 md:p-6")}>
-          <button
-            type="button"
-            onClick={() => {
-              const next = !historyOpen;
-              setHistoryOpen(next);
-              if (next && historyRows === null) void loadHistory();
-            }}
-            className="flex w-full items-center justify-between gap-2 text-left"
-          >
-            <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <History className="h-4 w-4" /> Histórico do cliente
-            </span>
-            <ChevronDown
-              className={`h-4 w-4 text-text-secondary transition-transform ${historyOpen ? "rotate-180" : ""}`}
-            />
-          </button>
-          {historyOpen && (
-            <div className="mt-4 space-y-2">
-              {historyLoading && (
-                <p className="text-xs text-text-secondary">Carregando histórico...</p>
-              )}
-              {historyError && <p className="text-xs text-destructive">{historyError}</p>}
-              {!historyLoading && historyRows && historyRows.length === 0 && (
-                <p className="text-xs text-text-secondary">
-                  Nenhum evento registrado para este cliente ainda.
-                </p>
-              )}
-              {!historyLoading &&
-                historyRows &&
-                historyRows.map((row) => (
-                  <div key={row.id} className="rounded-lg border border-border/60 p-2.5 text-xs">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-foreground">
-                        {accessAuditActionLabel(row.action)}
-                      </span>
-                      <span className="whitespace-nowrap text-text-secondary">
-                        {new Date(row.created_at).toLocaleString("pt-BR", {
-                          dateStyle: "short",
-                          timeStyle: "short",
-                        })}
-                      </span>
-                    </div>
-                    <p className="mt-0.5 text-text-secondary">
-                      Responsável: {row.actorEmail ?? row.actor_user_id}
-                    </p>
-                    {row.new_value != null && (
-                      <p className="mt-0.5 truncate text-text-secondary">
-                        {JSON.stringify(row.new_value)}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              <p className="pt-1 text-[11px] text-text-secondary">
-                Mostra apenas eventos já registrados em <code>access_audit_log</code> (convites,
-                mudanças de função/campanhas, suspensão/reativação/remoção, desativação do link
-                antigo). Eventos de ciclo de vida de cliente/campanha (criação, edição,
-                arquivamento) não têm logging hoje e ficam fora desta lista — ver relatório da
-                tarefa.
-              </p>
-            </div>
-          )}
-        </section>
+        <ClienteHistorico
+          cliente={cliente}
+          organizationId={portal.organizationId}
+          members={portal.members}
+          canSeeAccessLog={isAdmin}
+          portalLoading={portal.status === "loading"}
+        />
       </PageContainer>
 
       <ClienteFormSheet
@@ -578,36 +243,5 @@ export function ClienteDetailPage({ clienteId }: { clienteId: string }) {
       />
       {confirmDialog}
     </>
-  );
-}
-
-function InfoField({
-  label,
-  value,
-  href,
-  icon,
-}: {
-  label: string;
-  value: React.ReactNode;
-  href?: string | null;
-  icon?: React.ReactNode;
-}) {
-  return (
-    <div className="min-w-0">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-text-secondary">{label}</p>
-      {href ? (
-        <a
-          href={href}
-          target={href.startsWith("mailto:") ? undefined : "_blank"}
-          rel="noopener noreferrer"
-          className="mt-0.5 flex items-center gap-1.5 truncate text-sm font-medium text-text-brand hover:underline"
-        >
-          {icon}
-          {value}
-        </a>
-      ) : (
-        <p className="mt-0.5 truncate text-sm text-foreground">{value}</p>
-      )}
-    </div>
   );
 }

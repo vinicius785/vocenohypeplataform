@@ -37,8 +37,9 @@ import {
 } from "@/lib/contratos";
 import type { Campaign } from "@/components/VincularCampanhaDialog";
 import { CAMPANHA_STATUS_LABEL, campanhaStatus } from "@/components/campanhas/campanha-ui";
-import { cn, formatIsoDate } from "@/lib/utils";
-import { SURFACE, TYPOGRAPHY } from "@/lib/design-tokens";
+import { formatIsoDate } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ClienteSection } from "./ClienteSection";
 
 const STATUS_BADGE_VARIANT: Record<ContratoStatus, "outline" | "success" | "secondary"> = {
   rascunho: "outline",
@@ -187,18 +188,22 @@ export function ClienteContratosSection({
   };
 
   return (
-    <section className={cn(SURFACE.card, "p-5 md:p-6")}>
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-foreground">Contratos</h2>
-        {canManage && (contratos?.length ?? 0) > 0 && (
+    <ClienteSection
+      title="Contratos"
+      count={contratos?.length ?? null}
+      action={
+        canManage && (contratos?.length ?? 0) > 0 ? (
           <Button variant="outline" size="sm" onClick={openNew}>
             <Plus className="h-3.5 w-3.5" /> Novo contrato
           </Button>
-        )}
-      </div>
-
+        ) : undefined
+      }
+    >
       {contratos === null ? (
-        <p className="text-xs text-text-secondary">Carregando…</p>
+        <div className="space-y-2" aria-busy="true">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
       ) : contratos.length === 0 ? (
         <EmptyState
           icon={<FileText className="h-5 w-5" />}
@@ -208,36 +213,42 @@ export function ClienteContratosSection({
           primaryAction={canManage ? { label: "Novo contrato", onClick: openNew } : undefined}
         />
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {contratos.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => canManage && openEdit(c)}
-              className="flex items-start justify-between gap-3 rounded-xl border border-border/60 bg-background p-3 text-left transition-colors hover:bg-accent/40"
-            >
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-foreground">{c.nome}</p>
-                <p className="truncate text-xs text-text-secondary">
-                  {c.vigenciaFim
-                    ? `Vigência até ${formatIsoDate(c.vigenciaFim)}`
-                    : "Vigência não definida"}
-                </p>
-                {c.campanhaIds.length > 0 && (
-                  <p className="mt-1 truncate text-xs text-text-secondary">
-                    {c.campanhaIds
-                      .map((id) => campanhas.find((camp) => camp.id === id)?.nome)
-                      .filter(Boolean)
-                      .join(", ")}
-                  </p>
-                )}
-              </div>
-              <Badge variant={STATUS_BADGE_VARIANT[c.status]}>
-                {CONTRATO_STATUS_LABEL[c.status]}
-              </Badge>
-            </button>
-          ))}
-        </div>
+        <ul className="divide-y divide-border/60">
+          {contratos.map((c) => {
+            const campanhasDoContrato = c.campanhaIds
+              .map((id) => campanhas.find((camp) => camp.id === id)?.nome)
+              .filter(Boolean)
+              .join(", ");
+            return (
+              <li key={c.id}>
+                <button
+                  type="button"
+                  onClick={() => canManage && openEdit(c)}
+                  className="flex w-full items-center gap-3 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-foreground">
+                      {c.nome}
+                    </span>
+                    <span className="block truncate text-xs text-text-secondary">
+                      {[
+                        campanhasDoContrato || null,
+                        c.vigenciaFim
+                          ? `Vigência até ${formatIsoDate(c.vigenciaFim)}`
+                          : "Vigência não definida",
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
+                  </span>
+                  <Badge variant={STATUS_BADGE_VARIANT[c.status]}>
+                    {CONTRATO_STATUS_LABEL[c.status]}
+                  </Badge>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -366,6 +377,6 @@ export function ClienteContratosSection({
         </DialogContent>
       </Dialog>
       {confirmDialog}
-    </section>
+    </ClienteSection>
   );
 }

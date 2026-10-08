@@ -1,17 +1,10 @@
 import { useConfirm } from "@/hooks/use-confirm";
 import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { MoreHorizontal, UserPlus2 } from "lucide-react";
+import { MoreHorizontal, UserPlus2, Users } from "lucide-react";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,10 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  getClienteOrganizationId,
   inviteClientUser,
-  listOrganizationCampaigns,
-  listOrganizationMembers,
   reactivateClientMember,
   removeClientAccess,
   resendClientInvite,
@@ -45,6 +35,11 @@ import {
   updateClientMemberRole,
 } from "@/lib/organization-invites.functions";
 import { isInviteCosmeticallyExpired } from "@/lib/access-audit-labels";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ClienteSection } from "./ClienteSection";
+import { initialsOf } from "./cliente-ui";
+import type { ClientePortalData, PortalMember } from "./use-cliente-portal-members";
 
 /**
  * Full "Acessos ao portal" management table (Phase 2a, see CLAUDE.md piece
@@ -54,19 +49,7 @@ import { isInviteCosmeticallyExpired } from "@/lib/access-audit-labels";
  */
 type ClientRole = "client_standard" | "client_viewer";
 
-type Member = {
-  id: string;
-  user_id: string;
-  role: string;
-  status: string;
-  invited_at: string | null;
-  accepted_at: string | null;
-  last_access_at: string | null;
-  email: string | null;
-  fullName: string | null;
-  campaignIds: string[];
-};
-
+type Member = PortalMember;
 type Campaign = { id: string; nome: string };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -168,16 +151,14 @@ function MemberRowMenu({
 }
 
 export function PortalAccessSection({
-  clienteId,
+  portal,
   clienteNome,
 }: {
-  clienteId: string;
+  /** Dados compartilhados (uma única busca por página) — ver `useClientePortalData`. */
+  portal: ClientePortalData;
   clienteNome?: string;
 }) {
   const { confirm, confirmDialog } = useConfirm();
-  const getOrgIdFn = useServerFn(getClienteOrganizationId);
-  const listMembersFn = useServerFn(listOrganizationMembers);
-  const listCampaignsFn = useServerFn(listOrganizationCampaigns);
   const inviteFn = useServerFn(inviteClientUser);
   const resendFn = useServerFn(resendClientInvite);
   const updateRoleFn = useServerFn(updateClientMemberRole);
@@ -186,9 +167,7 @@ export function PortalAccessSection({
   const reactivateFn = useServerFn(reactivateClientMember);
   const removeFn = useServerFn(removeClientAccess);
 
-  const [organizationId, setOrganizationId] = useState<string | null>(null);
-  const [members, setMembers] = useState<Member[] | null>(null);
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const { organizationId, members, campaigns } = portal;
   const [showForm, setShowForm] = useState(false);
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
@@ -218,32 +197,9 @@ export function PortalAccessSection({
     [campaigns],
   );
 
-  const refreshMembers = async (orgId: string) => {
-    const list = await listMembersFn({ data: { organizationId: orgId } });
-    setMembers(list);
+  const refreshMembers = async (_orgId: string) => {
+    await portal.refreshMembers();
   };
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const { organizationId: orgId } = await getOrgIdFn({ data: { clienteId } });
-        if (cancelled) return;
-        setOrganizationId(orgId);
-        if (orgId) {
-          await refreshMembers(orgId);
-          const list = await listCampaignsFn({ data: { organizationId: orgId } });
-          if (!cancelled) setCampaigns(list);
-        }
-      } catch {
-        if (!cancelled) setOrganizationId(null);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clienteId]);
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -269,7 +225,7 @@ export function PortalAccessSection({
       // needs no call since an empty campaignIds list already means full
       // access (see the column's own "Todas" fallback).
       if (campaignScope === "specific" && inviteCampaignIds.size > 0) {
-        const freshList = await listMembersFn({ data: { organizationId } });
+        const freshList = (await portal.refreshMembers()) ?? [];
         const created = freshList.find((mm) => mm.user_id === result.id);
         if (created) {
           try {
@@ -383,31 +339,51 @@ export function PortalAccessSection({
     );
   };
 
+  const openInvite = () => {
+    setShowForm(true);
+    setTempPassword(null);
+    setError(null);
+  };
+
+  if (portal.status === "loading") {
+    return (
+      <ClienteSection id="acessos-ao-portal" title="Acessos ao portal">
+        <div className="space-y-3" aria-busy="true">
+          {[0, 1].map((i) => (
+            <div key={i} className="flex items-center gap-3">
+              <Skeleton className="h-8 w-8 rounded-full" />
+              <Skeleton className="h-4 w-40" />
+              <Skeleton className="h-4 flex-1" />
+            </div>
+          ))}
+        </div>
+      </ClienteSection>
+    );
+  }
+  if (portal.status === "error") {
+    return (
+      <ClienteSection id="acessos-ao-portal" title="Acessos ao portal">
+        <p role="alert" className="text-sm text-text-secondary">
+          Não foi possível carregar os acessos agora. Atualize a página para tentar de novo.
+        </p>
+      </ClienteSection>
+    );
+  }
+  // Cliente sem organização no portal: nada a administrar aqui.
   if (!organizationId) return null;
 
   return (
-    <div>
-      {confirmDialog}
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <div>
-          <h4 className="text-sm font-semibold text-foreground">Acessos ao portal</h4>
-          <p className="text-xs text-text-secondary">
-            Pessoas autorizadas a acessar as campanhas deste cliente.
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            setShowForm(true);
-            setTempPassword(null);
-            setError(null);
-          }}
-          className="shrink-0 gap-1.5"
-        >
-          <UserPlus2 className="h-3.5 w-3.5" /> Convidar usuário
+    <ClienteSection
+      id="acessos-ao-portal"
+      title="Acessos ao portal"
+      count={members?.length ?? 0}
+      action={
+        <Button variant="outline" size="sm" onClick={openInvite} className="shrink-0 gap-1.5">
+          <UserPlus2 className="h-3.5 w-3.5" aria-hidden="true" /> Convidar usuário
         </Button>
-      </div>
+      }
+    >
+      {confirmDialog}
 
       <Dialog open={showForm} onOpenChange={(v) => (v ? setShowForm(true) : setShowForm(false))}>
         <DialogContent>
@@ -583,20 +559,40 @@ export function PortalAccessSection({
       {rowError && <p className="mb-2 text-xs text-destructive">{rowError}</p>}
 
       {members && members.length > 0 ? (
-        <>
-          {/* Mobile: cards, not a cramped table (spec requirement). */}
-          <div className="space-y-2 sm:hidden">
-            {members.map((m) => (
-              <div
-                key={m.id}
-                className={`rounded-xl border border-border/60 p-3 ${rowBusyId === m.id ? "opacity-60" : ""}`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
+        <ul className="divide-y divide-border/60">
+          {members.map((m) => {
+            const name = m.fullName || m.email || "Sem nome";
+            const restricted = m.campaignIds.length > 0;
+            return (
+              <li key={m.id} className={`py-3 ${rowBusyId === m.id ? "opacity-60" : ""}`}>
+                <div className="flex items-center gap-3 md:grid md:grid-cols-[auto_minmax(0,1.1fr)_minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,0.8fr)_auto]">
+                  <Avatar className="h-8 w-8 shrink-0">
+                    <AvatarFallback className="bg-muted text-[11px] font-semibold text-text-secondary">
+                      {initialsOf(name) || "?"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0 flex-1 md:contents">
                     <p className="truncate text-sm font-medium text-foreground">
-                      {m.fullName || "—"}
+                      {m.fullName || "Sem nome"}
                     </p>
-                    <p className="truncate text-xs text-text-secondary">{m.email || "—"}</p>
+                    <p className="truncate text-xs text-text-secondary md:text-sm">
+                      {m.email || "—"}
+                    </p>
+                    <p className="hidden truncate text-sm text-text-secondary md:block">
+                      {ROLE_LABELS[m.role] ?? m.role}
+                      {restricted && (
+                        <span className="block text-xs">
+                          {m.campaignIds.length}{" "}
+                          {m.campaignIds.length === 1 ? "campanha" : "campanhas"}
+                        </span>
+                      )}
+                    </p>
+                    <p className="hidden md:block">
+                      <Badge variant={statusVariant(m)}>{statusLabel(m)}</Badge>
+                    </p>
+                    <p className="hidden truncate text-sm text-text-secondary md:block">
+                      {m.last_access_at ? formatDate(m.last_access_at) : "Nunca acessou"}
+                    </p>
                   </div>
                   <MemberRowMenu
                     m={m}
@@ -609,105 +605,32 @@ export function PortalAccessSection({
                     onRemove={handleRemove}
                   />
                 </div>
-                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                {/* Mobile: o resto da linha, compacto (status · função · último acesso). */}
+                <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 pl-11 text-xs text-text-secondary md:hidden">
                   <Badge variant={statusVariant(m)}>{statusLabel(m)}</Badge>
-                  <span className="text-xs text-text-secondary">
-                    {ROLE_LABELS[m.role] ?? m.role}
+                  <span>{ROLE_LABELS[m.role] ?? m.role}</span>
+                  {restricted && (
+                    <span>
+                      · {m.campaignIds.length}{" "}
+                      {m.campaignIds.length === 1 ? "campanha" : "campanhas"}
+                    </span>
+                  )}
+                  <span>
+                    ·{" "}
+                    {m.last_access_at ? `Acesso ${formatDate(m.last_access_at)}` : "Nunca acessou"}
                   </span>
-                </div>
-                <dl className="mt-2 grid grid-cols-2 gap-1 text-xs text-text-secondary">
-                  <div>
-                    <dt className="font-medium text-foreground">Campanhas</dt>
-                    <dd className="truncate">
-                      {m.campaignIds.length === 0
-                        ? "Todas"
-                        : m.campaignIds.map((id) => campaignNameById.get(id) ?? id).join(", ")}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="font-medium text-foreground">Convite</dt>
-                    <dd>{formatDate(m.invited_at)}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-medium text-foreground">Último acesso</dt>
-                    <dd>{formatDate(m.last_access_at)}</dd>
-                  </div>
-                </dl>
-              </div>
-            ))}
-          </div>
-
-          <div className="hidden overflow-x-auto rounded-xl border border-border/60 sm:block">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>E-mail</TableHead>
-                  <TableHead>Função</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Campanhas liberadas</TableHead>
-                  <TableHead>Data do convite</TableHead>
-                  <TableHead>Último acesso</TableHead>
-                  <TableHead className="w-10" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {members.map((m) => (
-                  <TableRow key={m.id} className={rowBusyId === m.id ? "opacity-60" : undefined}>
-                    <TableCell className="font-medium">{m.fullName || "—"}</TableCell>
-                    <TableCell className="text-text-secondary">{m.email || "—"}</TableCell>
-                    <TableCell>{ROLE_LABELS[m.role] ?? m.role}</TableCell>
-                    <TableCell>
-                      <Badge variant={statusVariant(m)}>{statusLabel(m)}</Badge>
-                    </TableCell>
-                    <TableCell className="max-w-[220px] truncate text-text-secondary">
-                      {m.campaignIds.length === 0
-                        ? "Todas"
-                        : m.campaignIds.map((id) => campaignNameById.get(id) ?? id).join(", ")}
-                    </TableCell>
-                    <TableCell className="text-text-secondary">
-                      {formatDate(m.invited_at)}
-                    </TableCell>
-                    <TableCell className="text-text-secondary">
-                      {formatDate(m.last_access_at)}
-                    </TableCell>
-                    <TableCell>
-                      <MemberRowMenu
-                        m={m}
-                        rowBusyId={rowBusyId}
-                        onResend={handleResend}
-                        onRole={openRoleDialog}
-                        onCampaigns={openCampaignsDialog}
-                        onSuspend={handleSuspend}
-                        onReactivate={handleReactivate}
-                        onRemove={handleRemove}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </>
+                </p>
+              </li>
+            );
+          })}
+        </ul>
       ) : (
-        <div className="rounded-xl border border-dashed border-border p-4 text-center">
-          <p className="text-sm font-medium text-foreground">Nenhum acesso ao portal</p>
-          <p className="mt-1 text-xs text-text-secondary">
-            Convide uma pessoa do cliente para acompanhar campanhas e aprovações.
-          </p>
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-3 gap-1.5"
-            onClick={() => {
-              setShowForm(true);
-              setTempPassword(null);
-              setError(null);
-            }}
-          >
-            <UserPlus2 className="h-3.5 w-3.5" /> Convidar usuário
-          </Button>
-        </div>
+        <EmptyState
+          compact
+          icon={<Users className="h-5 w-5" />}
+          title="Nenhum acesso ao portal"
+          description="Convide uma pessoa do cliente para acompanhar campanhas e aprovações."
+        />
       )}
 
       <Dialog open={!!roleDialogMember} onOpenChange={(v) => !v && setRoleDialogMember(null)}>
@@ -775,6 +698,6 @@ export function PortalAccessSection({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </ClienteSection>
   );
 }

@@ -63,11 +63,14 @@ export function ClienteStatusControl({
   canChange,
   canArchiveOrRestore,
   onApply,
+  showHistory = true,
 }: {
   cliente: Cliente;
   canChange: boolean;
   canArchiveOrRestore: boolean;
   onApply: (patch: Partial<Cliente>) => void;
+  /** Mostra o `<details>` de histórico de status. A Central do Cliente tem a própria timeline. */
+  showHistory?: boolean;
 }) {
   const status = clienteStatus(cliente);
   const [pending, setPending] = useState<Pending | null>(null);
@@ -141,7 +144,7 @@ export function ClienteStatusControl({
         )}
       </DropdownMenu>
 
-      {activity.length > 0 && (
+      {showHistory && activity.length > 0 && (
         <details className="group w-56 text-xs text-text-secondary sm:w-96">
           <summary className="cursor-pointer select-none font-medium hover:text-foreground">
             Histórico de status ({activity.length})

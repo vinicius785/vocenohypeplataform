@@ -1,6 +1,26 @@
 {
-  "version": "1.377.0",
+  "version": "1.378.0",
   "releases": [
+    {
+      "version": "1.378.0",
+      "summary": "Clientes: a página do cliente virou uma central, com visão geral, operação, acessos e histórico.",
+      "modules": [
+        {
+          "name": "CLIENTES",
+          "tagline": "Central do cliente",
+          "items": [
+            {
+              "title": "Visão geral",
+              "description": "Logo abaixo do nome, três blocos: campanhas (total e ativas), contato principal e situação financeira, cada um com atalho."
+            },
+            {
+              "title": "Seções mais leves",
+              "description": "Campanhas, contratos e acessos ao portal em listas compactas, sem caixas dentro de caixas. O histórico agora é uma linha do tempo legível, sem dados técnicos."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.377.0",
       "summary": "Portal do cliente: capas dos conteúdos na Home com a mesma altura e a arte inteira.",
