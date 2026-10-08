@@ -2,7 +2,12 @@ import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { snapshotFromDocument } from "./autentique-status";
 import { handleAutentiqueWebhook } from "./autentique-webhook-handler";
-import { parseAutentiqueEvent, verifyAutentiqueSignature } from "./autentique-webhook";
+import {
+  autentiqueWebhookSecretsFromEnv,
+  parseAutentiqueEvent,
+  verifyAutentiqueSignature,
+  verifyAutentiqueSignatureAny,
+} from "./autentique-webhook";
 import {
   ActiveContractExistsError,
   ContractPersistError,
@@ -356,6 +361,10 @@ describe("webhook HMAC + parse", () => {
   });
 });
 
+const PATH_SECRET = "p".repeat(40);
+const HMACSEC = "segredo-de-teste";
+const PATHAUTH = { method: "POST", pathSecret: PATH_SECRET, expectedPathSecret: PATH_SECRET };
+
 describe("endpoint do webhook (handler)", () => {
   const SECRET = "segredo-de-teste";
   const payload = (id: string, type: string, sig?: string, doc = "doc1") =>
@@ -370,9 +379,10 @@ describe("endpoint do webhook (handler)", () => {
   const sign = (b: string) => createHmac("sha256", SECRET).update(b).digest("hex");
   const call = (s: Awaited<ReturnType<typeof setup>>, body: string, header: string | null) =>
     handleAutentiqueWebhook({
+      ...PATHAUTH,
       rawBody: body,
       signatureHeader: header,
-      secret: SECRET,
+      secrets: [SECRET],
       getDeps: async () => ({ repo: s.repo, provider: s.provider }),
     });
 
@@ -386,29 +396,33 @@ describe("endpoint do webhook (handler)", () => {
       return { repo: s.repo, provider: s.provider };
     };
     const bad = await handleAutentiqueWebhook({
+      ...PATHAUTH,
       rawBody: body,
       signatureHeader: "00",
-      secret: SECRET,
+      secrets: [SECRET],
       getDeps: spy,
     });
     const tampered = await handleAutentiqueWebhook({
+      ...PATHAUTH,
       rawBody: body.replace("e1", "e2"),
       signatureHeader: sign(body),
-      secret: SECRET,
+      secrets: [SECRET],
       getDeps: spy,
     });
     expect([bad.status, tampered.status]).toEqual([401, 401]);
     expect(touched).toBe(false);
   });
 
-  it("sem segredo configurado: 500; JSON/evento inválido: 400 (assinados)", async () => {
+  it("sem path secret configurado: 500; JSON/evento inválido: 400 (assinados)", async () => {
     const s = await setup();
     expect(
       (
         await handleAutentiqueWebhook({
+          ...PATHAUTH,
+          expectedPathSecret: undefined,
           rawBody: "{}",
           signatureHeader: "x",
-          secret: undefined,
+          secrets: [HMACSEC],
           getDeps: async () => s,
         })
       ).status,
@@ -511,5 +525,193 @@ describe("endpoint do webhook (handler)", () => {
     });
     expect(s.contracts[0].status).toBe("aguardando");
     expect(s.signers).toHaveLength(2);
+  });
+});
+
+describe("secrets por endpoint (Documento e Assinatura)", () => {
+  const DOC = "secret-do-endpoint-documento";
+  const SIG = "secret-do-endpoint-assinatura";
+  const body = JSON.stringify({
+    event: { id: "e1", type: "document.finished", data: { object: { id: "doc1" } } },
+  });
+  const hmac = (secret: string, b = body) => createHmac("sha256", secret).update(b).digest("hex");
+  const run = (
+    s: Awaited<ReturnType<typeof setup>>,
+    header: string | null,
+    secrets: string[],
+    raw = body,
+  ) =>
+    handleAutentiqueWebhook({
+      ...PATHAUTH,
+      rawBody: raw,
+      signatureHeader: header,
+      secrets,
+      getDeps: async () => ({ repo: s.repo, provider: s.provider }),
+    });
+
+  it("assinatura do secret DOCUMENT e do secret SIGNATURE são aceitas (ambos configurados)", async () => {
+    const s = await setup();
+    expect((await run(s, hmac(DOC), [DOC, SIG])).status).toBe(200);
+    const b2 = body.replace("e1", "e2");
+    expect((await run(s, hmac(SIG, b2), [DOC, SIG], b2)).status).toBe(200);
+  });
+
+  it("inválida, ausente, secret incorreto e corpo reformatado dão 401", async () => {
+    const s = await setup();
+    expect((await run(s, "ab".repeat(32), [DOC, SIG])).status).toBe(401);
+    expect((await run(s, null, [DOC, SIG])).status).toBe(401);
+    expect((await run(s, hmac("outro-secret"), [DOC, SIG])).status).toBe(401);
+    // o HMAC é sobre o corpo CRU: o mesmo JSON reformatado muda a assinatura
+    const pretty = JSON.stringify(JSON.parse(body), null, 2);
+    expect((await run(s, hmac(DOC), [DOC, SIG], pretty)).status).toBe(401);
+  });
+
+  it("sem secrets HMAC mas com path secret: aceita sem header (HMAC é camada extra)", async () => {
+    const s = await setup();
+    expect((await run(s, null, [])).status).toBe(200);
+    expect(verifyAutentiqueSignatureAny(body, hmac(""), ["", undefined, null])).toBe(false);
+  });
+
+  it("só um secret configurado: o outro endpoint é rejeitado", async () => {
+    const s = await setup();
+    expect((await run(s, hmac(DOC), [DOC])).status).toBe(200);
+    expect((await run(s, hmac(SIG), [DOC])).status).toBe(401);
+  });
+
+  it("não expõe secrets nem o header na resposta", async () => {
+    const s = await setup();
+    const header = hmac("outro");
+    const r = await run(s, header, [DOC, SIG]);
+    const text = JSON.stringify(r);
+    expect(text).not.toContain(DOC);
+    expect(text).not.toContain(SIG);
+    expect(text).not.toContain(header);
+  });
+
+  it("evento autenticado chega à reconciliação existente", async () => {
+    const s = await setup();
+    s.remote.signatures[0].signed = { created_at: "a" };
+    s.remote.signatures[1].signed = { created_at: "b" };
+    const r = await run(s, hmac(DOC), [DOC, SIG]);
+    expect(r).toMatchObject({ status: 200, body: { outcome: "reconciled" } });
+    expect(s.contracts[0].status).toBe("assinado");
+  });
+
+  it("lê os dois secrets do ambiente, sem vazios nem repetidos, ignorando o legado", () => {
+    expect(
+      autentiqueWebhookSecretsFromEnv({
+        AUTENTIQUE_WEBHOOK_SECRET_DOCUMENT: " a ",
+        AUTENTIQUE_WEBHOOK_SECRET_SIGNATURE: "b",
+        AUTENTIQUE_WEBHOOK_SECRET: "legado",
+      }),
+    ).toEqual(["a", "b"]);
+    expect(
+      autentiqueWebhookSecretsFromEnv({
+        AUTENTIQUE_WEBHOOK_SECRET_DOCUMENT: "x",
+        AUTENTIQUE_WEBHOOK_SECRET_SIGNATURE: "x",
+      }),
+    ).toEqual(["x"]);
+    expect(autentiqueWebhookSecretsFromEnv({ AUTENTIQUE_WEBHOOK_SECRET: "legado" })).toEqual([]);
+  });
+
+  it("a comparação continua em tempo constante (timingSafeEqual) e o HMAC é sobre o corpo cru", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(new URL("./autentique-webhook.ts", import.meta.url), "utf8");
+    expect(src).toContain("timingSafeEqual");
+    expect(src).toMatch(/createHmac\("sha256", secret\)\.update\(rawBody, "utf8"\)/);
+    expect(verifyAutentiqueSignature(body, hmac(DOC), DOC)).toBe(true);
+  });
+});
+
+describe("segredo no caminho da URL (autenticação obrigatória)", () => {
+  const body = JSON.stringify({
+    event: { id: "e1", type: "document.finished", data: { object: { id: "doc1" } } },
+  });
+  const hmac = (secret: string) => createHmac("sha256", secret).update(body).digest("hex");
+  const run = (
+    s: Awaited<ReturnType<typeof setup>>,
+    o: Partial<Parameters<typeof handleAutentiqueWebhook>[0]> = {},
+  ) =>
+    handleAutentiqueWebhook({
+      ...PATHAUTH,
+      rawBody: body,
+      signatureHeader: null,
+      secrets: [],
+      getDeps: async () => ({ repo: s.repo, provider: s.provider }),
+      ...o,
+    });
+
+  it("path secret correto passa e reconcilia; sem HMAC não bloqueia", async () => {
+    const s = await setup();
+    s.remote.signatures[0].signed = { created_at: "a" };
+    s.remote.signatures[1].signed = { created_at: "b" };
+    expect(await run(s)).toMatchObject({ status: 200, body: { outcome: "reconciled" } });
+    expect(s.contracts[0].status).toBe("assinado");
+  });
+
+  it("ausente ou incorreto: 404, sem tocar em banco/provedor", async () => {
+    const s = await setup();
+    let touched = false;
+    const getDeps = async () => {
+      touched = true;
+      return { repo: s.repo, provider: s.provider };
+    };
+    expect((await run(s, { pathSecret: undefined, getDeps })).status).toBe(404);
+    expect((await run(s, { pathSecret: "", getDeps })).status).toBe(404);
+    expect((await run(s, { pathSecret: "x".repeat(40), getDeps })).status).toBe(404);
+    expect((await run(s, { pathSecret: PATH_SECRET.slice(0, -1), getDeps })).status).toBe(404);
+    expect(touched).toBe(false);
+  });
+
+  it("método diferente de POST é rejeitado", async () => {
+    const s = await setup();
+    for (const method of ["GET", "PUT", "DELETE"])
+      expect((await run(s, { method })).status).toBe(405);
+  });
+
+  it("path secret não configurado ou curto demais: 500 (nunca aberto)", async () => {
+    const s = await setup();
+    expect((await run(s, { expectedPathSecret: undefined, pathSecret: "" })).status).toBe(500);
+    expect((await run(s, { expectedPathSecret: "curto", pathSecret: "curto" })).status).toBe(500);
+  });
+
+  it("HMAC configurado continua exigido como camada extra", async () => {
+    const s = await setup();
+    expect((await run(s, { secrets: [HMACSEC] })).status).toBe(401);
+    expect((await run(s, { secrets: [HMACSEC], signatureHeader: hmac("errado") })).status).toBe(
+      401,
+    );
+    expect((await run(s, { secrets: [HMACSEC], signatureHeader: hmac(HMACSEC) })).status).toBe(200);
+  });
+
+  it("HMAC válido sem path secret correto ainda é rejeitado", async () => {
+    const s = await setup();
+    expect(
+      (
+        await run(s, {
+          pathSecret: "x".repeat(40),
+          secrets: [HMACSEC],
+          signatureHeader: hmac(HMACSEC),
+        })
+      ).status,
+    ).toBe(404);
+  });
+
+  it("não expõe o path secret nem HMAC nas respostas", async () => {
+    const s = await setup();
+    const rs = [
+      await run(s, { pathSecret: "x".repeat(40) }),
+      await run(s, { expectedPathSecret: undefined }),
+      await run(s, { secrets: [HMACSEC] }),
+    ];
+    const text = JSON.stringify(rs);
+    expect(text).not.toContain(PATH_SECRET);
+    expect(text).not.toContain(HMACSEC);
+  });
+
+  it("pathSecretMatches usa timingSafeEqual", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(new URL("./autentique-webhook.ts", import.meta.url), "utf8");
+    expect(src).toMatch(/pathSecretMatches[\s\S]*timingSafeEqual/);
   });
 });

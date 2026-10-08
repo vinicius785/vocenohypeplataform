@@ -1,22 +1,42 @@
-import { parseAutentiqueEvent, verifyAutentiqueSignature } from "./autentique-webhook";
+import {
+  MIN_PATH_SECRET_LENGTH,
+  parseAutentiqueEvent,
+  pathSecretMatches,
+  verifyAutentiqueSignatureAny,
+} from "./autentique-webhook";
 import { processAutentiqueEvent, type ContractRepo } from "./influencer-contract-service";
 import type { SignatureProvider } from "./signature-provider";
 
 export type WebhookResult = { status: number; body: string | { ok: true; outcome: string } };
 
 /**
- * Lógica do endpoint, sem I/O de framework: segredo → HMAC sobre o corpo CRU → parse →
- * processamento idempotente. 5xx em falha transitória faz o Autentique reenviar.
- * `getDeps` só é chamado depois da assinatura válida (nada de banco/provedor para requisição forjada).
+ * Lógica do endpoint, sem I/O de framework. Ordem: método POST → segredo do CAMINHO (autenticação
+ * obrigatória; o Dashboard público do Autentique não entrega secret HMAC) → HMAC sobre o corpo CRU,
+ * só se houver secrets HMAC configurados (camada extra) → parse → processamento idempotente.
+ * O processamento nunca confia no payload para definir estado: reconcilia com o Autentique.
+ * 5xx em falha transitória faz o Autentique reenviar. `getDeps` só roda após a autenticação.
  */
 export async function handleAutentiqueWebhook(input: {
+  method: string;
+  /** Segredo recebido no caminho da URL. */
+  pathSecret: string | undefined;
+  /** AUTENTIQUE_WEBHOOK_PATH_SECRET; ausente ou curto = erro de configuração. */
+  expectedPathSecret: string | undefined;
   rawBody: string;
   signatureHeader: string | null;
-  secret: string | undefined;
+  /** Secrets HMAC opcionais dos endpoints do Autentique; vazio = não exigir HMAC. */
+  secrets: readonly string[];
   getDeps: () => Promise<{ repo: ContractRepo; provider: SignatureProvider }>;
 }): Promise<WebhookResult> {
-  if (!input.secret) return { status: 500, body: "Webhook not configured" };
-  if (!verifyAutentiqueSignature(input.rawBody, input.signatureHeader, input.secret))
+  if (input.method.toUpperCase() !== "POST") return { status: 405, body: "Method not allowed" };
+  if (!input.expectedPathSecret || input.expectedPathSecret.length < MIN_PATH_SECRET_LENGTH)
+    return { status: 500, body: "Webhook not configured" };
+  if (!pathSecretMatches(input.pathSecret, input.expectedPathSecret))
+    return { status: 404, body: "Not found" };
+  if (
+    input.secrets.length > 0 &&
+    !verifyAutentiqueSignatureAny(input.rawBody, input.signatureHeader, input.secrets)
+  )
     return { status: 401, body: "Unauthorized" };
 
   let json: unknown;

@@ -99,7 +99,8 @@ Uma tabela nova `contratos_influenciador` (o domínio não existe hoje; não dá
 
 ```
 AUTENTIQUE_API_TOKEN=          # servidor apenas
-AUTENTIQUE_WEBHOOK_SECRET=     # segredo do endpoint de webhook
+AUTENTIQUE_WEBHOOK_SECRET_DOCUMENT=   # secret do endpoint "VNH - Contratos - Documento"
+AUTENTIQUE_WEBHOOK_SECRET_SIGNATURE=  # secret do endpoint "VNH - Contratos - Assinatura"
 ```
 
 Documentadas em `.env.example` (sem valores). Nunca em código, log, commit ou frontend.
@@ -251,8 +252,24 @@ signatário do contrato. A identidade dessa assinatura continua **não determina
 
 **Estado:** `aguardando|parcial|assinado|recusado|cancelado`, calculado só por `snapshotFromDocument` → `deriveDocumentState` sobre os signatários esperados (e-mail normalizado). Recusa vence; `viewed` e `files.signed` nunca decidem; assinatura extra nunca vira signatário nem altera estado. O webhook não confia no tipo do evento: sempre reconcilia com `getDocument(externalId, expectedEmails)`, então eventos fora de ordem convergem.
 
-**Webhook** `POST /api/webhooks/autentique` (`AUTENTIQUE_WEBHOOK_SECRET`): segredo configurado → HMAC-SHA256 do corpo cru (401 se inválido) → parse (400) → processamento idempotente. Relevantes: `document.finished`, `signature.accepted`, `signature.rejected`; os demais só são registrados. Documento desconhecido: registrado, 200. Todo evento de documento conhecido reconcilia pelo snapshot (`getDocument` com os e-mails esperados): o `object.id` do evento NÃO é assumido igual ao `public_id` da consulta (nunca visto em payload real); `external_signature_id` fica só para diagnóstico e assinaturas extras nunca entram no estado. Falha transitória: 500 e `processado_at` nulo, o retry do Autentique reprocessa o mesmo `event_id`. Duplicata já concluída: 200 sem reprocessar.
+**Webhook** `POST /api/webhooks/autentique` (`AUTENTIQUE_WEBHOOK_SECRET_DOCUMENT` / `AUTENTIQUE_WEBHOOK_SECRET_SIGNATURE`): segredo configurado → HMAC-SHA256 do corpo cru (401 se inválido) → parse (400) → processamento idempotente. Relevantes: `document.finished`, `signature.accepted`, `signature.rejected`; os demais só são registrados. Documento desconhecido: registrado, 200. Todo evento de documento conhecido reconcilia pelo snapshot (`getDocument` com os e-mails esperados): o `object.id` do evento NÃO é assumido igual ao `public_id` da consulta (nunca visto em payload real); `external_signature_id` fica só para diagnóstico e assinaturas extras nunca entram no estado. Falha transitória: 500 e `processado_at` nulo, o retry do Autentique reprocessa o mesmo `event_id`. Duplicata já concluída: 200 sem reprocessar.
 
 **Criação** (`createInfluencerContract`, só serviço, sem UI): grava a linha antes da chamada externa (barra duplo envio), nome do documento `VNH-<id>`; erro definitivo cancela a linha; timeout/indisponível (ambíguo) mantém pendente para reconciliação; falha de persistência após o envio gera `ContractPersistError` com o id externo (uma nova tentativa antes). `reconcileContract` repara contrato/eventos perdidos sob demanda (sem polling).
 
 **Limitações:** sem job de reconciliação de órfãos; a resposta de criação traz ids/links de assinatura e a de consulta não, por isso os ids de assinatura são gravados na criação e completados na reconciliação; identidade da 3ª assinatura segue ignorada. Evidências dos dois smoke tests: §17–19.
+
+
+## 21. Secrets de webhook por endpoint
+
+O `createEndpoint` do Autentique gera um secret **por endpoint** e só o mostra na criação. Cadastramos dois endpoints para a mesma URL (`VNH - Contratos - Documento`: `document.finished`; `VNH - Contratos - Assinatura`: `signature.accepted`, `signature.rejected`). A rota valida o HMAC-SHA256 hex do corpo **cru** contra **cada** secret configurado (`AUTENTIQUE_WEBHOOK_SECRET_DOCUMENT`, `AUTENTIQUE_WEBHOOK_SECRET_SIGNATURE`) e aceita se qualquer um bater (comparação em tempo constante; todos os secrets são avaliados). Sem nenhum configurado: 500 (erro de configuração, nunca "válido"). A autenticação não usa o nome do endpoint nem nada do payload. O antigo `AUTENTIQUE_WEBHOOK_SECRET` foi removido, sem fallback: se ainda estiver na Vercel, é ignorado.
+
+## 22. Autenticação do webhook por segredo no caminho
+
+O Dashboard público do Autentique cadastra os endpoints normais **sem** expor o secret HMAC, e `createEndpoint` não existe na API v2 pública deste token (`Cannot query field createEndpoint on type Mutation`; o endpoint Corporate responde `no_enterprise_access`). Por isso o HMAC sozinho não é viável e a autenticação obrigatória passou a ser um segredo no caminho:
+
+`POST /api/webhooks/autentique/<AUTENTIQUE_WEBHOOK_PATH_SECRET>` (arquivo `src/routes/api/webhooks/autentique.$secret.ts`; a rota sem segredo deixou de existir → 404).
+
+- `AUTENTIQUE_WEBHOOK_PATH_SECRET`: aleatório de alta entropia (mínimo 32 caracteres; menos que isso é erro de configuração, 500). Gerar, por exemplo, com `openssl rand -hex 32`. Só em variável de ambiente; a URL completa vai no Dashboard do Autentique e deve ser tratada como credencial (não colar em logs, chats ou commits).
+- Ordem: método POST (405) → segredo do caminho em tempo constante (404 se ausente/incorreto, sem tocar em banco nem provedor) → HMAC **somente se** `AUTENTIQUE_WEBHOOK_SECRET_DOCUMENT`/`_SIGNATURE` estiverem configurados (camada extra; 401) → parse → reconciliação existente.
+- O payload nunca define estado: o contrato é reconciliado com o Autentique (`getDocument` nos e-mails esperados), então um POST forjado só dispara uma consulta, sem poder inventar status. Idempotência, fora de ordem e snapshot não mudaram.
+- Limitação: segredo em URL pode aparecer em logs de proxy/CDN; por isso é rotacionável (trocar a variável e a URL no Dashboard). Deixe os secrets HMAC **sem configurar** enquanto não houver um valor real deles, para não bloquear o endpoint.
