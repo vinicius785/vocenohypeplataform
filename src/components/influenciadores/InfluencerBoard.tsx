@@ -1,3 +1,4 @@
+import { pickCardContext, type CardContext } from "./influ-card-context";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { barWidth } from "@/lib/audience-distribution";
 import { ensureCampaignCycleId } from "@/lib/campaign-cycles";
@@ -1486,7 +1487,7 @@ function InfluCard({
         ? { status: "reprovado", motivo: influ.clienteReprovacao?.motivo }
         : undefined;
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
-  const totalPago = totalAceito(influ.pagamento);
+  const totalPago = has("pagamentos") ? totalAceito(influ.pagamento) : 0;
   const overdueDays = approvalSlaOverdueDays(influ);
   const elegivel = isInfluencerEligibleForDeliveries(influ.status);
   const producao = has("entregas") && elegivel ? producaoResumo(influ.entregas) : null;
@@ -1503,11 +1504,27 @@ function InfluCard({
   const motivoRecusa = approval?.status === "reprovado" ? approval.motivo : undefined;
   const budget = firstCurrencyResposta(influ.inscricaoRespostas);
 
+  const context = pickCardContext({
+    overdueDays,
+    motivoRecusa,
+    producao: producao ? { publicadas: producao.publicadas, total: producao.total } : null,
+    proximaPostagem,
+    totalPago,
+    budget,
+  });
+  const actor = nextActionForInflu(influ.status);
+  const principalRede = has("redes")
+    ? (() => {
+        const resolved = ensurePrimary(influ.redes);
+        return resolved.find((r) => r.isPrimary) ?? resolved[0];
+      })()
+    : undefined;
+  const extraRedes = has("redes") ? Math.max(0, ensurePrimary(influ.redes).length - 1) : 0;
+
   return (
-    // Card denso (refatoração da Home da campanha): identidade + status +
-    // UMA linha de dados operacionais (conteúdo, valor, próxima postagem),
-    // sem empilhar 3 faixas com bordas. O card inteiro é clicável via
-    // <article role="button">; cada ação interna para a propagação.
+    // Card de TRIAGEM: identidade → estado → contexto operacional. Quem é, em que estado está e o que
+    // precisa acontecer agora. NPS, contrato e detalhes de entrega ficam no detalhe/menu `…`.
+    // O card inteiro é clicável (<article role="button">); cada controle interno para a propagação.
     <article
       role="button"
       tabIndex={0}
@@ -1521,38 +1538,36 @@ function InfluCard({
       aria-label={`Ver detalhes de ${influ.nome || "influenciador"}`}
       className="flex w-full cursor-pointer flex-col rounded-xl border border-border/60 bg-background transition-colors hover:border-foreground/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
     >
-      <div className="flex items-start gap-3 p-3 pb-2">
-        <div className="relative h-10 w-10 shrink-0">
-          <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
-            {influ.foto ? (
-              <img src={influ.foto} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <User className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
-            )}
-          </div>
+      {/* 1. Identidade */}
+      <div className="flex items-start gap-3 p-4 pb-3">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
+          {influ.foto ? (
+            <img src={influ.foto} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <User className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
+          )}
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-foreground">
             {influ.nome || "Sem nome"}
           </p>
-          <div className="flex min-w-0 items-center gap-x-1.5 text-xs text-muted-foreground">
+          <div className="mt-0.5 flex min-w-0 items-center gap-x-1.5 text-xs text-muted-foreground">
             {has("redes") &&
-              (() => {
-                const resolved = ensurePrimary(influ.redes);
-                const principal = resolved.find((r) => r.isPrimary) ?? resolved[0];
-                const extra = resolved.length - 1;
-                if (!principal) return <span className="truncate">Sem rede cadastrada</span>;
-                const label = sanitizeHandleForDisplay(principal.plataforma, principal.handle);
-                return (
-                  <span className="inline-flex min-w-0 items-center gap-1">
-                    <span className="shrink-0">{platformIcon(principal.plataforma)}</span>
-                    <span className="truncate">@{label || principal.plataforma}</span>
-                    {extra > 0 && (
-                      <span className="shrink-0 text-[11px] font-medium">+{extra}</span>
-                    )}
+              (principalRede ? (
+                <span className="inline-flex min-w-0 items-center gap-1">
+                  <span className="shrink-0">{platformIcon(principalRede.plataforma)}</span>
+                  <span className="truncate">
+                    @
+                    {sanitizeHandleForDisplay(principalRede.plataforma, principalRede.handle) ||
+                      principalRede.plataforma}
                   </span>
-                );
-              })()}
+                  {extraRedes > 0 && (
+                    <span className="shrink-0 text-[11px] font-medium">+{extraRedes}</span>
+                  )}
+                </span>
+              ) : (
+                <span className="truncate">Sem rede cadastrada</span>
+              ))}
             {influ.nicho && has("redes") && <span aria-hidden>·</span>}
             {influ.nicho && <span className="truncate">{influ.nicho}</span>}
           </div>
@@ -1565,7 +1580,7 @@ function InfluCard({
               onClick={stop}
               onKeyDown={stop}
               aria-label={`Mais ações para ${influ.nome || "influenciador"}`}
-              className="relative z-10 -m-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              className="relative z-10 -m-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
             >
               <MoreVertical className="h-4 w-4" />
             </button>
@@ -1575,6 +1590,13 @@ function InfluCard({
             {npsLink && (
               <DropdownMenuItem onSelect={() => nps?.onCopyLink(influ.id)}>
                 Copiar link NPS
+              </DropdownMenuItem>
+            )}
+            {has("contrato") && influ.contrato && (
+              <DropdownMenuItem asChild>
+                <a href={influ.contrato} download>
+                  Baixar contrato
+                </a>
               </DropdownMenuItem>
             )}
             <DropdownMenuItem
@@ -1587,104 +1609,88 @@ function InfluCard({
         </DropdownMenu>
       </div>
 
+      {/* 2. Estado atual: um status (único selo) + quem age agora, em texto */}
       {has("status") && (
         <div
-          className="flex flex-wrap items-center gap-1.5 px-3 pb-2"
+          className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 pb-3"
           onClick={stop}
           onKeyDown={stop}
         >
           <InfluStatusPill value={influ.status} onChange={onStatus} />
-          <NextActionBadge actor={nextActionForInflu(influ.status)} />
-          {npsLink && (
-            <span className="text-[11px] text-muted-foreground">
-              NPS · {npsLink.respondido ? `Respondido · ${npsLink.score}` : "Link disponível"}
-            </span>
-          )}
-          {budget ? (
-            <span
-              className="ml-auto text-[11px] font-medium text-foreground"
-              title="Valor informado na inscrição"
-            >
-              {formatBRL(budget)}
-            </span>
-          ) : null}
+          <NextActionBadge actor={actor} />
         </div>
       )}
 
-      {(overdueDays || motivoRecusa) && (
-        <div className="space-y-1 px-3 pb-2">
-          {overdueDays ? (
-            <p className="flex items-center gap-1 text-[11px] font-medium text-amber-700 dark:text-amber-400">
-              <AlertTriangle className="h-3 w-3 shrink-0" /> Aguardando aprovação há {overdueDays}{" "}
-              dias
-            </p>
-          ) : null}
-          {motivoRecusa ? (
-            <p
-              className="line-clamp-2 text-[11px] text-red-700 dark:text-red-400"
-              title={motivoRecusa}
-            >
-              <span className="font-medium">Motivo da recusa:</span> {motivoRecusa}
-            </p>
-          ) : null}
-        </div>
-      )}
-
-      {(producao ||
-        (has("entregas") && !elegivel) ||
-        has("pagamentos") ||
-        (has("contrato") && influ.contrato)) && (
-        <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/40 px-3 py-1.5 text-[11px] text-muted-foreground">
-          {producao && producao.total > 0 && (
-            <span className="inline-flex items-center gap-1.5">
-              <span className="font-medium tabular-nums text-foreground/80">
-                Conteúdo {producao.publicadas}/{producao.total}
-              </span>
-              publicados
-              <span
-                className="h-1 w-10 overflow-hidden rounded-full bg-muted"
-                role="progressbar"
-                aria-label={`${producao.publicadas} de ${producao.total} conteúdos publicados`}
-                aria-valuenow={producao.publicadas}
-                aria-valuemin={0}
-                aria-valuemax={producao.total}
-              >
-                <span
-                  className="block h-full rounded-full bg-brand"
-                  style={{ width: `${Math.round((producao.publicadas / producao.total) * 100)}%` }}
-                />
-              </span>
-            </span>
-          )}
-          {producao && producao.total === 0 && <span>Sem entregas cadastradas</span>}
-          {has("entregas") && !elegivel && <span>Não elegível para entregas</span>}
-          {proximaPostagem && (
-            <span>
-              Próxima postagem ·{" "}
-              <span className="font-medium text-foreground/80">{fmtDate(proximaPostagem)}</span>
-            </span>
-          )}
-          {has("pagamentos") && (
-            <span className="ml-auto">
-              Valor{" "}
-              <span className="font-medium text-foreground/80">
-                {totalPago > 0 ? fmtBRL(totalPago) : "—"}
-              </span>
-            </span>
-          )}
-          {has("contrato") && influ.contrato && (
-            <a
-              href={influ.contrato}
-              download
-              onClick={stop}
-              className="underline underline-offset-2 hover:text-foreground"
-            >
-              Contrato
-            </a>
-          )}
-        </div>
-      )}
+      {/* 3. Contexto operacional: a informação mais útil para ESTE estado (altura reservada) */}
+      <div className="mt-auto flex min-h-9 items-center justify-between gap-3 px-4 pb-3 text-xs text-muted-foreground">
+        <CardPrimaryLine primary={context.primary} />
+        <CardSecondaryInfo secondary={context.secondary} />
+      </div>
     </article>
+  );
+}
+
+function CardPrimaryLine({ primary }: { primary: CardContext["primary"] }) {
+  if (!primary) return <span />;
+  if (primary.kind === "aguardando") {
+    return (
+      <span className="inline-flex min-w-0 items-center gap-1.5 font-medium text-amber-700 dark:text-amber-400">
+        <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        <span className="truncate">Aguardando aprovação · há {primary.days} dias</span>
+      </span>
+    );
+  }
+  if (primary.kind === "recusa") {
+    return (
+      <span className="line-clamp-1 min-w-0 text-red-700 dark:text-red-400" title={primary.motivo}>
+        Recusa: {primary.motivo}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex min-w-0 flex-1 items-center gap-2">
+      <span className="truncate">
+        <span className="font-medium tabular-nums text-foreground/80">
+          {primary.publicadas}/{primary.total}
+        </span>{" "}
+        {primary.total === 1 ? "publicado" : "publicados"}
+      </span>
+      <span
+        className="h-1 w-10 shrink-0 overflow-hidden rounded-full bg-muted"
+        role="progressbar"
+        aria-label={`${primary.publicadas} de ${primary.total} conteúdos publicados`}
+        aria-valuenow={primary.publicadas}
+        aria-valuemin={0}
+        aria-valuemax={primary.total}
+      >
+        <span
+          className="block h-full rounded-full bg-brand"
+          style={{ width: `${Math.round((primary.publicadas / primary.total) * 100)}%` }}
+        />
+      </span>
+    </span>
+  );
+}
+
+function CardSecondaryInfo({ secondary }: { secondary: CardContext["secondary"] }) {
+  if (!secondary) return null;
+  if (secondary.kind === "proxima") {
+    return (
+      <span className="shrink-0" title={`Próxima postagem em ${fmtDate(secondary.data)}`}>
+        Próxima ·{" "}
+        <span className="font-medium text-foreground/80">
+          {fmtDate(secondary.data).slice(0, 5)}
+        </span>
+      </span>
+    );
+  }
+  return (
+    <span
+      className="shrink-0 font-medium tabular-nums text-foreground/80"
+      title={secondary.origem === "acordado" ? "Valor acordado" : "Valor informado na inscrição"}
+    >
+      {fmtBRL(secondary.amount)}
+    </span>
   );
 }
 
@@ -1892,18 +1898,13 @@ function InfluStatusPill({
  * saber onde está o gargalo (Hype/Cliente/Influenciador). */
 function NextActionBadge({ actor }: { actor: NextActor }) {
   if (!actor) return null;
-  const tone: Record<Exclude<NextActor, null>, string> = {
-    // Azul só quando a bola está com o time (é a nossa ação); cliente e
-    // influenciador são só contexto, em neutro.
-    hype: "bg-brand-subtle text-text-brand",
-    cliente: "bg-muted text-muted-foreground",
-    influenciador: "bg-muted text-muted-foreground",
-  };
+  // Texto, não selo: o único selo do card é o status. Azul só quando a bola está com o time.
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${tone[actor]}`}
+      className={`inline-flex items-center gap-1.5 text-xs ${
+        actor === "hype" ? "font-medium text-text-brand" : "text-muted-foreground"
+      }`}
     >
-      <span className="h-1.5 w-1.5 rounded-full bg-current" />
       Próxima ação: {NEXT_ACTOR_LABEL[actor]}
     </span>
   );

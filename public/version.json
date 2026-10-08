@@ -1,6 +1,26 @@
 {
-  "version": "1.380.0",
+  "version": "1.381.0",
   "releases": [
+    {
+      "version": "1.381.0",
+      "summary": "Campanhas: cards de influenciadores mais limpos, para triagem rápida.",
+      "modules": [
+        {
+          "name": "CAMPANHAS",
+          "tagline": "Influenciadores",
+          "items": [
+            {
+              "title": "Card em três níveis",
+              "description": "Quem é, em que estado está e quem age agora. Só aparece o contexto que ajuda a decidir (aguardando aprovação, progresso de conteúdo, próxima postagem ou valor)."
+            },
+            {
+              "title": "Menos ruído",
+              "description": "NPS, contrato e mensagens como “não elegível para entregas” saíram do card. O link de NPS e o contrato continuam no menu ⋯."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.380.0",
       "summary": "Primeiro acesso do cliente: o link do convite agora leva direto à criação de senha.",
