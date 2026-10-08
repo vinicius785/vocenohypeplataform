@@ -78,3 +78,44 @@ Dimensão sem dado sai do cálculo e as demais são escaladas para 100; sem nenh
 - **Atribuição**: responsável principal, ou todos os responsáveis se não houver principal (mesma regra da conclusão).
 - **Pontos** = % sem ajustes × 10, com mínimo de 3 tarefas avaliáveis (senão a dimensão fica sem dados). Mede o fluxo de aprovação, não a qualidade de quem entrega.
 - Tarefas antigas sem registro de atividade não são avaliáveis. Entregas de influenciador (etapas/feedback do cliente) têm outro motor e não entram aqui.
+
+## Insights por tarefa (`team-insights-tasks.ts`)
+Complementam `team-insights-v2.ts` com regras sobre as próprias tarefas (`DashTaskFlat`), sem consulta
+nem fonte nova; entram no mesmo ranking (`selectTeamInsights`: 1 insight por pessoa e tema, máx. 12).
+"No prazo" usa `classifyOutcome` e o prazo **vigente** (`performanceDueDate ?? dueDate`), então
+replanejamento antes de vencer não vira atraso e o prazo original não é referência.
+
+| Regra | Dispara quando | Amostra mínima | Observação |
+|---|---|---|---|
+| `reincidencia_atraso` | ≥ 4 das últimas 5 conclusões (60 dias) passaram do prazo vigente | 5 conclusões | Compara com as 5 anteriores; se já era igual ou pior antes, não repete o alerta |
+| `risco_acumulo` | ≥ 3 vencidas **sem bloqueio** + ≥ 3 prazos nos próximos 3 dias; ou ≥ 3 críticas (Alta/Urgente) próximas com vencida ou ≥ 3 atrasos recentes | — | Bloqueadas ficam fora da conta; quantidade sozinha não alerta |
+| `concentracao_criticas` | ≥ 70% das críticas (abertas + concluídas em 30 dias) numa pessoa | 6 críticas, 3 pessoas | Risco operacional, com ressalva de que pode ser a função da pessoa |
+| `bloqueios_externos` | ≥ 3 abertas bloqueadas por cliente/fornecedor/aprovação/informação | 3 | Problema de processo, sem pessoa |
+| `aprovacoes_acumuladas` | ≥ 6 e ≥ 25% das abertas em "Em aprovação" | 6 | Não há data de entrada em aprovação |
+
+Limiares em `TASK_INSIGHT_THRESHOLDS`. **Sem suporte hoje (dados inexistentes):** retrabalho
+reincidente na mesma tarefa e causa por briefing (o histórico de "Em ajustes" só existe agregado),
+mudança recorrente de prioridade (sem histórico), prazo incompatível com o histórico (sem
+estimativa) e tempo na fila de aprovação (sem data de entrada).
+
+### Calibração dos limiares (estado: PROVISÓRIO)
+Nenhum limiar de `TASK_INSIGHT_THRESHOLDS` nem de `TEAM_INSIGHT_THRESHOLDS` foi calibrado com dados
+reais. O projeto não tem ambiente de desenvolvimento/teste com dados (há um único Supabase, o de
+produção, que não foi consultado para isso), nem seeds ou fixtures. Os valores são heurísticas
+iniciais, escolhidas para exigir amostra mínima e evitar alertas por evento isolado; os testes
+provam **como** cada regra reage a cenários construídos, não que os cortes sejam os ideais.
+
+Para calibrar depois é preciso, por regra, uma distribuição observada (por pessoa, por mês):
+- `reincidencia_atraso`: nº de conclusões por pessoa nos últimos 60 dias (se a maioria tem < 5, a regra quase nunca dispara) e a taxa de atraso típica do time;
+- `risco_acumulo`: distribuição de vencidas e de prazos nos próximos 3 dias por pessoa;
+- `concentracao_criticas`: nº de tarefas Alta/Urgente por mês e quantas pessoas as recebem (se prioridade alta for o padrão, a regra perde sentido);
+- `bloqueios_externos` / `aprovacoes_acumuladas`: contagem semanal de bloqueios por motivo e de tarefas em "Em aprovação".
+Ajustar apenas por essa evidência, nunca para "fazer mais insights aparecerem".
+
+### Verificação do tempo útil (SQL)
+`business_seconds_between` (versão v2, `20261005110000_business_hours_weekends_holidays.sql`: 09:00–19:00,
+`America/Sao_Paulo`, sem fins de semana nem feriados de `agency_holidays`) só pode ser exercitada no
+Postgres. O repositório não tem infraestrutura de teste de banco (sem pgTAP, sem Postgres local). O
+script `docs/development/business-seconds-verificacao.sql` roda só `SELECT`s com valores esperados
+calculados à mão e deve ser executado no SQL Editor; até alguém rodá-lo, a regra está **lida, não
+testada**.

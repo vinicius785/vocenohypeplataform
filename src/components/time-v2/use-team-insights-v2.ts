@@ -11,6 +11,7 @@ import {
   newTaskCounts,
 } from "./team-metrics";
 import { useTeamResponseTime } from "./use-response-time";
+import { buildTaskInsightSignals, generateTaskInsights } from "./team-insights-tasks";
 import {
   generateTeamInsights,
   selectTeamInsights,
@@ -87,6 +88,24 @@ export function useTeamInsightsV2(
         },
       },
     );
-    return selectTeamInsights(all);
-  }, [bundles, allTasksFlat, deps, respCur.data, respPrev.data, cur, prev]);
+    const taskInsights = generateTaskInsights(
+      buildTaskInsightSignals(
+        allTasksFlat.map((t) => ({
+          id: t.id,
+          title: t.title,
+          status: t.status,
+          priority: t.priority,
+          dueISO: t.dueISO,
+          completedAt: t.completedAt,
+          bucket: t.bucket,
+          blockCategory: t.blockCategory,
+          deadlinePaused: t.deadlinePaused,
+          assigneeIds: t.assignees.map(resolve).filter((x): x is string => !!x),
+        })),
+        bundles.map((b) => ({ id: b.memberId, name: b.memberName })),
+        today,
+      ),
+    );
+    return selectTeamInsights([...all, ...taskInsights]);
+  }, [bundles, allTasksFlat, deps, respCur.data, respPrev.data, cur, prev, today]);
 }

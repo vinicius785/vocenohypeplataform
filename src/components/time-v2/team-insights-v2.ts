@@ -154,7 +154,7 @@ export type TeamInsightsInput = {
 const pct = (v: number, total: number) => (total > 0 ? Math.round((v / total) * 100) : 0);
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const first = (name: string) => name.split(" ")[0];
-const mk = (
+export const mk = (
   i: Omit<TeamInsightV2, "id" | "weight" | "topic" | "rank"> & {
     weight?: number;
     topic?: string;

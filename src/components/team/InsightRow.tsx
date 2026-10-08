@@ -37,7 +37,7 @@ export function InsightRow({
           <span className={`shrink-0 text-[11px] font-medium ${cat.className}`}>{label}</span>
         </div>
         <p className="mt-0.5 text-[13px] leading-snug text-foreground">{insight.evidence}</p>
-        <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-text-secondary">
+        <p className="mt-0.5 text-xs leading-snug text-text-secondary md:line-clamp-2">
           {insight.reading}
         </p>
         {insight.window && (
