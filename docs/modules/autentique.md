@@ -194,3 +194,23 @@ nenhum dos dois signatários que enviamos (o `**null**` do relato é só o papel
 "signatário sem nome" por definição; a hipótese a confirmar é que o Autentique inclui também o dono
 da conta/token. O smoke agora imprime nome, e-mail mascarado, ação e se há conta; `--raw` mostra a
 resposta GraphQL crua com e-mail, telefone e links mascarados.
+
+## 18. Segundo teste real (sandbox) — ponta a ponta OK; 3ª assinatura ainda SEM identificação
+
+Observado no smoke test, **somente o que a saída impressa mostrou**:
+
+- Passos 1 e 2 concluídos: documento criado em sandbox e consultado; estado derivado `aguardando`;
+  em todas as assinaturas `viewed=false`, `signed=false`, `rejected=false`; `--keep` manteve o documento.
+- `createDocument` devolveu **3 assinaturas**, nesta ordem: (1) papel `null`, (2) `CONTRATADO`,
+  (3) `CONTRATANTE`. Os `public_id` são sequenciais no tempo (`eb4e5d99…`, `eb57b482…`, `eb613551…`),
+  ou seja, a de papel `null` foi criada **primeiro**, antes das duas que enviamos.
+- O cliente envia **exatamente dois** signatários (`CONTRATADO` e `CONTRATANTE`, nesta ordem, com
+  `sortable: true`); os dois voltaram casados por e-mail com esses papéis. Nada foi acrescentado.
+
+**Em aberto (sem evidência):** nome, e-mail, `user.id`, `action` e a natureza da assinatura de papel
+`null` (dono da conta/token ou registro técnico do documento). A saída `--raw` completa **não foi
+anexada** a esta análise, e não existe cópia dela no repositório; nada foi concluído por suposição.
+Para fechar: rodar `bun scripts/autentique-sandbox-smoke.ts --raw --keep` e registrar aqui os campos
+mascarados da assinatura de papel `null`. Até lá, **não tratar essa assinatura como signatário do
+contrato**: a lógica de contratos deve considerar apenas as assinaturas casadas por e-mail com os
+dois signatários enviados.
