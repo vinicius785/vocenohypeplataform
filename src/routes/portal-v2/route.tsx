@@ -12,6 +12,7 @@ import {
   PortalSessionDataProvider,
   type PortalSessionData,
 } from "@/components/portal/portal-session-context";
+import { PortalOnboardingGate } from "@/features/client-portal-v2/components/onboarding/PortalOnboardingGate";
 import { PortalV2Shell } from "@/features/client-portal-v2/layouts/PortalV2Shell";
 import { RealPortalRuntime } from "@/features/client-portal-v2/runtime/real-runtime";
 import { NpsForm, NpsGateError } from "@/features/client-portal-v2/components/PendingNpsGate";
@@ -162,9 +163,11 @@ function PortalV2Layout() {
   return (
     <RealPortalRuntime>
       <PortalSessionDataProvider initialData={clienteData}>
-        <PortalV2Shell>
-          <Outlet />
-        </PortalV2Shell>
+        <PortalOnboardingGate>
+          <PortalV2Shell>
+            <Outlet />
+          </PortalV2Shell>
+        </PortalOnboardingGate>
       </PortalSessionDataProvider>
     </RealPortalRuntime>
   );

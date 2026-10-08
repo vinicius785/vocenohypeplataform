@@ -3,17 +3,10 @@ import { toast } from "sonner";
 import { Camera, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  avatarValidationMessage,
-  extensionForType,
-  sniffImageType,
-  validateAvatarFile,
-} from "../../lib/avatar-upload";
+import { checkAvatarFile, uploadClientAvatar } from "../../lib/avatar-upload-client";
 import { initialsFromName, useClientProfile } from "../../lib/client-profile";
 import { useConfirm } from "@/hooks/use-confirm";
 import { ClientAvatarCropDialog } from "./ClientAvatarCropDialog";
-
-const SIGNED_URL_TTL = 60 * 60 * 24 * 365; // 1 ano — mesmo padrão já usado pelo time (PerfilSection.tsx)
 
 /**
  * Avatar do Portal V2 — mesmo bucket `avatars` e mesmo padrão de path
@@ -37,11 +30,9 @@ export function ClientAvatarUploader({ name, roleLabel }: { name: string; roleLa
 
   const onPick = async (file: File | null) => {
     if (!file || busy) return;
-    const bytes = new Uint8Array(await file.slice(0, 32).arrayBuffer());
-    const sniffed = sniffImageType(bytes);
-    const error = validateAvatarFile(file.size, sniffed);
+    const error = await checkAvatarFile(file);
     if (error) {
-      toast.error(avatarValidationMessage(error));
+      toast.error(error);
       return;
     }
     setPendingFile(file);
@@ -52,24 +43,7 @@ export function ClientAvatarUploader({ name, roleLabel }: { name: string; roleLa
     setCropOpen(false);
     setBusy(true);
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("Sessão expirada.");
-      const path = `${user.id}/avatar.${extensionForType("image/jpeg")}`;
-      const { error: uploadError } = await supabase.storage
-        .from("avatars")
-        .upload(path, blob, { upsert: true, contentType: "image/jpeg" });
-      if (uploadError) throw uploadError;
-      const { data: signed, error: signedError } = await supabase.storage
-        .from("avatars")
-        .createSignedUrl(path, SIGNED_URL_TTL);
-      if (signedError) throw signedError;
-      const { error: dbError } = await supabase
-        .from("profiles")
-        .update({ photo_url: signed.signedUrl })
-        .eq("id", user.id);
-      if (dbError) throw dbError;
+      await uploadClientAvatar(blob);
       await invalidate();
       toast.success("Foto de perfil atualizada.");
     } catch (err) {

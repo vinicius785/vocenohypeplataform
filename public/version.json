@@ -1,6 +1,22 @@
 {
-  "version": "1.382.0",
+  "version": "1.383.0",
   "releases": [
+    {
+      "version": "1.383.0",
+      "summary": "Portal do cliente: no primeiro acesso, um modal rápido confirma nome, telefone e foto.",
+      "modules": [
+        {
+          "name": "PORTAL DO CLIENTE",
+          "tagline": "Primeiro acesso",
+          "items": [
+            {
+              "title": "Complete seu perfil",
+              "description": "Quem entra pela primeira vez confirma o nome, informa o telefone e pode adicionar uma foto antes de usar o portal. Se sair no meio, o modal volta no próximo acesso; depois de concluído, não aparece mais."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.382.0",
       "summary": "Cofre de senhas: nova grade de credenciais, detalhe de leitura e formulário mais claro.",
