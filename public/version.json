@@ -1,6 +1,26 @@
 {
-  "version": "1.381.0",
+  "version": "1.382.0",
   "releases": [
+    {
+      "version": "1.382.0",
+      "summary": "Cofre de senhas: nova grade de credenciais, detalhe de leitura e formulário mais claro.",
+      "modules": [
+        {
+          "name": "CONFIGURAÇÕES",
+          "tagline": "Cofre de senhas",
+          "items": [
+            {
+              "title": "Grade de credenciais",
+              "description": "Cada acesso virou um cartão compacto com selo do serviço, categoria e usuário. A senha nunca aparece no cartão; busca e filtro de categoria ficam numa única linha."
+            },
+            {
+              "title": "Detalhe e formulário",
+              "description": "Ao abrir uma credencial você vê os dados em modo leitura, com a senha oculta até pedir para mostrar. O formulário de nova senha e de edição é o mesmo, em blocos curtos. Excluir agora pede confirmação."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.381.0",
       "summary": "Campanhas: cards de influenciadores mais limpos, para triagem rápida.",

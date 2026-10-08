@@ -1,18 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import {
-  Lock,
-  KeyRound,
-  ShieldCheck,
-  Clock,
-  Plus,
-  X,
-  Eye,
-  EyeOff,
-  Copy,
-  Pencil,
-  Search,
-} from "lucide-react";
+import { Lock, KeyRound, ShieldCheck, Clock, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -35,17 +23,12 @@ import { getVaultTotpStatus, enrollVaultTotp } from "@/lib/vault-totp.functions"
 import { MfaEnrollCard } from "./MfaEnrollCard";
 import { SettingsCard, SettingsSectionHeader } from "./settings-shared";
 import { NativeSelect } from "@/components/ui/native-select";
+import { toast } from "sonner";
+import { CATEGORIAS, DECRYPT_FAILED, filterSenhas, type Senha } from "./cofre/cofre-model";
+import { SenhaTile } from "./cofre/SenhaTile";
+import { SenhaDetail } from "./cofre/SenhaDetail";
+import { SenhaForm } from "./cofre/SenhaForm";
 
-type Senha = {
-  id: string;
-  nome: string;
-  categoria: string;
-  usuario: string;
-  senha: string;
-  encrypted?: boolean;
-  url?: string;
-  notas?: string;
-};
 const SENHAS_KEY = "config:senhas";
 const loadSenhas = (): Senha[] => {
   try {
@@ -55,9 +38,6 @@ const loadSenhas = (): Senha[] => {
     return [];
   }
 };
-
-const inputCls =
-  "h-9 w-full rounded-md border border-border bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring";
 
 export function SegurancaSection({ canConfig, isAdmin }: { canConfig: boolean; isAdmin: boolean }) {
   if (!canConfig) return <LockedSection title="Segurança" />;
@@ -371,7 +351,7 @@ function SenhasCard() {
         try {
           next[s.id] = await vaultDecrypt(s.senha);
         } catch {
-          next[s.id] = "⚠️ não foi possível descriptografar";
+          next[s.id] = DECRYPT_FAILED;
         }
       }
       if (!cancelled) setDecrypted(next);
@@ -386,16 +366,17 @@ function SenhasCard() {
     localStorage.setItem(SENHAS_KEY, JSON.stringify(next));
   };
 
-  const filtered = useMemo(
-    () =>
-      items.filter(
-        (s) =>
-          s.nome.toLowerCase().includes(query.toLowerCase()) ||
-          s.categoria.toLowerCase().includes(query.toLowerCase()) ||
-          s.usuario.toLowerCase().includes(query.toLowerCase()),
-      ),
-    [items, query],
-  );
+  const [categoria, setCategoria] = useState("");
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const { confirm, confirmDialog } = useConfirm();
+
+  const filtered = useMemo(() => filterSenhas(items, query, categoria), [items, query, categoria]);
+  const hasFilter = query.trim() !== "" || categoria !== "";
+
+  const copyValue = (value: string, what: string) => {
+    void navigator.clipboard?.writeText(value);
+    toast.success(`${what} copiado`);
+  };
 
   const save = async (s: Senha, plainSenha: string) => {
     const encryptedSenha = await vaultEncrypt(plainSenha);
@@ -409,36 +390,70 @@ function SenhasCard() {
     setEditing(null);
   };
 
-  const remove = (id: string) => persist(items.filter((x) => x.id !== id));
+  const requestRemove = async (s: Senha) => {
+    const ok = await confirm(`Excluir a credencial "${s.nome}"? Essa ação não pode ser desfeita.`, {
+      title: "Excluir senha?",
+      confirmLabel: "Excluir",
+      destructive: true,
+    });
+    if (!ok) return;
+    persist(items.filter((x) => x.id !== s.id));
+    if (detailId === s.id) setDetailId(null);
+  };
 
   if (!unlocked) {
     return <VaultUnlockCard onUnlock={() => setUnlocked(true)} isAdmin={isAdmin} />;
   }
 
+  const detail = items.find((x) => x.id === detailId) ?? null;
+  const plainOf = (s: Senha) => decrypted[s.id] ?? (s.encrypted ? undefined : s.senha);
+  const openNew = () => {
+    setEditing(null);
+    setOpen(true);
+  };
+  const openEdit = (s: Senha) => {
+    setDetailId(null);
+    setEditing(s);
+    setOpen(true);
+  };
+
   return (
-    <SettingsCard>
-      <div className="space-y-4">
-        {getVaultExpiry() !== null && <VaultExpiryBanner expiresAt={getVaultExpiry()!} />}
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative w-64 max-w-full">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar ferramenta ou rede social"
-              className="h-9 w-full rounded-md border border-border bg-background pl-8 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
-          <Button
-            type="button"
-            onClick={() => {
-              setEditing(null);
-              setOpen(true);
-            }}
-            className="ml-auto"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Nova senha
+    <div className="space-y-5">
+      {confirmDialog}
+      {getVaultExpiry() !== null && <VaultExpiryBanner expiresAt={getVaultExpiry()!} />}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[14rem] flex-1 sm:max-w-sm">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-secondary"
+            aria-hidden="true"
+          />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar ferramenta ou rede social"
+            aria-label="Buscar ferramenta ou rede social"
+            className="h-9 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-brand"
+          />
+        </div>
+        <NativeSelect
+          value={categoria}
+          onChange={(e) => setCategoria(e.target.value)}
+          aria-label="Filtrar por categoria"
+          className="w-auto min-w-[10rem]"
+          selectClassName="border-input bg-background shadow-none focus-visible:ring-2 focus-visible:ring-brand"
+        >
+          <option value="">Todas as categorias</option>
+          {CATEGORIAS.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </NativeSelect>
+        <div className="ml-auto flex items-center gap-1.5">
+          <Button type="button" variant="primary" onClick={openNew}>
+            <Plus className="h-3.5 w-3.5" /> Nova senha
           </Button>
           <IconButton
             label="Bloquear cofre"
@@ -450,51 +465,68 @@ function SenhasCard() {
             <Lock className="h-3.5 w-3.5" />
           </IconButton>
         </div>
+      </div>
 
-        <p className="text-[11px] text-muted-foreground">
-          Só admins têm acesso permanente. Cada senha fica criptografada com a chave do cofre — sem
-          ela, ninguém lê o conteúdo, nem quem tem acesso direto ao banco de dados. Quem não é admin
-          pode pedir acesso temporário de 10 minutos.
-        </p>
-
-        {filtered.length === 0 ? (
+      {filtered.length === 0 ? (
+        items.length === 0 ? (
           <EmptyState
             compact
             icon={<KeyRound className="h-5 w-5" />}
-            title={items.length === 0 ? "Nenhuma senha cadastrada" : "Nenhum resultado"}
+            title="Nenhuma credencial cadastrada"
+            description="Adicione uma senha para começar a organizar os acessos do workspace."
+            primaryAction={{ label: "Nova senha", onClick: openNew }}
           />
         ) : (
-          <div className="rounded-xl border border-border/60">
-            <div
-              className="hidden gap-4 border-b border-border/60 bg-muted/50 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid md:grid-cols-[minmax(0,1.3fr)_minmax(0,0.8fr)_minmax(0,1.3fr)_minmax(0,1.5fr)_88px]"
-              aria-hidden="true"
-            >
-              <span>Serviço</span>
-              <span>Tipo</span>
-              <span>Usuário</span>
-              <span>Senha</span>
-              <span className="text-right">Ações</span>
-            </div>
-            <ul className="divide-y divide-border/60">
-              {filtered.map((s) => (
-                <SenhaCard
-                  key={s.id}
-                  s={s}
-                  plainSenha={decrypted[s.id] ?? (s.encrypted ? "…" : s.senha)}
-                  onEdit={() => {
-                    setEditing(s);
-                    setOpen(true);
-                  }}
-                  onDelete={() => remove(s.id)}
-                />
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
+          <EmptyState
+            compact
+            icon={<Search className="h-5 w-5" />}
+            title="Nenhuma credencial encontrada"
+            description="Não encontramos uma ferramenta ou acesso com esse nome."
+            secondaryAction={
+              hasFilter
+                ? {
+                    label: "Limpar busca",
+                    onClick: () => {
+                      setQuery("");
+                      setCategoria("");
+                    },
+                  }
+                : undefined
+            }
+          />
+        )
+      ) : (
+        <ul className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          {filtered.map((s) => {
+            const plain = plainOf(s);
+            return (
+              <SenhaTile
+                key={s.id}
+                s={s}
+                canCopySenha={plain !== undefined && plain !== DECRYPT_FAILED}
+                onOpen={() => setDetailId(s.id)}
+                onEdit={() => openEdit(s)}
+                onDelete={() => void requestRemove(s)}
+                onCopyUsuario={() => copyValue(s.usuario, "Usuário")}
+                onCopySenha={() => plain && copyValue(plain, "Senha")}
+              />
+            );
+          })}
+        </ul>
+      )}
+
+      {detail && (
+        <SenhaDetail
+          s={detail}
+          plainSenha={plainOf(detail)}
+          onClose={() => setDetailId(null)}
+          onEdit={() => openEdit(detail)}
+          onCopy={copyValue}
+        />
+      )}
 
       {open && (
-        <SenhaDialog
+        <SenhaForm
           initial={editing}
           initialPlainSenha={editing ? (decrypted[editing.id] ?? editing.senha) : ""}
           onClose={() => {
@@ -504,227 +536,6 @@ function SenhasCard() {
           onSave={save}
         />
       )}
-    </SettingsCard>
-  );
-}
-
-function SenhaCard({
-  s,
-  plainSenha,
-  onEdit,
-  onDelete,
-}: {
-  s: Senha;
-  plainSenha: string;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  const [show, setShow] = useState(false);
-  const [copiedField, setCopiedField] = useState<"usuario" | "senha" | null>(null);
-  const copy = (v: string, field: "usuario" | "senha") => {
-    navigator.clipboard?.writeText(v);
-    setCopiedField(field);
-    setTimeout(() => setCopiedField(null), 1200);
-  };
-  return (
-    <li className="grid grid-cols-1 gap-x-4 gap-y-1.5 px-4 py-3 text-sm md:grid-cols-[minmax(0,1.3fr)_minmax(0,0.8fr)_minmax(0,1.3fr)_minmax(0,1.5fr)_88px] md:items-center">
-      <div className="min-w-0">
-        <button
-          type="button"
-          onClick={onEdit}
-          className="block max-w-full truncate text-left font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-        >
-          {s.nome}
-        </button>
-        {s.url && (
-          <a
-            href={s.url}
-            target="_blank"
-            rel="noreferrer"
-            className="block truncate text-[11px] text-sky-600 hover:underline dark:text-sky-400"
-            title={s.url}
-          >
-            {s.url}
-          </a>
-        )}
-      </div>
-      <p className="truncate text-xs text-muted-foreground">{s.categoria || "—"}</p>
-      <div className="flex min-w-0 items-center gap-1">
-        <span className="truncate text-xs text-muted-foreground">{s.usuario || "—"}</span>
-        {s.usuario && (
-          <IconButton
-            label={copiedField === "usuario" ? "Copiado!" : "Copiar usuário"}
-            onClick={() => copy(s.usuario, "usuario")}
-          >
-            <Copy className="h-3 w-3" />
-          </IconButton>
-        )}
-      </div>
-      <div className="flex min-w-0 items-center gap-1">
-        <span className="truncate font-mono text-xs text-muted-foreground">
-          {show ? plainSenha : "•".repeat(Math.min(12, plainSenha.length || 8))}
-        </span>
-        <IconButton
-          label={show ? "Ocultar senha" : "Mostrar senha"}
-          onClick={() => setShow((v) => !v)}
-        >
-          {show ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-        </IconButton>
-        <IconButton
-          label={copiedField === "senha" ? "Copiado!" : "Copiar senha"}
-          onClick={() => copy(plainSenha, "senha")}
-        >
-          <Copy className="h-3 w-3" />
-        </IconButton>
-      </div>
-      <div className="flex items-center gap-1 md:justify-end">
-        <IconButton label="Editar" onClick={onEdit}>
-          <Pencil className="h-3.5 w-3.5" />
-        </IconButton>
-        <IconButton label="Remover" onClick={onDelete}>
-          <X className="h-3.5 w-3.5" />
-        </IconButton>
-      </div>
-    </li>
-  );
-}
-
-function SenhaDialog({
-  initial,
-  initialPlainSenha,
-  onClose,
-  onSave,
-}: {
-  initial: Senha | null;
-  initialPlainSenha: string;
-  onClose: () => void;
-  onSave: (s: Senha, plainSenha: string) => void | Promise<void>;
-}) {
-  const [nome, setNome] = useState(initial?.nome ?? "");
-  const [categoria, setCategoria] = useState(initial?.categoria ?? "");
-  const [usuario, setUsuario] = useState(initial?.usuario ?? "");
-  const [senha, setSenha] = useState(initialPlainSenha);
-  const [url, setUrl] = useState(initial?.url ?? "");
-  const [notas, setNotas] = useState(initial?.notas ?? "");
-  const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!nome.trim() || !senha.trim()) {
-      setError("Nome e senha são obrigatórios.");
-      return;
-    }
-    setSaving(true);
-    try {
-      await onSave(
-        {
-          id: initial?.id ?? crypto.randomUUID(),
-          nome: nome.trim(),
-          categoria: categoria.trim(),
-          usuario: usuario.trim(),
-          senha: "",
-          url: url.trim() || undefined,
-          notas: notas.trim() || undefined,
-        },
-        senha,
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      onClick={onClose}
-    >
-      <form
-        onClick={(e) => e.stopPropagation()}
-        onSubmit={submit}
-        className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl border border-border bg-background shadow-lg"
-      >
-        <div className="flex items-center justify-between border-b border-border px-5 py-3">
-          <h2 className="text-sm font-semibold">{initial ? "Editar senha" : "Nova senha"}</h2>
-          <button type="button" onClick={onClose} aria-label="Fechar">
-            <X className="h-4 w-4 text-muted-foreground hover:text-foreground" />
-          </button>
-        </div>
-        <div className="space-y-3 px-5 py-4">
-          <label className="block space-y-1">
-            <span className="text-xs font-medium">Nome</span>
-            <input
-              value={nome}
-              onChange={(e) => setNome(e.target.value)}
-              className={inputCls}
-              placeholder="Instagram, Meta Ads..."
-              required
-            />
-          </label>
-          <label className="block space-y-1">
-            <span className="text-xs font-medium">Categoria</span>
-            <NativeSelect
-              value={categoria}
-              onChange={(e) => setCategoria(e.target.value)}
-              className={inputCls}
-            >
-              <option value="">Selecione uma categoria</option>
-              <option value="Rede social">Rede social</option>
-              <option value="Ferramenta">Ferramenta</option>
-              <option value="E-mail">E-mail</option>
-              <option value="Hospedagem">Hospedagem</option>
-              <option value="Domínio">Domínio</option>
-              <option value="Analytics">Analytics</option>
-              <option value="Anúncios">Anúncios</option>
-              <option value="Design">Design</option>
-              <option value="Outros">Outros</option>
-            </NativeSelect>
-          </label>
-          <label className="block space-y-1">
-            <span className="text-xs font-medium">Usuário / e-mail</span>
-            <input
-              value={usuario}
-              onChange={(e) => setUsuario(e.target.value)}
-              className={inputCls}
-            />
-          </label>
-          <label className="block space-y-1">
-            <span className="text-xs font-medium">Senha</span>
-            <input
-              value={senha}
-              onChange={(e) => setSenha(e.target.value)}
-              className={inputCls}
-              required
-            />
-          </label>
-          <label className="block space-y-1">
-            <span className="text-xs font-medium">URL</span>
-            <input
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              className={inputCls}
-              placeholder="https://"
-            />
-          </label>
-          <label className="block space-y-1">
-            <span className="text-xs font-medium">Notas</span>
-            <textarea
-              value={notas}
-              onChange={(e) => setNotas(e.target.value)}
-              className={`${inputCls} h-20 py-2`}
-            />
-          </label>
-          {error && <p className="text-xs text-destructive">{error}</p>}
-        </div>
-        <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
-          <Button type="button" variant="outline" size="sm" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button type="submit" size="sm" disabled={saving}>
-            {saving ? "Salvando..." : "Salvar"}
-          </Button>
-        </div>
-      </form>
     </div>
   );
 }
