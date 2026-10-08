@@ -1,7 +1,19 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Play, Square, Pencil, Trash2, Loader2, Plus, X, ChevronLeft } from "lucide-react";
+import {
+  Play,
+  Square,
+  Pencil,
+  Trash2,
+  Loader2,
+  Plus,
+  X,
+  ChevronLeft,
+  MoreVertical,
+  Search,
+  UserPlus,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -12,6 +24,15 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogContent } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { useConfirm } from "@/hooks/use-confirm";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TimeField } from "@/components/ui/time-field";
 import { DateField } from "@/components/ui/date-field";
@@ -40,7 +61,12 @@ import {
   formatClock,
   formatDuration,
   groupSessions,
+  joinPlus,
   participantStart,
+  personTotals,
+  searchMembers,
+  sessionsOfDay,
+  timeActivityText,
   planManualSession,
   sessionElapsedSeconds,
   taskTotals,
@@ -97,81 +123,253 @@ function dayLabel(iso: string): string {
 }
 
 /* ------------------------------------------------------------------ */
-/* Linha de histórico: UMA sessão, vários participantes                */
+/* Linha de registro: UMA sessão, vários participantes                 */
 /* ------------------------------------------------------------------ */
+
+function AvatarStack({ members }: { members: (TimeTrackingMember | undefined)[] }) {
+  const shown = members.slice(0, 3);
+  return (
+    <span className="flex shrink-0 -space-x-1.5" aria-hidden="true">
+      {shown.map((m, i) => (
+        <span key={i} className="rounded-full ring-2 ring-background">
+          <Avatar member={m} size={18} />
+        </span>
+      ))}
+    </span>
+  );
+}
 
 function SessionRow({
   session,
   memberFor,
   canEdit,
+  showDay,
   onEdit,
+  onAddParticipant,
   onDelete,
 }: {
   session: TimeSession<TimeEntry>;
   memberFor: (userId: string | null) => TimeTrackingMember | undefined;
   canEdit: boolean;
+  showDay?: boolean;
   onEdit: () => void;
+  onAddParticipant: () => void;
   onDelete: () => void;
 }) {
-  const shared = session.entries.length > 1;
+  const people = session.entries.map((e) => memberFor(e.userId));
+  const names = joinPlus(people.map((m) => m?.name ?? "Alguém"));
   const interval = session.endedAt
     ? `${toTimeInput(session.startedAt)} → ${toTimeInput(session.endedAt)}`
-    : `${toTimeInput(session.startedAt)} → em andamento`;
+    : `${toTimeInput(session.startedAt)} → agora`;
   return (
-    <div className="group px-3 py-1.5 text-xs hover:bg-muted/40">
-      <div className="flex items-baseline gap-2">
-        <span className="shrink-0 text-[11px] text-muted-foreground">
-          {dayLabel(session.startedAt)}
-        </span>
-        <span className="min-w-0 flex-1 truncate tabular-nums text-foreground">
+    <div className="group flex items-center gap-2 px-1 py-2">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm tabular-nums text-foreground">
+          {showDay && <span className="text-text-secondary">{dayLabel(session.startedAt)} · </span>}
           {interval} ·{" "}
           <LiveText
             active={session.running}
             compute={(n) => formatDuration(sessionElapsedSeconds(session, n))}
           />
-        </span>
-        {canEdit && !session.running && (
-          <span className="flex shrink-0 items-center gap-2 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100">
-            <button
-              type="button"
-              aria-label="Editar registro de tempo"
-              onClick={onEdit}
-              className="cursor-pointer text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-            >
-              <Pencil className="h-3 w-3" />
-            </button>
-            <button
-              type="button"
-              aria-label="Excluir registro de tempo"
-              onClick={onDelete}
-              className="cursor-pointer text-muted-foreground hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-            >
-              <Trash2 className="h-3 w-3" />
-            </button>
-          </span>
-        )}
-      </div>
-      {shared ? (
-        <ul className="mt-0.5 space-y-0.5 pl-0.5">
-          {session.entries.map((e) => (
-            <li key={e.id} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              <Avatar member={memberFor(e.userId)} size={14} />
-              <span className="min-w-0 flex-1 truncate">
-                {memberFor(e.userId)?.name ?? "Alguém"}
-              </span>
-              <span className="tabular-nums">
-                <LiveText active={!e.endedAt} compute={(n) => formatDuration(entryEffort(e, n))} />
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          <Avatar member={memberFor(session.entries[0].userId)} size={14} />
-          <span className="truncate">{memberFor(session.entries[0].userId)?.name ?? "Alguém"}</span>
         </p>
+        <p className="mt-0.5 flex items-center gap-1.5 text-xs text-text-secondary">
+          <AvatarStack members={people} />
+          <span className="truncate">{names}</span>
+        </p>
+      </div>
+      {canEdit && !session.running && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label="Ações do registro"
+              className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-text-secondary hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            >
+              <MoreVertical className="h-4 w-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={onEdit}>
+              <Pencil className="h-3.5 w-3.5" /> Editar
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={onAddParticipant}>
+              <UserPlus className="h-3.5 w-3.5" /> Adicionar participante
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={onDelete}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="h-3.5 w-3.5" /> Excluir
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Seletor de participantes (busca + seleção múltipla)                 */
+/* ------------------------------------------------------------------ */
+
+function ParticipantPicker({
+  members,
+  taken,
+  selected,
+  onToggle,
+}: {
+  members: TimeTrackingMember[];
+  /** Quem já participa (aparece marcado e travado). */
+  taken: Set<string>;
+  selected: Set<string>;
+  onToggle: (id: string, on: boolean) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const list = searchMembers(
+    members.filter((m) => !!m.id),
+    query,
+  );
+  return (
+    <div className="space-y-2">
+      <div className="relative">
+        <Search
+          className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-secondary"
+          aria-hidden="true"
+        />
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Buscar pessoa"
+          aria-label="Buscar pessoa"
+          className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-brand"
+        />
+      </div>
+      <ul className="max-h-56 overflow-y-auto" aria-label="Pessoas do time">
+        {list.length === 0 && (
+          <li className="px-1 py-2 text-xs text-text-secondary">Ninguém encontrado.</li>
+        )}
+        {list.map((m) => {
+          const already = taken.has(m.id!);
+          return (
+            <li key={m.id}>
+              <label
+                className={`flex items-center gap-2.5 rounded-md px-1.5 py-1.5 text-sm ${
+                  already ? "opacity-70" : "cursor-pointer hover:bg-muted"
+                }`}
+              >
+                <Checkbox
+                  checked={already || selected.has(m.id!)}
+                  disabled={already}
+                  onCheckedChange={(c) => onToggle(m.id!, c === true)}
+                  aria-label={already ? `${m.name} já participa` : `Adicionar ${m.name}`}
+                />
+                <Avatar member={m} size={24} />
+                <span className="min-w-0 flex-1 truncate">{m.name}</span>
+                {already && <span className="text-[11px] text-text-secondary">participando</span>}
+              </label>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+/** Adiciona pessoas a uma sessão JÁ ENCERRADA: cada uma recebe o intervalo inteiro (nada se divide). */
+function AddParticipantDialog({
+  session,
+  members,
+  onOpenChange,
+  onDone,
+}: {
+  session: TimeSession<TimeEntry> | null;
+  members: TimeTrackingMember[];
+  onOpenChange: (o: boolean) => void;
+  onDone: () => void;
+}) {
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (session) setSelected(new Set());
+  }, [session]);
+  const taken = new Set(session?.entries.map((e) => e.userId ?? "") ?? []);
+
+  const confirm = async () => {
+    if (!session || !session.endedAt || selected.size === 0 || saving) return;
+    setSaving(true);
+    try {
+      let sessionId = session.sessionId;
+      if (!sessionId) {
+        const ensured = await ensureSession(session.entries[0]);
+        if (ensured.error || !ensured.sessionId)
+          return void toast.error(ensured.error ?? "Não foi possível compartilhar o registro.");
+        sessionId = ensured.sessionId;
+      }
+      let added = 0;
+      for (const userId of selected) {
+        const { error } = await addParticipant({
+          sessionId,
+          userId,
+          startedAt: session.startedAt,
+          endedAt: session.endedAt,
+        });
+        if (error) toast.error(error);
+        else added += 1;
+      }
+      if (added > 0)
+        toast.success(added === 1 ? "Participante adicionado." : "Participantes adicionados.");
+      onOpenChange(false);
+      onDone();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={!!session} onOpenChange={onOpenChange}>
+      <DialogContent mobileFullScreen className="max-w-sm gap-4">
+        <DialogHeader>
+          <DialogTitle className="text-base">Adicionar participante</DialogTitle>
+          <DialogDescription>
+            {session
+              ? `${toTimeInput(session.startedAt)} → ${session.endedAt ? toTimeInput(session.endedAt) : ""} · cada pessoa recebe o tempo inteiro, sem dividir.`
+              : ""}
+          </DialogDescription>
+        </DialogHeader>
+        <ParticipantPicker
+          members={members}
+          taken={taken}
+          selected={selected}
+          onToggle={(id, on) =>
+            setSelected((prev) => {
+              const next = new Set(prev);
+              if (on) next.add(id);
+              else next.delete(id);
+              return next;
+            })
+          }
+        />
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            className="cursor-pointer rounded-md px-3 py-1.5 text-sm text-text-secondary hover:bg-muted"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={() => void confirm()}
+            disabled={selected.size === 0 || saving}
+            className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            Adicionar{selected.size > 0 ? ` (${selected.size})` : ""}
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -199,7 +397,7 @@ function ManualSessionDialog({
   /** Sessão sendo editada; ausente = novo registro. */
   session?: TimeSession<TimeEntry>;
   meId: string;
-  onSaved: () => void;
+  onSaved: (summary?: { seconds: number; userIds: string[] }) => void;
 }) {
   const memberFor = (id: string | null) => members.find((m) => m.id === id);
   const [date, setDate] = useState(todayInput());
@@ -312,7 +510,11 @@ function ManualSessionDialog({
         toast.success("Registro atualizado.");
       }
       onOpenChange(false);
-      onSaved();
+      onSaved(
+        plan.ok
+          ? { seconds: plan.durationSeconds, userIds: plan.rows.map((r) => r.userId) }
+          : undefined,
+      );
     } finally {
       setSaving(false);
     }
@@ -507,27 +709,37 @@ function ManualSessionDialog({
 }
 
 /* ------------------------------------------------------------------ */
-/* Painel (botão + popover)                                            */
+/* Controle de tempo (botão no header + popover / sheet no mobile)     */
 /* ------------------------------------------------------------------ */
 
 type Props = {
   taskId: string;
   taskOrigin: TaskOrigin;
   members: TimeTrackingMember[];
+  /** Registra uma linha compacta na atividade da tarefa ("registrou 32min com João"). */
+  onActivity?: (text: string) => void;
 };
 
-export function TimeTrackingPanel({ taskId, taskOrigin, members }: Props) {
+const SectionLabel = ({ children }: { children: React.ReactNode }) => (
+  <p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
+    {children}
+  </p>
+);
+
+export function TimeTrackingPanel({ taskId, taskOrigin, members, onActivity }: Props) {
   const access = useMyAccess();
   const canManageOthers = hasPermission(access, "time");
+  const isMobile = useIsMobile();
   const me = getMe();
   const running = useRunningTimer();
   const { entries, loading, refetch } = useTaskTimeEntries(taskId, taskOrigin);
+  const { confirm, confirmDialog } = useConfirm();
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<"main" | "add">("main");
   const [manualOpen, setManualOpen] = useState(false);
   const [editing, setEditing] = useState<TimeSession<TimeEntry> | undefined>(undefined);
+  const [addingTo, setAddingTo] = useState<TimeSession<TimeEntry> | null>(null);
   const [conflict, setConflict] = useState<TimeEntry | null>(null);
-  const [deleting, setDeleting] = useState<TimeSession<TimeEntry> | null>(null);
   const [allOpen, setAllOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(() => new Set());
@@ -554,10 +766,19 @@ export function TimeTrackingPanel({ taskId, taskOrigin, members }: Props) {
   const totals = taskTotals(entries);
   const memberFor = (userId: string | null) =>
     userId ? members.find((m) => m.id === userId) : undefined;
+  const nameOf = (userId: string | null) => memberFor(userId)?.name ?? "Alguém";
   const canEditSession = (s: TimeSession<TimeEntry>) =>
     canManageOthers || s.entries.some((e) => e.userId === me.id);
-
   const hasRunning = entries.some((e) => !e.endedAt);
+  const today = sessionsOfDay(sessions, todayInput());
+  const todayShown = today.slice(0, 3);
+  const perPerson = personTotals(totals.byUser);
+  const participantsRunning = activeSession?.entries ?? [];
+
+  const log = (seconds: number, userIds: (string | null)[]) => {
+    const others = userIds.filter((u) => u && u !== me.id).map((u) => nameOf(u));
+    onActivity?.(timeActivityText(seconds, others));
+  };
 
   const handleStart = async () => {
     if (busy) return;
@@ -572,11 +793,16 @@ export function TimeTrackingPanel({ taskId, taskOrigin, members }: Props) {
 
   const handleStop = async () => {
     if (!runningHere || busy) return;
+    const seconds = activeSession ? sessionElapsedSeconds(activeSession) : 0;
+    const ids = participantsRunning.map((e) => e.userId);
     setBusy(true);
     const { error } = await stopSession(runningHere);
     setBusy(false);
     if (error) toast.error(error);
-    else toast.success("Tempo registrado.");
+    else {
+      toast.success("Tempo registrado.");
+      log(seconds, ids);
+    }
     refreshAll();
   };
 
@@ -617,16 +843,16 @@ export function TimeTrackingPanel({ taskId, taskOrigin, members }: Props) {
       const ensured = await ensureSession(runningHere);
       if (ensured.error || !ensured.sessionId)
         return void toast.error(ensured.error ?? "Não foi possível compartilhar o tempo.");
-      const nowIso = new Date().toISOString();
-      const startedAt = participantStart(mode, activeSession.startedAt, nowIso, true);
+      const startedAt = participantStart(
+        mode,
+        activeSession.startedAt,
+        new Date().toISOString(),
+        true,
+      );
       let added = 0;
       for (const userId of picked) {
-        const { error } = await addParticipant({
-          sessionId: ensured.sessionId,
-          userId,
-          startedAt,
-        });
-        if (error) toast.error(`${memberFor(userId)?.name ?? "Participante"}: ${error}`);
+        const { error } = await addParticipant({ sessionId: ensured.sessionId, userId, startedAt });
+        if (error) toast.error(`${nameOf(userId)}: ${error}`);
         else added += 1;
       }
       if (added > 0)
@@ -640,7 +866,15 @@ export function TimeTrackingPanel({ taskId, taskOrigin, members }: Props) {
     }
   };
 
-  const deleteSession = async (s: TimeSession<TimeEntry>) => {
+  const requestDelete = async (s: TimeSession<TimeEntry>) => {
+    const shared = s.entries.length > 1;
+    const ok = await confirm(
+      shared
+        ? "Este registro será removido para todos os participantes."
+        : "Este registro de tempo será removido.",
+      { title: "Excluir registro?", confirmLabel: "Excluir", destructive: true },
+    );
+    if (!ok) return;
     setBusy(true);
     for (const e of s.entries) {
       const { error } = await deleteEntry(e.id);
@@ -650,7 +884,6 @@ export function TimeTrackingPanel({ taskId, taskOrigin, members }: Props) {
       }
     }
     setBusy(false);
-    setDeleting(null);
     refreshAll();
   };
 
@@ -661,13 +894,17 @@ export function TimeTrackingPanel({ taskId, taskOrigin, members }: Props) {
     setManualOpen(true);
   };
 
-  const recent = sessions.slice(0, 3);
-  const participantsRunning = activeSession?.entries ?? [];
-  const addable = addableMembers(members, activeSession?.entries.map((e) => e.userId ?? "") ?? []);
+  const closePanel = (o: boolean) => {
+    setOpen(o);
+    if (!o) {
+      setView("main");
+      setPicked(new Set());
+    }
+  };
 
   const triggerContent = runningHere ? (
     <>
-      <span aria-hidden className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-sky-500" />
+      <span aria-hidden className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-emerald-500" />
       <LiveText
         active
         compute={(n) => formatClock((n - Date.parse(runningHere.startedAt)) / 1000)}
@@ -677,246 +914,273 @@ export function TimeTrackingPanel({ taskId, taskOrigin, members }: Props) {
     formatDuration(totals.effortSeconds)
   ) : (
     <>
-      <Play className="h-3.5 w-3.5 shrink-0" />
+      <Play className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
       Iniciar
     </>
   );
 
-  return (
-    <>
-      <Popover
-        open={open}
-        onOpenChange={(o) => {
-          setOpen(o);
-          if (!o) {
-            setView("main");
-            setPicked(new Set());
+  const triggerButton = (onClick?: () => void) => (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={runningHere ? "Cronômetro ativo — abrir controle de tempo" : "Controle de tempo"}
+      className="inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium tabular-nums text-foreground/80 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+    >
+      {triggerContent}
+    </button>
+  );
+
+  /* ---------- conteúdo (o mesmo no popover e no sheet) ---------- */
+  const body =
+    view === "add" && runningHere && activeSession ? (
+      <div className="space-y-3 p-4">
+        <button
+          type="button"
+          onClick={() => setView("main")}
+          className="inline-flex cursor-pointer items-center gap-1 text-xs text-text-secondary hover:text-foreground"
+        >
+          <ChevronLeft className="h-3 w-3" /> Voltar
+        </button>
+        <SectionLabel>Adicionar participante</SectionLabel>
+        <ParticipantPicker
+          members={members}
+          taken={new Set(participantsRunning.map((e) => e.userId ?? ""))}
+          selected={picked}
+          onToggle={(id, on) =>
+            setPicked((prev) => {
+              const next = new Set(prev);
+              if (on) next.add(id);
+              else next.delete(id);
+              return next;
+            })
           }
-        }}
-      >
-        <PopoverTrigger asChild>
+        />
+        <div className="space-y-1.5">
           <button
             type="button"
-            aria-label={
-              runningHere ? "Cronômetro ativo — abrir controle de tempo" : "Tempo da tarefa"
-            }
-            className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium tabular-nums transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
-              runningHere ? "text-sky-700 dark:text-sky-400" : "text-foreground/80"
-            }`}
+            disabled={picked.size === 0 || busy}
+            onClick={() => void addPicked("agora")}
+            className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {triggerContent}
+            {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            Começar agora
           </button>
-        </PopoverTrigger>
-        <PopoverContent align="start" className="w-80 max-w-[calc(100vw-2rem)] p-0">
-          {view === "add" && runningHere && activeSession ? (
-            <div className="p-3">
-              <button
-                type="button"
-                onClick={() => setView("main")}
-                className="mb-2 inline-flex cursor-pointer items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          <button
+            type="button"
+            disabled={picked.size === 0 || busy}
+            onClick={() => setConfirmRetro(true)}
+            className="w-full cursor-pointer text-center text-xs font-medium text-text-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Aplicar desde o início ({toTimeInput(activeSession.startedAt)})
+          </button>
+        </div>
+      </div>
+    ) : (
+      <div className="space-y-4 p-4">
+        {/* 1) Estou contando tempo agora? */}
+        {runningHere ? (
+          <div className="space-y-3">
+            <div>
+              <SectionLabel>Tempo</SectionLabel>
+              <p
+                className="mt-1 text-4xl font-semibold tabular-nums leading-none text-foreground"
+                aria-live="off"
               >
-                <ChevronLeft className="h-3 w-3" /> Voltar
-              </button>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Trabalhando nesta tarefa
+                <LiveText
+                  active
+                  compute={(n) => formatClock((n - Date.parse(runningHere.startedAt)) / 1000)}
+                />
               </p>
-              <ul className="mt-2 max-h-56 space-y-0.5 overflow-y-auto">
-                {participantsRunning.map((e) => (
-                  <li key={e.id} className="flex items-center gap-2 px-1 py-1 text-sm">
-                    <Checkbox
-                      checked
-                      disabled
-                      aria-label={`${memberFor(e.userId)?.name} já participa`}
-                    />
-                    <Avatar member={memberFor(e.userId)} />
-                    <span className="min-w-0 flex-1 truncate">
-                      {memberFor(e.userId)?.name ?? "Alguém"}
-                    </span>
-                  </li>
-                ))}
-                {addable.map((m) => (
-                  <li key={m.id}>
-                    <label className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm hover:bg-muted">
-                      <Checkbox
-                        checked={picked.has(m.id!)}
-                        onCheckedChange={(c) =>
-                          setPicked((prev) => {
-                            const next = new Set(prev);
-                            if (c === true) next.add(m.id!);
-                            else next.delete(m.id!);
-                            return next;
-                          })
-                        }
-                        aria-label={`Adicionar ${m.name}`}
-                      />
-                      <Avatar member={m} />
-                      <span className="min-w-0 flex-1 truncate">{m.name}</span>
-                    </label>
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-3 space-y-1.5">
-                <button
-                  type="button"
-                  disabled={picked.size === 0 || busy}
-                  onClick={() => void addPicked("agora")}
-                  className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  Começar agora
-                </button>
-                <button
-                  type="button"
-                  disabled={picked.size === 0 || busy}
-                  onClick={() => setConfirmRetro(true)}
-                  className="w-full cursor-pointer text-center text-xs font-medium text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Aplicar desde o início ({toTimeInput(activeSession.startedAt)})
-                </button>
-              </div>
+              <p className="mt-1.5 flex items-center gap-1.5 text-xs text-text-secondary">
+                <span
+                  className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500"
+                  aria-hidden="true"
+                />
+                Em andamento
+              </p>
             </div>
-          ) : (
-            <div className="p-3">
-              <div className="flex items-baseline justify-between">
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Tempo registrado
-                </span>
-                <span className="text-sm font-semibold tabular-nums">
-                  <LiveText
-                    active={hasRunning}
-                    compute={(n) => formatDuration(taskTotals(entries, n).effortSeconds)}
-                  />
-                </span>
-              </div>
-              {totals.hasShared && (
-                <p className="mt-0.5 text-right text-[11px] text-muted-foreground">
-                  horas-pessoa · {formatDuration(totals.sessionSeconds)} de sessões
-                </p>
-              )}
-
-              <div className="mt-3">
-                {runningHere ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => void handleStop()}
-                      disabled={busy}
-                      className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-md bg-sky-500/15 px-3 py-2 text-sm font-semibold tabular-nums text-sky-700 hover:bg-sky-500/25 disabled:opacity-60 dark:text-sky-400"
-                    >
-                      <Square className="h-3.5 w-3.5 fill-current" />
-                      {participantsRunning.length > 1 ? "Parar sessão" : "Parar"} ·{" "}
-                      <LiveText
-                        active
-                        compute={(n) => formatClock((n - Date.parse(runningHere.startedAt)) / 1000)}
-                      />
-                    </button>
-                    <ul className="mt-2 space-y-0.5" aria-label="Participantes da sessão">
-                      {participantsRunning.map((e) => (
-                        <li key={e.id} className="flex items-center gap-2 px-0.5 py-0.5 text-xs">
-                          <Avatar member={memberFor(e.userId)} />
-                          <span className="min-w-0 flex-1 truncate text-foreground">
-                            {memberFor(e.userId)?.name ?? "Alguém"}
-                            {e.id !== runningHere.id || participantsRunning.length > 1 ? (
-                              <span className="text-muted-foreground">
-                                {" "}
-                                · {e.endedAt ? "saiu" : `desde ${toTimeInput(e.startedAt)}`}
-                              </span>
-                            ) : null}
-                          </span>
-                          {!e.endedAt && participantsRunning.length > 1 && (
-                            <button
-                              type="button"
-                              aria-label={`Parar o tempo de ${memberFor(e.userId)?.name ?? "participante"}`}
-                              onClick={() => void stopOne(e)}
-                              className="cursor-pointer text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-                            >
-                              <Square className="h-3 w-3" />
-                            </button>
-                          )}
-                          {e.id !== runningHere.id && (
-                            <button
-                              type="button"
-                              aria-label={`Remover ${memberFor(e.userId)?.name ?? "participante"} da sessão`}
-                              onClick={() => void removeParticipant(e)}
-                              className="cursor-pointer text-muted-foreground hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                    <button
-                      type="button"
-                      onClick={() => setView("add")}
-                      disabled={addable.length === 0}
-                      className="mt-1.5 inline-flex cursor-pointer items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <Plus className="h-3 w-3" /> Adicionar participante
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => void handleStart()}
-                    disabled={busy}
-                    className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-60"
-                  >
-                    {busy ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Play className="h-3.5 w-3.5" />
-                    )}
-                    {busy ? "Iniciando..." : "Iniciar cronômetro"}
-                  </button>
-                )}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => openManual()}
-                className="mt-3 w-full cursor-pointer rounded-md border-t border-border pt-2.5 text-left text-xs font-medium text-muted-foreground hover:text-foreground"
-              >
-                + Registrar tempo manualmente
-              </button>
-
-              {loading ? null : recent.length === 0 ? (
-                <p className="mt-2 text-xs text-muted-foreground">Nenhum tempo registrado.</p>
+            <button
+              type="button"
+              onClick={() => void handleStop()}
+              disabled={busy}
+              className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-md bg-primary px-3 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {busy ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
-                <div className="-mx-3 mt-3 border-t border-border pt-2">
-                  <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Registros recentes
-                  </p>
-                  <div className="space-y-0.5">
-                    {recent.map((s) => (
-                      <SessionRow
-                        key={s.key}
-                        session={s}
-                        memberFor={memberFor}
-                        canEdit={canEditSession(s)}
-                        onEdit={() => openManual(s)}
-                        onDelete={() => setDeleting(s)}
-                      />
-                    ))}
-                  </div>
-                  {sessions.length > 3 && (
+                <Square className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+              )}
+              Parar
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div>
+              <SectionLabel>Tempo</SectionLabel>
+              <p className="mt-1 text-4xl font-semibold tabular-nums leading-none text-foreground">
+                <LiveText
+                  active={hasRunning}
+                  compute={(n) => formatDuration(taskTotals(entries, n).effortSeconds)}
+                />
+              </p>
+              <p className="mt-1.5 text-xs text-text-secondary">
+                {totals.hasShared ? "Tempo total registrado (horas-pessoa)" : "Tempo registrado"}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void handleStart()}
+              disabled={busy}
+              className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-md bg-primary px-3 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {busy ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Play className="h-3.5 w-3.5" aria-hidden="true" />
+              )}
+              {busy ? "Iniciando..." : "Iniciar cronômetro"}
+            </button>
+          </div>
+        )}
+
+        {/* 2) Para quem está sendo registrado? (só com sessão ativa) */}
+        {runningHere && (
+          <div className="space-y-1.5 border-t border-border/60 pt-3">
+            <SectionLabel>Participantes</SectionLabel>
+            <ul aria-label="Participantes da sessão">
+              {participantsRunning.map((e) => (
+                <li key={e.id} className="flex items-center gap-2 py-1 text-sm">
+                  <Avatar member={memberFor(e.userId)} size={22} />
+                  <span className="min-w-0 flex-1 truncate text-foreground">
+                    {e.userId === me.id ? `${nameOf(e.userId)} (você)` : nameOf(e.userId)}
+                    {participantsRunning.length > 1 &&
+                      toTimeInput(e.startedAt) !== toTimeInput(activeSession!.startedAt) && (
+                        <span className="text-xs text-text-secondary">
+                          {" "}
+                          · desde {toTimeInput(e.startedAt)}
+                        </span>
+                      )}
+                    {e.endedAt && <span className="text-xs text-text-secondary"> · saiu</span>}
+                  </span>
+                  {!e.endedAt && participantsRunning.length > 1 && (
                     <button
                       type="button"
-                      onClick={() => {
-                        setOpen(false);
-                        setAllOpen(true);
-                      }}
-                      className="mt-1 w-full cursor-pointer px-3 py-1.5 text-left text-xs font-medium text-muted-foreground hover:text-foreground"
+                      aria-label={`Parar o tempo de ${nameOf(e.userId)}`}
+                      onClick={() => void stopOne(e)}
+                      className="cursor-pointer rounded p-1 text-text-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                     >
-                      Ver todos os registros ({sessions.length})
+                      <Square className="h-3 w-3" />
                     </button>
                   )}
-                </div>
-              )}
+                  {e.id !== runningHere.id && (
+                    <button
+                      type="button"
+                      aria-label={`Remover ${nameOf(e.userId)} da sessão`}
+                      onClick={() => void removeParticipant(e)}
+                      className="cursor-pointer rounded p-1 text-text-secondary hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              onClick={() => setView("add")}
+              className="inline-flex cursor-pointer items-center gap-1 text-xs font-medium text-text-secondary hover:text-foreground"
+            >
+              <Plus className="h-3 w-3" /> Adicionar participante
+            </button>
+          </div>
+        )}
+
+        {/* Quanto já foi registrado, por pessoa (parado e com mais de uma pessoa) */}
+        {!runningHere && perPerson.length > 1 && (
+          <div className="space-y-1.5 border-t border-border/60 pt-3">
+            <SectionLabel>Por pessoa</SectionLabel>
+            <ul>
+              {perPerson.map((p) => (
+                <li key={p.userId} className="flex items-center gap-2 py-0.5 text-sm">
+                  <Avatar member={memberFor(p.userId)} size={20} />
+                  <span className="min-w-0 flex-1 truncate">{nameOf(p.userId)}</span>
+                  <span className="tabular-nums text-text-secondary">
+                    {formatDuration(p.seconds)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* 3) Registros de hoje */}
+        <div className="border-t border-border/60 pt-3">
+          <SectionLabel>Registros de hoje</SectionLabel>
+          {loading ? null : todayShown.length === 0 ? (
+            <p className="mt-1.5 text-xs text-text-secondary">Nenhum registro hoje.</p>
+          ) : (
+            <div className="-mx-1 mt-1 divide-y divide-border/40">
+              {todayShown.map((s) => (
+                <SessionRow
+                  key={s.key}
+                  session={s}
+                  memberFor={memberFor}
+                  canEdit={canEditSession(s)}
+                  onEdit={() => openManual(s)}
+                  onAddParticipant={() => setAddingTo(s)}
+                  onDelete={() => void requestDelete(s)}
+                />
+              ))}
             </div>
           )}
-        </PopoverContent>
-      </Popover>
+          {sessions.length > todayShown.length && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setAllOpen(true);
+              }}
+              className="mt-1 cursor-pointer text-xs font-medium text-text-secondary hover:text-foreground"
+            >
+              Ver todos ({sessions.length})
+            </button>
+          )}
+        </div>
+
+        {/* 4) Registro manual (ação secundária) */}
+        <button
+          type="button"
+          onClick={() => openManual()}
+          className="inline-flex cursor-pointer items-center gap-1 text-xs font-medium text-text-secondary hover:text-foreground"
+        >
+          <Plus className="h-3 w-3" /> Registrar tempo manualmente
+        </button>
+      </div>
+    );
+
+  return (
+    <>
+      {isMobile ? (
+        <>
+          {triggerButton(() => setOpen(true))}
+          <Sheet open={open} onOpenChange={closePanel}>
+            <SheetContent side="bottom" className="max-h-[88dvh] overflow-y-auto rounded-t-2xl p-0">
+              <SheetTitle className="sr-only">Controle de tempo</SheetTitle>
+              <SheetDescription className="sr-only">
+                Cronômetro, participantes e registros de tempo desta tarefa.
+              </SheetDescription>
+              {body}
+            </SheetContent>
+          </Sheet>
+        </>
+      ) : (
+        <Popover open={open} onOpenChange={closePanel}>
+          <PopoverTrigger asChild>{triggerButton()}</PopoverTrigger>
+          <PopoverContent align="start" className="w-80 max-w-[calc(100vw-2rem)] p-0">
+            {body}
+          </PopoverContent>
+        </Popover>
+      )}
 
       <ManualSessionDialog
         open={manualOpen}
@@ -929,7 +1193,17 @@ export function TimeTrackingPanel({ taskId, taskOrigin, members }: Props) {
         members={members}
         session={editing}
         meId={me.id}
-        onSaved={refreshAll}
+        onSaved={(summary) => {
+          if (summary && !editing) log(summary.seconds, summary.userIds);
+          refreshAll();
+        }}
+      />
+
+      <AddParticipantDialog
+        session={addingTo}
+        members={members}
+        onOpenChange={(o) => !o && setAddingTo(null)}
+        onDone={refreshAll}
       />
 
       <Dialog open={allOpen} onOpenChange={setAllOpen}>
@@ -940,15 +1214,20 @@ export function TimeTrackingPanel({ taskId, taskOrigin, members }: Props) {
               Todas as sessões desta tarefa.
             </DialogDescription>
           </DialogHeader>
-          <div className="-mx-2 max-h-[60vh] space-y-0.5 overflow-y-auto">
+          <div className="-mx-1 max-h-[60vh] divide-y divide-border/40 overflow-y-auto">
             {sessions.map((s) => (
               <SessionRow
                 key={s.key}
                 session={s}
+                showDay
                 memberFor={memberFor}
                 canEdit={canEditSession(s)}
                 onEdit={() => openManual(s)}
-                onDelete={() => setDeleting(s)}
+                onAddParticipant={() => {
+                  setAllOpen(false);
+                  setAddingTo(s);
+                }}
+                onDelete={() => void requestDelete(s)}
               />
             ))}
           </div>
@@ -1009,37 +1288,7 @@ export function TimeTrackingPanel({ taskId, taskOrigin, members }: Props) {
           </div>
         </AlertDialogContent>
       </AlertDialog>
-
-      <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
-        <AlertDialogContent>
-          <div className="space-y-3">
-            <p className="text-sm">
-              Excluir este registro de tempo
-              {deleting && deleting.entries.length > 1 ? " (todos os participantes)" : ""}?
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setDeleting(null)}
-                className="cursor-pointer rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => deleting && void deleteSession(deleting)}
-                className="cursor-pointer rounded-md bg-destructive px-3 py-1.5 text-sm font-medium text-destructive-foreground hover:opacity-90 disabled:opacity-60"
-              >
-                Excluir
-              </button>
-            </div>
-          </div>
-        </AlertDialogContent>
-      </AlertDialog>
+      {confirmDialog}
     </>
   );
 }
-
-/** Reexporta o instante de parede usado pelos testes/outros painéis (mesmo fuso do painel). */
-export { combine as combineBrasilia };

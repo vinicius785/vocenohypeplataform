@@ -119,3 +119,54 @@ describe("rótulos e participantes", () => {
     expect(addableMembers(m, ["a"])).toEqual([{ id: "b" }]);
   });
 });
+
+import {
+  joinNatural,
+  joinPlus,
+  personTotals,
+  searchMembers,
+  sessionsOfDay,
+  timeActivityText,
+} from "./time-sessions";
+
+describe("recortes e textos da UI", () => {
+  it("registros do dia (fuso de São Paulo)", () => {
+    const rows = [
+      e("1", "u1", "2026-10-08T15:00:00.000Z", "2026-10-08T15:30:00.000Z"),
+      e("2", "u1", "2026-10-07T15:00:00.000Z", "2026-10-07T15:30:00.000Z"),
+    ];
+    const s = groupSessions(rows);
+    expect(sessionsOfDay(s, "2026-10-08").map((x) => x.key)).toEqual(["1"]);
+    // 02:30 UTC do dia 9 ainda é noite do dia 8 no Brasil
+    const late = groupSessions([
+      e("3", "u1", "2026-10-09T02:30:00.000Z", "2026-10-09T02:50:00.000Z"),
+    ]);
+    expect(sessionsOfDay(late, "2026-10-08")).toHaveLength(1);
+  });
+  it("total por pessoa: individual, ordenado, sem dividir", () => {
+    expect(
+      personTotals(
+        new Map([
+          ["a", 100],
+          ["b", 300],
+        ]),
+      ),
+    ).toEqual([
+      { userId: "b", seconds: 300 },
+      { userId: "a", seconds: 100 },
+    ]);
+  });
+  it("textos", () => {
+    expect(joinPlus(["Vinícius", "João"])).toBe("Vinícius + João");
+    expect(joinNatural(["João"])).toBe("João");
+    expect(joinNatural(["João", "Ana"])).toBe("João e Ana");
+    expect(joinNatural(["João", "Ana", "Pedro"])).toBe("João, Ana e Pedro");
+    expect(timeActivityText(1920, [])).toBe("registrou 32min");
+    expect(timeActivityText(1920, ["João"])).toBe("registrou 32min com João");
+  });
+  it("busca de participante ignora acento e caixa", () => {
+    const ms = [{ name: "João Silva" }, { name: "Ana" }];
+    expect(searchMembers(ms, "joao")).toEqual([{ name: "João Silva" }]);
+    expect(searchMembers(ms, "  ")).toHaveLength(2);
+  });
+});

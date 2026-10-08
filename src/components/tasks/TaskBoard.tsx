@@ -3724,6 +3724,7 @@ export function TaskDialog({
                       taskId={timeTrackingTaskId!}
                       taskOrigin={timeTrackingOrigin}
                       members={members}
+                      onActivity={(text) => setActivity((a) => pushActivity(a, text))}
                     />
                   </span>
                 )}

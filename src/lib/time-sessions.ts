@@ -280,3 +280,44 @@ export function addableMembers<M extends { id?: string }>(
   const inside = new Set(participantIds);
   return members.filter((m) => !!m.id && !inside.has(m.id));
 }
+
+/* ---------------- recortes e textos da UI ---------------- */
+
+/** Sessões que COMEÇARAM no dia (AAAA-MM-DD, fuso de São Paulo). */
+export function sessionsOfDay<E extends SessionEntryLike>(
+  sessions: TimeSession<E>[],
+  dateInput: string,
+): TimeSession<E>[] {
+  return sessions.filter((s) => toDateInput(s.startedAt) === dateInput);
+}
+
+/** Total individual por pessoa, do maior para o menor (nunca dividido entre participantes). */
+export function personTotals(byUser: Map<string, number>): { userId: string; seconds: number }[] {
+  return [...byUser.entries()]
+    .map(([userId, seconds]) => ({ userId, seconds }))
+    .sort((a, b) => b.seconds - a.seconds);
+}
+
+/** "Vinícius + João + Ana" (linha de registro). */
+export function joinPlus(names: string[]): string {
+  return names.join(" + ");
+}
+
+/** "João", "João e Ana", "João, Ana e Pedro". */
+export function joinNatural(names: string[]): string {
+  if (names.length <= 1) return names.join("");
+  return `${names.slice(0, -1).join(", ")} e ${names[names.length - 1]}`;
+}
+
+/** Texto compacto da atividade da tarefa: "registrou 32min" / "registrou 32min com João". */
+export function timeActivityText(seconds: number, otherNames: string[]): string {
+  const base = `registrou ${formatDuration(seconds)}`;
+  return otherNames.length > 0 ? `${base} com ${joinNatural(otherNames)}` : base;
+}
+
+/** Filtra por nome (sem acento/caixa) — busca do seletor de participantes. */
+export function searchMembers<M extends { name: string }>(members: M[], query: string): M[] {
+  const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const q = norm(query.trim());
+  return q ? members.filter((m) => norm(m.name).includes(q)) : members;
+}

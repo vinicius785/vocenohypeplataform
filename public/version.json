@@ -1,6 +1,30 @@
 {
-  "version": "1.383.0",
+  "version": "1.384.0",
   "releases": [
+    {
+      "version": "1.384.0",
+      "summary": "Controle de tempo das tarefas refeito: sessão em primeiro plano, participantes e registros do dia.",
+      "modules": [
+        {
+          "name": "TAREFAS",
+          "tagline": "Controle de tempo",
+          "items": [
+            {
+              "title": "Sessão atual em destaque",
+              "description": "O relógio grande, o botão Parar e quem está participando ficam no topo; depois os registros de hoje e, por último, o registro manual. No celular abre como painel inferior."
+            },
+            {
+              "title": "Participantes em qualquer momento",
+              "description": "Adicione pessoas à sessão em andamento (começando agora ou desde o início) ou a um registro já encerrado, com busca e seleção múltipla. Cada pessoa recebe o tempo inteiro, sem dividir."
+            },
+            {
+              "title": "Total por pessoa e atividade",
+              "description": "O tempo registrado aparece por pessoa, e a atividade da tarefa ganha linhas como “registrou 32min com João”. Cada registro tem menu para editar, adicionar participante e excluir (com confirmação)."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.383.0",
       "summary": "Portal do cliente: no primeiro acesso, um modal rápido confirma nome, telefone e foto.",
