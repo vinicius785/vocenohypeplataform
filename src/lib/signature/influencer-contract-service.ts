@@ -255,12 +255,7 @@ export async function reconcileContract(
 
 const RELEVANT = new Set(["document.finished", "signature.accepted", "signature.rejected"]);
 
-export type EventOutcome =
-  | "duplicate"
-  | "ignored_type"
-  | "unknown_contract"
-  | "technical_signature"
-  | "reconciled";
+export type EventOutcome = "duplicate" | "ignored_type" | "unknown_contract" | "reconciled";
 
 /**
  * Processa um evento já autenticado (HMAC) e parseado. Idempotente: o mesmo `eventId` não é
@@ -297,16 +292,9 @@ export async function processAutentiqueEvent(
       await finish("contrato_nao_encontrado");
       return "unknown_contract";
     }
-    if (event.signatureId) {
-      const signers = await repo.listSigners(found.id);
-      const known = signers.some((s) => s.externalId === event.signatureId);
-      const hasGap = signers.some((s) => !s.externalId);
-      // assinatura que não é de nenhum esperado: só registro técnico, sem papel nem estado
-      if (!known && !hasGap) {
-        await finish(null);
-        return "technical_signature";
-      }
-    }
+    // Conservador: o id da assinatura no evento NÃO é assumido igual ao public_id do getDocument.
+    // Todo evento de documento conhecido reconcilia pelo snapshot (só e-mails esperados);
+    // assinaturas extras nunca entram no estado, então não precisam de tratamento à parte.
     await reconcileContract(deps, found);
     await finish(null);
     return "reconciled";

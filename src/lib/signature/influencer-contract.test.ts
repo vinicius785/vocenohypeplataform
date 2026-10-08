@@ -1,6 +1,7 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { snapshotFromDocument } from "./autentique-status";
+import { handleAutentiqueWebhook } from "./autentique-webhook-handler";
 import { parseAutentiqueEvent, verifyAutentiqueSignature } from "./autentique-webhook";
 import {
   ActiveContractExistsError,
@@ -177,6 +178,24 @@ describe("createInfluencerContract", () => {
     expect(m.contracts[0]).toMatchObject({ status: "aguardando", externalId: null, sentAt: null });
   });
 
+  it("chamadas concorrentes: só uma chega ao provedor", async () => {
+    const m = memRepo();
+    const p = fakeProvider();
+    let sends = 0;
+    const orig = p.provider.createAndSend;
+    p.provider.createAndSend = async (i) => {
+      sends++;
+      return orig(i);
+    };
+    const deps = { repo: m.repo, provider: p.provider, now: t };
+    const r = await Promise.allSettled([
+      createInfluencerContract(deps, input),
+      createInfluencerContract(deps, input),
+    ]);
+    expect(r.filter((x) => x.status === "fulfilled")).toHaveLength(1);
+    expect(sends).toBe(1);
+  });
+
   it("falha ao persistir depois do envio expõe contrato e id externo", async () => {
     const m = memRepo();
     m.repo.insertSigners = async () => {
@@ -252,11 +271,11 @@ describe("processAutentiqueEvent", () => {
     expect(s.contracts[0].status).toBe("assinado");
   });
 
-  it("assinatura extra: só registro técnico, sem mudar estado", async () => {
+  it("assinatura extra: reconcilia pelo snapshot, mas não muda estado nem cria signatário", async () => {
     const s = await setup();
     s.remote.signatures[2].signed = { created_at: "z" };
     expect(await processAutentiqueEvent(s.deps, ev("e1", "signature.accepted", "sigX"))).toBe(
-      "technical_signature",
+      "reconciled",
     );
     expect(s.contracts[0].status).toBe("aguardando");
     expect(s.signers).toHaveLength(2);
@@ -334,5 +353,163 @@ describe("webhook HMAC + parse", () => {
       documentId: "doc1",
       signatureId: "sig0",
     });
+  });
+});
+
+describe("endpoint do webhook (handler)", () => {
+  const SECRET = "segredo-de-teste";
+  const payload = (id: string, type: string, sig?: string, doc = "doc1") =>
+    JSON.stringify({
+      event: {
+        id,
+        type,
+        created_at: "2026-10-08T12:00:00Z",
+        data: { object: sig ? { id: sig, document: doc } : { id: doc } },
+      },
+    });
+  const sign = (b: string) => createHmac("sha256", SECRET).update(b).digest("hex");
+  const call = (s: Awaited<ReturnType<typeof setup>>, body: string, header: string | null) =>
+    handleAutentiqueWebhook({
+      rawBody: body,
+      signatureHeader: header,
+      secret: SECRET,
+      getDeps: async () => ({ repo: s.repo, provider: s.provider }),
+    });
+
+  it("A/B/C: HMAC válido aceita; inválido e corpo adulterado dão 401 sem tocar no banco", async () => {
+    const s = await setup();
+    const body = payload("e1", "signature.accepted", "sig0");
+    expect((await call(s, body, sign(body))).status).toBe(200);
+    let touched = false;
+    const spy = async () => {
+      touched = true;
+      return { repo: s.repo, provider: s.provider };
+    };
+    const bad = await handleAutentiqueWebhook({
+      rawBody: body,
+      signatureHeader: "00",
+      secret: SECRET,
+      getDeps: spy,
+    });
+    const tampered = await handleAutentiqueWebhook({
+      rawBody: body.replace("e1", "e2"),
+      signatureHeader: sign(body),
+      secret: SECRET,
+      getDeps: spy,
+    });
+    expect([bad.status, tampered.status]).toEqual([401, 401]);
+    expect(touched).toBe(false);
+  });
+
+  it("sem segredo configurado: 500; JSON/evento inválido: 400 (assinados)", async () => {
+    const s = await setup();
+    expect(
+      (
+        await handleAutentiqueWebhook({
+          rawBody: "{}",
+          signatureHeader: "x",
+          secret: undefined,
+          getDeps: async () => s,
+        })
+      ).status,
+    ).toBe(500);
+    expect((await call(s, "nao-json", sign("nao-json"))).status).toBe(400);
+    expect((await call(s, "{}", sign("{}"))).status).toBe(400);
+  });
+
+  it("D/I: documento desconhecido responde 200 e fica registrado", async () => {
+    const s = await setup();
+    const body = payload("e1", "document.finished", undefined, "desconhecido");
+    const r = await call(s, body, sign(body));
+    expect(r).toMatchObject({ status: 200, body: { outcome: "unknown_contract" } });
+    expect(s.events.get("autentique:e1")?.processed).toBe(true);
+  });
+
+  it("E: evento duplicado é idempotente", async () => {
+    const s = await setup();
+    const body = payload("e1", "signature.accepted", "sig0");
+    s.remote.signatures[0].signed = { created_at: "a" };
+    await call(s, body, sign(body));
+    const calls = s.remote.calls;
+    const r = await call(s, body, sign(body));
+    expect(r).toMatchObject({ status: 200, body: { outcome: "duplicate" } });
+    expect(s.remote.calls).toBe(calls);
+    expect(s.events.size).toBe(1);
+  });
+
+  it("F: signature.accepted atualiza o signatário certo; contrato parcial", async () => {
+    const s = await setup();
+    s.remote.signatures[0].signed = { created_at: "2026-10-08T13:00:00Z" };
+    const body = payload("e1", "signature.accepted", "sig0");
+    await call(s, body, sign(body));
+    expect(s.signers.map((x) => [x.papel, x.status])).toEqual([
+      ["CONTRATADO", "assinado"],
+      ["CONTRATANTE", "aguardando"],
+    ]);
+    expect(s.contracts[0].status).toBe("parcial");
+  });
+
+  it("G: signature.rejected recusa o signatário e o contrato", async () => {
+    const s = await setup();
+    s.remote.signatures[0].rejected = { created_at: "a" };
+    const body = payload("e1", "signature.rejected", "sig0");
+    await call(s, body, sign(body));
+    expect(s.signers[0]).toMatchObject({ status: "recusado" });
+    expect(s.signers[0].rejectedAt).toBeTruthy();
+    expect(s.signers[1].status).toBe("aguardando");
+    expect(s.contracts[0]).toMatchObject({ status: "recusado" });
+    expect(s.contracts[0].rejectedAt).toBeTruthy();
+  });
+
+  it("H/ordem: document.finished antes de signature.accepted converge para assinado", async () => {
+    const s = await setup();
+    s.remote.signatures[0].signed = { created_at: "a" };
+    s.remote.signatures[1].signed = { created_at: "b" };
+    const fin = payload("e2", "document.finished");
+    const acc = payload("e1", "signature.accepted", "sig0");
+    await call(s, fin, sign(fin));
+    expect(s.contracts[0].status).toBe("assinado");
+    const done = s.contracts[0].completedAt;
+    await call(s, acc, sign(acc)); // evento antigo depois do estado final
+    expect(s.contracts[0]).toMatchObject({ status: "assinado", completedAt: done });
+  });
+
+  it("J: falha transitória do provedor responde 500 (retry); a reentrega conclui", async () => {
+    const s = await setup();
+    const ok = s.provider.getDocument;
+    s.provider.getDocument = async () => {
+      throw new SignatureProviderError("unavailable", "x", true);
+    };
+    const body = payload("e1", "signature.accepted", "sig0");
+    expect((await call(s, body, sign(body))).status).toBe(500);
+    s.provider.getDocument = ok;
+    s.remote.signatures[0].signed = { created_at: "a" };
+    expect((await call(s, body, sign(body))).status).toBe(200);
+    expect(s.contracts[0].status).toBe("parcial");
+  });
+
+  it("object.id diferente do public_id NÃO vira assinatura extra: o snapshot atualiza o signatário", async () => {
+    const s = await setup();
+    s.remote.signatures[0].signed = { created_at: "2026-10-08T13:00:00Z" };
+    const body = payload("e1", "signature.accepted", "id-do-evento-diferente-do-public-id");
+    expect(await call(s, body, sign(body))).toMatchObject({
+      status: 200,
+      body: { outcome: "reconciled" },
+    });
+    expect(s.signers[0]).toMatchObject({ papel: "CONTRATADO", status: "assinado" });
+    expect(s.contracts[0].status).toBe("parcial");
+    expect(s.signers[0].externalId).toBe("sig0"); // vem do snapshot, não do evento
+  });
+
+  it("assinatura extra: 200, sem alterar signatários nem estado", async () => {
+    const s = await setup();
+    s.remote.signatures[2].signed = { created_at: "z" };
+    const body = payload("e1", "signature.accepted", "sigX");
+    expect(await call(s, body, sign(body))).toMatchObject({
+      status: 200,
+      body: { outcome: "reconciled" },
+    });
+    expect(s.contracts[0].status).toBe("aguardando");
+    expect(s.signers).toHaveLength(2);
   });
 });

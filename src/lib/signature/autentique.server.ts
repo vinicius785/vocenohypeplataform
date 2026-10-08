@@ -111,6 +111,42 @@ function signerInput(
   };
 }
 
+/** Diagnóstico SANITIZADO de uma resposta de erro (só para scripts de smoke; nunca em produção). */
+export type ErrorDiagnostic = {
+  httpStatus: number | null;
+  graphqlCodes: string[];
+  messages: string[];
+  /** Chaves de topo da resposta, para entender a estrutura sem expor valores. */
+  responseKeys: string[];
+};
+
+const clean = (v: unknown): string =>
+  String(v)
+    .replace(/https?:\/\/\S+/gi, "[url]")
+    .replace(/Bearer\s+\S+/gi, "Bearer [oculto]")
+    .replace(/[A-Za-z0-9_\-+/=]{24,}/g, "[oculto]")
+    .slice(0, 200);
+
+/** Extrai só status, códigos, mensagens (limpas e truncadas) e chaves de topo. Nunca lança. */
+export function sanitizeErrorDiagnostic(httpStatus: number | null, body: unknown): ErrorDiagnostic {
+  const out: ErrorDiagnostic = { httpStatus, graphqlCodes: [], messages: [], responseKeys: [] };
+  if (!body || typeof body !== "object") return out;
+  const b = body as { errors?: unknown; message?: unknown; error?: unknown };
+  out.responseKeys = Object.keys(b).slice(0, 10);
+  if (typeof b.message === "string") out.messages.push(clean(b.message));
+  if (typeof b.error === "string") out.messages.push(clean(b.error));
+  if (Array.isArray(b.errors)) {
+    for (const e of b.errors.slice(0, 5)) {
+      if (!e || typeof e !== "object") continue;
+      const g = e as { message?: unknown; extensions?: { code?: unknown; category?: unknown } };
+      if (typeof g.message === "string") out.messages.push(clean(g.message));
+      for (const c of [g.extensions?.code, g.extensions?.category])
+        if (typeof c === "string") out.graphqlCodes.push(clean(c));
+    }
+  }
+  return out;
+}
+
 export class AutentiqueProvider implements SignatureProvider {
   readonly name = "autentique";
 
@@ -120,7 +156,17 @@ export class AutentiqueProvider implements SignatureProvider {
     private readonly endpoint = AUTENTIQUE_ENDPOINT,
     /** Diagnóstico: recebe o `data` bruto de cada resposta (o chamador decide mascarar). Nunca em produção. */
     private readonly onRawData?: (operation: string, data: unknown) => void,
+    /** Diagnóstico: recebe um resumo SANITIZADO de respostas de erro. Opt-in; não altera o fluxo. */
+    private readonly onErrorDiagnostic?: (d: ErrorDiagnostic) => void,
   ) {}
+
+  private report(status: number | null, body: unknown) {
+    try {
+      this.onErrorDiagnostic?.(sanitizeErrorDiagnostic(status, body));
+    } catch {
+      /* diagnóstico nunca interfere no fluxo */
+    }
+  }
 
   private async send(body: BodyInit | string, headers: Record<string, string> = {}) {
     const controller = new AbortController();
@@ -145,6 +191,12 @@ export class AutentiqueProvider implements SignatureProvider {
     } finally {
       clearTimeout(timer);
     }
+    if (
+      this.onErrorDiagnostic &&
+      (res.status === 429 || res.status === 401 || res.status === 403 || res.status >= 500)
+    ) {
+      this.report(res.status, await res.json().catch(() => null));
+    }
     if (res.status === 429)
       throw new SignatureProviderError("rate_limited", "Limite de requisições do provedor.", true);
     if (res.status === 401 || res.status === 403)
@@ -161,7 +213,10 @@ export class AutentiqueProvider implements SignatureProvider {
       throw new SignatureProviderError("unavailable", "Resposta inválida do provedor.", true);
     }
     // GraphQL pode responder 200 com `errors`.
-    if (json.errors && json.errors.length > 0) throw mapAutentiqueErrors(json.errors);
+    if (json.errors && json.errors.length > 0) {
+      this.report(res.status, json);
+      throw mapAutentiqueErrors(json.errors);
+    }
     this.onRawData?.("graphql", json.data);
     return json.data as Record<string, unknown>;
   }

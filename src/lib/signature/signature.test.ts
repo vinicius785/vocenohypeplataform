@@ -421,3 +421,61 @@ describe("PDF de teste", () => {
     expect(t).toContain("Ola \\(teste\\)");
   });
 });
+
+describe("diagnóstico sanitizado de erro (opt-in)", () => {
+  const fakeFetch = (status: number, body: unknown) =>
+    (async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch;
+  const call = (p: AutentiqueProvider) => p.getDocument("a".repeat(50), ["a@x.com"]);
+
+  it("401: informa status e mensagem, sem token, URL ou strings longas", async () => {
+    const got: unknown[] = [];
+    const secret = "tok_" + "z".repeat(40);
+    const p = new AutentiqueProvider(
+      secret,
+      fakeFetch(401, {
+        message: `Unauthenticated. Bearer ${secret} em https://x.com/y?k=1`,
+        extra: { a: 1 },
+      }),
+      undefined,
+      undefined,
+      (d) => got.push(d),
+    );
+    await expect(call(p)).rejects.toMatchObject({ code: "unauthorized" });
+    const text = JSON.stringify(got);
+    expect(got).toHaveLength(1);
+    expect(text).toContain('"httpStatus":401');
+    expect(text).toContain("Unauthenticated");
+    expect(text).not.toContain(secret);
+    expect(text).not.toContain("x.com");
+    expect(got[0]).toMatchObject({ responseKeys: ["message", "extra"] });
+  });
+
+  it("200 com errors GraphQL: códigos e mensagens", async () => {
+    const got: Array<{ graphqlCodes: string[]; messages: string[]; httpStatus: number }> = [];
+    const p = new AutentiqueProvider(
+      "t",
+      fakeFetch(200, { errors: [{ message: "Unauthenticated", extensions: { code: "UNAUTH" } }] }),
+      undefined,
+      undefined,
+      (d) => got.push(d as never),
+    );
+    await expect(call(p)).rejects.toMatchObject({ code: "unauthorized" });
+    expect(got[0]).toMatchObject({
+      httpStatus: 200,
+      graphqlCodes: ["UNAUTH"],
+      messages: ["Unauthenticated"],
+    });
+  });
+
+  it("sem callback o comportamento não muda e o corpo nem é lido", async () => {
+    const p = new AutentiqueProvider("t", fakeFetch(401, { message: "x" }));
+    await expect(call(p)).rejects.toMatchObject({ code: "unauthorized", retryable: false });
+  });
+
+  it("callback que lança não afeta o erro", async () => {
+    const p = new AutentiqueProvider("t", fakeFetch(429, {}), undefined, undefined, () => {
+      throw new Error("boom");
+    });
+    await expect(call(p)).rejects.toMatchObject({ code: "rate_limited", retryable: true });
+  });
+});
