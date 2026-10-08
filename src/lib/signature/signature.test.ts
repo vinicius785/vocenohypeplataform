@@ -122,7 +122,10 @@ describe("consulta e cancelamento", () => {
         },
       }),
     );
-    const snap = await provider(f as unknown as typeof fetch).getDocument(DOC_ID);
+    const snap = await provider(f as unknown as typeof fetch).getDocument(DOC_ID, [
+      "a@x.com",
+      "b@x.com",
+    ]);
     expect(snap.state).toBe("parcial");
     expect(snap.signers[0]).toMatchObject({ viewed: true, signed: true, signedAt: "t2" });
   });
@@ -130,13 +133,15 @@ describe("consulta e cancelamento", () => {
   it("aceita o id real (50 hex) e recusa qualquer coisa que feche aspas ou abra campos", async () => {
     const f = vi.fn();
     await expect(
-      provider(f as unknown as typeof fetch).getDocument('x") { id } #'),
+      provider(f as unknown as typeof fetch).getDocument('x") { id } #', []),
     ).rejects.toMatchObject({ code: "not_found" });
     await expect(
       provider(f as unknown as typeof fetch).cancelDocument("../../x"),
     ).rejects.toBeInstanceOf(SignatureProviderError);
     for (const bad of ['a"b', "a b", "a{b}", "a\nb", "", "ab", "x".repeat(200)]) {
-      await expect(provider(f as unknown as typeof fetch).getDocument(bad)).rejects.toMatchObject({
+      await expect(
+        provider(f as unknown as typeof fetch).getDocument(bad, []),
+      ).rejects.toMatchObject({
         code: "not_found",
       });
     }
@@ -186,7 +191,7 @@ describe("consulta e cancelamento", () => {
       expect(q).not.toContain("deleted_at");
       return okJson({ document: { id: DOC_ID, signatures: [] } });
     });
-    await provider(f as unknown as typeof fetch).getDocument(DOC_ID);
+    await provider(f as unknown as typeof fetch).getDocument(DOC_ID, []);
   });
 
   it("cancelar chama deleteDocument", async () => {
@@ -260,19 +265,99 @@ describe("falhas (sem vazar token nem texto do provedor)", () => {
   });
 });
 
-describe("estado derivado", () => {
-  const s = (signed: boolean, rejected = false) => ({ signed, rejected });
-  it("regras", () => {
-    expect(deriveDocumentState([s(false), s(false)])).toBe("aguardando");
-    expect(deriveDocumentState([s(true), s(false)])).toBe("parcial");
-    expect(deriveDocumentState([s(true), s(true)])).toBe("assinado");
-    expect(deriveDocumentState([s(true), s(false, true)])).toBe("recusado");
-    expect(deriveDocumentState([s(true), s(true)], { deleted: true })).toBe("cancelado");
-    expect(deriveDocumentState([])).toBe("aguardando");
+describe("estado derivado (só os signatários ESPERADOS)", () => {
+  const ev = { created_at: "2026-10-08T17:13:20Z" };
+  const sig = (
+    id: string,
+    email: string,
+    o: { viewed?: boolean; signed?: boolean; rejected?: boolean } = {},
+  ) => ({
+    public_id: id,
+    email,
+    viewed: o.viewed ? ev : null,
+    signed: o.signed ? ev : null,
+    rejected: o.rejected ? ev : null,
   });
-  it("snapshot é defensivo com campos ausentes", () => {
-    const snap = snapshotFromDocument({ id: "d" });
-    expect(snap).toMatchObject({ state: "aguardando", signers: [], signedFileUrl: null });
+  const EXP = ["contratado@x.com", "contratante@x.com"];
+  const EXTRA = sig("extra", "outro@vocenohype.com.br");
+  const doc = (signatures: ReturnType<typeof sig>[], files?: { signed?: string | null }) =>
+    snapshotFromDocument({ id: DOC_ID, signatures, files }, EXP);
+
+  it("2 esperados, nenhum assinado → aguardando", () => {
+    expect(doc([sig("a", EXP[0]), sig("b", EXP[1])]).state).toBe("aguardando");
+  });
+  it("1 esperado assinou → parcial", () => {
+    expect(doc([sig("a", EXP[0], { signed: true }), sig("b", EXP[1])]).state).toBe("parcial");
+  });
+  it("2 esperados assinaram + 1 assinatura extra pendente → assinado (caso real)", () => {
+    const s = doc([EXTRA, sig("a", EXP[0], { signed: true }), sig("b", EXP[1], { signed: true })]);
+    expect(s.state).toBe("assinado");
+    expect(s.signers).toHaveLength(2);
+    expect(s.unmatchedSignatures.map((x) => x.externalId)).toEqual(["extra"]);
+    expect(s.unmatchedSignatures[0].signed).toBe(false);
+  });
+  it("1 esperado recusou → recusado (mesmo que o outro tenha assinado)", () => {
+    expect(
+      doc([sig("a", EXP[0], { signed: true }), sig("b", EXP[1], { rejected: true })]).state,
+    ).toBe("recusado");
+    expect(doc([sig("a", EXP[0], { rejected: true }), sig("b", EXP[1])]).state).toBe("recusado");
+  });
+  it("assinatura extra isolada não altera o estado (nem assinada, nem recusada)", () => {
+    expect(doc([sig("a", EXP[0]), sig("b", EXP[1]), EXTRA]).state).toBe("aguardando");
+    expect(doc([sig("a", EXP[0]), sig("b", EXP[1]), { ...EXTRA, signed: ev }]).state).toBe(
+      "aguardando",
+    );
+    expect(doc([sig("a", EXP[0]), sig("b", EXP[1]), { ...EXTRA, rejected: ev }]).state).toBe(
+      "aguardando",
+    );
+    expect(doc([EXTRA]).state).toBe("aguardando");
+  });
+  it("viewed sem assinatura não altera o estado", () => {
+    expect(
+      doc([sig("a", EXP[0], { viewed: true }), sig("b", EXP[1], { viewed: true })]).state,
+    ).toBe("aguardando");
+    const s = doc([
+      sig("a", EXP[0], { viewed: true, signed: true }),
+      sig("b", EXP[1], { viewed: true }),
+    ]);
+    expect(s.state).toBe("parcial");
+    expect(s.signers[0].viewed).toBe(true);
+  });
+  it("files.signed presente sem assinaturas não significa assinado", () => {
+    const s = doc([], { signed: "https://arquivo/assinado.pdf" });
+    expect(s.state).toBe("aguardando");
+    expect(s.signedFileUrl).toBe("https://arquivo/assinado.pdf");
+    expect(doc([sig("a", EXP[0]), sig("b", EXP[1])], { signed: "https://x" }).state).toBe(
+      "aguardando",
+    );
+  });
+  it("e-mail casa normalizado (caixa e espaços)", () => {
+    const s = snapshotFromDocument(
+      {
+        id: DOC_ID,
+        signatures: [
+          sig("a", "  Contratado@X.com ", { signed: true }),
+          sig("b", "CONTRATANTE@x.com", { signed: true }),
+        ],
+      },
+      EXP,
+    );
+    expect(s.state).toBe("assinado");
+    expect(s.unmatchedSignatures).toEqual([]);
+  });
+  it("esperado ausente da resposta conta como pendente", () => {
+    const s = doc([sig("a", EXP[0], { signed: true })]);
+    expect(s.state).toBe("parcial");
+    expect(s.signers[1]).toMatchObject({ externalId: "", signed: false });
+  });
+  it("sem esperados, nada é 'assinado' por engano", () => {
+    expect(deriveDocumentState([])).toBe("aguardando");
+    expect(snapshotFromDocument({ id: "d" }, []).state).toBe("aguardando");
+  });
+  it("cancelado vence (documento apagado)", () => {
+    expect(snapshotFromDocument({ id: "d", deleted_at: "t", signatures: [] }, EXP).state).toBe(
+      "cancelado",
+    );
   });
 });
 

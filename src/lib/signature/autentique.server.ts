@@ -228,12 +228,15 @@ export class AutentiqueProvider implements SignatureProvider {
     return { externalId: doc.id, signers };
   }
 
-  async getDocument(externalId: string): Promise<SignatureDocumentSnapshot> {
+  async getDocument(
+    externalId: string,
+    expectedEmails: readonly string[],
+  ): Promise<SignatureDocumentSnapshot> {
     const data = await this.json(getDocumentQuery(externalId), {});
     const doc = data?.document as Parameters<typeof snapshotFromDocument>[0] | null | undefined;
     if (!doc)
       throw new SignatureProviderError("not_found", "Documento não encontrado no provedor.");
-    return snapshotFromDocument(doc);
+    return snapshotFromDocument(doc, expectedEmails);
   }
 
   async cancelDocument(externalId: string): Promise<void> {

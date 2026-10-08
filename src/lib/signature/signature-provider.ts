@@ -72,8 +72,13 @@ export type SignerProgress = {
 
 export type SignatureDocumentSnapshot = {
   externalId: string;
+  /** Estado calculado SÓ sobre `signers` (os esperados). */
   state: SignatureDocumentState;
+  /** Os signatários que NÓS enviamos (casados por e-mail), um por e-mail esperado. */
   signers: SignerProgress[];
+  /** Assinaturas devolvidas pelo provedor que não correspondem a nenhum signatário esperado.
+   * Só diagnóstico: nunca entram no estado nem são tratadas como signatário do contrato. */
+  unmatchedSignatures: SignerProgress[];
   /** URL do arquivo final assinado, quando existir. */
   signedFileUrl: string | null;
 };
@@ -107,7 +112,11 @@ export interface SignatureProvider {
   readonly name: string;
   /** Cria o documento com os signatários e já o ENVIA para assinatura (um passo só no Autentique). */
   createAndSend(input: CreateSignatureDocumentInput): Promise<CreatedSignatureDocument>;
-  getDocument(externalId: string): Promise<SignatureDocumentSnapshot>;
+  /** `expectedEmails`: os e-mails enviados na criação — só eles definem o estado contratual. */
+  getDocument(
+    externalId: string,
+    expectedEmails: readonly string[],
+  ): Promise<SignatureDocumentSnapshot>;
   /** Cancela/apaga o documento no provedor. */
   cancelDocument(externalId: string): Promise<void>;
 }

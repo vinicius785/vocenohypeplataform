@@ -65,10 +65,20 @@ try {
     console.log(" signatário:", s.role, s.externalId, s.link ? "(link)" : "");
 
   step(2, "Consultar status");
-  const snap = await provider.getDocument(created.externalId);
+  const snap = await provider.getDocument(created.externalId, [influEmail, agencyEmail]);
   console.log("estado:", snap.state);
   for (const s of snap.signers)
-    console.log(" ", s.externalId, { viewed: s.viewed, signed: s.signed, rejected: s.rejected });
+    console.log(" esperado", s.externalId, {
+      viewed: s.viewed,
+      signed: s.signed,
+      rejected: s.rejected,
+    });
+  for (const s of snap.unmatchedSignatures)
+    console.log(" fora dos esperados (ignorada no estado)", s.externalId, {
+      viewed: s.viewed,
+      signed: s.signed,
+      rejected: s.rejected,
+    });
 
   if (keep) {
     console.log("\n--keep: documento mantido (sandbox expira sozinho em alguns dias).");

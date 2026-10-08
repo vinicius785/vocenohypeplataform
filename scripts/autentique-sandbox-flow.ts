@@ -88,23 +88,38 @@ async function create() {
 }
 
 async function watch(id: string) {
+  const expected = [
+    process.env.AUTENTIQUE_SMOKE_CONTRATADO_EMAIL?.trim(),
+    process.env.AUTENTIQUE_SMOKE_CONTRATANTE_EMAIL?.trim(),
+  ].filter((e): e is string => !!e);
+  if (expected.length === 0) {
+    console.error(
+      "Defina AUTENTIQUE_SMOKE_CONTRATADO_EMAIL e AUTENTIQUE_SMOKE_CONTRATANTE_EMAIL (o estado só considera esses e-mails).",
+    );
+    process.exit(1);
+  }
   console.log(`Acompanhando ${id} a cada ${every}s. Ctrl+C para parar.`);
   let last = "";
   for (;;) {
     try {
-      const snap = await provider.getDocument(id);
-      const sig = snap.signers
-        .map((s) => `${s.externalId.slice(0, 8)}:${+s.viewed}${+s.signed}${+s.rejected}`)
-        .join(" ");
+      const snap = await provider.getDocument(id, expected);
+      const fmt = (s: {
+        externalId: string;
+        viewed: boolean;
+        signed: boolean;
+        rejected: boolean;
+      }) => `${s.externalId.slice(0, 8) || "(ausente)"}:${+s.viewed}${+s.signed}${+s.rejected}`;
+      const sig = `${snap.signers.map(fmt).join(" ")} | fora: ${snap.unmatchedSignatures.map(fmt).join(" ") || "-"}`;
       const line = `${snap.state} | ${sig} | arquivoAssinado=${snap.signedFileUrl ? "sim" : "não"}`;
       if (line !== last) {
         last = line;
         console.log(`[${stamp()}] estado=${snap.state}`);
-        for (const s of snap.signers) {
+        const show = (tag: string, s: (typeof snap.signers)[number]) =>
           console.log(
-            `   ${s.externalId} email=${maskEmail(s.email)} viewed=${s.viewed} signed=${s.signed} rejected=${s.rejected}${s.signedAt ? ` signedAt=${s.signedAt}` : ""}`,
+            `   ${tag} ${s.externalId || "(ausente)"} email=${maskEmail(s.email)} viewed=${s.viewed} signed=${s.signed} rejected=${s.rejected}${s.signedAt ? ` signedAt=${s.signedAt}` : ""}`,
           );
-        }
+        for (const s of snap.signers) show("esperado:", s);
+        for (const s of snap.unmatchedSignatures) show("fora dos esperados (ignorada):", s);
         console.log(`   arquivo assinado disponível: ${snap.signedFileUrl ? "sim" : "não"}`);
       }
     } catch (err) {

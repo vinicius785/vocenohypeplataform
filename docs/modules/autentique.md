@@ -214,3 +214,27 @@ Para fechar: rodar `bun scripts/autentique-sandbox-smoke.ts --raw --keep` e regi
 mascarados da assinatura de papel `null`. Até lá, **não tratar essa assinatura como signatário do
 contrato**: a lógica de contratos deve considerar apenas as assinaturas casadas por e-mail com os
 dois signatários enviados.
+
+## 19. Correção da derivação de estado (evidência real, sandbox)
+
+Documento `0c2500d3…` (teste real): o CONTRATADO assinou em `2026-10-08T17:13:20Z` e o CONTRATANTE em
+`2026-10-08T17:15:10Z`; a API também devolveu uma **terceira assinatura**, de um e-mail
+`vocenohype.com.br` que não é de nenhum signatário enviado, e ela **permaneceu sem assinatura**.
+O cliente anterior derivava o estado sobre todas as assinaturas e respondeu `parcial`, embora os
+dois signatários esperados tivessem assinado.
+
+**Regra atual** (`autentique-status.ts`): o estado contratual é calculado **somente sobre os
+signatários esperados** — os e-mails enviados no `createDocument`, casados por e-mail normalizado
+(minúsculas, sem espaços nas pontas). `getDocument(id, expectedEmails)` agora exige esses e-mails.
+
+- nenhum esperado assinou/recusou → `aguardando`;
+- ao menos um assinou e ainda há esperado pendente → `parcial`;
+- todos os esperados assinaram → `assinado`;
+- qualquer esperado recusou → `recusado` (vence os demais);
+- `viewed` **não** altera o estado; `files.signed` **não** é usado para decidir "concluído";
+- um esperado ausente da resposta conta como pendente.
+
+Assinaturas devolvidas que não casam com nenhum e-mail esperado ficam em
+`unmatchedSignatures` — apenas diagnóstico, **sem papel atribuído**: não se afirma que seja o dono da
+conta, um registro técnico ou qualquer outra coisa. Não influenciam o estado e não são tratadas como
+signatário do contrato. A identidade dessa assinatura continua **não determinada**.
