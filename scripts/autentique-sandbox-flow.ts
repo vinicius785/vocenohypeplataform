@@ -9,7 +9,10 @@
  *   # 2) acompanha o documento: imprime uma linha SÓ quando algo muda (estado derivado + flags)
  *   bun scripts/autentique-sandbox-flow.ts watch <documentId> [--raw] [--every=15]
  *
- *   # 3) apaga o documento de teste
+ *   # 3) recupera os links de assinatura de um documento JÁ criado (para continuar o teste manual)
+ *   bun scripts/autentique-sandbox-flow.ts links <documentId>
+ *
+ *   # 4) apaga o documento de teste
  *   bun scripts/autentique-sandbox-flow.ts delete <documentId>
  *
  * Variáveis: AUTENTIQUE_API_TOKEN, AUTENTIQUE_SMOKE_CONTRATADO_EMAIL, AUTENTIQUE_SMOKE_CONTRATANTE_EMAIL.
@@ -87,6 +90,70 @@ async function create() {
   }
 }
 
+/**
+ * Links de assinatura de um documento existente. Consulta direta (só neste script): o cliente do
+ * provedor não pede `link` na consulta de estado e não deve ser alterado por causa de um teste manual.
+ * Os links são credenciais de assinatura — documentos de TESTE em sandbox; não os compartilhe.
+ */
+async function links(id: string) {
+  if (!/^[A-Za-z0-9_-]{8,128}$/.test(id)) {
+    console.error("Identificador de documento inválido.");
+    process.exit(1);
+  }
+  const res = await fetch("https://api.autentique.com.br/v2/graphql", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      query: `query { document(id: "${id}") { id signatures { public_id name email link { short_link } } } }`,
+    }),
+  });
+  if (res.status === 429)
+    throw new SignatureProviderError("rate_limited", "Limite de requisições do provedor.", true);
+  if (res.status === 401 || res.status === 403)
+    throw new SignatureProviderError(
+      "unauthorized",
+      "Credencial do provedor de assinatura inválida.",
+    );
+  if (res.status >= 500)
+    throw new SignatureProviderError("unavailable", "Provedor de assinatura indisponível.", true);
+  const json = (await res.json()) as {
+    data?: {
+      document?: {
+        id: string;
+        signatures?: Array<{
+          public_id: string;
+          name?: string | null;
+          email?: string | null;
+          link?: { short_link?: string | null } | null;
+        }>;
+      } | null;
+    };
+    errors?: unknown[];
+  };
+  if (json.errors?.length)
+    throw new SignatureProviderError("rejected_by_provider", "O provedor recusou a consulta.");
+  const doc = json.data?.document;
+  if (!doc) throw new SignatureProviderError("not_found", "Documento não encontrado no provedor.");
+
+  const roleByEmail = new Map<string, string>();
+  const contratado = process.env.AUTENTIQUE_SMOKE_CONTRATADO_EMAIL?.trim().toLowerCase();
+  const contratante = process.env.AUTENTIQUE_SMOKE_CONTRATANTE_EMAIL?.trim().toLowerCase();
+  if (contratado) roleByEmail.set(contratado, "CONTRATADO");
+  if (contratante) roleByEmail.set(contratante, "CONTRATANTE");
+
+  console.log("documento:", doc.id);
+  for (const s of doc.signatures ?? []) {
+    const role = s.email ? (roleByEmail.get(s.email.toLowerCase()) ?? null) : null;
+    console.log({
+      papel: role ?? "(nenhum dos nossos)",
+      id: s.public_id,
+      nome: s.name ?? null,
+      email: maskEmail(s.email),
+      link: s.link?.short_link ?? "(a API não devolveu link)",
+    });
+  }
+}
+
 async function watch(id: string) {
   const expected = [
     process.env.AUTENTIQUE_SMOKE_CONTRATADO_EMAIL?.trim(),
@@ -135,11 +202,14 @@ async function watch(id: string) {
 try {
   if (cmd === "create") await create();
   else if (cmd === "watch" && arg && !arg.startsWith("--")) await watch(arg);
+  else if (cmd === "links" && arg && !arg.startsWith("--")) await links(arg);
   else if (cmd === "delete" && arg && !arg.startsWith("--")) {
     await provider.cancelDocument(arg);
     console.log("apagado.");
   } else {
-    console.error("Uso: create [--show-links] | watch <id> [--raw] [--every=15] | delete <id>");
+    console.error(
+      "Uso: create [--show-links] | watch <id> [--raw] [--every=15] | links <id> | delete <id>",
+    );
     process.exit(1);
   }
 } catch (err) {
