@@ -99,3 +99,5 @@ Seções: Geral/Workspace, Perfil, Preferências, Disponibilidade, Áudio e Víd
 ## Shell e transversais
 
 `AppShell`: sidebar global (256/68px), topbar, busca global, notificações (menções, tarefas, mensagens), timer ativo, tema, aviso de versão. Transversais: `useConfirm`, `FilterToolbar`, `Kpi`, `PageHeader`, `EmptyState`, notificações/push, release notes.
+
+- [Assinatura de contratos — Autentique](autentique.md): auditoria da API, riscos, proposta de persistência e teste em sandbox.

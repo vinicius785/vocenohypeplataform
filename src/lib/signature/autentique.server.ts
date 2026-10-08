@@ -1,0 +1,245 @@
+import {
+  SignatureProviderError,
+  type CreateSignatureDocumentInput,
+  type CreatedSignatureDocument,
+  type ProviderSigner,
+  type SignatureDocumentSnapshot,
+  type SignatureProvider,
+  type SignerSpec,
+} from "./signature-provider";
+import { snapshotFromDocument } from "./autentique-status";
+
+/**
+ * Cliente do Autentique (GraphQL, `https://api.autentique.com.br/v2/graphql`). SOMENTE servidor:
+ * o token vem de `AUTENTIQUE_API_TOKEN` e nunca aparece em log, erro ou resposta. Mensagens de
+ * erro são códigos estáveis — nada de texto do provedor, conteúdo de documento ou token.
+ */
+
+export const AUTENTIQUE_ENDPOINT = "https://api.autentique.com.br/v2/graphql";
+const TIMEOUT_MS = 25_000;
+
+type Fetch = typeof fetch;
+
+const createDocumentMutation = (
+  sandbox: boolean,
+) => `mutation CreateDocumentMutation($document: DocumentInput!, $signers: [SignerInput!]!, $file: Upload!) {
+  createDocument(sandbox: ${sandbox ? "true" : "false"}, document: $document, signers: $signers, file: $file) {
+    id
+    name
+    signatures { public_id name email link { short_link } }
+  }
+}`;
+
+/** O tipo do id no schema não está documentado; o id entra no texto da query, só depois de validado
+ * como UUID (nada além de hex e hífens chega ao GraphQL). */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function assertDocumentId(id: string): string {
+  if (!UUID_RE.test(id))
+    throw new SignatureProviderError("not_found", "Identificador de documento inválido.");
+  return id;
+}
+
+const getDocumentQuery = (id: string) => `query {
+  document(id: "${assertDocumentId(id)}") {
+    id
+    deleted_at
+    files { signed }
+    signatures {
+      public_id
+      email
+      viewed { created_at }
+      signed { created_at }
+      rejected { created_at }
+    }
+  }
+}`;
+
+const deleteDocumentMutation = (id: string) =>
+  `mutation { deleteDocument(id: "${assertDocumentId(id)}") }`;
+
+/** Converte erros do provedor em códigos nossos (sem repassar o texto dele). */
+export function mapAutentiqueErrors(
+  errors: Array<{ message?: string; extensions?: { validation?: Record<string, unknown> } }>,
+): SignatureProviderError {
+  const text = JSON.stringify(errors.map((e) => [e.message, e.extensions?.validation ?? null]));
+  const has = (s: string) => text.includes(s);
+  if (has("unauthorized") || has("Unauthenticated")) {
+    return new SignatureProviderError(
+      "unauthorized",
+      "Credencial do provedor de assinatura inválida.",
+    );
+  }
+  if (has("unavailable_credits")) {
+    return new SignatureProviderError(
+      "no_credits",
+      "O plano do provedor não tem documentos disponíveis.",
+    );
+  }
+  if (has("must_be_a_valid_email_address") || has("sms_delivery_not_allowed")) {
+    return new SignatureProviderError(
+      "invalid_signer",
+      "Dados de signatário recusados pelo provedor.",
+    );
+  }
+  if (has("must_be_a_valid_file") || has("failed_to_upload") || has("could_not_upload_file")) {
+    return new SignatureProviderError("invalid_file", "Arquivo recusado pelo provedor.");
+  }
+  if (has("document_not_found")) {
+    return new SignatureProviderError("not_found", "Documento não encontrado no provedor.");
+  }
+  return new SignatureProviderError("rejected_by_provider", "O provedor recusou a solicitação.");
+}
+
+function signerInput(
+  s: SignerSpec,
+  positions?: CreateSignatureDocumentInput["signaturePositions"],
+) {
+  const pos = positions?.[s.role];
+  return {
+    name: s.name,
+    email: s.email,
+    action: "SIGN",
+    ...(s.cpf ? { configs: { cpf: s.cpf } } : {}),
+    ...(pos
+      ? {
+          positions: [{ element: "SIGNATURE", x: String(pos.x), y: String(pos.y), z: pos.page }],
+        }
+      : {}),
+    ...(s.extraVerification === "sms"
+      ? { security_verifications: [{ type: "SMS", ...(s.phone ? { verify_phone: s.phone } : {}) }] }
+      : {}),
+  };
+}
+
+export class AutentiqueProvider implements SignatureProvider {
+  readonly name = "autentique";
+
+  constructor(
+    private readonly token: string,
+    private readonly fetchImpl: Fetch = fetch,
+    private readonly endpoint = AUTENTIQUE_ENDPOINT,
+  ) {}
+
+  private async send(body: BodyInit | string, headers: Record<string, string> = {}) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await this.fetchImpl(this.endpoint, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${this.token}`, ...headers },
+        body,
+        signal: controller.signal,
+      });
+    } catch (err) {
+      if ((err as { name?: string })?.name === "AbortError") {
+        throw new SignatureProviderError(
+          "timeout",
+          "O provedor demorou demais para responder.",
+          true,
+        );
+      }
+      throw new SignatureProviderError("unavailable", "Provedor de assinatura indisponível.", true);
+    } finally {
+      clearTimeout(timer);
+    }
+    if (res.status === 429)
+      throw new SignatureProviderError("rate_limited", "Limite de requisições do provedor.", true);
+    if (res.status === 401 || res.status === 403)
+      throw new SignatureProviderError(
+        "unauthorized",
+        "Credencial do provedor de assinatura inválida.",
+      );
+    if (res.status >= 500)
+      throw new SignatureProviderError("unavailable", "Provedor de assinatura indisponível.", true);
+    let json: { data?: unknown; errors?: Parameters<typeof mapAutentiqueErrors>[0] };
+    try {
+      json = (await res.json()) as typeof json;
+    } catch {
+      throw new SignatureProviderError("unavailable", "Resposta inválida do provedor.", true);
+    }
+    // GraphQL pode responder 200 com `errors`.
+    if (json.errors && json.errors.length > 0) throw mapAutentiqueErrors(json.errors);
+    return json.data as Record<string, unknown>;
+  }
+
+  private json(query: string, variables: Record<string, unknown>) {
+    return this.send(JSON.stringify({ query, variables }), { "Content-Type": "application/json" });
+  }
+
+  async createAndSend(input: CreateSignatureDocumentInput): Promise<CreatedSignatureDocument> {
+    const form = new FormData();
+    form.append(
+      "operations",
+      JSON.stringify({
+        query: createDocumentMutation(input.sandbox === true),
+        variables: {
+          document: {
+            name: input.name,
+            sortable: input.sequential,
+            refusable: true,
+            ...(input.message ? { message: input.message } : {}),
+          },
+          signers: input.signers.map((s) => signerInput(s, input.signaturePositions)),
+          file: null,
+        },
+      }),
+    );
+    form.append("map", JSON.stringify({ file: ["variables.file"] }));
+    form.append(
+      "file",
+      new Blob([input.file.bytes as BlobPart], { type: input.file.mimeType }),
+      input.file.fileName,
+    );
+    // Sem Content-Type: o fetch monta o boundary do multipart sozinho.
+    const data = await this.send(form);
+    const doc = data?.createDocument as
+      | {
+          id: string;
+          signatures?: Array<{
+            public_id: string;
+            email?: string | null;
+            link?: { short_link?: string | null } | null;
+          }>;
+        }
+      | undefined;
+    if (!doc?.id) {
+      throw new SignatureProviderError(
+        "rejected_by_provider",
+        "O provedor não devolveu o documento.",
+      );
+    }
+    const byEmail = new Map(input.signers.map((s) => [s.email.toLowerCase(), s.role]));
+    const signers: ProviderSigner[] = (doc.signatures ?? []).map((s) => ({
+      externalId: s.public_id,
+      role: s.email ? (byEmail.get(s.email.toLowerCase()) ?? null) : null,
+      email: s.email ?? null,
+      link: s.link?.short_link ?? null,
+    }));
+    return { externalId: doc.id, signers };
+  }
+
+  async getDocument(externalId: string): Promise<SignatureDocumentSnapshot> {
+    const data = await this.json(getDocumentQuery(externalId), {});
+    const doc = data?.document as Parameters<typeof snapshotFromDocument>[0] | null | undefined;
+    if (!doc)
+      throw new SignatureProviderError("not_found", "Documento não encontrado no provedor.");
+    return snapshotFromDocument(doc);
+  }
+
+  async cancelDocument(externalId: string): Promise<void> {
+    await this.json(deleteDocumentMutation(externalId), {});
+  }
+}
+
+/** Provedor configurado pelo ambiente. Lança `not_configured` se o token não existir. */
+export function getSignatureProvider(): SignatureProvider {
+  const token = process.env.AUTENTIQUE_API_TOKEN?.trim();
+  if (!token) {
+    throw new SignatureProviderError(
+      "not_configured",
+      "Provedor de assinatura não configurado (AUTENTIQUE_API_TOKEN).",
+    );
+  }
+  return new AutentiqueProvider(token);
+}
