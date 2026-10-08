@@ -57,7 +57,7 @@ describe("histórico do cliente", () => {
       audit: [audit("r1", "invite_sent", "2026-10-06T09:00:00Z")],
       members,
     });
-    expect(h[0].text).toBe("Acesso ao portal concedido a Maria");
+    expect(h[0].text).toBe("Convite enviado para Maria");
     expect(h[0].person).toBe("Maria");
     for (const e of h) expect(e.text).not.toMatch(/access_audit|[{}]|invite_sent/);
   });
@@ -93,7 +93,7 @@ describe("histórico do cliente", () => {
       audit: [audit("r", "invite_sent", "2026-10-06T09:00:00Z", "ghost")],
       members,
     });
-    expect(h[0].text).toBe("Convite de acesso ao portal enviado");
+    expect(h[0].text).toBe("Convite de acesso enviado");
   });
 
   it("motivo da troca de status vira observação", () => {
@@ -146,5 +146,59 @@ describe("núcleos", () => {
     expect(hasComercialData({})).toBe(false);
     expect(hasComercialData({ proximoPasso: "  " })).toBe(false);
     expect(hasComercialData({ previsaoFechamento: "2026-12-01" })).toBe(true);
+  });
+});
+
+describe("histórico: convite x acesso", () => {
+  it("convite enviado NÃO diz que o acesso foi concedido", () => {
+    const h = buildClienteHistorico({
+      activity: [],
+      audit: [audit("1", "invite_sent", "2026-10-06T09:00:00Z")],
+      members,
+    });
+    expect(h[0].text).toBe("Convite enviado para Maria");
+    expect(h[0].text).not.toMatch(/concedido/);
+  });
+  it("aceite concede o acesso", () => {
+    const h = buildClienteHistorico({
+      activity: [],
+      audit: [audit("2", "invite_accepted", "2026-10-07T09:00:00Z")],
+      members,
+    });
+    expect(h[0].text).toBe("Maria aceitou o convite e recebeu acesso ao portal");
+  });
+  it("convite excluído usa o nome guardado no evento (a conta não existe mais)", () => {
+    const h = buildClienteHistorico({
+      activity: [],
+      audit: [
+        {
+          ...audit("3", "invite_cancelled", "2026-10-07T10:00:00Z", null),
+          previous_value: { status: "invited", email: "t@x.com", name: "Atendimento Terê" },
+        },
+      ],
+      members,
+    });
+    expect(h[0].text).toBe("Convite para Atendimento Terê excluído");
+  });
+  it("convite enviado a quem foi excluído mostra o nome gravado no envio", () => {
+    const h = buildClienteHistorico({
+      activity: [],
+      audit: [
+        {
+          ...audit("4", "invite_sent", "2026-10-05T10:00:00Z", "gone"),
+          new_value: { email: "f@x.com", name: "Fernando" },
+        },
+      ],
+      members,
+    });
+    expect(h[0].text).toBe("Convite enviado para Fernando");
+  });
+  it("revogar acesso fala em acesso revogado", () => {
+    const h = buildClienteHistorico({
+      activity: [],
+      audit: [audit("5", "removed", "2026-10-07T11:00:00Z")],
+      members,
+    });
+    expect(h[0].text).toBe("Acesso de Maria revogado");
   });
 });

@@ -5,7 +5,10 @@ import {
   lastAccessAt,
   memberActions,
   relativeDay,
+  INVITE_ACTIONS,
+  inviteSentLabel,
   removeActionLabel,
+  splitInvitesAndAccess,
 } from "./portal-access-ui";
 import { recordPortalAccessCore, ACCESS_RECORD_MIN_INTERVAL_MS } from "@/lib/portal-access-record";
 
@@ -87,10 +90,9 @@ describe("estado x atividade", () => {
 describe("ações por estado", () => {
   it("ativo", () =>
     expect(memberActions("active")).toEqual(["role", "campaigns", "suspend", "remove"]));
-  it("convite pendente: reenviar e revogar, sem suspender", () => {
-    expect(memberActions("invited")).toContain("resend");
-    expect(memberActions("invited")).not.toContain("suspend");
-    expect(removeActionLabel("invited")).toBe("Revogar convite");
+  it("convite pendente não tem ações de acesso (tem menu próprio: reenviar/excluir)", () => {
+    expect(memberActions("invited")).toEqual([]);
+    expect(INVITE_ACTIONS).toEqual(["resend", "cancel"]);
   });
   it("suspenso: reativar, sem suspender nem reenviar", () => {
     expect(memberActions("suspended")).toContain("reactivate");
@@ -149,5 +151,24 @@ describe("registro do acesso (origem de last_access_at)", () => {
     ]);
     const cutoff = new Date(now.getTime() - ACCESS_RECORD_MIN_INTERVAL_MS).toISOString();
     expect(calls[0].or).toBe(`last_access_at.is.null,last_access_at.lt.${cutoff}`);
+  });
+});
+
+describe("convite x acesso", () => {
+  it("convites e acessos são listas disjuntas", () => {
+    const ms = [
+      { status: "invited" },
+      { status: "active" },
+      { status: "suspended" },
+      { status: "removed" },
+    ];
+    const { invites, access } = splitInvitesAndAccess(ms);
+    expect(invites).toHaveLength(1);
+    expect(access.map((m) => m.status)).toEqual(["active", "suspended", "removed"]);
+  });
+  it("rótulo do envio", () => {
+    expect(inviteSentLabel(daysAgo(0), NOW)).toBe("Enviado hoje");
+    expect(inviteSentLabel(daysAgo(3), NOW)).toBe("Enviado há 3 dias");
+    expect(inviteSentLabel(null, NOW)).toBe("Enviado");
   });
 });

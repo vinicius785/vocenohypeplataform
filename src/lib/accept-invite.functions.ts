@@ -44,6 +44,7 @@ export const acceptPendingInvites = createServerFn({ method: "POST" })
       await writeAuditLog(supabaseAdmin, {
         actorUserId: context.userId,
         organizationId: row.organization_id,
+        targetUserId: context.userId,
         action: "invite_accepted",
         previousValue: { status: "invited" },
         newValue: { status: "active" },

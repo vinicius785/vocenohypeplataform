@@ -105,6 +105,14 @@ function generateTempPassword(): string {
   return `Vnh-${Math.random().toString(36).slice(2, 8)}${Math.random().toString(36).slice(2, 6)}!`;
 }
 
+/** Mensagem certa para "este e-mail já está ligado a este cliente", conforme o estado do vínculo. */
+export function duplicateInviteMessage(status: string): string {
+  if (status === "invited")
+    return "Já existe um convite pendente para este e-mail. Use “Reenviar” em Convites pendentes.";
+  if (status === "removed") return "Este e-mail já teve o acesso revogado neste cliente.";
+  return "Este e-mail já tem acesso ao portal deste cliente.";
+}
+
 export type InviteEmailResult = { emailSent: boolean; emailError: string | null };
 
 /** Envia ao convidado o e-mail com as informações do acesso ao portal. Conta nova recebe um link
@@ -251,7 +259,7 @@ export async function inviteClientUserCore(
       .eq("user_id", existingAuthUser.id)
       .maybeSingle();
     if (existingLink) {
-      throw new Error("Este usuário já tem um vínculo com esta organização.");
+      throw new Error(duplicateInviteMessage(existingLink.status));
     }
 
     const { error: memberErr } = await supabaseAdmin.from("organization_members").insert({
@@ -269,7 +277,7 @@ export async function inviteClientUserCore(
       organizationId: input.organizationId,
       action: "invite_sent_existing_account",
       targetUserId: existingAuthUser.id,
-      newValue: { role: input.role, email: input.email },
+      newValue: { role: input.role, email: input.email, name: input.fullName || undefined },
     });
 
     return {
@@ -311,7 +319,7 @@ export async function inviteClientUserCore(
     organizationId: input.organizationId,
     action: "invite_sent",
     targetUserId: userId,
-    newValue: { role: input.role, email: input.email },
+    newValue: { role: input.role, email: input.email, name: input.fullName || undefined },
   });
 
   return { id: userId, email: input.email, tempPassword, existingAccount: false };
@@ -658,3 +666,99 @@ export const removeClientAccess = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) =>
     setMembershipStatus(context, data.organizationMemberId, "removed", "removed"),
   );
+
+/**
+ * Exclui um CONVITE pendente (não um acesso): o vínculo `invited` deixa de existir e o convite
+ * deixa de valer de verdade, não só na tela.
+ *  - Conta criada POR este convite (nunca entrou, sem outros vínculos): a conta de login é apagada —
+ *    isso invalida o link do e-mail (token de recuperação) e a senha temporária.
+ *  - Conta que já existia: só o vínculo (e as campanhas liberadas deste cliente) é removido; a conta
+ *    e os outros acessos dela ficam intactos. O link desse convite era só o do login.
+ * Só convites com status `invited`; acesso aceito/suspenso/revogado nunca passa por aqui.
+ */
+export async function cancelClientInviteCore(
+  supabaseAdmin: SupabaseClient<Database>,
+  actorUserId: string,
+  organizationMemberId: string,
+): Promise<{ ok: true; deletedAccount: boolean }> {
+  const membership = await loadMembershipWithOrg(supabaseAdmin, organizationMemberId);
+  const org = membership.organizations as unknown as { type: string } | null;
+  if (!org || org.type !== "client") {
+    throw new Error("Só é possível excluir convites de organizações de clientes.");
+  }
+  if (membership.status !== "invited") {
+    throw new Error("Só convites pendentes podem ser excluídos.");
+  }
+
+  const { data: authData } = await supabaseAdmin.auth.admin.getUserById(membership.user_id);
+  const authUser = authData?.user ?? null;
+  const email = authUser?.email ?? null;
+  const name =
+    typeof authUser?.user_metadata?.full_name === "string"
+      ? authUser.user_metadata.full_name
+      : null;
+
+  const { count: otherMemberships, error: countErr } = await supabaseAdmin
+    .from("organization_members")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", membership.user_id)
+    .neq("id", organizationMemberId);
+  if (countErr) throw new Error(countErr.message);
+
+  const createdByInvite =
+    !!authUser &&
+    authUser.user_metadata?.must_change_password === true &&
+    !authUser.last_sign_in_at &&
+    (otherMemberships ?? 0) === 0;
+
+  if (createdByInvite) {
+    // Apaga a conta criada pelo convite: o vínculo cai junto (ON DELETE CASCADE) e o link do e-mail morre.
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(membership.user_id);
+    if (error) throw new Error(error.message);
+  } else {
+    const { data: cliente } = await supabaseAdmin
+      .from("clientes")
+      .select("data")
+      .eq("organization_id", membership.organization_id)
+      .maybeSingle();
+    const campaignIds = (
+      ((cliente?.data as { campanhas?: { id?: string }[] } | null)?.campanhas ?? []) as {
+        id?: string;
+      }[]
+    )
+      .map((c) => c.id)
+      .filter((id): id is string => typeof id === "string");
+    if (campaignIds.length > 0) {
+      const { error } = await supabaseAdmin
+        .from("campaign_members")
+        .delete()
+        .eq("user_id", membership.user_id)
+        .in("campaign_id", campaignIds);
+      if (error) throw new Error(error.message);
+    }
+    const { error } = await supabaseAdmin
+      .from("organization_members")
+      .delete()
+      .eq("id", organizationMemberId)
+      .eq("status", "invited"); // nunca apaga um acesso que acabou de ser aceito
+    if (error) throw new Error(error.message);
+  }
+
+  await logAccessAudit(supabaseAdmin, {
+    actorUserId,
+    organizationId: membership.organization_id,
+    action: "invite_cancelled",
+    targetUserId: createdByInvite ? null : membership.user_id,
+    previousValue: { status: "invited", email, name },
+  });
+  return { ok: true, deletedAccount: createdByInvite };
+}
+
+export const cancelClientInvite = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((raw: unknown) => OrgMemberIdInput.parse(raw))
+  .handler(async ({ data, context }) => {
+    await assertClientesAccess(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    return cancelClientInviteCore(supabaseAdmin, context.userId, data.organizationMemberId);
+  });

@@ -1,6 +1,26 @@
 {
-  "version": "1.384.0",
+  "version": "1.385.0",
   "releases": [
+    {
+      "version": "1.385.0",
+      "summary": "Clientes: convite e acesso ao portal agora são coisas separadas, e dá para excluir um convite pendente.",
+      "modules": [
+        {
+          "name": "CLIENTES",
+          "tagline": "Acessos ao portal",
+          "items": [
+            {
+              "title": "Convites pendentes em lista própria",
+              "description": "“Acessos ao portal” mostra só quem já tem acesso. Quem foi convidado e ainda não aceitou aparece em “Convites pendentes”, com Reenviar e Excluir convite."
+            },
+            {
+              "title": "Excluir convite de verdade",
+              "description": "Ao excluir, o link do e-mail deixa de funcionar e o convite não pode mais ser aceito. O histórico passa a diferenciar “convite enviado”, “convite excluído” e “aceitou o convite e recebeu acesso”."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.384.0",
       "summary": "Controle de tempo das tarefas refeito: sessão em primeiro plano, participantes e registros do dia.",

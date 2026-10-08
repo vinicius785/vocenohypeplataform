@@ -24,20 +24,26 @@ export type AuditRowLike = {
   created_at: string;
   target_user_id: string | null;
   actorEmail?: string | null;
+  /** Valores gravados no evento (lidos só para achar nome/e-mail do convidado — nunca exibidos crus). */
+  new_value?: unknown;
+  previous_value?: unknown;
 };
 
 export type MemberLike = { user_id: string; fullName: string | null; email: string | null };
 
 /** Eventos de acesso que fazem sentido numa timeline de cliente (login/MFA/troca de ambiente não). */
 const AUDIT_TEXT: Record<string, (who: string | null) => string> = {
-  invite_sent: (w) =>
-    w ? `Acesso ao portal concedido a ${w}` : "Convite de acesso ao portal enviado",
+  // CONVITE ≠ ACESSO: enviar um convite não concede acesso — isso só acontece no aceite.
+  invite_sent: (w) => (w ? `Convite enviado para ${w}` : "Convite de acesso enviado"),
   invite_sent_existing_account: (w) =>
-    w ? `Acesso ao portal concedido a ${w}` : "Acesso ao portal concedido",
-  invite_accepted: (w) =>
-    w ? `${w} entrou no portal pela primeira vez` : "Primeiro acesso ao portal",
-  invite_resent: (w) => (w ? `Convite reenviado a ${w}` : "Convite de acesso reenviado"),
+    w ? `Convite enviado para ${w}` : "Convite de acesso enviado",
+  invite_resent: (w) => (w ? `Convite reenviado para ${w}` : "Convite de acesso reenviado"),
+  invite_cancelled: (w) => (w ? `Convite para ${w} excluído` : "Convite de acesso excluído"),
   invite_revoked: (w) => (w ? `Convite de ${w} revogado` : "Convite de acesso revogado"),
+  invite_accepted: (w) =>
+    w
+      ? `${w} aceitou o convite e recebeu acesso ao portal`
+      : "Convite aceito: acesso ao portal concedido",
   role_changed: (w) => (w ? `Função de ${w} no portal alterada` : "Função de acesso alterada"),
   campaigns_changed: (w) =>
     w ? `Campanhas liberadas para ${w} alteradas` : "Campanhas liberadas alteradas",
@@ -45,8 +51,8 @@ const AUDIT_TEXT: Record<string, (who: string | null) => string> = {
   member_suspended: (w) => (w ? `Acesso de ${w} suspenso` : "Acesso ao portal suspenso"),
   reactivated: (w) => (w ? `Acesso de ${w} reativado` : "Acesso ao portal reativado"),
   member_reactivated: (w) => (w ? `Acesso de ${w} reativado` : "Acesso ao portal reativado"),
-  removed: (w) => (w ? `Acesso de ${w} removido` : "Acesso ao portal removido"),
-  member_removed: (w) => (w ? `Acesso de ${w} removido` : "Acesso ao portal removido"),
+  removed: (w) => (w ? `Acesso de ${w} revogado` : "Acesso ao portal revogado"),
+  member_removed: (w) => (w ? `Acesso de ${w} revogado` : "Acesso ao portal revogado"),
   token_deactivated: () => "Link antigo do portal desativado",
 };
 
@@ -64,11 +70,26 @@ function activityEvent(e: ClienteActivityEntry): HistoricoEvento {
   };
 }
 
+function nameFromValue(v: unknown): string | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as { name?: unknown; email?: unknown };
+  if (typeof o.name === "string" && o.name.trim()) return o.name.trim();
+  if (typeof o.email === "string" && o.email.trim()) return o.email.trim();
+  return null;
+}
+
 function auditEvent(r: AuditRowLike, members: readonly MemberLike[]): HistoricoEvento | null {
   const make = AUDIT_TEXT[r.action];
   if (!make) return null;
   const target = r.target_user_id ? members.find((m) => m.user_id === r.target_user_id) : undefined;
-  const who = target?.fullName?.trim() || target?.email || null;
+  // Quem é a pessoa: o cadastro atual; se ela não existe mais (convite excluído), o nome/e-mail
+  // guardado no próprio evento.
+  const who =
+    target?.fullName?.trim() ||
+    target?.email ||
+    nameFromValue(r.new_value) ||
+    nameFromValue(r.previous_value) ||
+    null;
   return {
     id: `audit:${r.id}`,
     at: r.created_at,

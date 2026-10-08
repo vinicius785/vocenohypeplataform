@@ -108,7 +108,8 @@ export function memberActions(status: string): MemberAction[] {
     case "active":
       return ["role", "campaigns", "suspend", "remove"];
     case "invited":
-      return ["resend", "role", "campaigns", "remove"];
+      // Convite não é acesso: tem lista e menu próprios (ver `inviteActions`).
+      return [];
     case "suspended":
       return ["reactivate", "role", "campaigns", "remove"];
     default:
@@ -120,4 +121,23 @@ export function memberActions(status: string): MemberAction[] {
 /** Texto da ação de remover conforme o estado ("Revogar convite" enquanto pendente). */
 export function removeActionLabel(status: string): string {
   return status === "invited" ? "Revogar convite" : "Remover acesso";
+}
+
+/** Convite pendente: só reenviar ou excluir (ainda não existe acesso para suspender/revogar). */
+export type InviteAction = "resend" | "cancel";
+export const INVITE_ACTIONS: InviteAction[] = ["resend", "cancel"];
+
+/** Separa CONVITES (status `invited`) de ACESSOS (todo o resto) — uma pessoa nunca está nas duas. */
+export function splitInvitesAndAccess<M extends { status: string }>(
+  members: readonly M[],
+): { invites: M[]; access: M[] } {
+  return {
+    invites: members.filter((m) => m.status === "invited"),
+    access: members.filter((m) => m.status !== "invited"),
+  };
+}
+
+/** "Enviado hoje" / "Enviado ontem" / "Enviado há 3 dias" / "Enviado em 24 ago. 2026". */
+export function inviteSentLabel(invitedAt: string | null, now: Date = new Date()): string {
+  return invitedAt ? `Enviado ${relativeDay(invitedAt, now)}` : "Enviado";
 }

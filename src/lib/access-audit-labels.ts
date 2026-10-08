@@ -20,6 +20,7 @@ export const ACCESS_AUDIT_ACTION_LABELS: Record<string, string> = {
   invite_sent_existing_account: "Convite enviado (conta existente vinculada)",
   invite_accepted: "Primeiro acesso (convite aceito)",
   invite_resent: "Convite reenviado",
+  invite_cancelled: "Convite excluído",
   invite_revoked: "Convite revogado",
   role_changed: "Função alterada",
   campaigns_changed: "Campanhas liberadas alteradas",

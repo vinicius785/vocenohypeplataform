@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  cancelClientInvite,
   inviteClientUser,
   reactivateClientMember,
   removeClientAccess,
@@ -39,8 +40,10 @@ import { ClienteSection } from "./ClienteSection";
 import {
   accessActivity,
   accessState,
-  memberActions,
+  inviteSentLabel,
   removeActionLabel,
+  memberActions,
+  splitInvitesAndAccess,
   type AccessTone,
 } from "./portal-access-ui";
 import { initialsOf } from "./cliente-ui";
@@ -169,6 +172,7 @@ export function PortalAccessSection({
   const suspendFn = useServerFn(suspendClientMember);
   const reactivateFn = useServerFn(reactivateClientMember);
   const removeFn = useServerFn(removeClientAccess);
+  const cancelInviteFn = useServerFn(cancelClientInvite);
 
   const { organizationId, members, campaigns } = portal;
   const [showForm, setShowForm] = useState(false);
@@ -337,6 +341,21 @@ export function PortalAccessSection({
     );
   };
 
+  /** Exclui o CONVITE (não um acesso): o servidor invalida o link e remove o vínculo pendente. */
+  const handleCancelInvite = async (m: Member) => {
+    const who = m.fullName || m.email || "este convidado";
+    if (
+      !(await confirm(
+        `O convite de "${who}" será cancelado e deixará de aparecer nos convites pendentes.`,
+        { title: "Excluir convite?", confirmLabel: "Excluir convite", destructive: true },
+      ))
+    )
+      return;
+    return withRowBusy(m.id, async () => {
+      await cancelInviteFn({ data: { organizationMemberId: m.id } });
+    });
+  };
+
   const openInvite = () => {
     setShowForm(true);
     setTempPassword(null);
@@ -370,347 +389,432 @@ export function PortalAccessSection({
   // Cliente sem organização no portal: nada a administrar aqui.
   if (!organizationId) return null;
 
+  // CONVITE ≠ ACESSO: convites pendentes têm lista própria; só quem já aceitou tem acesso.
+  const { invites, access } = splitInvitesAndAccess(members ?? []);
+
   return (
-    <ClienteSection
-      id="acessos-ao-portal"
-      title="Acessos ao portal"
-      count={members?.length ?? 0}
-      action={
-        <Button variant="outline" size="sm" onClick={openInvite} className="shrink-0 gap-1.5">
-          <UserPlus2 className="h-3.5 w-3.5" aria-hidden="true" /> Convidar usuário
-        </Button>
-      }
-    >
-      {confirmDialog}
+    <>
+      <ClienteSection
+        id="acessos-ao-portal"
+        title="Acessos ao portal"
+        count={access.length}
+        action={
+          <Button variant="outline" size="sm" onClick={openInvite} className="shrink-0 gap-1.5">
+            <UserPlus2 className="h-3.5 w-3.5" aria-hidden="true" /> Convidar usuário
+          </Button>
+        }
+      >
+        {confirmDialog}
 
-      <Dialog open={showForm} onOpenChange={(v) => (v ? setShowForm(true) : setShowForm(false))}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Convidar para o portal</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-text-secondary">
-            Esta pessoa receberá um convite para acessar as campanhas da{" "}
-            {clienteNome ? <strong>{clienteNome}</strong> : "empresa"}.
-          </p>
-          <form onSubmit={handleInvite} className="space-y-3">
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-text-secondary">Nome</label>
-              <input
-                type="text"
-                required
-                placeholder="Nome"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-text-secondary">E-mail</label>
-              <input
-                type="email"
-                required
-                placeholder="E-mail"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-text-secondary">Tipo de acesso</label>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => setRole("client_standard")}
-                  className={`rounded-xl border p-3 text-left text-xs transition-colors ${
-                    role === "client_standard"
-                      ? "border-brand bg-brand/5"
-                      : "border-border/60 hover:bg-muted/40"
-                  }`}
-                >
-                  <p className="font-medium text-foreground">Acesso padrão</p>
-                  <p className="mt-1 text-text-secondary">
-                    Pode acompanhar campanhas, comentar e realizar aprovações.
-                  </p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRole("client_viewer")}
-                  className={`rounded-xl border p-3 text-left text-xs transition-colors ${
-                    role === "client_viewer"
-                      ? "border-brand bg-brand/5"
-                      : "border-border/60 hover:bg-muted/40"
-                  }`}
-                >
-                  <p className="font-medium text-foreground">Somente visualização</p>
-                  <p className="mt-1 text-text-secondary">
-                    Pode consultar informações, sem comentar ou aprovar.
-                  </p>
-                </button>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-text-secondary">Campanhas liberadas</label>
-              <div className="space-y-2 rounded-xl border border-border/60 p-2">
-                <label className="flex items-center gap-2 text-xs">
-                  <input
-                    type="radio"
-                    name="campaignScope"
-                    checked={campaignScope === "all"}
-                    onChange={() => setCampaignScope("all")}
-                  />
-                  Todas as campanhas atuais e futuras
-                </label>
-                <label className="flex items-center gap-2 text-xs">
-                  <input
-                    type="radio"
-                    name="campaignScope"
-                    checked={campaignScope === "specific"}
-                    onChange={() => setCampaignScope("specific")}
-                  />
-                  Selecionar campanhas específicas
-                </label>
-                {campaignScope === "specific" && (
-                  <div className="max-h-32 space-y-1 overflow-y-auto border-t border-border/60 pt-2">
-                    {campaigns.length === 0 && (
-                      <p className="text-xs text-text-secondary">Nenhuma campanha cadastrada.</p>
-                    )}
-                    {campaigns.map((c) => (
-                      <label key={c.id} className="flex items-center gap-2 text-xs">
-                        <input
-                          type="checkbox"
-                          checked={inviteCampaignIds.has(c.id)}
-                          onChange={() =>
-                            setInviteCampaignIds((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(c.id)) next.delete(c.id);
-                              else next.add(c.id);
-                              return next;
-                            })
-                          }
-                        />
-                        {c.nome}
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-            {error && <p className="text-xs text-destructive">{error}</p>}
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" variant="primary" disabled={loading}>
-                {loading ? "Enviando..." : "Enviar convite"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {inviteEmail && (
-        <div role="status" className="mb-3 rounded-xl border border-border/60 bg-card p-3 text-xs">
-          <p className="font-medium text-foreground">
-            {inviteEmail.sent
-              ? `Convite enviado por e-mail para ${inviteEmail.to}.`
-              : "O convite foi criado, mas o e-mail não foi enviado."}
-          </p>
-          {!inviteEmail.sent && (
-            <p className="mt-1 text-text-secondary">
-              {inviteEmail.error ? `${inviteEmail.error} ` : ""}
-              {tempPassword
-                ? "Compartilhe a senha temporária abaixo ou use “Reenviar convite” depois."
-                : "Use “Reenviar convite” para tentar de novo."}
+        <Dialog open={showForm} onOpenChange={(v) => (v ? setShowForm(true) : setShowForm(false))}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Convidar para o portal</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-text-secondary">
+              Esta pessoa receberá um convite para acessar as campanhas da{" "}
+              {clienteNome ? <strong>{clienteNome}</strong> : "empresa"}.
             </p>
-          )}
-        </div>
-      )}
+            <form onSubmit={handleInvite} className="space-y-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-text-secondary">Nome</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Nome"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-text-secondary">E-mail</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="E-mail"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-text-secondary">Tipo de acesso</label>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => setRole("client_standard")}
+                    className={`rounded-xl border p-3 text-left text-xs transition-colors ${
+                      role === "client_standard"
+                        ? "border-brand bg-brand/5"
+                        : "border-border/60 hover:bg-muted/40"
+                    }`}
+                  >
+                    <p className="font-medium text-foreground">Acesso padrão</p>
+                    <p className="mt-1 text-text-secondary">
+                      Pode acompanhar campanhas, comentar e realizar aprovações.
+                    </p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRole("client_viewer")}
+                    className={`rounded-xl border p-3 text-left text-xs transition-colors ${
+                      role === "client_viewer"
+                        ? "border-brand bg-brand/5"
+                        : "border-border/60 hover:bg-muted/40"
+                    }`}
+                  >
+                    <p className="font-medium text-foreground">Somente visualização</p>
+                    <p className="mt-1 text-text-secondary">
+                      Pode consultar informações, sem comentar ou aprovar.
+                    </p>
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-text-secondary">
+                  Campanhas liberadas
+                </label>
+                <div className="space-y-2 rounded-xl border border-border/60 p-2">
+                  <label className="flex items-center gap-2 text-xs">
+                    <input
+                      type="radio"
+                      name="campaignScope"
+                      checked={campaignScope === "all"}
+                      onChange={() => setCampaignScope("all")}
+                    />
+                    Todas as campanhas atuais e futuras
+                  </label>
+                  <label className="flex items-center gap-2 text-xs">
+                    <input
+                      type="radio"
+                      name="campaignScope"
+                      checked={campaignScope === "specific"}
+                      onChange={() => setCampaignScope("specific")}
+                    />
+                    Selecionar campanhas específicas
+                  </label>
+                  {campaignScope === "specific" && (
+                    <div className="max-h-32 space-y-1 overflow-y-auto border-t border-border/60 pt-2">
+                      {campaigns.length === 0 && (
+                        <p className="text-xs text-text-secondary">Nenhuma campanha cadastrada.</p>
+                      )}
+                      {campaigns.map((c) => (
+                        <label key={c.id} className="flex items-center gap-2 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={inviteCampaignIds.has(c.id)}
+                            onChange={() =>
+                              setInviteCampaignIds((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(c.id)) next.delete(c.id);
+                                else next.add(c.id);
+                                return next;
+                              })
+                            }
+                          />
+                          {c.nome}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              {error && <p className="text-xs text-destructive">{error}</p>}
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" variant="primary" disabled={loading}>
+                  {loading ? "Enviando..." : "Enviar convite"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
 
-      {tempPassword && (
-        <div className="mb-3 rounded-xl border border-border/60 bg-card p-3 text-xs">
-          <p className="font-medium text-foreground">
-            {inviteEmail?.sent
-              ? "Senha temporária (opcional — o convidado recebeu um link por e-mail para criar a própria senha):"
-              : inviteWasExistingAccount
-                ? "Conta existente vinculada. Senha temporária (caso precise):"
-                : "Senha temporária para o primeiro acesso:"}
-          </p>
-          <div className="mt-1 flex items-center gap-2">
-            <p className="select-all rounded bg-muted px-2 py-1 font-mono text-foreground">
-              {tempPassword}
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => void navigator.clipboard.writeText(tempPassword)}
-            >
-              Copiar senha temporária
-            </Button>
-          </div>
-          <p className="mt-1 text-text-secondary">
-            Só é exibida agora; não fica disponível depois.
-          </p>
-        </div>
-      )}
-
-      {rowError && <p className="mb-2 text-xs text-destructive">{rowError}</p>}
-
-      {members && members.length > 0 ? (
-        <div>
+        {inviteEmail && (
           <div
-            aria-hidden="true"
-            className="hidden border-b border-border/60 pb-2 text-[11px] font-medium uppercase tracking-wide text-text-secondary md:grid md:grid-cols-[2rem_minmax(0,1.1fr)_minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,1fr)_2.25rem] md:gap-x-3"
+            role="status"
+            className="mb-3 rounded-xl border border-border/60 bg-card p-3 text-xs"
           >
-            <span />
-            <span>Pessoa</span>
-            <span>E-mail</span>
-            <span>Função</span>
-            <span>Acesso</span>
-            <span>Atividade</span>
-            <span />
+            <p className="font-medium text-foreground">
+              {inviteEmail.sent
+                ? `Convite enviado por e-mail para ${inviteEmail.to}.`
+                : "O convite foi criado, mas o e-mail não foi enviado."}
+            </p>
+            {!inviteEmail.sent && (
+              <p className="mt-1 text-text-secondary">
+                {inviteEmail.error ? `${inviteEmail.error} ` : ""}
+                {tempPassword
+                  ? "Compartilhe a senha temporária abaixo ou use “Reenviar convite” depois."
+                  : "Use “Reenviar convite” para tentar de novo."}
+              </p>
+            )}
           </div>
-          <ul className="divide-y divide-border/60">
-            {members.map((m) => {
-              const name = m.fullName || m.email || "Sem nome";
-              const restricted = m.campaignIds.length > 0;
-              const activity = accessActivity(m);
-              const roleLabel = ROLE_LABELS[m.role] ?? m.role;
-              const scope = restricted
-                ? `${m.campaignIds.length} ${m.campaignIds.length === 1 ? "campanha" : "campanhas"}`
-                : null;
-              return (
-                <li key={m.id} className={`py-3 ${rowBusyId === m.id ? "opacity-60" : ""}`}>
-                  <div className="flex items-center gap-3 md:grid md:grid-cols-[2rem_minmax(0,1.1fr)_minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,1fr)_2.25rem] md:gap-x-3">
-                    <Avatar className="h-8 w-8 shrink-0">
-                      <AvatarFallback className="bg-muted text-[11px] font-semibold text-text-secondary">
-                        {initialsOf(name) || "?"}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0 flex-1 md:contents">
-                      <p className="truncate text-sm font-medium text-foreground">
-                        {m.fullName || "Sem nome"}
-                      </p>
-                      <p className="truncate text-xs text-text-secondary md:text-sm">
-                        {m.email || "—"}
-                      </p>
-                      <p className="hidden truncate text-sm text-text-secondary md:block">
-                        {roleLabel}
-                        {scope && <span className="block text-xs">{scope}</span>}
-                      </p>
-                      <p className="hidden md:block">
+        )}
+
+        {tempPassword && (
+          <div className="mb-3 rounded-xl border border-border/60 bg-card p-3 text-xs">
+            <p className="font-medium text-foreground">
+              {inviteEmail?.sent
+                ? "Senha temporária (opcional — o convidado recebeu um link por e-mail para criar a própria senha):"
+                : inviteWasExistingAccount
+                  ? "Conta existente vinculada. Senha temporária (caso precise):"
+                  : "Senha temporária para o primeiro acesso:"}
+            </p>
+            <div className="mt-1 flex items-center gap-2">
+              <p className="select-all rounded bg-muted px-2 py-1 font-mono text-foreground">
+                {tempPassword}
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void navigator.clipboard.writeText(tempPassword)}
+              >
+                Copiar senha temporária
+              </Button>
+            </div>
+            <p className="mt-1 text-text-secondary">
+              Só é exibida agora; não fica disponível depois.
+            </p>
+          </div>
+        )}
+
+        {rowError && <p className="mb-2 text-xs text-destructive">{rowError}</p>}
+
+        {access.length > 0 ? (
+          <div>
+            <div
+              aria-hidden="true"
+              className="hidden border-b border-border/60 pb-2 text-[11px] font-medium uppercase tracking-wide text-text-secondary md:grid md:grid-cols-[2rem_minmax(0,1.1fr)_minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,1fr)_2.25rem] md:gap-x-3"
+            >
+              <span />
+              <span>Pessoa</span>
+              <span>E-mail</span>
+              <span>Função</span>
+              <span>Acesso</span>
+              <span>Atividade</span>
+              <span />
+            </div>
+            <ul className="divide-y divide-border/60">
+              {access.map((m) => {
+                const name = m.fullName || m.email || "Sem nome";
+                const restricted = m.campaignIds.length > 0;
+                const activity = accessActivity(m);
+                const roleLabel = ROLE_LABELS[m.role] ?? m.role;
+                const scope = restricted
+                  ? `${m.campaignIds.length} ${m.campaignIds.length === 1 ? "campanha" : "campanhas"}`
+                  : null;
+                return (
+                  <li key={m.id} className={`py-3 ${rowBusyId === m.id ? "opacity-60" : ""}`}>
+                    <div className="flex items-center gap-3 md:grid md:grid-cols-[2rem_minmax(0,1.1fr)_minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,1fr)_2.25rem] md:gap-x-3">
+                      <Avatar className="h-8 w-8 shrink-0">
+                        <AvatarFallback className="bg-muted text-[11px] font-semibold text-text-secondary">
+                          {initialsOf(name) || "?"}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1 md:contents">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {m.fullName || "Sem nome"}
+                        </p>
+                        <p className="truncate text-xs text-text-secondary md:text-sm">
+                          {m.email || "—"}
+                        </p>
+                        <p className="hidden truncate text-sm text-text-secondary md:block">
+                          {roleLabel}
+                          {scope && <span className="block text-xs">{scope}</span>}
+                        </p>
+                        <p className="hidden md:block">
+                          <AccessStateLabel status={m.status} />
+                        </p>
+                        <p
+                          title={activity.title}
+                          className="hidden truncate text-sm text-text-secondary md:block"
+                        >
+                          {activity.text}
+                        </p>
+                      </div>
+                      <MemberRowMenu
+                        m={m}
+                        rowBusyId={rowBusyId}
+                        onResend={handleResend}
+                        onRole={openRoleDialog}
+                        onCampaigns={openCampaignsDialog}
+                        onSuspend={handleSuspend}
+                        onReactivate={handleReactivate}
+                        onRemove={handleRemove}
+                      />
+                    </div>
+                    {/* Mobile: duas linhas separadas — estado do acesso e atividade. */}
+                    <div className="mt-1.5 space-y-0.5 pl-11 md:hidden">
+                      <p className="flex flex-wrap items-center gap-x-2 text-xs text-text-secondary">
                         <AccessStateLabel status={m.status} />
+                        <span>
+                          {roleLabel}
+                          {scope ? ` · ${scope}` : ""}
+                        </span>
                       </p>
-                      <p
-                        title={activity.title}
-                        className="hidden truncate text-sm text-text-secondary md:block"
-                      >
+                      <p title={activity.title} className="text-xs text-text-secondary">
                         {activity.text}
                       </p>
                     </div>
-                    <MemberRowMenu
-                      m={m}
-                      rowBusyId={rowBusyId}
-                      onResend={handleResend}
-                      onRole={openRoleDialog}
-                      onCampaigns={openCampaignsDialog}
-                      onSuspend={handleSuspend}
-                      onReactivate={handleReactivate}
-                      onRemove={handleRemove}
-                    />
-                  </div>
-                  {/* Mobile: duas linhas separadas — estado do acesso e atividade. */}
-                  <div className="mt-1.5 space-y-0.5 pl-11 md:hidden">
-                    <p className="flex flex-wrap items-center gap-x-2 text-xs text-text-secondary">
-                      <AccessStateLabel status={m.status} />
-                      <span>
-                        {roleLabel}
-                        {scope ? ` · ${scope}` : ""}
-                      </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ) : (
+          <EmptyState
+            compact
+            icon={<Users className="h-5 w-5" />}
+            title="Nenhum acesso ao portal"
+            description={
+              invites.length > 0
+                ? "Os acessos aparecem aqui quando os convites forem aceitos."
+                : "Convide uma pessoa do cliente para acompanhar campanhas e aprovações."
+            }
+          />
+        )}
+
+        <Dialog open={!!roleDialogMember} onOpenChange={(v) => !v && setRoleDialogMember(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Alterar função</DialogTitle>
+            </DialogHeader>
+            <Select
+              value={roleDialogValue}
+              onValueChange={(v) => setRoleDialogValue(v as ClientRole)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="client_standard">Acesso padrão</SelectItem>
+                <SelectItem value="client_viewer">Somente visualização</SelectItem>
+              </SelectContent>
+            </Select>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setRoleDialogMember(null)}>
+                Cancelar
+              </Button>
+              <Button variant="primary" onClick={confirmRoleChange}>
+                Salvar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
+          open={!!campaignsDialogMember}
+          onOpenChange={(v) => !v && setCampaignsDialogMember(null)}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Campanhas liberadas</DialogTitle>
+            </DialogHeader>
+            <p className="text-xs text-text-secondary">
+              Nenhuma selecionada = acesso a todas as campanhas do cliente.
+            </p>
+            <div className="max-h-64 space-y-1.5 overflow-y-auto">
+              {campaigns.length === 0 && (
+                <p className="text-xs text-text-secondary">Nenhuma campanha cadastrada.</p>
+              )}
+              {campaigns.map((c) => (
+                <label key={c.id} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={campaignsDialogSelected.has(c.id)}
+                    onChange={() => toggleCampaign(c.id)}
+                    className="h-3.5 w-3.5 rounded border-input accent-foreground"
+                  />
+                  {c.nome}
+                </label>
+              ))}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCampaignsDialogMember(null)}>
+                Cancelar
+              </Button>
+              <Button variant="primary" onClick={confirmCampaignsChange}>
+                Salvar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </ClienteSection>
+
+      {invites.length > 0 && (
+        <ClienteSection id="convites-pendentes" title="Convites pendentes" count={invites.length}>
+          <ul className="divide-y divide-border/60">
+            {invites.map((m) => {
+              const name = m.fullName || m.email || "Sem nome";
+              return (
+                <li
+                  key={m.id}
+                  className={`flex items-center gap-3 py-3 ${rowBusyId === m.id ? "opacity-60" : ""}`}
+                >
+                  <Avatar className="h-8 w-8 shrink-0">
+                    <AvatarFallback className="bg-muted text-[11px] font-semibold text-text-secondary">
+                      {initialsOf(name) || "?"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {m.fullName || "Sem nome"}
                     </p>
-                    <p title={activity.title} className="text-xs text-text-secondary">
-                      {activity.text}
+                    <p className="truncate text-xs text-text-secondary">{m.email || "—"}</p>
+                    <p className="truncate text-xs text-text-secondary sm:hidden">
+                      {inviteSentLabel(m.invited_at)}
                     </p>
                   </div>
+                  <p
+                    className="hidden shrink-0 text-sm text-text-secondary sm:block"
+                    title={
+                      m.invited_at ? new Date(m.invited_at).toLocaleString("pt-BR") : undefined
+                    }
+                  >
+                    {inviteSentLabel(m.invited_at)}
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={rowBusyId === m.id}
+                    onClick={() => void handleResend(m)}
+                    className="shrink-0"
+                  >
+                    Reenviar
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        disabled={rowBusyId === m.id}
+                        aria-label={`Ações do convite de ${name}`}
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => void handleResend(m)}>
+                        Reenviar convite
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onClick={() => void handleCancelInvite(m)}
+                      >
+                        Excluir convite
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </li>
               );
             })}
           </ul>
-        </div>
-      ) : (
-        <EmptyState
-          compact
-          icon={<Users className="h-5 w-5" />}
-          title="Nenhum acesso ao portal"
-          description="Convide uma pessoa do cliente para acompanhar campanhas e aprovações."
-        />
+        </ClienteSection>
       )}
-
-      <Dialog open={!!roleDialogMember} onOpenChange={(v) => !v && setRoleDialogMember(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Alterar função</DialogTitle>
-          </DialogHeader>
-          <Select
-            value={roleDialogValue}
-            onValueChange={(v) => setRoleDialogValue(v as ClientRole)}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="client_standard">Acesso padrão</SelectItem>
-              <SelectItem value="client_viewer">Somente visualização</SelectItem>
-            </SelectContent>
-          </Select>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRoleDialogMember(null)}>
-              Cancelar
-            </Button>
-            <Button variant="primary" onClick={confirmRoleChange}>
-              Salvar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={!!campaignsDialogMember}
-        onOpenChange={(v) => !v && setCampaignsDialogMember(null)}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Campanhas liberadas</DialogTitle>
-          </DialogHeader>
-          <p className="text-xs text-text-secondary">
-            Nenhuma selecionada = acesso a todas as campanhas do cliente.
-          </p>
-          <div className="max-h-64 space-y-1.5 overflow-y-auto">
-            {campaigns.length === 0 && (
-              <p className="text-xs text-text-secondary">Nenhuma campanha cadastrada.</p>
-            )}
-            {campaigns.map((c) => (
-              <label key={c.id} className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={campaignsDialogSelected.has(c.id)}
-                  onChange={() => toggleCampaign(c.id)}
-                  className="h-3.5 w-3.5 rounded border-input accent-foreground"
-                />
-                {c.nome}
-              </label>
-            ))}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCampaignsDialogMember(null)}>
-              Cancelar
-            </Button>
-            <Button variant="primary" onClick={confirmCampaignsChange}>
-              Salvar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </ClienteSection>
+    </>
   );
 }
