@@ -1,6 +1,22 @@
 {
-  "version": "1.385.0",
+  "version": "1.386.0",
   "releases": [
+    {
+      "version": "1.386.0",
+      "summary": "Comercial: cards de oportunidade mais limpos, com follow-up compacto.",
+      "modules": [
+        {
+          "name": "COMERCIAL",
+          "tagline": "Kanban",
+          "items": [
+            {
+              "title": "Card mais leve",
+              "description": "O botão grande “Registrar follow-up” virou um “+ Follow-up” discreto no rodapé. O responsável é só um avatar (e some quando não há), e o card mostra nome, contato, valor e a situação em uma linha."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.385.0",
       "summary": "Clientes: convite e acesso ao portal agora são coisas separadas, e dá para excluir um convite pendente.",

@@ -47,12 +47,12 @@ const text = (html: string) =>
     .trim();
 
 describe("LeadCard — o que o vendedor lê sem abrir a ficha", () => {
-  it("quem, quanto, situação e o CTA; cargo sem repetir o contato", () => {
+  it("quem, quanto, situação e o follow-up compacto; cargo sem repetir o contato", () => {
     const t = text(render({ lastContactAt: Date.now() - 6 * DAY }));
     expect(t).toContain("zerezes");
     expect(t).toContain("R$ 100.000");
     expect(t).toContain("Sem contato há 6 dias");
-    expect(t).toContain("Registrar follow-up");
+    expect(t).toContain("Follow-up");
     // contato e cargo iguais (webhook) aparecem uma vez só
     expect(t.match(/Head of Growth \/ Digital/g)).toHaveLength(1);
   });
@@ -88,13 +88,24 @@ describe("LeadCard — o que o vendedor lê sem abrir a ficha", () => {
     expect(t).not.toContain("R$ 0");
   });
 
-  it("responsável: iniciais com nome acessível; sem responsável, ícone claro (não um '—')", () => {
+  it("responsável: avatar com nome acessível; sem responsável não ocupa espaço (sem placeholder)", () => {
     const withOwner = render();
     expect(withOwner).toContain('aria-label="Responsável: Rodrigo Hype"');
     const none = render({ responsible: undefined });
-    expect(none).toContain('aria-label="Sem responsável"');
-    expect(none).toContain("border-dashed");
-    expect(text(none)).not.toContain("—");
+    expect(none).not.toContain("Responsável");
+    expect(none).not.toContain("Sem responsável");
+    expect(none).not.toContain("border-dashed");
+  });
+
+  it("follow-up é uma ação compacta no rodapé: nunca um botão de largura total", () => {
+    const html = render();
+    expect(html).toContain('aria-label="Registrar follow-up"');
+    const btn = html.slice(
+      html.indexOf('aria-label="Registrar follow-up"') - 400,
+      html.indexOf('aria-label="Registrar follow-up"') + 100,
+    );
+    expect(btn).not.toContain("flex-1");
+    expect(btn).not.toContain("w-full");
   });
 
   it("WhatsApp é ação secundária com nome acessível; some sem telefone válido", () => {
@@ -106,10 +117,10 @@ describe("LeadCard — o que o vendedor lê sem abrir a ficha", () => {
   it("lead encerrado: mostra o desfecho e não oferece follow-up", () => {
     const won = text(render({ stage: "GANHO" }));
     expect(won).toContain("Ganho");
-    expect(won).not.toContain("Registrar follow-up");
+    expect(won).not.toContain("Follow-up");
     const lost = text(render({ stage: "PERDIDO", lossReason: "Sem orçamento" }));
     expect(lost).toContain("Perdido — Sem orçamento");
-    expect(lost).not.toContain("Registrar follow-up");
+    expect(lost).not.toContain("Follow-up");
   });
 
   it("nomes e cargos longos truncam (e levam o texto completo no title)", () => {

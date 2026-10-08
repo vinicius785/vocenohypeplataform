@@ -1,4 +1,4 @@
-import { AlertTriangle, MessageCircle, Phone, UserRound } from "lucide-react";
+import { AlertTriangle, MessageCircle, Plus } from "lucide-react";
 import type { Lead } from "@/lib/comercial";
 import { formatBRL } from "@/lib/comercial";
 import { legacyStage } from "@/lib/comercial-engine";
@@ -10,7 +10,8 @@ import { contactSubline, leadSituation } from "@/lib/comercial-lead-view";
 
 /**
  * Card da oportunidade — responde, sem abrir a ficha: QUEM é (nome + cargo),
- * QUANTO vale, QUAL a situação e O QUE fazer (o CTA "Registrar follow-up").
+ * QUANTO vale, QUAL a situação e quem cuida (avatar). O follow-up é uma ação compacta no rodapé
+ * ("+ Follow-up"), nunca um botão de largura total — a informação é a protagonista.
  * A "situação" é UMA frase (`leadSituation`): a próxima ação combinada, se
  * houver; senão "aguardando retorno" ou o tempo desde o último contato —
  * sempre em texto discreto, sem badges. O resto (e-mail, telefone, origem,
@@ -52,7 +53,7 @@ export function LeadCard({
       draggable={draggable}
       onDragStart={draggable ? onDragStart : undefined}
       onDragEnd={draggable ? onDragEnd : undefined}
-      className={`surface-card p-4 text-sm transition-all hover:bg-muted/30 ${
+      className={`surface-card p-3.5 text-sm transition-all hover:bg-muted/30 ${
         dragging ? "scale-[0.98] opacity-50 shadow-lg" : ""
       }`}
     >
@@ -68,29 +69,22 @@ export function LeadCard({
         }}
         className="cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
       >
-        <div className="min-w-0">
-          <p
-            className="truncate text-[15px] font-semibold text-foreground"
-            title={lead.company || lead.name}
-          >
-            {lead.company || lead.name}
-          </p>
-          {subline && (
-            <p className="mt-0.5 truncate text-xs text-text-secondary" title={subline}>
-              {subline}
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <p
+              className="truncate text-[15px] font-semibold text-foreground"
+              title={lead.company || lead.name}
+            >
+              {lead.company || lead.name}
             </p>
-          )}
-        </div>
-
-        <div className="mt-3 flex items-center justify-between gap-2">
-          {lead.value ? (
-            <span className="whitespace-nowrap text-[15px] font-semibold tabular-nums text-foreground">
-              {formatBRL(lead.value)}
-            </span>
-          ) : (
-            <span className="text-xs text-text-secondary">Valor a definir</span>
-          )}
-          {lead.responsible ? (
+            {subline && (
+              <p className="mt-0.5 truncate text-xs text-text-secondary" title={subline}>
+                {subline}
+              </p>
+            )}
+          </div>
+          {/* Responsável: só o avatar, e só quando existe (sem placeholder). */}
+          {lead.responsible && (
             <span
               title={`Responsável: ${lead.responsible}`}
               aria-label={`Responsável: ${lead.responsible}`}
@@ -100,21 +94,23 @@ export function LeadCard({
             >
               {initialsOf(lead.responsible, "?")}
             </span>
-          ) : (
-            <span
-              title="Sem responsável"
-              aria-label="Sem responsável"
-              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-dashed border-border text-text-secondary"
-            >
-              <UserRound className="h-3.5 w-3.5" aria-hidden="true" />
-            </span>
           )}
         </div>
+
+        <p className="mt-2.5">
+          {lead.value ? (
+            <span className="whitespace-nowrap text-[15px] font-semibold tabular-nums text-foreground">
+              {formatBRL(lead.value)}
+            </span>
+          ) : (
+            <span className="text-xs text-text-secondary">Valor a definir</span>
+          )}
+        </p>
 
         {/* A situação: uma frase, texto discreto (cor só para ação vencida/de hoje). */}
         <p
           title={[situation.prefix, situation.text].filter(Boolean).join(" ")}
-          className={`mt-2 flex items-center gap-1 text-xs ${
+          className={`mt-1 flex items-center gap-1 text-xs ${
             situation.tone === "danger"
               ? "font-medium text-danger-soft-foreground"
               : situation.tone === "warning"
@@ -137,46 +133,45 @@ export function LeadCard({
       </div>
 
       {!isTerminal && (
-        <>
-          <div className="mt-2.5 flex items-center gap-1.5">
-            <Button
-              variant="secondary"
-              size="sm"
-              className="flex-1"
-              onClick={(e) => {
-                e.stopPropagation();
-                onRegisterFollowUp();
-              }}
-            >
-              <Phone /> Registrar follow-up
-            </Button>
-            {hasWhatsapp && (
-              <TooltipProvider delayDuration={300}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      asChild
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 shrink-0 text-text-secondary hover:text-foreground"
+        <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/50 pt-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label="Registrar follow-up"
+            className="-ml-2 h-7 gap-1 px-2 text-xs text-text-secondary hover:text-foreground"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRegisterFollowUp();
+            }}
+          >
+            <Plus className="h-3.5 w-3.5" aria-hidden="true" /> Follow-up
+          </Button>
+          {hasWhatsapp && (
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    asChild
+                    variant="ghost"
+                    size="icon"
+                    className="-mr-1.5 h-7 w-7 shrink-0 text-text-secondary hover:text-foreground"
+                  >
+                    <a
+                      href={`https://wa.me/${whatsappDigits}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label="Abrir WhatsApp"
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      <a
-                        href={`https://wa.me/${whatsappDigits}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        aria-label="Abrir WhatsApp"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <MessageCircle />
-                      </a>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Abrir WhatsApp</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-          </div>
-        </>
+                      <MessageCircle />
+                    </a>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Abrir WhatsApp</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </div>
       )}
     </div>
   );
