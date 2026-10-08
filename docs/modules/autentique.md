@@ -172,3 +172,25 @@ sandbox envia e-mail, e o formato exato dos eventos de webhook.
   verificação extra (SMS?) e plano (Free tem 10 documentos/mês).
 - Aprovar a tabela da seção 9; depois: rota `api/public/autentique-webhook` (verificar HMAC →
   deduplicar `event.id` → responder 2xx → reconsultar o documento → atualizar o contrato).
+
+## 17. Evidência do primeiro teste real (sandbox, 2026-10-09)
+
+Resultado do `scripts/autentique-sandbox-smoke.ts` com o token real da conta:
+
+- **Passo 1 — OK:** autenticação, endpoint, multipart, `sandbox: true` e `createDocument` foram aceitos.
+  O Autentique devolveu o id do documento e **3** assinaturas.
+- **Passo 2 — falhou no NOSSO cliente, não no Autentique:** a consulta foi recusada antes de sair, com
+  `not_found: Identificador de documento inválido`.
+
+**Causa:** o cliente validava o id do documento como **UUID**, mas o id real devolvido pelo
+`createDocument` tem **50 caracteres hexadecimais** (ex.: `65369b2e…b5`), não UUID. A documentação
+chama o argumento de "UUID", o que não vale para o id que a própria API entrega. Correção: a validação
+passou a aceitar `[A-Za-z0-9_-]{8,128}` (mantém a proteção contra aspas/chaves no texto da query).
+Também saiu `deleted_at` da consulta `document(id)`, por não constar entre os campos documentados
+dela (só aparece em `documentsByFolder`).
+
+**A 3ª assinatura:** o smoke imprimia o papel `null` — ou seja, uma assinatura cujo e-mail não é de
+nenhum dos dois signatários que enviamos (o `**null**` do relato é só o papel impresso). Não é
+"signatário sem nome" por definição; a hipótese a confirmar é que o Autentique inclui também o dono
+da conta/token. O smoke agora imprime nome, e-mail mascarado, ação e se há conta; `--raw` mostra a
+resposta GraphQL crua com e-mail, telefone e links mascarados.

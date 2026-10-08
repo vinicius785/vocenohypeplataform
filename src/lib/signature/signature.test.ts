@@ -11,7 +11,8 @@ import { buildMinimalPdf } from "./minimal-pdf";
 import { SignatureProviderError } from "./signature-provider";
 
 const TOKEN = "tok_SUPER_SECRET_123";
-const DOC_ID = "0b6a1d2e-3c4f-4a5b-8c7d-9e0f1a2b3c4d";
+// Formato REAL devolvido pelo createDocument: ~50 caracteres hexadecimais (não é UUID).
+const DOC_ID = "65369b2ea60365590a02f70b888ad48f155bb35837ecc89b5";
 
 const okJson = (data: unknown, status = 200) =>
   new Response(JSON.stringify({ data }), {
@@ -69,8 +70,24 @@ describe("criar documento", () => {
     const r = await provider(spy as unknown as typeof fetch).createAndSend(input);
     expect(r.externalId).toBe(DOC_ID);
     expect(r.signers).toEqual([
-      { externalId: "s1", role: "CONTRATADO", email: "A@x.com", link: null },
-      { externalId: "s2", role: "CONTRATANTE", email: "b@x.com", link: "https://a.im/x" },
+      {
+        externalId: "s1",
+        role: "CONTRATADO",
+        name: null,
+        email: "A@x.com",
+        action: null,
+        hasAccount: false,
+        link: null,
+      },
+      {
+        externalId: "s2",
+        role: "CONTRATANTE",
+        name: null,
+        email: "b@x.com",
+        action: null,
+        hasAccount: false,
+        link: "https://a.im/x",
+      },
     ]);
   });
 
@@ -110,7 +127,7 @@ describe("consulta e cancelamento", () => {
     expect(snap.signers[0]).toMatchObject({ viewed: true, signed: true, signedAt: "t2" });
   });
 
-  it("recusa id que não é UUID (nada de texto livre entra na query)", async () => {
+  it("aceita o id real (50 hex) e recusa qualquer coisa que feche aspas ou abra campos", async () => {
     const f = vi.fn();
     await expect(
       provider(f as unknown as typeof fetch).getDocument('x") { id } #'),
@@ -118,7 +135,58 @@ describe("consulta e cancelamento", () => {
     await expect(
       provider(f as unknown as typeof fetch).cancelDocument("../../x"),
     ).rejects.toBeInstanceOf(SignatureProviderError);
+    for (const bad of ['a"b', "a b", "a{b}", "a\nb", "", "ab", "x".repeat(200)]) {
+      await expect(provider(f as unknown as typeof fetch).getDocument(bad)).rejects.toMatchObject({
+        code: "not_found",
+      });
+    }
     expect(f).not.toHaveBeenCalled();
+  });
+
+  it("assinatura que não é de nenhum signatário nosso fica com papel null (e dados para diagnóstico)", async () => {
+    const f = vi.fn(async () =>
+      okJson({
+        createDocument: {
+          id: DOC_ID,
+          signatures: [
+            {
+              public_id: "s0",
+              name: "Dono da conta",
+              email: "dono@conta.com",
+              action: { name: "SIGN" },
+              user: { id: "u1" },
+              link: null,
+            },
+            {
+              public_id: "s1",
+              name: "A",
+              email: "a@x.com",
+              action: { name: "SIGN" },
+              user: null,
+              link: null,
+            },
+          ],
+        },
+      }),
+    );
+    const r = await provider(f as unknown as typeof fetch).createAndSend(input);
+    expect(r.signers[0]).toMatchObject({
+      role: null,
+      name: "Dono da conta",
+      action: "SIGN",
+      hasAccount: true,
+    });
+    expect(r.signers[1]).toMatchObject({ role: "CONTRATADO", hasAccount: false });
+  });
+
+  it("a consulta usa o id real e só campos documentados", async () => {
+    const f = vi.fn(async (_u: unknown, init?: RequestInit) => {
+      const q = JSON.parse(String(init!.body)).query as string;
+      expect(q).toContain(`document(id: "${DOC_ID}")`);
+      expect(q).not.toContain("deleted_at");
+      return okJson({ document: { id: DOC_ID, signatures: [] } });
+    });
+    await provider(f as unknown as typeof fetch).getDocument(DOC_ID);
   });
 
   it("cancelar chama deleteDocument", async () => {

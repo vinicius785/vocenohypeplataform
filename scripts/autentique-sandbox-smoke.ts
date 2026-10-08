@@ -4,7 +4,7 @@
  *   AUTENTIQUE_API_TOKEN=... \
  *   AUTENTIQUE_SMOKE_CONTRATADO_EMAIL=voce+influ@seudominio.com \
  *   AUTENTIQUE_SMOKE_CONTRATANTE_EMAIL=voce+agencia@seudominio.com \
- *   bun scripts/autentique-sandbox-smoke.ts [--keep]
+ *   bun scripts/autentique-sandbox-smoke.ts [--keep] [--raw]
  *
  * Valida: criar documento → cadastrar signatários → enviar → ids → status → (apagar). Imprime
  * apenas ids e estados — nunca o token. Sem `--keep`, apaga o documento de teste no final.
@@ -17,6 +17,15 @@ const token = process.env.AUTENTIQUE_API_TOKEN?.trim();
 const influEmail = process.env.AUTENTIQUE_SMOKE_CONTRATADO_EMAIL?.trim();
 const agencyEmail = process.env.AUTENTIQUE_SMOKE_CONTRATANTE_EMAIL?.trim();
 const keep = process.argv.includes("--keep");
+const raw = process.argv.includes("--raw");
+
+/** Mascara o que é sensível (e-mail, telefone, links de assinatura) antes de imprimir a resposta crua. */
+function mask(key: string, value: unknown) {
+  if (typeof value !== "string") return value;
+  if (key === "email") return value.replace(/^(.).*(@.*)$/, "$1***$2");
+  if (key === "phone" || key === "short_link" || key === "link") return "***";
+  return value;
+}
 
 if (!token || !influEmail || !agencyEmail) {
   console.error(
@@ -25,7 +34,9 @@ if (!token || !influEmail || !agencyEmail) {
   process.exit(1);
 }
 
-const provider = new AutentiqueProvider(token);
+const provider = new AutentiqueProvider(token, fetch, undefined, (_op, data) => {
+  if (raw) console.log("\n[resposta crua, mascarada]\n" + JSON.stringify(data, mask, 2));
+});
 const step = (n: number, label: string) => console.log(`\n[${n}] ${label}`);
 
 try {

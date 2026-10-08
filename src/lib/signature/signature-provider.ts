@@ -36,8 +36,14 @@ export type CreateSignatureDocumentInput = {
 export type ProviderSigner = {
   /** Identificador do signatário no provedor. */
   externalId: string;
+  /** Papel nosso, achado pelo e-mail; `null` = assinatura que NÃO é de nenhum signatário que enviamos. */
   role: SignerRole | null;
+  name: string | null;
   email: string | null;
+  /** Ação no provedor (ex.: SIGN). */
+  action: string | null;
+  /** O e-mail já corresponde a uma conta do provedor. */
+  hasAccount: boolean;
   /** Link de assinatura, se o provedor o devolveu. */
   link: string | null;
 };

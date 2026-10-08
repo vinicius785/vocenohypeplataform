@@ -26,15 +26,16 @@ const createDocumentMutation = (
   createDocument(sandbox: ${sandbox ? "true" : "false"}, document: $document, signers: $signers, file: $file) {
     id
     name
-    signatures { public_id name email link { short_link } }
+    signatures { public_id name email action { name } user { id } link { short_link } }
   }
 }`;
 
-/** O tipo do id no schema não está documentado; o id entra no texto da query, só depois de validado
- * como UUID (nada além de hex e hífens chega ao GraphQL). */
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** O id real do documento NÃO é UUID (o createDocument devolve ~50 caracteres hexadecimais). O id entra
+ * no texto da query, então só passa um formato "seguro": letras, números, `_` e `-` — nada que feche
+ * aspas ou abra um campo GraphQL. */
+const DOCUMENT_ID_RE = /^[A-Za-z0-9_-]{8,128}$/;
 function assertDocumentId(id: string): string {
-  if (!UUID_RE.test(id))
+  if (!DOCUMENT_ID_RE.test(id))
     throw new SignatureProviderError("not_found", "Identificador de documento inválido.");
   return id;
 }
@@ -42,7 +43,6 @@ function assertDocumentId(id: string): string {
 const getDocumentQuery = (id: string) => `query {
   document(id: "${assertDocumentId(id)}") {
     id
-    deleted_at
     files { signed }
     signatures {
       public_id
@@ -118,6 +118,8 @@ export class AutentiqueProvider implements SignatureProvider {
     private readonly token: string,
     private readonly fetchImpl: Fetch = fetch,
     private readonly endpoint = AUTENTIQUE_ENDPOINT,
+    /** Diagnóstico: recebe o `data` bruto de cada resposta (o chamador decide mascarar). Nunca em produção. */
+    private readonly onRawData?: (operation: string, data: unknown) => void,
   ) {}
 
   private async send(body: BodyInit | string, headers: Record<string, string> = {}) {
@@ -160,6 +162,7 @@ export class AutentiqueProvider implements SignatureProvider {
     }
     // GraphQL pode responder 200 com `errors`.
     if (json.errors && json.errors.length > 0) throw mapAutentiqueErrors(json.errors);
+    this.onRawData?.("graphql", json.data);
     return json.data as Record<string, unknown>;
   }
 
@@ -198,7 +201,10 @@ export class AutentiqueProvider implements SignatureProvider {
           id: string;
           signatures?: Array<{
             public_id: string;
+            name?: string | null;
             email?: string | null;
+            action?: { name?: string | null } | null;
+            user?: { id?: string | null } | null;
             link?: { short_link?: string | null } | null;
           }>;
         }
@@ -213,7 +219,10 @@ export class AutentiqueProvider implements SignatureProvider {
     const signers: ProviderSigner[] = (doc.signatures ?? []).map((s) => ({
       externalId: s.public_id,
       role: s.email ? (byEmail.get(s.email.toLowerCase()) ?? null) : null,
+      name: s.name ?? null,
       email: s.email ?? null,
+      action: s.action?.name ?? null,
+      hasAccount: !!s.user?.id,
       link: s.link?.short_link ?? null,
     }));
     return { externalId: doc.id, signers };
