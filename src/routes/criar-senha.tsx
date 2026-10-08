@@ -1,3 +1,4 @@
+import { acceptPendingInvites } from "@/lib/accept-invite.functions";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { ArrowRight, Eye, EyeOff, Lock, Loader2 } from "lucide-react";
@@ -70,7 +71,21 @@ function CriarSenhaPage() {
             }
             const uid = sessionData.session.user.id;
             setPreparingStep("perfil");
-            const env = await resolveUserEnvironment(supabase, uid);
+            let env = await resolveUserEnvironment(supabase, uid);
+
+            // Convite novo: o vínculo ainda está `invited`, então o ambiente vem "pending" e a
+            // pessoa era mandada para "Acesso pendente" SEM nunca chegar a criar a senha. Entrar
+            // pelo link do convite É o primeiro acesso autenticado (mesma regra do login e do
+            // portal): ativa o vínculo e resolve de novo. Melhor esforço — falhar aqui só
+            // mantém o comportamento anterior.
+            if (env.type === "pending") {
+              try {
+                const { activated } = await acceptPendingInvites();
+                if (activated > 0) env = await resolveUserEnvironment(supabase, uid);
+              } catch {
+                /* segue com o env original (pending) */
+              }
+            }
 
             // Defensive branch-by-environment (see module doc): an
             // internal user somehow landing here belongs on the team's

@@ -1,6 +1,22 @@
 {
-  "version": "1.379.0",
+  "version": "1.380.0",
   "releases": [
+    {
+      "version": "1.380.0",
+      "summary": "Primeiro acesso do cliente: o link do convite agora leva direto à criação de senha.",
+      "modules": [
+        {
+          "name": "PORTAL DO CLIENTE",
+          "tagline": "Primeiro acesso",
+          "items": [
+            {
+              "title": "Convite funciona na primeira vez",
+              "description": "Quem abria o link do convite caía em “Acesso pendente” sem conseguir criar a senha. Agora o convite é ativado ao abrir o link e a pessoa segue para criar a senha e entrar."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.379.0",
       "summary": "Acessos ao portal: agora separam “pode acessar?” de “já acessou?”, e o último acesso passa a ser registrado de verdade.",
