@@ -1,6 +1,26 @@
 {
-  "version": "1.386.0",
+  "version": "1.387.0",
   "releases": [
+    {
+      "version": "1.387.0",
+      "summary": "Integrações viraram um catálogo: busca, categorias e a configuração de cada uma só ao abrir.",
+      "modules": [
+        {
+          "name": "CONFIGURAÇÕES",
+          "tagline": "Integrações",
+          "items": [
+            {
+              "title": "Catálogo de integrações",
+              "description": "Cards com ícone, nome, uma linha e o estado (Conectado, Não conectado, N ativos). Busque por nome, categoria ou ferramenta e filtre por Calendário ou Automação."
+            },
+            {
+              "title": "Configuração só ao abrir",
+              "description": "Google Agenda, Webhook de leads e Webhooks de saída abrem numa janela própria. URLs, chaves e formulários não ficam mais expostos na página; excluir um webhook agora pede confirmação."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.386.0",
       "summary": "Comercial: cards de oportunidade mais limpos, com follow-up compacto.",
