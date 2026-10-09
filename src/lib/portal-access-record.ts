@@ -11,16 +11,28 @@ export const ACCESS_RECORD_MIN_INTERVAL_MS = 60 * 60 * 1000;
  */
 export async function recordPortalAccessCore(
   admin: SupabaseClient<Database>,
-  input: { userId: string; organizationId: string; now?: Date },
+  input: { userId: string; organizationId: string; now?: Date; device?: string | null },
 ): Promise<void> {
   const now = input.now ?? new Date();
   const cutoff = new Date(now.getTime() - ACCESS_RECORD_MIN_INTERVAL_MS).toISOString();
   const { error } = await admin
     .from("organization_members")
-    .update({ last_access_at: now.toISOString() })
+    .update({
+      last_access_at: now.toISOString(),
+      ...(input.device ? { last_access_device: input.device } : {}),
+    })
     .eq("user_id", input.userId)
     .eq("organization_id", input.organizationId)
     .eq("status", "active")
-    .or(`last_access_at.is.null,last_access_at.lt.${cutoff}`);
+    .or(
+      [
+        "last_access_at.is.null",
+        `last_access_at.lt.${cutoff}`,
+        // Preenche quem ainda não tem aparelho e atualiza na hora se o aparelho mudou.
+        ...(input.device
+          ? ["last_access_device.is.null", `last_access_device.neq.${input.device}`]
+          : []),
+      ].join(","),
+    );
   if (error) throw new Error(error.message);
 }

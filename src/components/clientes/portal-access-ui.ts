@@ -1,3 +1,5 @@
+import { deviceLabel } from "@/lib/device-class";
+
 /**
  * Apresentação de "Acessos ao portal": duas perguntas independentes.
  *  1) "Pode acessar?"  → ESTADO do acesso (o `status` real de `organization_members`).
@@ -11,6 +13,8 @@ export type AccessMemberLike = {
   invited_at: string | null;
   accepted_at: string | null;
   last_access_at: string | null;
+  /** Aparelho do último acesso (`desktop` | `mobile` | `tablet`); ausente em quem ainda não tem registro. */
+  last_access_device?: string | null;
 };
 
 export type AccessTone = "success" | "warning" | "danger" | "muted";
@@ -93,7 +97,8 @@ export function accessActivity(m: AccessMemberLike, now: Date = new Date()): Acc
         ? `Último acesso ${rel}`
         : `Acessou ${rel}`
       : `Último acesso ${rel}`;
-  return { text, title: fullDateTime(last) };
+  const device = deviceLabel(m.last_access_device);
+  return { text: device ? `${text} · ${device}` : text, title: fullDateTime(last) };
 }
 
 function fullDateTime(iso: string): string {

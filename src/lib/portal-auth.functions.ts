@@ -32,6 +32,8 @@ import type { Database } from "@/integrations/supabase/types";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { throwSafeDbError } from "@/lib/portal-db-error";
 import { recordPortalAccessCore } from "@/lib/portal-access-record";
+import { classifyDevice } from "@/lib/device-class";
+import { getRequest } from "@tanstack/react-start/server";
 import {
   findClienteByOrganizationId,
   buildClienteLinkData,
@@ -884,6 +886,7 @@ export const recordPortalAccess = createServerFn({ method: "POST" })
     await recordPortalAccessCore(supabaseAdmin, {
       userId: context.userId,
       organizationId: data.organizationId,
+      device: classifyDevice(getRequest()?.headers.get("user-agent")),
     });
     return { ok: true };
   });

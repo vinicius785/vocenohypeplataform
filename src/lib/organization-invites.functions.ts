@@ -396,7 +396,9 @@ export const listOrganizationMembers = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: members, error } = await supabaseAdmin
       .from("organization_members")
-      .select("id, user_id, role, status, invited_at, accepted_at, last_access_at")
+      .select(
+        "id, user_id, role, status, invited_at, accepted_at, last_access_at, last_access_device",
+      )
       .eq("organization_id", data.organizationId)
       .order("created_at", { ascending: true });
     if (error) throw new Error(error.message);

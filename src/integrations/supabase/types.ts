@@ -2823,6 +2823,7 @@ export type Database = {
           invited_at: string | null;
           invited_by: string | null;
           last_access_at: string | null;
+          last_access_device: string | null;
           organization_id: string;
           removed_at: string | null;
           role: string;
@@ -2837,6 +2838,7 @@ export type Database = {
           invited_at?: string | null;
           invited_by?: string | null;
           last_access_at?: string | null;
+          last_access_device?: string | null;
           organization_id: string;
           removed_at?: string | null;
           role: string;
@@ -2851,6 +2853,7 @@ export type Database = {
           invited_at?: string | null;
           invited_by?: string | null;
           last_access_at?: string | null;
+          last_access_device?: string | null;
           organization_id?: string;
           removed_at?: string | null;
           role?: string;

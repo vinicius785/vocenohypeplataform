@@ -40,6 +40,14 @@ describe("estado x atividade", () => {
       "Acessou há 2 dias",
     );
     expect(accessActivity(member({ last_access_at: daysAgo(1) }), NOW).text).toBe("Acessou ontem");
+    expect(
+      accessActivity(member({ last_access_at: daysAgo(1), last_access_device: "mobile" }), NOW)
+        .text,
+    ).toBe("Acessou ontem · Celular");
+    expect(
+      accessActivity(member({ last_access_at: daysAgo(1), last_access_device: "desktop" }), NOW)
+        .text,
+    ).toBe("Acessou ontem · Computador");
     expect(accessActivity(member({ last_access_at: daysAgo(0) }), NOW).text).toBe("Acessou hoje");
   });
 
