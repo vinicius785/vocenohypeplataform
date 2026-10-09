@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AcessoBloqueadoRouteImport } from './routes/acesso-bloqueado'
 import { Route as AcessoPendenteRouteImport } from './routes/acesso-pendente'
 import { Route as CriarSenhaRouteImport } from './routes/criar-senha'
+import { Route as PoliticaDePrivacidadeRouteImport } from './routes/politica-de-privacidade'
 import { Route as PortalV2RouteRouteImport } from './routes/portal-v2/route'
 import { Route as RedefinirSenhaRouteImport } from './routes/redefinir-senha'
 import { Route as SelecionarAmbienteRouteImport } from './routes/selecionar-ambiente'
@@ -119,6 +120,11 @@ const AcessoPendenteRoute = AcessoPendenteRouteImport.update({
 const CriarSenhaRoute = CriarSenhaRouteImport.update({
   id: '/criar-senha',
   path: '/criar-senha',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PoliticaDePrivacidadeRoute = PoliticaDePrivacidadeRouteImport.update({
+  id: '/politica-de-privacidade',
+  path: '/politica-de-privacidade',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PortalV2RouteRoute = PortalV2RouteRouteImport.update({
@@ -573,6 +579,7 @@ export interface FileRoutesByFullPath {
   '/acesso-bloqueado': typeof AcessoBloqueadoRoute
   '/acesso-pendente': typeof AcessoPendenteRoute
   '/criar-senha': typeof CriarSenhaRoute
+  '/politica-de-privacidade': typeof PoliticaDePrivacidadeRoute
   '/redefinir-senha': typeof RedefinirSenhaRoute
   '/selecionar-ambiente': typeof SelecionarAmbienteRoute
   '/demo/$token': typeof DemoTokenRouteRouteWithChildren
@@ -660,6 +667,7 @@ export interface FileRoutesByTo {
   '/acesso-bloqueado': typeof AcessoBloqueadoRoute
   '/acesso-pendente': typeof AcessoPendenteRoute
   '/criar-senha': typeof CriarSenhaRoute
+  '/politica-de-privacidade': typeof PoliticaDePrivacidadeRoute
   '/redefinir-senha': typeof RedefinirSenhaRoute
   '/selecionar-ambiente': typeof SelecionarAmbienteRoute
   '/banco-influenciadores-v2': typeof AuthenticatedBancoInfluenciadoresV2Route
@@ -742,6 +750,7 @@ export interface FileRoutesById {
   '/acesso-bloqueado': typeof AcessoBloqueadoRoute
   '/acesso-pendente': typeof AcessoPendenteRoute
   '/criar-senha': typeof CriarSenhaRoute
+  '/politica-de-privacidade': typeof PoliticaDePrivacidadeRoute
   '/redefinir-senha': typeof RedefinirSenhaRoute
   '/selecionar-ambiente': typeof SelecionarAmbienteRoute
   '/demo/$token': typeof DemoTokenRouteRouteWithChildren
@@ -832,6 +841,7 @@ export interface FileRouteTypes {
     | '/acesso-bloqueado'
     | '/acesso-pendente'
     | '/criar-senha'
+    | '/politica-de-privacidade'
     | '/redefinir-senha'
     | '/selecionar-ambiente'
     | '/demo/$token'
@@ -919,6 +929,7 @@ export interface FileRouteTypes {
     | '/acesso-bloqueado'
     | '/acesso-pendente'
     | '/criar-senha'
+    | '/politica-de-privacidade'
     | '/redefinir-senha'
     | '/selecionar-ambiente'
     | '/banco-influenciadores-v2'
@@ -1000,6 +1011,7 @@ export interface FileRouteTypes {
     | '/acesso-bloqueado'
     | '/acesso-pendente'
     | '/criar-senha'
+    | '/politica-de-privacidade'
     | '/redefinir-senha'
     | '/selecionar-ambiente'
     | '/demo/$token'
@@ -1090,6 +1102,7 @@ export interface RootRouteChildren {
   AcessoBloqueadoRoute: typeof AcessoBloqueadoRoute
   AcessoPendenteRoute: typeof AcessoPendenteRoute
   CriarSenhaRoute: typeof CriarSenhaRoute
+  PoliticaDePrivacidadeRoute: typeof PoliticaDePrivacidadeRoute
   RedefinirSenhaRoute: typeof RedefinirSenhaRoute
   SelecionarAmbienteRoute: typeof SelecionarAmbienteRoute
   DemoTokenRouteRoute: typeof DemoTokenRouteRouteWithChildren
@@ -1143,6 +1156,13 @@ declare module '@tanstack/react-router' {
       path: '/criar-senha'
       fullPath: '/criar-senha'
       preLoaderRoute: typeof CriarSenhaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/politica-de-privacidade': {
+      id: '/politica-de-privacidade'
+      path: '/politica-de-privacidade'
+      fullPath: '/politica-de-privacidade'
+      preLoaderRoute: typeof PoliticaDePrivacidadeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/portal-v2': {
@@ -2004,6 +2024,7 @@ const rootRouteChildren: RootRouteChildren = {
   AcessoBloqueadoRoute: AcessoBloqueadoRoute,
   AcessoPendenteRoute: AcessoPendenteRoute,
   CriarSenhaRoute: CriarSenhaRoute,
+  PoliticaDePrivacidadeRoute: PoliticaDePrivacidadeRoute,
   RedefinirSenhaRoute: RedefinirSenhaRoute,
   SelecionarAmbienteRoute: SelecionarAmbienteRoute,
   DemoTokenRouteRoute: DemoTokenRouteRouteWithChildren,

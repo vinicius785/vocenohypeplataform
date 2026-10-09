@@ -44,6 +44,13 @@ export function LoginScreenShell({
         </div>
 
         <img src="/brand/logo-arco.png" alt="Você no Hype" className="h-5 w-auto opacity-90" />
+
+        <a
+          href="/politica-de-privacidade"
+          className="text-xs text-white/55 underline-offset-2 hover:text-white/80 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+        >
+          Política de Privacidade
+        </a>
       </div>
     </div>
   );

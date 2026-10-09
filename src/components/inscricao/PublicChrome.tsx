@@ -82,6 +82,12 @@ export function PublicFooter({
           >
             <Instagram className="h-[18px] w-[18px]" aria-hidden="true" />
           </a>
+          <a
+            href="/politica-de-privacidade"
+            className="text-xs text-text-secondary underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+          >
+            Política de Privacidade
+          </a>
           <p className="text-xs text-text-secondary">
             © {new Date().getFullYear()} {nome}
           </p>
