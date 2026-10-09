@@ -12,7 +12,7 @@ const SECTIONS: { id: string; title: string }[] = [
   { id: "dados", title: "3. Dados pessoais que tratamos" },
   { id: "finalidades", title: "4. Para que usamos os dados e em que base legal" },
   { id: "google", title: "5. Integração com Google (Google Agenda)" },
-  { id: "meta", title: "6. Meta, Facebook e Instagram" },
+  { id: "meta", title: "6. Instagram e Meta" },
   { id: "compartilhamento", title: "7. Com quem os dados são tratados" },
   { id: "transferencia", title: "8. Transferência internacional" },
   { id: "seguranca", title: "9. Segurança" },
@@ -170,6 +170,10 @@ export function PrivacyPolicyContent() {
             e-mail da conta conectada.
           </li>
           <li>
+            Instagram, somente se o influenciador conectar a conta (seção 6): perfil básico,
+            métricas dos últimos 30 dias e perfil do público em percentuais.
+          </li>
+          <li>
             Assinatura eletrônica (Autentique): estado da assinatura de contratos. Esta integração
             está <strong>em implementação e teste</strong>; ainda não é usada com dados reais de
             contratos.
@@ -207,7 +211,10 @@ export function PrivacyPolicyContent() {
             legítimo interesse (art. 7º, IX).
           </li>
           <li>
-            <strong>Notificações push, conexão com o Google Agenda e comunicações opcionais</strong>{" "}
+            <strong>
+              Notificações push, conexão com o Google Agenda, conexão do Instagram e comunicações
+              opcionais
+            </strong>{" "}
             — consentimento (art. 7º, I), que você pode retirar a qualquer momento.
           </li>
         </UL>
@@ -274,19 +281,53 @@ export function PrivacyPolicyContent() {
         </P>
       </Section>
 
-      <Section id="meta" title="6. Meta, Facebook e Instagram">
+      <Section id="meta" title="6. Instagram e Meta">
         <P>
-          <strong>Hoje a Plataforma VNH não se conecta às APIs da Meta</strong> (Facebook ou
-          Instagram), não pede login com Facebook e não acessa mensagens, comentários, publicações
-          ou métricas dessas redes por integração. Os @ e links de perfis do Instagram que aparecem
-          na plataforma são informados manualmente pela equipe ou pelos próprios influenciadores, e
-          as métricas exibidas são as informadas.
+          A plataforma permite que um{" "}
+          <strong>influenciador conecte a própria conta profissional do Instagram</strong> (Business
+          ou Criador) por um link único enviado pela equipe. A conexão é opcional, feita pelo
+          próprio influenciador e somente de leitura. Não usamos login com Facebook e não acessamos
+          o Facebook.
         </P>
+        <UL>
+          <li>
+            <strong>Permissões solicitadas:</strong> <code>instagram_business_basic</code> (dados
+            básicos do perfil) e <code>instagram_business_manage_insights</code> (métricas de
+            desempenho).
+          </li>
+          <li>
+            <strong>Dados acessados:</strong> @ e tipo da conta, número de seguidores, de contas
+            seguidas e de publicações; alcance, visualizações, interações e contas engajadas dos
+            últimos 30 dias; e o perfil dos seguidores em percentuais (gênero, faixa etária, países
+            e cidades), que o Instagram só informa para contas com 100 ou mais seguidores. Não
+            recebemos a identidade individual dos seguidores.
+          </li>
+          <li>
+            <strong>Para que servem:</strong> mostrar à equipe da {c.nomeComercial} o desempenho e o
+            público do influenciador para planejar e acompanhar campanhas. As métricas conectadas
+            não são exibidas no portal de clientes.
+          </li>
+          <li>
+            <strong>O que não fazemos:</strong> não publicamos conteúdo, não lemos mensagens
+            privadas nem comentários e não alteramos a conta.
+          </li>
+          <li>
+            <strong>Armazenamento:</strong> o token de acesso é guardado criptografado, em tabela
+            acessível apenas pelo servidor; ele vale por cerca de 60 dias e é renovado enquanto a
+            conexão existir. As métricas ficam no cadastro do influenciador e só a equipe com
+            permissão de influenciadores as vê.
+          </li>
+          <li>
+            <strong>Revogação e exclusão:</strong> o influenciador pode revogar no Instagram, em
+            Configurações → Aplicativos e sites, ou pedir à equipe; a equipe também pode desconectar
+            na plataforma, o que apaga o acesso e as métricas importadas. Pedidos de exclusão
+            enviados pela Meta e pedidos manuais seguem a seção 12.
+          </li>
+        </UL>
         <P>
-          Se uma integração com a Meta for habilitada no futuro, esta seção será atualizada antes do
-          uso, com as permissões solicitadas, as finalidades, a retenção e o processo de exclusão
-          correspondentes. Pedidos de exclusão enviados pela Meta já são recebidos e tratados (seção
-          12).
+          O uso das informações recebidas da Meta se limita ao descrito aqui e segue os Termos da
+          Plataforma e as Políticas da Meta para desenvolvedores. Não vendemos esses dados nem os
+          usamos para publicidade.
         </P>
       </Section>
 
@@ -305,6 +346,10 @@ export function PrivacyPolicyContent() {
           <li>
             Google: apenas se você conectar o Google Agenda (seção 5). Serviços de notificação push
             dos navegadores: quando você ativa esse recurso.
+          </li>
+          <li>
+            Meta (Instagram): apenas se o influenciador conectar a conta (seção 6); a Meta trata os
+            dados conforme as próprias políticas.
           </li>
           <li>
             Autentique: assinatura eletrônica de contratos (integração em teste; ainda sem uso com
@@ -349,7 +394,10 @@ export function PrivacyPolicyContent() {
           <li>
             criptografia do campo sensível do cofre de senhas e acesso temporário controlado a ele;
           </li>
-          <li>tokens de integrações mantidos apenas no servidor.</li>
+          <li>
+            tokens de integrações mantidos apenas no servidor; o do Instagram, criptografado
+            (AES-256-GCM).
+          </li>
         </UL>
         <P>
           Nenhum sistema é totalmente seguro. Em caso de incidente que possa causar risco ou dano
@@ -381,7 +429,9 @@ export function PrivacyPolicyContent() {
           <li>
             <strong>Dados recebidos por integrações:</strong> reuniões importadas do Google não são
             apagadas automaticamente ao desconectar; podem ser excluídas a seu pedido. Eventos muito
-            distantes da janela de importação são removidos automaticamente.
+            distantes da janela de importação são removidos automaticamente. A desconexão do
+            Instagram apaga o token e as métricas importadas; se o acesso não for renovado, o token
+            expira em cerca de 60 dias.
           </li>
         </UL>
       </Section>
@@ -412,11 +462,10 @@ export function PrivacyPolicyContent() {
         </P>
         <P>
           Pedidos de exclusão enviados pela Meta chegam a um endpoint próprio, que valida a
-          assinatura da Meta, registra o pedido com um código de confirmação e procura dados
-          vinculados àquela identidade antes de concluir. Como a plataforma não guarda
-          identificadores da Meta hoje, a conclusão informa que não havia dados vinculados; se
-          houver no futuro, eles serão excluídos sem apagar a conta de uma empresa cliente ou de
-          outras pessoas.
+          assinatura da Meta, registra o pedido com um código de confirmação e exclui a conexão do
+          Instagram, o token e as métricas vinculados àquela identidade, sem apagar a conta de uma
+          empresa cliente ou de outras pessoas. O pedido só é marcado como concluído depois dessa
+          exclusão, e o andamento pode ser consultado pelo código.
         </P>
       </Section>
 

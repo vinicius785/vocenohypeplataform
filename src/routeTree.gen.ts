@@ -29,6 +29,8 @@ import { Route as AuthenticatedTimeRouteImport } from './routes/_authenticated/t
 import { Route as AuthenticatedTimeV2RouteImport } from './routes/_authenticated/time-v2'
 import { Route as BugsTokenRouteImport } from './routes/bugs.$token'
 import { Route as CalculadoraPropostaTokenRouteImport } from './routes/calculadora-proposta.$token'
+import { Route as ConectarInstagramTokenRouteImport } from './routes/conectar-instagram.$token'
+import { Route as ConectarInstagramResultadoRouteImport } from './routes/conectar-instagram.resultado'
 import { Route as DemoTokenRouteRouteImport } from './routes/demo.$token/route'
 import { Route as ExclusaoDeDadosIndexRouteImport } from './routes/exclusao-de-dados.index'
 import { Route as ExclusaoDeDadosCodeRouteImport } from './routes/exclusao-de-dados.$code'
@@ -55,7 +57,9 @@ import { Route as AuthenticatedPreviewClienteClienteIdRouteRouteImport } from '.
 import { Route as AuthenticatedProjetoIdRouteImport } from './routes/_authenticated/projeto.$id'
 import { Route as ApiCronEmailFlowsRouteImport } from './routes/api/cron/email-flows'
 import { Route as ApiCronGoogleCalendarSyncRouteImport } from './routes/api/cron/google-calendar-sync'
+import { Route as ApiCronInstagramRefreshRouteImport } from './routes/api/cron/instagram-refresh'
 import { Route as ApiGoogleOauthCallbackRouteImport } from './routes/api/google/oauth-callback'
+import { Route as ApiInstagramOauthCallbackRouteImport } from './routes/api/instagram/oauth-callback'
 import { Route as ApiPublicLeadsRouteImport } from './routes/api/public/leads'
 import { Route as ApiWebhooksMetaDataDeletionRouteImport } from './routes/api/webhooks/meta-data-deletion'
 import { Route as ApiWebhooksResendRouteImport } from './routes/api/webhooks/resend'
@@ -206,6 +210,17 @@ const CalculadoraPropostaTokenRoute =
     path: '/calculadora-proposta/$token',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ConectarInstagramTokenRoute = ConectarInstagramTokenRouteImport.update({
+  id: '/conectar-instagram/$token',
+  path: '/conectar-instagram/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConectarInstagramResultadoRoute =
+  ConectarInstagramResultadoRouteImport.update({
+    id: '/conectar-instagram/resultado',
+    path: '/conectar-instagram/resultado',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const DemoTokenRouteRoute = DemoTokenRouteRouteImport.update({
   id: '/demo/$token',
   path: '/demo/$token',
@@ -339,11 +354,22 @@ const ApiCronGoogleCalendarSyncRoute =
     path: '/api/cron/google-calendar-sync',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiCronInstagramRefreshRoute = ApiCronInstagramRefreshRouteImport.update({
+  id: '/api/cron/instagram-refresh',
+  path: '/api/cron/instagram-refresh',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiGoogleOauthCallbackRoute = ApiGoogleOauthCallbackRouteImport.update({
   id: '/api/google/oauth-callback',
   path: '/api/google/oauth-callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiInstagramOauthCallbackRoute =
+  ApiInstagramOauthCallbackRouteImport.update({
+    id: '/api/instagram/oauth-callback',
+    path: '/api/instagram/oauth-callback',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicLeadsRoute = ApiPublicLeadsRouteImport.update({
   id: '/api/public/leads',
   path: '/api/public/leads',
@@ -620,6 +646,8 @@ export interface FileRoutesByFullPath {
   '/time-v2': typeof AuthenticatedTimeV2Route
   '/bugs/$token': typeof BugsTokenRoute
   '/calculadora-proposta/$token': typeof CalculadoraPropostaTokenRoute
+  '/conectar-instagram/$token': typeof ConectarInstagramTokenRoute
+  '/conectar-instagram/resultado': typeof ConectarInstagramResultadoRoute
   '/exclusao-de-dados/$code': typeof ExclusaoDeDadosCodeRoute
   '/inscricao/$token': typeof InscricaoTokenRoute
   '/nps-influenciador/$token': typeof NpsInfluenciadorTokenRoute
@@ -643,7 +671,9 @@ export interface FileRoutesByFullPath {
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/cron/email-flows': typeof ApiCronEmailFlowsRoute
   '/api/cron/google-calendar-sync': typeof ApiCronGoogleCalendarSyncRoute
+  '/api/cron/instagram-refresh': typeof ApiCronInstagramRefreshRoute
   '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
+  '/api/instagram/oauth-callback': typeof ApiInstagramOauthCallbackRoute
   '/api/public/leads': typeof ApiPublicLeadsRoute
   '/api/webhooks/meta-data-deletion': typeof ApiWebhooksMetaDataDeletionRoute
   '/api/webhooks/resend': typeof ApiWebhooksResendRoute
@@ -709,6 +739,8 @@ export interface FileRoutesByTo {
   '/time-v2': typeof AuthenticatedTimeV2Route
   '/bugs/$token': typeof BugsTokenRoute
   '/calculadora-proposta/$token': typeof CalculadoraPropostaTokenRoute
+  '/conectar-instagram/$token': typeof ConectarInstagramTokenRoute
+  '/conectar-instagram/resultado': typeof ConectarInstagramResultadoRoute
   '/exclusao-de-dados/$code': typeof ExclusaoDeDadosCodeRoute
   '/inscricao/$token': typeof InscricaoTokenRoute
   '/nps-influenciador/$token': typeof NpsInfluenciadorTokenRoute
@@ -729,7 +761,9 @@ export interface FileRoutesByTo {
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/cron/email-flows': typeof ApiCronEmailFlowsRoute
   '/api/cron/google-calendar-sync': typeof ApiCronGoogleCalendarSyncRoute
+  '/api/cron/instagram-refresh': typeof ApiCronInstagramRefreshRoute
   '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
+  '/api/instagram/oauth-callback': typeof ApiInstagramOauthCallbackRoute
   '/api/public/leads': typeof ApiPublicLeadsRoute
   '/api/webhooks/meta-data-deletion': typeof ApiWebhooksMetaDataDeletionRoute
   '/api/webhooks/resend': typeof ApiWebhooksResendRoute
@@ -799,6 +833,8 @@ export interface FileRoutesById {
   '/_authenticated/time-v2': typeof AuthenticatedTimeV2Route
   '/bugs/$token': typeof BugsTokenRoute
   '/calculadora-proposta/$token': typeof CalculadoraPropostaTokenRoute
+  '/conectar-instagram/$token': typeof ConectarInstagramTokenRoute
+  '/conectar-instagram/resultado': typeof ConectarInstagramResultadoRoute
   '/exclusao-de-dados/$code': typeof ExclusaoDeDadosCodeRoute
   '/inscricao/$token': typeof InscricaoTokenRoute
   '/nps-influenciador/$token': typeof NpsInfluenciadorTokenRoute
@@ -822,7 +858,9 @@ export interface FileRoutesById {
   '/_authenticated/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/cron/email-flows': typeof ApiCronEmailFlowsRoute
   '/api/cron/google-calendar-sync': typeof ApiCronGoogleCalendarSyncRoute
+  '/api/cron/instagram-refresh': typeof ApiCronInstagramRefreshRoute
   '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
+  '/api/instagram/oauth-callback': typeof ApiInstagramOauthCallbackRoute
   '/api/public/leads': typeof ApiPublicLeadsRoute
   '/api/webhooks/meta-data-deletion': typeof ApiWebhooksMetaDataDeletionRoute
   '/api/webhooks/resend': typeof ApiWebhooksResendRoute
@@ -894,6 +932,8 @@ export interface FileRouteTypes {
     | '/time-v2'
     | '/bugs/$token'
     | '/calculadora-proposta/$token'
+    | '/conectar-instagram/$token'
+    | '/conectar-instagram/resultado'
     | '/exclusao-de-dados/$code'
     | '/inscricao/$token'
     | '/nps-influenciador/$token'
@@ -917,7 +957,9 @@ export interface FileRouteTypes {
     | '/projeto/$id'
     | '/api/cron/email-flows'
     | '/api/cron/google-calendar-sync'
+    | '/api/cron/instagram-refresh'
     | '/api/google/oauth-callback'
+    | '/api/instagram/oauth-callback'
     | '/api/public/leads'
     | '/api/webhooks/meta-data-deletion'
     | '/api/webhooks/resend'
@@ -983,6 +1025,8 @@ export interface FileRouteTypes {
     | '/time-v2'
     | '/bugs/$token'
     | '/calculadora-proposta/$token'
+    | '/conectar-instagram/$token'
+    | '/conectar-instagram/resultado'
     | '/exclusao-de-dados/$code'
     | '/inscricao/$token'
     | '/nps-influenciador/$token'
@@ -1003,7 +1047,9 @@ export interface FileRouteTypes {
     | '/projeto/$id'
     | '/api/cron/email-flows'
     | '/api/cron/google-calendar-sync'
+    | '/api/cron/instagram-refresh'
     | '/api/google/oauth-callback'
+    | '/api/instagram/oauth-callback'
     | '/api/public/leads'
     | '/api/webhooks/meta-data-deletion'
     | '/api/webhooks/resend'
@@ -1072,6 +1118,8 @@ export interface FileRouteTypes {
     | '/_authenticated/time-v2'
     | '/bugs/$token'
     | '/calculadora-proposta/$token'
+    | '/conectar-instagram/$token'
+    | '/conectar-instagram/resultado'
     | '/exclusao-de-dados/$code'
     | '/inscricao/$token'
     | '/nps-influenciador/$token'
@@ -1095,7 +1143,9 @@ export interface FileRouteTypes {
     | '/_authenticated/projeto/$id'
     | '/api/cron/email-flows'
     | '/api/cron/google-calendar-sync'
+    | '/api/cron/instagram-refresh'
     | '/api/google/oauth-callback'
+    | '/api/instagram/oauth-callback'
     | '/api/public/leads'
     | '/api/webhooks/meta-data-deletion'
     | '/api/webhooks/resend'
@@ -1159,6 +1209,8 @@ export interface RootRouteChildren {
   PortalTokenRouteRoute: typeof PortalTokenRouteRouteWithChildren
   BugsTokenRoute: typeof BugsTokenRoute
   CalculadoraPropostaTokenRoute: typeof CalculadoraPropostaTokenRoute
+  ConectarInstagramTokenRoute: typeof ConectarInstagramTokenRoute
+  ConectarInstagramResultadoRoute: typeof ConectarInstagramResultadoRoute
   ExclusaoDeDadosCodeRoute: typeof ExclusaoDeDadosCodeRoute
   InscricaoTokenRoute: typeof InscricaoTokenRoute
   NpsInfluenciadorTokenRoute: typeof NpsInfluenciadorTokenRoute
@@ -1166,7 +1218,9 @@ export interface RootRouteChildren {
   ExclusaoDeDadosIndexRoute: typeof ExclusaoDeDadosIndexRoute
   ApiCronEmailFlowsRoute: typeof ApiCronEmailFlowsRoute
   ApiCronGoogleCalendarSyncRoute: typeof ApiCronGoogleCalendarSyncRoute
+  ApiCronInstagramRefreshRoute: typeof ApiCronInstagramRefreshRoute
   ApiGoogleOauthCallbackRoute: typeof ApiGoogleOauthCallbackRoute
+  ApiInstagramOauthCallbackRoute: typeof ApiInstagramOauthCallbackRoute
   ApiPublicLeadsRoute: typeof ApiPublicLeadsRoute
   ApiWebhooksMetaDataDeletionRoute: typeof ApiWebhooksMetaDataDeletionRoute
   ApiWebhooksResendRoute: typeof ApiWebhooksResendRoute
@@ -1314,6 +1368,20 @@ declare module '@tanstack/react-router' {
       path: '/calculadora-proposta/$token'
       fullPath: '/calculadora-proposta/$token'
       preLoaderRoute: typeof CalculadoraPropostaTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/conectar-instagram/$token': {
+      id: '/conectar-instagram/$token'
+      path: '/conectar-instagram/$token'
+      fullPath: '/conectar-instagram/$token'
+      preLoaderRoute: typeof ConectarInstagramTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/conectar-instagram/resultado': {
+      id: '/conectar-instagram/resultado'
+      path: '/conectar-instagram/resultado'
+      fullPath: '/conectar-instagram/resultado'
+      preLoaderRoute: typeof ConectarInstagramResultadoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/demo/$token': {
@@ -1498,11 +1566,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCronGoogleCalendarSyncRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/cron/instagram-refresh': {
+      id: '/api/cron/instagram-refresh'
+      path: '/api/cron/instagram-refresh'
+      fullPath: '/api/cron/instagram-refresh'
+      preLoaderRoute: typeof ApiCronInstagramRefreshRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/google/oauth-callback': {
       id: '/api/google/oauth-callback'
       path: '/api/google/oauth-callback'
       fullPath: '/api/google/oauth-callback'
       preLoaderRoute: typeof ApiGoogleOauthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/instagram/oauth-callback': {
+      id: '/api/instagram/oauth-callback'
+      path: '/api/instagram/oauth-callback'
+      fullPath: '/api/instagram/oauth-callback'
+      preLoaderRoute: typeof ApiInstagramOauthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/leads': {
@@ -2113,6 +2195,8 @@ const rootRouteChildren: RootRouteChildren = {
   PortalTokenRouteRoute: PortalTokenRouteRouteWithChildren,
   BugsTokenRoute: BugsTokenRoute,
   CalculadoraPropostaTokenRoute: CalculadoraPropostaTokenRoute,
+  ConectarInstagramTokenRoute: ConectarInstagramTokenRoute,
+  ConectarInstagramResultadoRoute: ConectarInstagramResultadoRoute,
   ExclusaoDeDadosCodeRoute: ExclusaoDeDadosCodeRoute,
   InscricaoTokenRoute: InscricaoTokenRoute,
   NpsInfluenciadorTokenRoute: NpsInfluenciadorTokenRoute,
@@ -2120,7 +2204,9 @@ const rootRouteChildren: RootRouteChildren = {
   ExclusaoDeDadosIndexRoute: ExclusaoDeDadosIndexRoute,
   ApiCronEmailFlowsRoute: ApiCronEmailFlowsRoute,
   ApiCronGoogleCalendarSyncRoute: ApiCronGoogleCalendarSyncRoute,
+  ApiCronInstagramRefreshRoute: ApiCronInstagramRefreshRoute,
   ApiGoogleOauthCallbackRoute: ApiGoogleOauthCallbackRoute,
+  ApiInstagramOauthCallbackRoute: ApiInstagramOauthCallbackRoute,
   ApiPublicLeadsRoute: ApiPublicLeadsRoute,
   ApiWebhooksMetaDataDeletionRoute: ApiWebhooksMetaDataDeletionRoute,
   ApiWebhooksResendRoute: ApiWebhooksResendRoute,

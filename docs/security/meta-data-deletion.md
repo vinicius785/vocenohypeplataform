@@ -20,11 +20,16 @@
 4. Processa: status `processing` → roda cada `MetaDataStore` registrado → só então `completed`. Falha deixa `failed` (a página mostra "em processamento"; a reentrega da Meta reprocessa).
 5. Responde `{ "url": ..., "confirmation_code": ... }`.
 
-## O que é excluído hoje
-**Nada, porque não existe dado vinculado à Meta**: a plataforma não tem login nem API da Meta e não guarda identificadores dela (auditoria de 2026-10-09; @ e links de Instagram são digitados à mão e não estão ligados a uma identidade Meta). O pedido é registrado, a verificação roda (`META_DATA_STORES` vazio) e a conclusão informa 0 registros. Isso é o comportamento correto e verdadeiro, mas **não** é "processamento simulado": o status só vira `completed` depois da verificação.
+## O que é excluído
+Armazenamento registrado em `stores` na rota do callback: `instagramDeletionStore` (conexões do Instagram, `instagram_connections`). Para o identificador do pedido (`user_id` do `signed_request`, casado por HMAC com `ig_user_hash` e `ig_app_user_hash`) o fluxo apaga **só** a conexão daquele influenciador: token criptografado, @, perfil e métricas importadas. Não apaga o cadastro do influenciador, a organização, o cliente nem outras conexões. Se não houver conexão, o pedido conclui com 0 registros, após a verificação.
 
-## Quando houver integração com a Meta
-Registrar em `META_DATA_STORES` (`src/lib/meta-data-deletion.ts`) um `MetaDataStore` por local de dados (tokens, vínculos, dados importados). `deleteForMetaUser(hash)` deve apagar **só** o que pertence àquela identidade (nunca a conta, a organização ou o cliente) e devolver a contagem; para isso a integração deve gravar o mesmo `metaUserHash(userId, META_APP_SECRET)` ao vincular a identidade. Retenção legal (financeiro, contratos) fica fora da exclusão e deve ser documentada no store.
+A assinatura aceita o App Secret do app Meta (`META_APP_SECRET`) **ou** do produto Instagram (`INSTAGRAM_APP_SECRET`); os hashes usam sempre `META_APP_SECRET` como chave. Incerteza a confirmar com o primeiro pedido real: o `user_id` do pedido pode ser o ID app-scoped (`user_id` do OAuth) ou o ID da conta profissional; os dois hashes são guardados e qualquer um casa.
+
+## Retenção que NÃO é apagada
+Nenhum dado financeiro/contratual do influenciador é tocado: o pedido refere-se à identidade Instagram, não ao cadastro. Retenções legais ficam fora (documentadas na Política de Privacidade).
+
+## Novos armazenamentos
+Para cada nova integração com dados vinculados à Meta, registrar um `MetaDataStore` na rota do callback e gravar o mesmo `metaUserHash(id, META_APP_SECRET)` ao vincular a identidade.
 
 ## Limitações
 - Sem integração Meta ativa não há como testar fim a fim com a Meta; os testes automatizados cobrem assinatura, idempotência, estados, isolamento e ausência de vazamento em logs.

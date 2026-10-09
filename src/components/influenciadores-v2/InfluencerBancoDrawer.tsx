@@ -31,6 +31,7 @@ import {
 import { getAvaliacoesPorParticipacoes } from "@/lib/campanha-influenciador-avaliacao.functions";
 import { getNpsPorParticipacoes } from "@/lib/campanha-nps-influenciador-interno.functions";
 import { InfluencerAvaliarDialog } from "./InfluencerAvaliarDialog";
+import { InstagramConnectionCard } from "./InstagramConnectionCard";
 
 function initials(nome: string): string {
   return nome
@@ -361,6 +362,8 @@ export function InfluencerBancoDrawer({
                 <p className="mt-1 text-xs text-text-secondary">Sem contato cadastrado.</p>
               )}
             </section>
+
+            <InstagramConnectionCard influenciadorId={influ.id} />
 
             {influ.observacoes && (
               <section>

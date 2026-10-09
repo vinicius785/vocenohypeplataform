@@ -66,21 +66,33 @@ describe("política de privacidade (texto renderizado no servidor)", () => {
     expect(src).toContain("calendar/v3/calendars/primary/events");
   });
 
-  it("Meta: declara que não há integração e descreve o callback e a página de exclusão reais", () => {
-    expect(text).toContain("não se conecta às APIs da Meta");
-    expect(text).toContain("endpoint próprio");
+  it("Instagram: escopos, finalidade, limites e exclusão descritos batem com o código", () => {
+    expect(text).toContain("instagram_business_basic");
+    expect(text).toContain("instagram_business_manage_insights");
+    expect(text).toContain("não lemos mensagens");
+    expect(text).toContain("não publicamos conteúdo");
+    expect(text).toContain("AES-256-GCM");
     expect(text).toContain("/exclusao-de-dados");
-    const src = readFileSync(
-      new URL("../../lib/google-calendar.functions.ts", import.meta.url),
+    expect(text).toContain("Não usamos login com Facebook");
+    const client = readFileSync(
+      new URL("../../lib/instagram/instagram-client.ts", import.meta.url),
       "utf8",
     );
-    expect(src).not.toMatch(/graph\.facebook\.com/);
-    // o endpoint descrito existe de fato no projeto
+    expect(client).toContain('"instagram_business_basic"');
+    expect(client).toContain('"instagram_business_manage_insights"');
+    expect(client).not.toMatch(/content_publish|manage_messages|manage_comments/);
+    expect(client).not.toMatch(/graph\.facebook\.com|facebook\.com\/dialog/);
+    const crypto = readFileSync(
+      new URL("../../lib/instagram/token-crypto.ts", import.meta.url),
+      "utf8",
+    );
+    expect(crypto).toContain("aes-256-gcm");
+    // o endpoint de exclusão descrito existe e apaga as conexões do Instagram
     const route = readFileSync(
       new URL("../../routes/api/webhooks/meta-data-deletion.ts", import.meta.url),
       "utf8",
     );
-    expect(route).toContain("signed_request");
+    expect(route).toContain("instagramDeletionStore");
   });
 
   it("integração Autentique aparece como em teste, e o texto não afirma analytics nem segurança absoluta", () => {

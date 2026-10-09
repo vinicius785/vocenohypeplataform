@@ -64,7 +64,8 @@ const call = (
 ) =>
   handleMetaDeletionCallback({
     signedRequest,
-    appSecret: SECRET,
+    appSecrets: [SECRET],
+    hashKey: SECRET,
     appUrl: () => APP_URL,
     repo: m.repo,
     stores,
@@ -137,7 +138,8 @@ describe("callback", () => {
     expect(m.rows).toHaveLength(0);
     const out = await handleMetaDeletionCallback({
       signedRequest: req("1"),
-      appSecret: undefined,
+      appSecrets: [],
+      hashKey: undefined,
       appUrl: () => APP_URL,
       repo: m.repo,
     });
@@ -174,7 +176,8 @@ describe("configuração", () => {
     };
     const bad = await handleMetaDeletionCallback({
       signedRequest: "lixo",
-      appSecret: SECRET,
+      appSecrets: [SECRET],
+      hashKey: SECRET,
       appUrl: noUrl,
       repo: m.repo,
     });

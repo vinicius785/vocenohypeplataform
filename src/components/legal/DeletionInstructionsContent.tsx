@@ -54,19 +54,24 @@ export function DeletionInstructionsContent() {
         </P>
       </header>
 
-      <Section id="meta" title="Se você usou a Meta (Facebook ou Instagram)">
+      <Section id="meta" title="Se você conectou o Instagram (Meta)">
         <P>
-          Hoje a Plataforma VNH não usa login nem APIs da Meta e não guarda identificadores dela.
-          Mesmo assim, se a Meta nos enviar um pedido de exclusão, nós o registramos, procuramos
-          dados vinculados àquela identidade e só marcamos o pedido como concluído depois dessa
-          verificação. Você recebe um código de confirmação e pode acompanhar o pedido nesta página.
+          A plataforma só recebe dados do Instagram se o próprio influenciador conectar a conta
+          profissional dele (token, perfil básico e métricas). Quando a Meta nos envia um pedido de
+          exclusão, nós o registramos, apagamos a conexão e as métricas vinculadas àquela identidade
+          e só marcamos o pedido como concluído depois disso. Você recebe um código de confirmação e
+          pode acompanhar o pedido nesta página.
         </P>
         <UL>
           <li>
-            No Facebook, vá em Configurações → Aplicativos e sites, escolha o aplicativo da Você no
-            Hype e use a opção de remover o aplicativo e excluir os dados.
+            No Instagram, vá em Configurações → Aplicativos e sites, escolha o aplicativo da Você no
+            Hype e remova o acesso (e peça a exclusão dos dados).
           </li>
           <li>Guarde o código de confirmação que a Meta mostrar.</li>
+          <li>
+            Também é possível pedir a desconexão e a exclusão diretamente à equipe, pelo e-mail
+            abaixo.
+          </li>
         </UL>
       </Section>
 

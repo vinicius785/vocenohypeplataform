@@ -2,7 +2,14 @@ import type { ReactNode } from "react";
 import { PRIVACY_POLICY_URL_PATH, TERMS_PATH } from "@/lib/privacy-policy-config";
 
 /** Moldura das páginas legais públicas (política e termos): sem login, renderizada no servidor. */
-export function LegalPageShell({ children }: { children: ReactNode }) {
+export function LegalPageShell({
+  children,
+  showLogin = true,
+}: {
+  children: ReactNode;
+  /** Esconde o link "Acessar a plataforma" em páginas para público externo (ex.: influenciador). */
+  showLogin?: boolean;
+}) {
   const link =
     "rounded-md px-1.5 py-1 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand";
   return (
@@ -10,12 +17,14 @@ export function LegalPageShell({ children }: { children: ReactNode }) {
       <header className="border-b border-border">
         <div className="mx-auto flex h-16 w-full max-w-3xl items-center justify-between gap-4 px-5 sm:px-6">
           <span className="text-sm font-semibold">Você no Hype</span>
-          <a
-            href="/"
-            className="rounded-md px-2 py-1.5 text-sm font-medium text-text-secondary hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-          >
-            Acessar a plataforma
-          </a>
+          {showLogin && (
+            <a
+              href="/"
+              className="rounded-md px-2 py-1.5 text-sm font-medium text-text-secondary hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            >
+              Acessar a plataforma
+            </a>
+          )}
         </div>
       </header>
       <main id="conteudo" className="mx-auto w-full max-w-3xl px-5 py-10 sm:px-6 sm:py-14">

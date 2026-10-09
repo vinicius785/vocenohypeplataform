@@ -188,12 +188,13 @@ export function TermsOfServiceContent() {
 
       <Section id="integracoes" title="7. Integrações com terceiros">
         <P>
-          A plataforma pode se conectar a serviços de terceiros, como o Google Agenda, se você optar
-          por conectar sua conta. Essas conexões são opcionais, seguem os termos do terceiro
-          correspondente e podem ser desfeitas por você a qualquer momento (para o Google, em
-          Configurações → Integrações ou nas permissões da sua conta Google). Não nos
-          responsabilizamos por indisponibilidade ou mudanças nos serviços de terceiros. O
-          tratamento dos dados dessas integrações está descrito na{" "}
+          A plataforma pode se conectar a serviços de terceiros, como o Google Agenda e o Instagram
+          (este, conectado pelo próprio influenciador), se você optar por conectar sua conta. Essas
+          conexões são opcionais, seguem os termos do terceiro correspondente e podem ser desfeitas
+          por você a qualquer momento (para o Google, em Configurações → Integrações ou nas
+          permissões da sua conta Google). Não nos responsabilizamos por indisponibilidade ou
+          mudanças nos serviços de terceiros. O tratamento dos dados dessas integrações está
+          descrito na{" "}
           <a
             href={PRIVACY_POLICY_URL_PATH}
             className="font-medium text-foreground underline underline-offset-2 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"

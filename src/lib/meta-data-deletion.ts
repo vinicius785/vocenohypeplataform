@@ -48,6 +48,21 @@ export function parseMetaSignedRequest(
   return { ok: true, userId, issuedAt: Number.isFinite(issuedAt) ? Math.trunc(issuedAt) : 0 };
 }
 
+/** O App Secret que assina o pedido pode ser o do app Meta ou o do produto Instagram: vale se QUALQUER um confere. */
+export function parseMetaSignedRequestAny(
+  raw: string | null | undefined,
+  secrets: readonly string[],
+): SignedRequestResult {
+  let last: SignedRequestResult = { ok: false, reason: raw ? "bad_signature" : "missing" };
+  for (const secret of secrets) {
+    const r = parseMetaSignedRequest(raw, secret);
+    if (r.ok) return r;
+    if (r.reason === "missing" || r.reason === "malformed") return r;
+    last = r;
+  }
+  return last;
+}
+
 /** Identificador estável e não reversível sem o App Secret (o ID da Meta nunca é guardado em claro). */
 export function metaUserHash(userId: string, appSecret: string): string {
   return createHmac("sha256", appSecret).update(`meta-user:${userId}`).digest("hex");
@@ -120,18 +135,22 @@ export async function processDeletion(
 /** Trata o corpo do POST da Meta e devolve o JSON exigido: `{ url, confirmation_code }`. */
 export async function handleMetaDeletionCallback(deps: {
   signedRequest: string | null | undefined;
-  appSecret: string | undefined;
+  /** Segredos aceitos na validação da assinatura (app Meta e/ou Instagram). */
+  appSecrets: readonly string[];
+  /** Chave dos hashes de identidade (META_APP_SECRET); sem ela não há como casar dados com o pedido. */
+  hashKey: string | undefined;
   /** Avaliada só ao montar a resposta (um APP_URL ausente não pode mascarar um pedido inválido). */
   appUrl: () => string;
   repo: DeletionRepo;
   stores?: readonly MetaDataStore[];
   newCode?: () => string;
 }): Promise<DeletionOutcome> {
-  if (!deps.appSecret) return { status: 500, body: { error: "not_configured" } };
-  const parsed = parseMetaSignedRequest(deps.signedRequest, deps.appSecret);
+  if (deps.appSecrets.length === 0 || !deps.hashKey)
+    return { status: 500, body: { error: "not_configured" } };
+  const parsed = parseMetaSignedRequestAny(deps.signedRequest, deps.appSecrets);
   if (!parsed.ok) return { status: 400, body: { error: "invalid_request" } };
 
-  const hash = metaUserHash(parsed.userId, deps.appSecret);
+  const hash = metaUserHash(parsed.userId, deps.hashKey);
   let row = await deps.repo.findByUserAndIssued(hash, parsed.issuedAt);
   if (!row) {
     row = await deps.repo.insert({

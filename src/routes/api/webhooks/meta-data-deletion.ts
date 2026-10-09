@@ -26,11 +26,19 @@ export const Route = createFileRoute("/api/webhooks/meta-data-deletion")({
             await import("@/lib/meta-data-deletion-repo.server");
           const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
           const { getAppUrl } = await import("@/lib/google-oauth-config");
+          const { createSupabaseInstagramRepo } =
+            await import("@/lib/instagram/instagram-repo.server");
+          const { instagramDeletionStore } = await import("@/lib/instagram/instagram-service");
+          const metaSecret = process.env.META_APP_SECRET?.trim();
+          const igSecret = process.env.INSTAGRAM_APP_SECRET?.trim();
           const out = await handleMetaDeletionCallback({
             signedRequest: typeof signedRequest === "string" ? signedRequest : null,
-            appSecret: process.env.META_APP_SECRET?.trim(),
+            appSecrets: [metaSecret, igSecret].filter((v): v is string => !!v),
+            hashKey: metaSecret,
             appUrl: getAppUrl,
             repo: createSupabaseDeletionRepo(supabaseAdmin),
+            // armazenamentos reais com dados vinculados à identidade Meta/Instagram
+            stores: [instagramDeletionStore(createSupabaseInstagramRepo(supabaseAdmin))],
           });
           return Response.json(out.body, { status: out.status });
         } catch {
