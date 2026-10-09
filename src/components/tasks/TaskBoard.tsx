@@ -2919,7 +2919,7 @@ export function TaskDialog({
       const { blockTask } = await import("@/lib/task-blocks.functions");
       const res = await blockTask({
         data: {
-          taskId: initial.id,
+          taskId: depTaskId ?? initial.id,
           taskScope: origin,
           category: fields.category,
           reason: fields.reason,
@@ -2972,7 +2972,7 @@ export function TaskDialog({
       const res = await resolveTaskBlock({
         data: {
           blockId: blockedState.blockId,
-          taskId: initial.id,
+          taskId: depTaskId ?? initial.id,
           taskScope: origin,
           resolutionNote: fields.resolutionNote,
           newStatus: fields.newStatus,
