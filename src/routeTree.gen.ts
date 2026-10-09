@@ -30,6 +30,8 @@ import { Route as AuthenticatedTimeV2RouteImport } from './routes/_authenticated
 import { Route as BugsTokenRouteImport } from './routes/bugs.$token'
 import { Route as CalculadoraPropostaTokenRouteImport } from './routes/calculadora-proposta.$token'
 import { Route as DemoTokenRouteRouteImport } from './routes/demo.$token/route'
+import { Route as ExclusaoDeDadosIndexRouteImport } from './routes/exclusao-de-dados.index'
+import { Route as ExclusaoDeDadosCodeRouteImport } from './routes/exclusao-de-dados.$code'
 import { Route as InscricaoTokenRouteImport } from './routes/inscricao.$token'
 import { Route as NpsInfluenciadorTokenRouteImport } from './routes/nps-influenciador.$token'
 import { Route as PortalAppSplatRouteImport } from './routes/portal-app.$'
@@ -55,6 +57,7 @@ import { Route as ApiCronEmailFlowsRouteImport } from './routes/api/cron/email-f
 import { Route as ApiCronGoogleCalendarSyncRouteImport } from './routes/api/cron/google-calendar-sync'
 import { Route as ApiGoogleOauthCallbackRouteImport } from './routes/api/google/oauth-callback'
 import { Route as ApiPublicLeadsRouteImport } from './routes/api/public/leads'
+import { Route as ApiWebhooksMetaDataDeletionRouteImport } from './routes/api/webhooks/meta-data-deletion'
 import { Route as ApiWebhooksResendRouteImport } from './routes/api/webhooks/resend'
 import { Route as DemoTokenIndexRouteImport } from './routes/demo.$token/index'
 import { Route as DemoTokenArquivosRouteImport } from './routes/demo.$token/arquivos'
@@ -208,6 +211,16 @@ const DemoTokenRouteRoute = DemoTokenRouteRouteImport.update({
   path: '/demo/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ExclusaoDeDadosIndexRoute = ExclusaoDeDadosIndexRouteImport.update({
+  id: '/exclusao-de-dados/',
+  path: '/exclusao-de-dados/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ExclusaoDeDadosCodeRoute = ExclusaoDeDadosCodeRouteImport.update({
+  id: '/exclusao-de-dados/$code',
+  path: '/exclusao-de-dados/$code',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const InscricaoTokenRoute = InscricaoTokenRouteImport.update({
   id: '/inscricao/$token',
   path: '/inscricao/$token',
@@ -336,6 +349,12 @@ const ApiPublicLeadsRoute = ApiPublicLeadsRouteImport.update({
   path: '/api/public/leads',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiWebhooksMetaDataDeletionRoute =
+  ApiWebhooksMetaDataDeletionRouteImport.update({
+    id: '/api/webhooks/meta-data-deletion',
+    path: '/api/webhooks/meta-data-deletion',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiWebhooksResendRoute = ApiWebhooksResendRouteImport.update({
   id: '/api/webhooks/resend',
   path: '/api/webhooks/resend',
@@ -601,6 +620,7 @@ export interface FileRoutesByFullPath {
   '/time-v2': typeof AuthenticatedTimeV2Route
   '/bugs/$token': typeof BugsTokenRoute
   '/calculadora-proposta/$token': typeof CalculadoraPropostaTokenRoute
+  '/exclusao-de-dados/$code': typeof ExclusaoDeDadosCodeRoute
   '/inscricao/$token': typeof InscricaoTokenRoute
   '/nps-influenciador/$token': typeof NpsInfluenciadorTokenRoute
   '/portal-app/$': typeof PortalAppSplatRoute
@@ -616,6 +636,7 @@ export interface FileRoutesByFullPath {
   '/portal-v2/perfil': typeof PortalV2PerfilRoute
   '/portal-v2/relatorios': typeof PortalV2RelatoriosRoute
   '/portal-v2/seguranca': typeof PortalV2SegurancaRoute
+  '/exclusao-de-dados/': typeof ExclusaoDeDadosIndexRoute
   '/portal-v2/': typeof PortalV2IndexRoute
   '/preview-cliente/$clienteId': typeof AuthenticatedPreviewClienteClienteIdRouteRouteWithChildren
   '/clientes/$id': typeof AuthenticatedClientesIdRoute
@@ -624,6 +645,7 @@ export interface FileRoutesByFullPath {
   '/api/cron/google-calendar-sync': typeof ApiCronGoogleCalendarSyncRoute
   '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
   '/api/public/leads': typeof ApiPublicLeadsRoute
+  '/api/webhooks/meta-data-deletion': typeof ApiWebhooksMetaDataDeletionRoute
   '/api/webhooks/resend': typeof ApiWebhooksResendRoute
   '/demo/$token/arquivos': typeof DemoTokenArquivosRoute
   '/demo/$token/campanhas': typeof DemoTokenCampanhasRouteWithChildren
@@ -687,6 +709,7 @@ export interface FileRoutesByTo {
   '/time-v2': typeof AuthenticatedTimeV2Route
   '/bugs/$token': typeof BugsTokenRoute
   '/calculadora-proposta/$token': typeof CalculadoraPropostaTokenRoute
+  '/exclusao-de-dados/$code': typeof ExclusaoDeDadosCodeRoute
   '/inscricao/$token': typeof InscricaoTokenRoute
   '/nps-influenciador/$token': typeof NpsInfluenciadorTokenRoute
   '/portal-app/$': typeof PortalAppSplatRoute
@@ -700,6 +723,7 @@ export interface FileRoutesByTo {
   '/portal-v2/perfil': typeof PortalV2PerfilRoute
   '/portal-v2/relatorios': typeof PortalV2RelatoriosRoute
   '/portal-v2/seguranca': typeof PortalV2SegurancaRoute
+  '/exclusao-de-dados': typeof ExclusaoDeDadosIndexRoute
   '/portal-v2': typeof PortalV2IndexRoute
   '/clientes/$id': typeof AuthenticatedClientesIdRoute
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
@@ -707,6 +731,7 @@ export interface FileRoutesByTo {
   '/api/cron/google-calendar-sync': typeof ApiCronGoogleCalendarSyncRoute
   '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
   '/api/public/leads': typeof ApiPublicLeadsRoute
+  '/api/webhooks/meta-data-deletion': typeof ApiWebhooksMetaDataDeletionRoute
   '/api/webhooks/resend': typeof ApiWebhooksResendRoute
   '/demo/$token/arquivos': typeof DemoTokenArquivosRoute
   '/demo/$token/conteudos': typeof DemoTokenConteudosRoute
@@ -774,6 +799,7 @@ export interface FileRoutesById {
   '/_authenticated/time-v2': typeof AuthenticatedTimeV2Route
   '/bugs/$token': typeof BugsTokenRoute
   '/calculadora-proposta/$token': typeof CalculadoraPropostaTokenRoute
+  '/exclusao-de-dados/$code': typeof ExclusaoDeDadosCodeRoute
   '/inscricao/$token': typeof InscricaoTokenRoute
   '/nps-influenciador/$token': typeof NpsInfluenciadorTokenRoute
   '/portal-app/$': typeof PortalAppSplatRoute
@@ -789,6 +815,7 @@ export interface FileRoutesById {
   '/portal-v2/perfil': typeof PortalV2PerfilRoute
   '/portal-v2/relatorios': typeof PortalV2RelatoriosRoute
   '/portal-v2/seguranca': typeof PortalV2SegurancaRoute
+  '/exclusao-de-dados/': typeof ExclusaoDeDadosIndexRoute
   '/portal-v2/': typeof PortalV2IndexRoute
   '/_authenticated/preview-cliente/$clienteId': typeof AuthenticatedPreviewClienteClienteIdRouteRouteWithChildren
   '/_authenticated/clientes/$id': typeof AuthenticatedClientesIdRoute
@@ -797,6 +824,7 @@ export interface FileRoutesById {
   '/api/cron/google-calendar-sync': typeof ApiCronGoogleCalendarSyncRoute
   '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
   '/api/public/leads': typeof ApiPublicLeadsRoute
+  '/api/webhooks/meta-data-deletion': typeof ApiWebhooksMetaDataDeletionRoute
   '/api/webhooks/resend': typeof ApiWebhooksResendRoute
   '/demo/$token/arquivos': typeof DemoTokenArquivosRoute
   '/demo/$token/campanhas': typeof DemoTokenCampanhasRouteWithChildren
@@ -866,6 +894,7 @@ export interface FileRouteTypes {
     | '/time-v2'
     | '/bugs/$token'
     | '/calculadora-proposta/$token'
+    | '/exclusao-de-dados/$code'
     | '/inscricao/$token'
     | '/nps-influenciador/$token'
     | '/portal-app/$'
@@ -881,6 +910,7 @@ export interface FileRouteTypes {
     | '/portal-v2/perfil'
     | '/portal-v2/relatorios'
     | '/portal-v2/seguranca'
+    | '/exclusao-de-dados/'
     | '/portal-v2/'
     | '/preview-cliente/$clienteId'
     | '/clientes/$id'
@@ -889,6 +919,7 @@ export interface FileRouteTypes {
     | '/api/cron/google-calendar-sync'
     | '/api/google/oauth-callback'
     | '/api/public/leads'
+    | '/api/webhooks/meta-data-deletion'
     | '/api/webhooks/resend'
     | '/demo/$token/arquivos'
     | '/demo/$token/campanhas'
@@ -952,6 +983,7 @@ export interface FileRouteTypes {
     | '/time-v2'
     | '/bugs/$token'
     | '/calculadora-proposta/$token'
+    | '/exclusao-de-dados/$code'
     | '/inscricao/$token'
     | '/nps-influenciador/$token'
     | '/portal-app/$'
@@ -965,6 +997,7 @@ export interface FileRouteTypes {
     | '/portal-v2/perfil'
     | '/portal-v2/relatorios'
     | '/portal-v2/seguranca'
+    | '/exclusao-de-dados'
     | '/portal-v2'
     | '/clientes/$id'
     | '/projeto/$id'
@@ -972,6 +1005,7 @@ export interface FileRouteTypes {
     | '/api/cron/google-calendar-sync'
     | '/api/google/oauth-callback'
     | '/api/public/leads'
+    | '/api/webhooks/meta-data-deletion'
     | '/api/webhooks/resend'
     | '/demo/$token/arquivos'
     | '/demo/$token/conteudos'
@@ -1038,6 +1072,7 @@ export interface FileRouteTypes {
     | '/_authenticated/time-v2'
     | '/bugs/$token'
     | '/calculadora-proposta/$token'
+    | '/exclusao-de-dados/$code'
     | '/inscricao/$token'
     | '/nps-influenciador/$token'
     | '/portal-app/$'
@@ -1053,6 +1088,7 @@ export interface FileRouteTypes {
     | '/portal-v2/perfil'
     | '/portal-v2/relatorios'
     | '/portal-v2/seguranca'
+    | '/exclusao-de-dados/'
     | '/portal-v2/'
     | '/_authenticated/preview-cliente/$clienteId'
     | '/_authenticated/clientes/$id'
@@ -1061,6 +1097,7 @@ export interface FileRouteTypes {
     | '/api/cron/google-calendar-sync'
     | '/api/google/oauth-callback'
     | '/api/public/leads'
+    | '/api/webhooks/meta-data-deletion'
     | '/api/webhooks/resend'
     | '/demo/$token/arquivos'
     | '/demo/$token/campanhas'
@@ -1122,13 +1159,16 @@ export interface RootRouteChildren {
   PortalTokenRouteRoute: typeof PortalTokenRouteRouteWithChildren
   BugsTokenRoute: typeof BugsTokenRoute
   CalculadoraPropostaTokenRoute: typeof CalculadoraPropostaTokenRoute
+  ExclusaoDeDadosCodeRoute: typeof ExclusaoDeDadosCodeRoute
   InscricaoTokenRoute: typeof InscricaoTokenRoute
   NpsInfluenciadorTokenRoute: typeof NpsInfluenciadorTokenRoute
   PortalAppSplatRoute: typeof PortalAppSplatRoute
+  ExclusaoDeDadosIndexRoute: typeof ExclusaoDeDadosIndexRoute
   ApiCronEmailFlowsRoute: typeof ApiCronEmailFlowsRoute
   ApiCronGoogleCalendarSyncRoute: typeof ApiCronGoogleCalendarSyncRoute
   ApiGoogleOauthCallbackRoute: typeof ApiGoogleOauthCallbackRoute
   ApiPublicLeadsRoute: typeof ApiPublicLeadsRoute
+  ApiWebhooksMetaDataDeletionRoute: typeof ApiWebhooksMetaDataDeletionRoute
   ApiWebhooksResendRoute: typeof ApiWebhooksResendRoute
   EmailDescadastroTokenRoute: typeof EmailDescadastroTokenRoute
   ApiWebhooksAutentiqueSecretRoute: typeof ApiWebhooksAutentiqueSecretRoute
@@ -1281,6 +1321,20 @@ declare module '@tanstack/react-router' {
       path: '/demo/$token'
       fullPath: '/demo/$token'
       preLoaderRoute: typeof DemoTokenRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/exclusao-de-dados/': {
+      id: '/exclusao-de-dados/'
+      path: '/exclusao-de-dados'
+      fullPath: '/exclusao-de-dados/'
+      preLoaderRoute: typeof ExclusaoDeDadosIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/exclusao-de-dados/$code': {
+      id: '/exclusao-de-dados/$code'
+      path: '/exclusao-de-dados/$code'
+      fullPath: '/exclusao-de-dados/$code'
+      preLoaderRoute: typeof ExclusaoDeDadosCodeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/inscricao/$token': {
@@ -1456,6 +1510,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/leads'
       fullPath: '/api/public/leads'
       preLoaderRoute: typeof ApiPublicLeadsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/webhooks/meta-data-deletion': {
+      id: '/api/webhooks/meta-data-deletion'
+      path: '/api/webhooks/meta-data-deletion'
+      fullPath: '/api/webhooks/meta-data-deletion'
+      preLoaderRoute: typeof ApiWebhooksMetaDataDeletionRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/webhooks/resend': {
@@ -2052,13 +2113,16 @@ const rootRouteChildren: RootRouteChildren = {
   PortalTokenRouteRoute: PortalTokenRouteRouteWithChildren,
   BugsTokenRoute: BugsTokenRoute,
   CalculadoraPropostaTokenRoute: CalculadoraPropostaTokenRoute,
+  ExclusaoDeDadosCodeRoute: ExclusaoDeDadosCodeRoute,
   InscricaoTokenRoute: InscricaoTokenRoute,
   NpsInfluenciadorTokenRoute: NpsInfluenciadorTokenRoute,
   PortalAppSplatRoute: PortalAppSplatRoute,
+  ExclusaoDeDadosIndexRoute: ExclusaoDeDadosIndexRoute,
   ApiCronEmailFlowsRoute: ApiCronEmailFlowsRoute,
   ApiCronGoogleCalendarSyncRoute: ApiCronGoogleCalendarSyncRoute,
   ApiGoogleOauthCallbackRoute: ApiGoogleOauthCallbackRoute,
   ApiPublicLeadsRoute: ApiPublicLeadsRoute,
+  ApiWebhooksMetaDataDeletionRoute: ApiWebhooksMetaDataDeletionRoute,
   ApiWebhooksResendRoute: ApiWebhooksResendRoute,
   EmailDescadastroTokenRoute: EmailDescadastroTokenRoute,
   ApiWebhooksAutentiqueSecretRoute: ApiWebhooksAutentiqueSecretRoute,

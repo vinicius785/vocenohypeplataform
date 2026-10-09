@@ -7,6 +7,7 @@
 export const PRIVACY_POLICY_URL_PATH = "/politica-de-privacidade";
 export const PRIVACY_POLICY_UPDATED_AT = "2026-10-09";
 export const TERMS_PATH = "/termos-de-servico";
+export const DELETION_PATH = "/exclusao-de-dados";
 export const TERMS_UPDATED_AT = "2026-10-09";
 /** Foro da cláusula de lei aplicável dos Termos: decisão jurídica da empresa, não deduzida do código. */
 export const TERMS_FORO: string | null = "da Comarca de São Paulo, Estado de São Paulo";

@@ -1,4 +1,8 @@
-import { PRIVACY_CONTROLLER, PRIVACY_POLICY_UPDATED_AT } from "@/lib/privacy-policy-config";
+import {
+  DELETION_PATH,
+  PRIVACY_CONTROLLER,
+  PRIVACY_POLICY_UPDATED_AT,
+} from "@/lib/privacy-policy-config";
 import { A, P, Pending, Section, UL } from "./legal-ui";
 import { dataLonga } from "./format-date";
 
@@ -281,7 +285,8 @@ export function PrivacyPolicyContent() {
         <P>
           Se uma integração com a Meta for habilitada no futuro, esta seção será atualizada antes do
           uso, com as permissões solicitadas, as finalidades, a retenção e o processo de exclusão
-          correspondentes. Enquanto isso, qualquer solicitação de exclusão segue a seção 12.
+          correspondentes. Pedidos de exclusão enviados pela Meta já são recebidos e tratados (seção
+          12).
         </P>
       </Section>
 
@@ -402,12 +407,16 @@ export function PrivacyPolicyContent() {
           Envie o pedido ao canal de privacidade da seção 1 informando o e-mail da sua conta ou o
           nome do cadastro e quais dados quer excluir (por exemplo, a conta, os dados de uma
           integração ou o conteúdo de uma campanha). Confirmaremos a solicitação, excluiremos o que
-          for cabível e informaremos o que precisa ser mantido e por quê.
+          for cabível e informaremos o que precisa ser mantido e por quê. As instruções completas e
+          o acompanhamento de pedidos estão em <A href={DELETION_PATH}>{DELETION_PATH}</A>.
         </P>
         <P>
-          Este é um procedimento de atendimento manual; <strong>não existe</strong> hoje um endpoint
-          automático de exclusão (como o callback de exclusão de dados da Meta), pois não há
-          integração com a Meta que o exija.
+          Pedidos de exclusão enviados pela Meta chegam a um endpoint próprio, que valida a
+          assinatura da Meta, registra o pedido com um código de confirmação e procura dados
+          vinculados àquela identidade antes de concluir. Como a plataforma não guarda
+          identificadores da Meta hoje, a conclusão informa que não havia dados vinculados; se
+          houver no futuro, eles serão excluídos sem apagar a conta de uma empresa cliente ou de
+          outras pessoas.
         </P>
       </Section>
 

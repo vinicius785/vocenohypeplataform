@@ -66,15 +66,21 @@ describe("política de privacidade (texto renderizado no servidor)", () => {
     expect(src).toContain("calendar/v3/calendars/primary/events");
   });
 
-  it("Meta: declara que não há integração e não promete callback inexistente", () => {
+  it("Meta: declara que não há integração e descreve o callback e a página de exclusão reais", () => {
     expect(text).toContain("não se conecta às APIs da Meta");
-    expect(text).toContain("não existe");
-    expect(text).toMatch(/endpoint automático de exclusão/);
+    expect(text).toContain("endpoint próprio");
+    expect(text).toContain("/exclusao-de-dados");
     const src = readFileSync(
       new URL("../../lib/google-calendar.functions.ts", import.meta.url),
       "utf8",
     );
     expect(src).not.toMatch(/graph\.facebook\.com/);
+    // o endpoint descrito existe de fato no projeto
+    const route = readFileSync(
+      new URL("../../routes/api/webhooks/meta-data-deletion.ts", import.meta.url),
+      "utf8",
+    );
+    expect(route).toContain("signed_request");
   });
 
   it("integração Autentique aparece como em teste, e o texto não afirma analytics nem segurança absoluta", () => {
