@@ -1,0 +1,19 @@
+| módulo | arquivos prod | LOC prod | arquivos de teste | testes (it) |
+| Autenticação/acesso/MFA | 55 | 6932 | 10 | 72 |
+| Clientes | 33 | 6566 | 5 | 78 |
+| Campanhas | 98 | 20505 | 13 | 196 |
+| Influenciadores/Banco | 49 | 17527 | 9 | 201 |
+| Projetos/Tarefas | 52 | 19102 | 7 | 134 |
+| Reuniões/Google | 25 | 7387 | 6 | 73 |
+| Comercial/Leads/Proposta | 42 | 8721 | 14 | 173 |
+| Financeiro | 30 | 7231 | 2 | 58 |
+| Time/Score/Desempenho | 41 | 11482 | 12 | 228 |
+| Metas/AEO | 45 | 7883 | 0 | 0 |
+| Chat/Chamadas/Notificações | 59 | 12516 | 9 | 81 |
+| Portal (token + V2) | 147 | 17321 | 21 | 166 |
+| Marketing/Blog/E-mail | 73 | 11449 | 8 | 61 |
+| Contratos/Autentique | 14 | 2767 | 4 | 150 |
+| Instagram/Meta/Legal | 25 | 2986 | 5 | 60 |
+| Demo | 38 | 4691 | 24 | 304 |
+| Cofre/Segurança/Config | 36 | 6301 | 3 | 22 |
+| Problemas/Bugs/Release | 12 | 3631 | 2 | 19 |

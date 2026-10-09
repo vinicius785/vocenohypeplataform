@@ -1,0 +1,7 @@
+# Resumo SANITIZADO da varredura de autorização (heurística por regex; falsos positivos e negativos possíveis)
+# A lista nominal das funções sinalizadas está em anexo local não versionado (repositório público).
+server functions analisadas: 184
+autenticadas, escopo RLS (context.supabase): 87
+autenticadas com service-role: 60
+sinalizadas (service-role sem palavra-chave de autorização): 22
+revisadas manualmente: 4 de 22; as demais 18 NÃO podem ser consideradas seguras só por usarem context.userId

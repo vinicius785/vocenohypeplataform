@@ -1,0 +1,10 @@
+# Resumo SANITIZADO da simulação de RLS (estimativa por regex; sujeita a falsos positivos e negativos)
+# A saída completa (com nomes de tabelas e políticas) é gerada ao executar scripts/rls.py localmente e
+# foi mantida apenas em anexo local não versionado, porque o repositório é público.
+migrations: 162
+tabelas criadas (estado final aproximado): 114 | com RLS: 114 | sem RLS: 0
+tabelas com RLS e nenhuma política (acesso só por service-role): 13
+tabelas com política ampla (USING/CHECK true) ainda presente: 5
+tabelas cujas políticas não usam nenhuma função de guarda: 1
+tabelas explicitamente internas (is_internal_team_member): 37
+funções: 60 | SECURITY DEFINER: 41 | SECURITY DEFINER sem search_path: 1

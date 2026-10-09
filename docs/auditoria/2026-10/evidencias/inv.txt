@@ -1,0 +1,46 @@
+src files 1056 prod 878 tests 176
+prod LOC 176447 test LOC 27987
+LOC by src/ dir: {'components': 108538, 'lib': 48742, 'routes': 9267, 'features': 9265, 'integrations': 270, 'hooks': 264, '.': 101}
+largest: [(6574, 'src/components/influenciadores/InfluencerBoard.tsx'), (5169, 'src/components/tasks/TaskBoard.tsx'), (2301, 'src/components/AppShell.tsx'), (1944, 'src/components/portal/portal-widgets.tsx'), (1826, 'src/lib/financeiro-entries.ts'), (1743, 'src/components/InicioDashboard.tsx'), (1700, 'src/components/CampanhasSection.tsx'), (1609, 'src/components/CallOverlay.tsx'), (1571, 'src/components/VincularCampanhaDialog.tsx'), (1554, 'src/lib/performance-engine.ts'), (1509, 'src/lib/chat-store.ts'), (1402, 'src/lib/call-controller.ts')]
+route files 97
+api routes ['src/routes/api/google/oauth-callback.ts', 'src/routes/api/public/leads.ts', 'src/routes/api/webhooks/meta-data-deletion.ts', 'src/routes/api/webhooks/resend.ts', 'src/routes/api/webhooks/autentique.$secret.ts', 'src/routes/api/instagram/oauth-callback.ts', 'src/routes/api/cron/email-flows.ts', 'src/routes/api/cron/google-calendar-sync.ts', 'src/routes/api/cron/instagram-refresh.ts']
+server functions 184 with auth middleware 147 public(no middleware) 37 with validator 151
+PUBLIC fns:
+  cliente-link.functions.ts loadArtigoEngagement GET validator admin-file
+  cliente-link.functions.ts toggleArtigoLike POST validator admin-file
+  cliente-link.functions.ts addArtigoComentario POST validator admin-file
+  cliente-link.functions.ts getClienteLinkData GET validator admin-file
+  cliente-link.functions.ts respondCampanhaInflu POST validator admin-file
+  cliente-link.functions.ts reopenCampanhaInflu POST validator admin-file
+  cliente-link.functions.ts respondCampanhaEntrega POST validator admin-file
+  cliente-link.functions.ts updateInfluBriefing POST validator admin-file
+  cliente-link.functions.ts updateInfluObservacoes POST validator admin-file
+  cliente-link.functions.ts updateInfluBriefingAnexo POST validator admin-file
+  cliente-link.functions.ts submitClientDemand POST validator admin-file
+  cliente-link.functions.ts submitPortalBugReport POST validator admin-file
+  cliente-link.functions.ts submitRelatorioNps POST validator admin-file
+  campanha-nps-influenciador.functions.ts getInfluNpsPublic GET validator admin-file
+  campanha-nps-influenciador.functions.ts submitInfluNps POST validator admin-file
+  bugs-link.functions.ts getPublicBugReports GET validator admin-file
+  bugs-link.functions.ts getPublicBugScreenshotUrl GET validator admin-file
+  bugs-link.functions.ts submitPublicBugReport POST validator admin-file
+  bugs-link.functions.ts setPublicBugResolved POST validator admin-file
+  email-campaigns.functions.ts processEmailUnsubscribe POST validator admin-file
+  demo-public.functions.ts getDemoPortalData POST validator 
+  demo-public.functions.ts respondDemoInflu POST validator 
+  demo-public.functions.ts reopenDemoInflu POST validator 
+  demo-public.functions.ts respondDemoEntrega POST validator 
+  demo-public.functions.ts addDemoComentario POST validator 
+  demo-public.functions.ts getDemoRelatorioUrl POST validator 
+  audit-log.functions.ts logLoginFailure POST validator admin-file
+  inscricao-campanha.functions.ts getInscricaoCampanhaData GET validator admin-file
+  inscricao-campanha.functions.ts submitInscricaoCampanha POST validator admin-file
+  meta-data-deletion.functions.ts getMetaDeletionStatus GET validator admin-file
+  instagram.functions.ts getInstagramLinkInfo GET validator 
+  instagram.functions.ts startInstagramConnect POST validator 
+  proposta-publica.functions.ts getPropostaPublicaData GET validator admin-file
+  proposta-publica.functions.ts calcPropostaPublica POST validator admin-file
+  proposta-publica.functions.ts savePropostaPublica POST validator admin-file
+  rate-limit.functions.ts checkLoginRateLimit POST validator 
+  rate-limit.functions.ts checkRecoveryRateLimit POST validator 
+authenticated w/o validator: [('accept-invite.functions.ts', 'acceptPendingInvites'), ('email-campaigns.functions.ts', 'getEmailDashboard'), ('email-campaigns.functions.ts', 'listLeadsForPicker'), ('email-campaigns.functions.ts', 'listClientesForPicker'), ('email-campaigns.functions.ts', 'listBancoInfluenciadoresForPicker'), ('email-campaigns.functions.ts', 'listEmailTemplates'), ('email-campaigns.functions.ts', 'getEmailProviderSettings'), ('vault.functions.ts', 'getVaultKey'), ('client-access.functions.ts', 'listClientAccessMembers'), ('audit-log.functions.ts', 'logLoginSuccess'), ('audit-log.functions.ts', 'logLogout'), ('audit-log.functions.ts', 'logMfaEnrolled'), ('audit-log.functions.ts', 'logMfaUnenrolled'), ('comercial.functions.ts', 'listSavedViews'), ('integrations.functions.ts', 'getLeadsWebhookConfig'), ('integrations.functions.ts', 'regenerateLeadsWebhookSecret'), ('integrations.functions.ts', 'listOutgoingWebhooks'), ('mfa.functions.ts', 'checkMfaVerifyRateLimit'), ('password-reset.functions.ts', 'signOutOtherSessions'), ('google-calendar.functions.ts', 'startGoogleOAuth'), ('google-calendar.functions.ts', 'getGoogleConnectionStatus'), ('google-calendar.functions.ts', 'disconnectGoogleCalendar'), ('google-calendar.functions.ts', 'syncAllMeetingsToGoogle'), ('google-calendar.functions.ts', 'importGoogleEventsToMeetings'), ('google-calendar.functions.ts', 'deleteGoogleEventsForMeetings'), ('google-calendar.functions.ts', 'runGoogleCalendarSync'), ('vault-totp.functions.ts', 'getVaultTotpStatus'), ('vault-totp.functions.ts', 'enrollVaultTotp'), ('vault-totp.functions.ts', 'verifyVaultTotpAndUnlock'), ('team.functions.ts', 'getTeamDirectory'), ('portal-auth.functions.ts', 'getActivePortalOrganization'), ('portal-auth.functions.ts', 'getPortalDataForSession'), ('portal-auth.functions.ts', 'getPendingNpsSession')]

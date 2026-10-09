@@ -1,0 +1,22 @@
+# Verificações executadas em 2026-10-09 (commit d7b374a)
+
+$ bun run typecheck
+$ tsc --noEmit
+resultado: sem erros
+
+$ bun run lint
+  67:5  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+  184:5  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+✖ 112 problems (0 errors, 112 warnings)
+avisos por regra:
+  78 react-refresh/only-export-components
+  17 @typescript-eslint/no-unused-vars
+  15 react-hooks/exhaustive-deps (+ 2 diretivas eslint-disable sem uso)
+
+$ bun run test
+ Test Files  176 passed (176)
+      Tests  2145 passed (2145)
+
+$ bun run build
+resultado: sucesso (nitro/vercel preset); 312 chunks JS; 4,5 MB de JS bruto
+maiores chunks (bruto/gzip): TaskBoard 574/169 KB; index 437/136 KB; generateCategoricalChart 360/95 KB; AppShell 308/85 KB
