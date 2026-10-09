@@ -1,6 +1,30 @@
 {
-  "version": "1.387.0",
+  "version": "1.388.0",
   "releases": [
+    {
+      "version": "1.388.0",
+      "summary": "A barra inferior do celular ficou flutuante, com efeito de vidro.",
+      "modules": [
+        {
+          "name": "NAVEGAÇÃO",
+          "tagline": "Celular",
+          "items": [
+            {
+              "title": "Barra flutuante em vidro",
+              "description": "A navegação inferior agora flutua perto da borda, translúcida e com desfoque, e o conteúdo passa por trás dela. Os mesmos destinos e o \"Mais\" continuam no lugar."
+            },
+            {
+              "title": "Sem esconder conteúdo",
+              "description": "A tela reserva um respiro no final para nada ficar atrás da barra, respeita a área segura do iPhone e a barra sai da frente quando o teclado abre."
+            },
+            {
+              "title": "Estado ativo mais claro",
+              "description": "O destino atual aparece numa pílula suave, e os avisos de mensagens e novidades continuam visíveis."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.387.0",
       "summary": "Integrações viraram um catálogo: busca, categorias e a configuração de cada uma só ao abrir.",

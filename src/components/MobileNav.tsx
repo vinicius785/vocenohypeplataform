@@ -53,7 +53,7 @@ function useEditableFocus(): boolean {
 }
 
 const itemBase =
-  "relative flex min-w-0 flex-col items-center justify-center gap-0.5 transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand";
+  "relative flex min-w-0 flex-col items-center justify-center gap-0.5 transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand rounded-[24px]";
 
 /** Barra de navegação inferior (só mobile, < md). Os 4 destinos prioritários + "Mais". O estado
  * ativo vem de `active` (a rota real), nunca do último clique. */
@@ -71,127 +71,124 @@ export function MobileBottomNav(props: MobileNavState) {
 
   return (
     <>
-      <nav
-        aria-label="Navegação principal"
-        className={`shrink-0 border-t border-border bg-background pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] md:hidden ${
+      {/* Barra flutuante (vidro): o wrapper não captura toques fora da pílula; sai da frente com o
+       * teclado. O `data-mobile-nav` faz o <main> reservar o respiro inferior só enquanto ela existe. */}
+      <div
+        data-mobile-nav
+        className={`pointer-events-none absolute inset-x-0 bottom-0 z-30 px-4 pb-[max(env(safe-area-inset-bottom),0.5rem)] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] md:hidden ${
           keyboard ? "hidden" : ""
         }`}
       >
-        <ul className="grid grid-cols-5">
-          {MOBILE_PRIMARY_KEYS.map((key) => {
-            const item = itemByKey(key)!;
-            const Icon = item.icon;
-            const isActive = active === key;
-            const ok = allowed(key);
-            const unread = key === "chat" && ok ? chatUnread : 0;
-            const showDot = ok && key !== "chat" && dot(key);
-            return (
-              <li key={key}>
-                <button
-                  type="button"
-                  disabled={!ok}
-                  onClick={() => ok && onSelect(key)}
-                  aria-current={isActive ? "page" : undefined}
-                  aria-label={
-                    !ok
-                      ? `${item.label}. Sem permissão para acessar esta seção`
-                      : unread > 0
-                        ? `${item.label}, ${unread} mensagens não lidas`
-                        : showDot
-                          ? `${item.label}, há novidades`
-                          : undefined
-                  }
-                  className={`${itemBase} h-12 w-full ${
-                    !ok
-                      ? "cursor-not-allowed text-text-secondary"
-                      : isActive
-                        ? "text-foreground"
-                        : "text-muted-foreground active:bg-muted/60"
-                  }`}
-                >
-                  {isActive && (
+        <nav
+          aria-label="Navegação principal"
+          className="pointer-events-auto mx-auto max-w-md rounded-[28px] border border-border/60 bg-background shadow-[0_8px_30px_-8px_rgb(0_0_0/0.25)] supports-[backdrop-filter]:bg-background/72 supports-[backdrop-filter]:backdrop-blur-xl supports-[backdrop-filter]:backdrop-saturate-150 [-webkit-backdrop-filter:blur(20px)_saturate(1.5)]"
+        >
+          <ul className="grid grid-cols-5 p-0.5">
+            {MOBILE_PRIMARY_KEYS.map((key) => {
+              const item = itemByKey(key)!;
+              const Icon = item.icon;
+              const isActive = active === key;
+              const ok = allowed(key);
+              const unread = key === "chat" && ok ? chatUnread : 0;
+              const showDot = ok && key !== "chat" && dot(key);
+              return (
+                <li key={key}>
+                  <button
+                    type="button"
+                    disabled={!ok}
+                    onClick={() => ok && onSelect(key)}
+                    aria-current={isActive ? "page" : undefined}
+                    aria-label={
+                      !ok
+                        ? `${item.label}. Sem permissão para acessar esta seção`
+                        : unread > 0
+                          ? `${item.label}, ${unread} mensagens não lidas`
+                          : showDot
+                            ? `${item.label}, há novidades`
+                            : undefined
+                    }
+                    className={`${itemBase} m-1 h-12 w-[calc(100%-0.5rem)] ${
+                      !ok
+                        ? "cursor-not-allowed text-text-secondary"
+                        : isActive
+                          ? "bg-foreground/10 text-foreground"
+                          : "text-muted-foreground active:bg-foreground/5"
+                    }`}
+                  >
+                    <span className="relative">
+                      <Icon
+                        className="h-5 w-5"
+                        strokeWidth={isActive ? 2.25 : 1.75}
+                        aria-hidden="true"
+                      />
+                      {unread > 0 && (
+                        <span
+                          aria-hidden="true"
+                          className="absolute -right-2.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-semibold leading-none text-brand-foreground"
+                        >
+                          {unread > 99 ? "99+" : unread}
+                        </span>
+                      )}
+                      {showDot && (
+                        <span
+                          aria-hidden="true"
+                          className="absolute -right-1 -top-0.5 h-1.5 w-1.5 rounded-full bg-destructive"
+                        />
+                      )}
+                      {!ok && (
+                        <Lock
+                          aria-hidden="true"
+                          className="absolute -right-2 -top-1 h-2.5 w-2.5 text-text-secondary"
+                        />
+                      )}
+                    </span>
+                    <span
+                      className={`text-[10px] leading-none ${isActive ? "font-semibold" : "font-medium"}`}
+                    >
+                      {item.label}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+            <li>
+              <button
+                ref={moreButtonRef}
+                type="button"
+                onClick={() => setMoreOpen(true)}
+                aria-haspopup="dialog"
+                aria-expanded={moreOpen}
+                aria-current={moreActive ? "page" : undefined}
+                aria-label={moreHasDot ? "Mais, há novidades" : undefined}
+                className={`${itemBase} m-1 h-12 w-[calc(100%-0.5rem)] ${
+                  moreActive
+                    ? "bg-foreground/10 text-foreground"
+                    : "text-muted-foreground active:bg-foreground/5"
+                }`}
+              >
+                <span className="relative">
+                  <Menu
+                    className="h-5 w-5"
+                    strokeWidth={moreActive ? 2.25 : 1.75}
+                    aria-hidden="true"
+                  />
+                  {moreHasDot && (
                     <span
                       aria-hidden="true"
-                      className="absolute inset-x-6 top-0 h-0.5 rounded-full bg-brand"
+                      className="absolute -right-1 -top-0.5 h-1.5 w-1.5 rounded-full bg-destructive"
                     />
                   )}
-                  <span className="relative">
-                    <Icon
-                      className="h-5 w-5"
-                      strokeWidth={isActive ? 2.25 : 1.75}
-                      aria-hidden="true"
-                    />
-                    {unread > 0 && (
-                      <span
-                        aria-hidden="true"
-                        className="absolute -right-2.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-semibold leading-none text-brand-foreground"
-                      >
-                        {unread > 99 ? "99+" : unread}
-                      </span>
-                    )}
-                    {showDot && (
-                      <span
-                        aria-hidden="true"
-                        className="absolute -right-1 -top-0.5 h-1.5 w-1.5 rounded-full bg-destructive"
-                      />
-                    )}
-                    {!ok && (
-                      <Lock
-                        aria-hidden="true"
-                        className="absolute -right-2 -top-1 h-2.5 w-2.5 text-text-secondary"
-                      />
-                    )}
-                  </span>
-                  <span
-                    className={`text-[10px] leading-none ${isActive ? "font-semibold" : "font-medium"}`}
-                  >
-                    {item.label}
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-          <li>
-            <button
-              ref={moreButtonRef}
-              type="button"
-              onClick={() => setMoreOpen(true)}
-              aria-haspopup="dialog"
-              aria-expanded={moreOpen}
-              aria-current={moreActive ? "page" : undefined}
-              aria-label={moreHasDot ? "Mais, há novidades" : undefined}
-              className={`${itemBase} h-12 w-full ${
-                moreActive ? "text-foreground" : "text-muted-foreground active:bg-muted/60"
-              }`}
-            >
-              {moreActive && (
+                </span>
                 <span
-                  aria-hidden="true"
-                  className="absolute inset-x-6 top-0 h-0.5 rounded-full bg-brand"
-                />
-              )}
-              <span className="relative">
-                <Menu
-                  className="h-5 w-5"
-                  strokeWidth={moreActive ? 2.25 : 1.75}
-                  aria-hidden="true"
-                />
-                {moreHasDot && (
-                  <span
-                    aria-hidden="true"
-                    className="absolute -right-1 -top-0.5 h-1.5 w-1.5 rounded-full bg-destructive"
-                  />
-                )}
-              </span>
-              <span
-                className={`text-[10px] leading-none ${moreActive ? "font-semibold" : "font-medium"}`}
-              >
-                Mais
-              </span>
-            </button>
-          </li>
-        </ul>
-      </nav>
+                  className={`text-[10px] leading-none ${moreActive ? "font-semibold" : "font-medium"}`}
+                >
+                  Mais
+                </span>
+              </button>
+            </li>
+          </ul>
+        </nav>
+      </div>
 
       <MoreSheet
         open={moreOpen}

@@ -88,11 +88,14 @@ describe("acessibilidade e permissões", () => {
 
   it("respeita a safe area e some do desktop", () => {
     const out = html();
-    // Barra rasa e colada na borda, NO fluxo do layout (nada de flutuar por cima do conteúdo).
-    expect(out).toContain("pb-[env(safe-area-inset-bottom)]");
-    expect(out).toContain("border-t");
+    // Pílula flutuante em vidro: absoluta dentro da coluna do shell (não `fixed`), com a safe area
+    // do iOS, desfoque com fallback sólido e sem capturar toques fora da pílula.
+    expect(out).toContain("env(safe-area-inset-bottom)");
+    expect(out).toContain("data-mobile-nav");
+    expect(out).toContain("pointer-events-none");
+    expect(out).toContain("supports-[backdrop-filter]:backdrop-blur-xl");
+    expect(out).toContain("bg-background");
     expect(out).not.toContain("fixed");
-    expect(out).not.toContain("rounded-2xl");
     expect(out).toContain("md:hidden");
   });
 });

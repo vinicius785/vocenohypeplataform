@@ -485,7 +485,7 @@ export function AppShell({
         </aside>
       </TooltipProvider>
 
-      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden md:h-dvh">
+      <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden max-md:has-[[data-mobile-nav]]:[&>main]:pb-[calc(5.75rem+env(safe-area-inset-bottom))] md:h-dvh">
         <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3 md:h-16 md:gap-3 md:px-6">
           <GlobalSearch onSelect={onSelect} />
           <div className="ml-auto flex items-center gap-1">
@@ -503,8 +503,8 @@ export function AppShell({
         </header>
 
         <main className="min-h-0 min-w-0 flex-1 overflow-auto p-4 md:p-8">{children}</main>
-        {/* Dentro da coluna, depois do <main>: ocupa espaço REAL no layout (o conteúdo rola acima dela),
-         * em vez de flutuar por cima e depender de um padding "reserva" no <main>. */}
+        {/* Barra flutuante em vidro sobre o fim do <main>: o conteúdo rola por baixo dela, e o <main>
+         * reserva o respiro inferior (classe `has-[[data-mobile-nav]]` na coluna) só com a barra visível. */}
         <MobileBottomNav
           active={active}
           allowed={(key) => hasPermission(access, SECTION_PERMISSION[key])}
