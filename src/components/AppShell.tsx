@@ -72,6 +72,7 @@ import {
   subscribeChat,
   loadLastRead,
   summarizeUnread,
+  visibleConvoIds,
   type ChatMessage,
   markRead,
 } from "@/lib/chat-store";
@@ -128,7 +129,16 @@ const groups = NAV_GROUPS;
 function useUnreadChatCount(): number {
   const [, force] = useState(0);
   useEffect(() => subscribeChat(() => force((t) => t + 1)), []);
-  return summarizeUnread(loadMessages(), getMe().id, loadLastRead()).total;
+  const clientes = useClientes();
+  const meId = getMe().id;
+  const known = visibleConvoIds({
+    channels: loadChannels(),
+    campaignChannels: loadCampaignChannels(clientes),
+    projectChannels: loadProjectChannels(),
+    members: loadMembers(),
+    meId,
+  });
+  return summarizeUnread(loadMessages(), meId, loadLastRead(), known).total;
 }
 
 /** Tem alguma reunião onde eu ainda não confirmei nem recusei? Usado pra
@@ -1668,8 +1678,16 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
 
   // Group unread messages by convo (excluding own, excluding active)
   const grouped = new Map<string, { count: number; last: (typeof messages)[number] }>();
+  const knownConvos = visibleConvoIds({
+    channels,
+    campaignChannels: campaigns,
+    projectChannels: projects,
+    members,
+    meId: me.id,
+  });
   for (const m of messages) {
     if (m.authorId === me.id) continue;
+    if (!knownConvos.has(m.convoId)) continue;
     if (isConvoBeingViewed(m.convoId)) continue;
     const lr = lastRead[m.convoId] ?? 0;
     if (m.createdAt <= lr) continue;

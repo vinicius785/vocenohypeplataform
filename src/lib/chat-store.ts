@@ -1234,15 +1234,39 @@ export type UnreadSummary = {
 
 /** Única fonte de verdade das mensagens não lidas — sidebar e sino chamam
  * esta função, nunca reimplementam a conta. Ignora mensagens minhas e as da conversa que está sendo vista agora. */
+/** Ids das conversas que existem na lista do Chat para esta pessoa (mesma regra de `buildChatList`): canais que
+ * ela enxerga, campanhas, projetos e DMs com membros do time. Mensagem fora deste conjunto (canal apagado ou
+ * privado, campanha removida, DM com conta fora do time) não tem onde ser aberta — contá-la deixava um
+ * "N não lidas" que não levava a lugar nenhum. */
+export function visibleConvoIds(args: {
+  channels: ChatChannel[];
+  campaignChannels: { id: string }[];
+  projectChannels: { id: string }[];
+  members: ChatMember[];
+  meId: string;
+}): Set<string> {
+  const { channels, campaignChannels, projectChannels, members, meId } = args;
+  const ids = new Set<string>();
+  for (const c of channels) {
+    if (!c.private || !c.allowedMemberIds || c.allowedMemberIds.includes(meId)) ids.add(c.id);
+  }
+  for (const c of campaignChannels) ids.add(c.id);
+  for (const p of projectChannels) ids.add(p.id);
+  for (const m of members) if (m.id !== meId) ids.add(dmId(meId, m.id));
+  return ids;
+}
+
 export function summarizeUnread(
   messages: ChatMessage[],
   meId: string,
   lastRead: Record<string, number>,
+  onlyConvos?: Set<string>,
 ): UnreadSummary {
   const byConvo = new Map<string, number>();
   let total = 0;
   for (const m of messages) {
     if (m.authorId === meId) continue;
+    if (onlyConvos && !onlyConvos.has(m.convoId)) continue;
     if (isConvoBeingViewed(m.convoId)) continue;
     if (m.createdAt <= (lastRead[m.convoId] ?? 0)) continue;
     byConvo.set(m.convoId, (byConvo.get(m.convoId) ?? 0) + 1);
