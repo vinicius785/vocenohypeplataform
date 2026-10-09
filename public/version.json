@@ -1,6 +1,22 @@
 {
-  "version": "1.388.0",
+  "version": "1.388.1",
   "releases": [
+    {
+      "version": "1.388.1",
+      "summary": "Corrige a barra de navegação do celular, que não respondia ao toque.",
+      "modules": [
+        {
+          "name": "NAVEGAÇÃO",
+          "tagline": "Celular",
+          "items": [
+            {
+              "title": "Barra responde ao toque",
+              "description": "A barra inferior flutuante voltou a trocar de aba normalmente, mantendo o efeito de vidro."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.388.0",
       "summary": "A barra inferior do celular ficou flutuante, com efeito de vidro.",
