@@ -77,6 +77,39 @@ export function canonicalRedirectUrl(requestUrl: string): string | null {
   return `${appOrigin}${current.pathname}${current.search}`;
 }
 
+/** Página para onde o usuário é levado quando inicia a conexão fora do domínio canônico. Caminho FIXO:
+ * nunca vem do navegador (sem open redirect). */
+export const OAUTH_RETURN_PATH = "/time?section=configuracoes";
+
+/** Extrai a origem (`https://host`) de um valor de cabeçalho `Origin`/`Referer`; `null` se ausente,
+ * `"null"` (origem opaca) ou inválida. */
+export function originOf(headerValue: string | null | undefined): string | null {
+  if (!headerValue || headerValue === "null") return null;
+  try {
+    return new URL(headerValue).origin;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Decide, no INÍCIO do fluxo, se o navegador está fora do domínio canônico.
+ *
+ * Por que não usar `canonicalRedirectUrl(request.url)` aqui: dentro de uma server function, a
+ * `request.url` é a da própria chamada (`/_serverFn/<id>`), não a da página — redirecionar para
+ * ela mandava o usuário para uma rota de função de servidor. A origem da página vem do cabeçalho
+ * `Origin` (ou `Referer`) da requisição, usado SÓ para comparar com `APP_URL`; a URL de destino é
+ * montada exclusivamente com a origem canônica (configuração do servidor) + `OAUTH_RETURN_PATH`.
+ *
+ * `null` = pode seguir (mesma origem, ou sem cabeçalho confiável para comparar — não bloqueia).
+ * Lança se `APP_URL` estiver ausente/inválida (quem chama devolve erro controlado).
+ */
+export function canonicalOriginRedirect(requestOrigin: string | null): string | null {
+  const appOrigin = new URL(getAppUrl()).origin;
+  if (!requestOrigin || requestOrigin === appOrigin) return null;
+  return `${appOrigin}${OAUTH_RETURN_PATH}`;
+}
+
 /** `state` do OAuth só vale por 10 minutos — depois disso o callback força
  * reconectar em vez de aceitar um `code` velho. */
 export const OAUTH_STATE_TTL_MS = 10 * 60_000;

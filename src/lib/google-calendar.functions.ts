@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
+import { getRequest, setResponseHeader } from "@tanstack/react-start/server";
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
@@ -13,10 +13,27 @@ import {
   pruneCutoffDate,
 } from "@/lib/google-sync-window";
 import {
-  canonicalRedirectUrl,
+  canonicalOriginRedirect,
   getGoogleOAuthRedirectUri,
   googleOAuthEnvTag,
+  originOf,
 } from "@/lib/google-oauth-config";
+import {
+  ensureAccessToken,
+  type ConnectionTokenStore,
+  type GoogleConnectionTokens,
+  type RefreshOutcome,
+} from "@/lib/google-token";
+import {
+  connectionsToMarkSynced,
+  outboundResultFor,
+  processEachConnection,
+  summarizeOutcomes,
+  type ConnectionResult,
+} from "@/lib/google-sync-runner";
+import { updateMeetingData, type MeetingStore } from "@/lib/google-meeting-write";
+import { buildStateCookie } from "@/lib/google-oauth-state-cookie";
+import type { StartGoogleOAuthResult } from "@/lib/google-connect-flow";
 
 /**
  * Integração Google Calendar, por conta PESSOAL de cada usuário (sem conta
@@ -42,7 +59,6 @@ import {
  */
 
 const GOOGLE_SCOPE = "https://www.googleapis.com/auth/calendar.events openid email";
-const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const EVENTS_URL = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
 
 function requireGoogleEnv() {
@@ -60,32 +76,77 @@ function requireGoogleEnv() {
   return { clientId, clientSecret };
 }
 
+/** Só equipe interna (ou admin) usa a integração: contas do portal do cliente são `authenticated`
+ * comuns na mesma chave anon, e este módulo grava em `reunioes` e usa tokens de terceiros. */
+export async function isInternalOrAdmin(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+): Promise<boolean> {
+  const [{ data: admin, error: adminErr }, { data: internal, error: internalErr }] =
+    await Promise.all([
+      supabase.rpc("is_admin", { _user_id: userId }),
+      supabase.rpc("is_internal_team_member", { _user_id: userId }),
+    ]);
+  if (adminErr) throw new Error(adminErr.message);
+  if (internalErr) throw new Error(internalErr.message);
+  return Boolean(admin) || Boolean(internal);
+}
+
 export const startGoogleOAuth = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .handler(async ({ context }): Promise<StartGoogleOAuthResult> => {
+    if (!(await isInternalOrAdmin(context.supabase, context.userId))) {
+      return { ok: false, error: "forbidden" };
+    }
+
+    // Fora do domínio canônico (`APP_URL`), manda o navegador para lá ANTES de iniciar: o callback
+    // volta pelo domínio canônico e a sessão do usuário vive por origem. A origem da página vem do
+    // cabeçalho `Origin`/`Referer` (só comparada com `APP_URL`); o destino é origem canônica +
+    // caminho fixo — nada fornecido pelo navegador entra na URL. (A `request.url` aqui é a da
+    // própria server function, `/_serverFn/…`, e NÃO serve para isso.)
     const request = getRequest();
-    // Se a página que chamou isso está num domínio alternativo (não o
-    // `APP_URL` canônico), manda o navegador pra lá primeiro — assim o
-    // Google só precisa conhecer UM redirect_uri autorizado, nunca todo
-    // domínio que aponta pro mesmo deploy. Preserva caminho e query string
-    // atuais; o usuário simplesmente clica em "Conectar" de novo já no
-    // domínio certo.
-    const redirectHome = canonicalRedirectUrl(request.url);
+    const requestOrigin =
+      originOf(request.headers.get("origin")) ?? originOf(request.headers.get("referer"));
+    let redirectHome: string | null;
+    try {
+      redirectHome = canonicalOriginRedirect(requestOrigin);
+    } catch {
+      console.error("[google-oauth] start: APP_URL ausente/inválida", { env: googleOAuthEnvTag() });
+      return { ok: false, error: "not_configured" };
+    }
     if (redirectHome) {
       console.log("[google-oauth] start: domínio não-canônico, redirecionando", {
         env: googleOAuthEnvTag(),
       });
-      return { url: redirectHome };
+      return { ok: true, url: redirectHome };
     }
 
-    const { clientId } = requireGoogleEnv();
-    const redirectUri = getGoogleOAuthRedirectUri();
+    let clientId: string;
+    let redirectUri: string;
+    try {
+      ({ clientId } = requireGoogleEnv());
+      redirectUri = getGoogleOAuthRedirectUri();
+    } catch {
+      console.error("[google-oauth] start: configuração ausente", { env: googleOAuthEnvTag() });
+      return { ok: false, error: "not_configured" };
+    }
+
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const token = crypto.randomUUID();
     const { error } = await supabaseAdmin
       .from("google_oauth_states")
       .insert({ token, user_id: context.userId });
-    if (error) throw new Error(error.message);
+    if (error) {
+      console.error("[google-oauth] start: falha ao gravar o state", { dbCode: error.code });
+      return { ok: false, error: "unavailable" };
+    }
+
+    // Vincula este `state` ao navegador que iniciou (cookie HttpOnly, 10 min): o callback só aceita
+    // quem trouxer o mesmo valor — outra pessoa que receba a URL de autorização não consegue concluir.
+    setResponseHeader(
+      "Set-Cookie",
+      buildStateCookie(token, { secure: redirectUri.startsWith("https://") }),
+    );
 
     const params = new URLSearchParams({
       client_id: clientId,
@@ -97,7 +158,7 @@ export const startGoogleOAuth = createServerFn({ method: "POST" })
       state: token,
     });
     console.log("[google-oauth] start", { env: googleOAuthEnvTag(), redirectUri });
-    return { url: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}` };
+    return { ok: true, url: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}` };
   });
 
 export const getGoogleConnectionStatus = createServerFn({ method: "GET" })
@@ -167,64 +228,70 @@ async function fetchAllReunioes(
   return out;
 }
 
-type GoogleConnectionRow = {
-  user_id: string;
-  access_token: string;
-  refresh_token: string;
-  token_expiry: string;
-};
+type GoogleConnectionRow = GoogleConnectionTokens;
 
-/** Token válido da conta pessoal de `userId` — renova via refresh_token
- * quando perto de expirar, gravando de volta na própria linha. */
+/** Persistência da renovação via service role (só no servidor). */
+function adminTokenStore(admin: AdminClient): ConnectionTokenStore {
+  return {
+    async saveRefreshed(userId, tokens) {
+      const { error } = await admin
+        .from("google_calendar_connections")
+        .update({
+          access_token: tokens.access_token,
+          token_expiry: tokens.token_expiry,
+          // Só troca o refresh_token quando o Google devolveu um novo; senão preserva o existente.
+          ...(tokens.refresh_token ? { refresh_token: tokens.refresh_token } : null),
+          updated_at: new Date().toISOString(),
+          token_invalid: false,
+          last_error: null,
+        })
+        .eq("user_id", userId);
+      return !error;
+    },
+    async markReauthRequired(userId, message) {
+      const { error } = await admin
+        .from("google_calendar_connections")
+        .update({ token_invalid: true, last_error: message })
+        .eq("user_id", userId);
+      return !error;
+    },
+    async recordTransientError(userId, message) {
+      const { error } = await admin
+        .from("google_calendar_connections")
+        .update({ last_error: message })
+        .eq("user_id", userId);
+      return !error;
+    },
+  };
+}
+
+/** Token válido da conta pessoal da conexão — renova via refresh_token quando perto de expirar.
+ * Nunca lança: o desfecho (ok / reautorização / falha temporária) vem tipado. */
 async function getValidAccessToken(
   admin: AdminClient,
   row: GoogleConnectionRow,
-): Promise<string | null> {
-  const expiresInMs = new Date(row.token_expiry).getTime() - Date.now();
-  if (expiresInMs > 60_000) return row.access_token;
-
-  const { clientId, clientSecret } = requireGoogleEnv();
-  const res = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      refresh_token: row.refresh_token,
-      grant_type: "refresh_token",
-    }),
-  });
-  if (!res.ok) {
-    const body = await res.text();
-    console.warn(`[google-calendar] refresh token failed for user ${row.user_id}`, body);
-    // Fase B: persiste o problema em vez de só logar e seguir em frente
-    // silenciosamente — antes a UI não tinha como saber que o token
-    // morreu (mostrava "Conectado" pra sempre, mesmo com acesso revogado
-    // ou refresh_token expirado). `token_invalid` é o que a tela de
-    // Configurações usa pra oferecer "Reconectar" em vez de fingir que
-    // está tudo bem.
-    await admin
-      .from("google_calendar_connections")
-      .update({
-        token_invalid: true,
-        last_error: `Falha ao renovar o token de acesso (HTTP ${res.status}). É provável que o acesso tenha sido revogado — reconecte sua conta.`,
-      })
-      .eq("user_id", row.user_id);
-    return null;
+): Promise<RefreshOutcome> {
+  let creds: { clientId: string; clientSecret: string };
+  try {
+    creds = requireGoogleEnv();
+  } catch {
+    return { kind: "transient", reason: "config", recorded: false };
   }
-  const json = (await res.json()) as { access_token: string; expires_in: number };
-  const tokenExpiry = new Date(Date.now() + json.expires_in * 1000).toISOString();
-  await admin
-    .from("google_calendar_connections")
-    .update({
-      access_token: json.access_token,
-      token_expiry: tokenExpiry,
-      updated_at: new Date().toISOString(),
-      token_invalid: false,
-      last_error: null,
-    })
-    .eq("user_id", row.user_id);
-  return json.access_token;
+  return ensureAccessToken(
+    {
+      fetch,
+      clientId: creds.clientId,
+      clientSecret: creds.clientSecret,
+      store: adminTokenStore(admin),
+      log: (event, meta) => console.warn(`[google-calendar] ${event}`, meta),
+    },
+    row,
+  );
+}
+
+function connectionResultFor(outcome: RefreshOutcome): ConnectionResult | null {
+  if (outcome.kind === "ok") return null;
+  return outcome.kind === "reauth_required" ? "reauth_required" : "transient";
 }
 
 type SlimMeeting = {
@@ -330,13 +397,53 @@ export function shouldSkipSyncDueToBackoff(
   return now - new Date(m.lastSyncAttemptAt).getTime() < SYNC_RETRY_BACKOFF_MS;
 }
 
+/** Leitura/escrita de `reunioes` com condição por `updated_at` (ver `google-meeting-write.ts`). */
+function adminMeetingStore(admin: AdminClient): MeetingStore {
+  return {
+    async read(id) {
+      const { data, error } = await admin
+        .from("reunioes")
+        .select("data, updated_at")
+        .eq("id", id)
+        .maybeSingle();
+      if (error) throw new Error("read_failed");
+      return data
+        ? { data: data.data as Record<string, unknown>, updated_at: data.updated_at }
+        : null;
+    },
+    async writeIfUnchanged(id, data, expectedUpdatedAt) {
+      const { data: rows, error } = await admin
+        .from("reunioes")
+        .update({ data: data as never })
+        .eq("id", id)
+        .eq("updated_at", expectedUpdatedAt)
+        .select("id");
+      if (error) return "error";
+      return (rows?.length ?? 0) > 0 ? "written" : "conflict";
+    },
+  };
+}
+
+/** Aplica só os campos de sincronização sobre a versão fresca (`undefined` remove a chave). */
+export function applySyncPatch(
+  fresh: Record<string, unknown>,
+  patch: Record<string, unknown>,
+): Record<string, unknown> {
+  const out = { ...fresh };
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) delete out[key];
+    else out[key] = value;
+  }
+  return out;
+}
+
 async function syncOneMeeting(
   admin: AdminClient,
   accessToken: string,
   m: SlimMeeting,
   emailById: Map<string, string>,
-): Promise<void> {
-  if (shouldSkipSyncDueToBackoff(m)) return;
+): Promise<"synced" | "skipped" | "failed"> {
+  if (shouldSkipSyncDueToBackoff(m)) return "skipped";
 
   // Fonte de verdade é o id já gravado na própria reunião — nunca busca
   // por `privateExtendedProperty` quando já sabemos o id (esse filtro do
@@ -361,7 +468,7 @@ async function syncOneMeeting(
         headers: { Authorization: `Bearer ${accessToken}` },
       }).catch(() => {});
     }
-    return;
+    return "synced";
   }
 
   const { start, end } = meetingTimeRange(m);
@@ -409,19 +516,16 @@ async function syncOneMeeting(
     // a mensagem: nunca deve conter token/secret, mas o corpo bruto do
     // Google pode ser longo (ex.: HTML de erro) e não precisa ser guardado
     // inteiro pra ser útil.
-    await admin
-      .from("reunioes")
-      .update({
-        data: {
-          ...m,
-          syncStatus: "error" as const,
-          lastSyncError: `Falha ao sincronizar com o Google (HTTP ${res.status}): ${errBody.slice(0, 300)}`,
-          lastSyncAttemptAt: new Date().toISOString(),
-        },
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", m.id);
-    return;
+    // Só os campos de sincronização, sobre a versão FRESCA da reunião (não sobrescreve edições
+    // feitas pelo usuário depois que o ciclo leu a lista).
+    await updateMeetingData(adminMeetingStore(admin), m.id, (fresh) =>
+      applySyncPatch(fresh, {
+        syncStatus: "error",
+        lastSyncError: `Falha ao sincronizar com o Google (HTTP ${res.status}): ${errBody.slice(0, 300)}`,
+        lastSyncAttemptAt: new Date().toISOString(),
+      }),
+    );
+    return "failed";
   }
   // A resposta do POST/PATCH já traz o evento completo, incluindo o link
   // do Google Meet gerado (`hangoutLink`) — antes só o `id` era lido daqui,
@@ -435,30 +539,33 @@ async function syncOneMeeting(
     hangoutLink?: string;
     htmlLink?: string;
   };
-  const next: SlimMeeting = {
-    ...m,
-    ...(existingId ? null : { googleEventId: synced.id }),
-    ...(synced.hangoutLink && synced.hangoutLink !== m.meetLink
-      ? { meetLink: synced.hangoutLink }
-      : null),
-    ...(synced.htmlLink ? { googleHtmlLink: synced.htmlLink } : null),
-    googleCalendarId: "primary",
-    etag: synced.etag,
-    syncStatus: "synced",
-    lastSyncedAt: new Date().toISOString(),
-    lastSyncAttemptAt: new Date().toISOString(),
-    lastSyncError: undefined,
-  };
-  // `lastSyncedAt` muda a cada chamada por definição, então esse `diff`
-  // sempre é "true" agora — a comparação continua aqui só documentando a
-  // intenção (evitar campos vazios/redundantes no patch), não pra pular o
-  // write: gravar "quando foi a última vez que isto rodou" é o requisito.
-  if (JSON.stringify(next) !== JSON.stringify(m)) {
-    await admin
-      .from("reunioes")
-      .update({ data: next, updated_at: new Date().toISOString() })
-      .eq("id", m.id);
+  // Só os campos de sincronização, sobre a versão fresca da reunião (ver `applySyncPatch`).
+  const nowIso = new Date().toISOString();
+  const written = await updateMeetingData(adminMeetingStore(admin), m.id, (fresh) =>
+    applySyncPatch(fresh, {
+      ...(existingId ? null : { googleEventId: synced.id }),
+      ...(synced.hangoutLink && synced.hangoutLink !== m.meetLink
+        ? { meetLink: synced.hangoutLink }
+        : null),
+      ...(synced.htmlLink ? { googleHtmlLink: synced.htmlLink } : null),
+      googleCalendarId: "primary",
+      etag: synced.etag,
+      syncStatus: "synced",
+      lastSyncedAt: nowIso,
+      lastSyncAttemptAt: nowIso,
+      lastSyncError: undefined,
+    }),
+  );
+  if (written === "conflict" || written === "error") {
+    // O evento no Google já foi criado/atualizado, mas o registro local não pôde ser gravado sem
+    // arriscar sobrescrever uma edição concorrente: conta como falha desta reunião e a próxima
+    // rodada tenta de novo (o evento é reencontrado pelo marcador, sem duplicar).
+    console.warn("[google-calendar] não foi possível gravar o resultado da sincronização", {
+      result: written,
+    });
+    return "failed";
   }
+  return "synced";
 }
 
 /** Sincroniza cada reunião contra a conta Google PESSOAL de quem a criou
@@ -472,13 +579,34 @@ async function syncOneMeeting(
  * rodava via `setInterval` de 3min NO NAVEGADOR (`_authenticated/route.tsx`)
  * — sem nenhuma aba aberta, a sincronização simplesmente não acontecia,
  * nunca, em nenhum sentido. */
-export async function runSyncAllMeetingsToGoogle() {
+type OutboundDetail = {
+  result: {
+    synced: number;
+    failedMeetings: number;
+    connected: boolean;
+    connections: ReturnType<typeof summarizeOutcomes>;
+  };
+  /** Por conexão — só uso interno (ids de usuário nunca saem do servidor). */
+  outcomes: Map<string, ConnectionResult>;
+};
+
+async function runOutbound(): Promise<OutboundDetail> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
   const { data: connections } = await supabaseAdmin
     .from("google_calendar_connections")
-    .select("user_id, access_token, refresh_token, token_expiry");
-  if (!connections || connections.length === 0) return { synced: 0, connected: false as const };
+    .select("user_id, access_token, refresh_token, token_expiry, token_invalid");
+  if (!connections || connections.length === 0) {
+    return {
+      result: {
+        synced: 0,
+        failedMeetings: 0,
+        connected: false,
+        connections: summarizeOutcomes(new Map()),
+      },
+      outcomes: new Map(),
+    };
+  }
 
   const rows = await fetchAllReunioes(supabaseAdmin);
   const meetings = rows.map((r) => r.data as SlimMeeting);
@@ -510,22 +638,56 @@ export async function runSyncAllMeetingsToGoogle() {
   }
 
   let synced = 0;
-  for (const conn of connections) {
-    const creatorMeetings = meetingsByCreator.get(conn.user_id);
-    if (!creatorMeetings || creatorMeetings.length === 0) continue;
-    const accessToken = await getValidAccessToken(supabaseAdmin, conn);
-    if (!accessToken) continue;
-    for (const m of creatorMeetings) {
-      await syncOneMeeting(supabaseAdmin, accessToken, m, emailById);
-      synced++;
-    }
-  }
-  return { synced, connected: true as const };
+  let failedMeetings = 0;
+  // Uma exceção ou falha de renovação de UM usuário nunca interrompe os demais.
+  const outcomes = await processEachConnection(
+    connections,
+    async (conn) => {
+      const creatorMeetings = meetingsByCreator.get(conn.user_id);
+      if (!creatorMeetings || creatorMeetings.length === 0) return "skipped";
+      const token = await getValidAccessToken(supabaseAdmin, conn);
+      if (token.kind !== "ok") return connectionResultFor(token)!;
+      const counts = { synced: 0, failed: 0 };
+      for (const m of creatorMeetings) {
+        const res = await syncOneMeeting(supabaseAdmin, token.accessToken, m, emailById);
+        if (res === "synced") counts.synced++;
+        else if (res === "failed") counts.failed++;
+      }
+      synced += counts.synced;
+      failedMeetings += counts.failed;
+      // total (ok) / parcial (partial) / falha total (transient: NÃO conta como sincronizada)
+      return outboundResultFor(counts);
+    },
+    (errorName) =>
+      console.warn("[google-calendar] outbound: falha isolada numa conexão", errorName),
+  );
+  return {
+    result: {
+      synced,
+      failedMeetings,
+      connected: true,
+      connections: summarizeOutcomes(outcomes),
+    },
+    outcomes,
+  };
 }
+
+export async function runSyncAllMeetingsToGoogle() {
+  return (await runOutbound()).result;
+}
+
+/** Resposta para quem não é equipe interna/admin: nada é executado (sem erro, para não gerar ruído
+ * em sessões que disparam o polling). */
+const FORBIDDEN_SYNC = { ran: false as const, forbidden: true as const };
 
 export const syncAllMeetingsToGoogle = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(() => runSyncAllMeetingsToGoogle());
+  .handler(async ({ context }) => {
+    if (!(await isInternalOrAdmin(context.supabase, context.userId))) return FORBIDDEN_SYNC;
+    // Mesma trava do ciclo automático: nunca em paralelo com cron/polling/outro disparo manual.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    return runWithSyncLock(supabaseAdmin, () => runSyncAllMeetingsToGoogle());
+  });
 
 type GoogleEvent = {
   id: string;
@@ -655,6 +817,9 @@ type ListGoogleEventsResult = {
    * enviado — o token antigo não serve mais, quem chamou precisa
    * invalidar e refazer uma sincronização completa (item 6 do pedido). */
   tokenInvalid: boolean;
+  /** `true` quando a listagem NÃO foi concluída (erro HTTP ≠ 410 ou falha de rede): `events` pode
+   * estar parcial e a conexão não conta como sincronizada neste ciclo. */
+  failed: boolean;
 };
 
 /** Fase C: sincronização incremental de verdade. Com `syncToken`, pede só
@@ -688,13 +853,20 @@ async function listGoogleEvents(
       url.searchParams.set("timeMax", new Date(Date.now() + LIST_WINDOW_MS_AFTER).toISOString());
     }
     if (pageToken) url.searchParams.set("pageToken", pageToken);
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    let res: Response;
+    try {
+      res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    } catch {
+      console.warn("[google-calendar] events.list: falha de rede");
+      return { events, nextSyncToken: null, tokenInvalid: false, failed: true };
+    }
     if (res.status === 410) {
-      return { events: [], nextSyncToken: null, tokenInvalid: true };
+      return { events: [], nextSyncToken: null, tokenInvalid: true, failed: false };
     }
     if (!res.ok) {
-      console.warn("[google-calendar] events.list failed", await res.text());
-      break;
+      // Só o status: o corpo do erro do Google não é registrado.
+      console.warn("[google-calendar] events.list failed", res.status);
+      return { events, nextSyncToken: null, tokenInvalid: false, failed: true };
     }
     const json = (await res.json()) as {
       items?: GoogleEvent[];
@@ -706,7 +878,7 @@ async function listGoogleEvents(
     if (!json.nextPageToken) break;
     pageToken = json.nextPageToken;
   }
-  return { events, nextSyncToken, tokenInvalid: false };
+  return { events, nextSyncToken, tokenInvalid: false, failed: false };
 }
 
 /** Caminho inverso de `syncAllMeetingsToGoogle`: eventos criados DIRETO no
@@ -718,14 +890,36 @@ async function listGoogleEvents(
  * dá um valor DIFERENTE por calendário pro mesmo evento); eventos
  * editados/cancelados no Google atualizam a Reunião já importada em vez de
  * duplicar. */
-export async function runImportGoogleEventsToMeetings() {
+type InboundDetail = {
+  result: {
+    imported: number;
+    updated: number;
+    cancelled: number;
+    pruned: number;
+    connected: boolean;
+    connections: ReturnType<typeof summarizeOutcomes>;
+  };
+  outcomes: Map<string, ConnectionResult>;
+};
+
+async function runInbound(): Promise<InboundDetail> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
   const { data: connections } = await supabaseAdmin
     .from("google_calendar_connections")
-    .select("user_id, access_token, refresh_token, token_expiry, sync_token");
+    .select("user_id, access_token, refresh_token, token_expiry, token_invalid, sync_token");
   if (!connections || connections.length === 0)
-    return { imported: 0, updated: 0, connected: false as const };
+    return {
+      result: {
+        imported: 0,
+        updated: 0,
+        cancelled: 0,
+        pruned: 0,
+        connected: false,
+        connections: summarizeOutcomes(new Map()),
+      },
+      outcomes: new Map(),
+    };
 
   const rows = await fetchAllReunioes(supabaseAdmin);
   const importCutoff = importCutoffDate();
@@ -761,215 +955,228 @@ export async function runImportGoogleEventsToMeetings() {
   let updated = 0;
   let cancelled_ = 0;
 
-  for (const conn of connections) {
-    const accessToken = await getValidAccessToken(supabaseAdmin, conn);
-    if (!accessToken) continue;
+  // Uma exceção ou falha de renovação de UM usuário nunca interrompe os demais.
+  const outcomes = await processEachConnection(
+    connections,
+    async (conn) => {
+      const token = await getValidAccessToken(supabaseAdmin, conn);
+      if (token.kind !== "ok") return connectionResultFor(token)!;
+      const accessToken = token.accessToken;
 
-    let { events, nextSyncToken, tokenInvalid } = await listGoogleEvents(
-      accessToken,
-      decodeSyncToken(conn.sync_token),
-    );
-    if (tokenInvalid) {
-      // Fase C, item 6 do pedido: 410 Gone — o syncToken antigo não serve
-      // mais (expirou por inatividade, ou o calendário mudou demais). Log
-      // de recuperação, limpa o token salvo e refaz uma sincronização
-      // completa — nunca duplica, porque o dedupe por `googleEventId`
-      // (abaixo) é o mesmo em qualquer modo.
-      console.warn(
-        `[google-calendar] syncToken expirado (410) pra ${conn.user_id} — refazendo sincronização completa`,
+      let { events, nextSyncToken, tokenInvalid, failed } = await listGoogleEvents(
+        accessToken,
+        decodeSyncToken(conn.sync_token),
       );
-      await supabaseAdmin
-        .from("google_calendar_connections")
-        .update({ sync_token: null })
-        .eq("user_id", conn.user_id);
-      ({ events, nextSyncToken, tokenInvalid } = await listGoogleEvents(accessToken, null));
-    }
-
-    for (const event of events) {
-      // Já é uma reunião da plataforma (foi a própria `syncOneMeeting` que
-      // criou esse evento) — nunca reimportar de volta, mas ainda assim
-      // reflete a resposta RSVP dos convidados (Fase 6): é a única chance
-      // de capturar alguém que respondeu direto no Gmail/Google Agenda em
-      // vez de usar os botões Confirmar/Recusar na plataforma.
-      const ownMeetingId = event.extendedProperties?.private?.vnhMeetingId;
-      if (ownMeetingId) {
-        const { data: ownRow } = await supabaseAdmin
-          .from("reunioes")
-          .select("data")
-          .eq("id", ownMeetingId)
-          .maybeSingle();
-        if (ownRow?.data) {
-          const ownData = ownRow.data as SlimMeeting & {
-            confirmedBy?: string[];
-            declinedBy?: string[];
-          };
-          const patched = applyGoogleAttendeeResponses(ownData, event.attendees, idByEmail);
-          if (patched) {
-            await supabaseAdmin
-              .from("reunioes")
-              .update({ data: patched, updated_at: new Date().toISOString() })
-              .eq("id", ownMeetingId);
-          }
-        }
-        continue;
-      }
-      // Evento de dia inteiro (só `date`, sem `dateTime`) — Reunião
-      // sempre tem hora, fora de escopo aqui. Também é o formato de um
-      // tombstone de exclusão (`showDeleted`) de um evento que nunca
-      // tinha `dateTime` pra começo — nada a fazer aqui de qualquer jeito.
-      if (!event.start?.dateTime || !event.end?.dateTime) continue;
-
-      // `id` é único por OCORRÊNCIA dentro da conta (o que precisamos
-      // aqui) — `iCalUID` parecia mais robusto (mesmo evento, ids
-      // diferentes em cada calendário de cada convidado), mas o Google
-      // usa o MESMO `iCalUID` pra TODA ocorrência de uma recorrência.
-      // Usar só `iCalUID` fazia cada ocorrência nova "atualizar" a
-      // mesma linha em vez de criar uma por dia, sobrando só a última
-      // ocorrência da janela. `id` também é o valor que precisamos pra
-      // apagar o evento certo depois (exclusão espelhada), então vira
-      // a única chave — dedupe entre contas conectadas diferentes pro
-      // mesmo evento fica sem cobertura, uma perda aceitável perto do
-      // bug que isso corrige.
-      const dedupeKey = event.id;
-      const { data: dataStr, hora } = isoToSaoPauloParts(event.start.dateTime);
-      const duracao = Math.max(
-        1,
-        Math.round(
-          (new Date(event.end.dateTime).getTime() - new Date(event.start.dateTime).getTime()) /
-            60_000,
-        ),
-      );
-
-      const participanteIds: string[] = [];
-      const convidadosExternos: { nome: string; email: string }[] = [];
-      for (const a of event.attendees ?? []) {
-        if (!a.email || a.self) continue;
-        const uid = idByEmail.get(a.email.toLowerCase());
-        if (uid) participanteIds.push(uid);
-        else convidadosExternos.push({ nome: a.displayName || a.email, email: a.email });
+      if (tokenInvalid) {
+        // Fase C, item 6 do pedido: 410 Gone — o syncToken antigo não serve
+        // mais (expirou por inatividade, ou o calendário mudou demais). Log
+        // de recuperação, limpa o token salvo e refaz uma sincronização
+        // completa — nunca duplica, porque o dedupe por `googleEventId`
+        // (abaixo) é o mesmo em qualquer modo.
+        console.warn(
+          `[google-calendar] syncToken expirado (410) pra ${conn.user_id} — refazendo sincronização completa`,
+        );
+        await supabaseAdmin
+          .from("google_calendar_connections")
+          .update({ sync_token: null })
+          .eq("user_id", conn.user_id);
+        ({ events, nextSyncToken, tokenInvalid, failed } = await listGoogleEvents(
+          accessToken,
+          null,
+        ));
       }
 
-      const byId = byGoogleEventId.get(dedupeKey);
-      const byTime = byId ? undefined : byCreatorTime.get(`${conn.user_id}|${dataStr}|${hora}`);
-      const existing = byId ?? byTime;
-      const cancelled = event.status === "cancelled";
-
-      if (existing) {
-        // Etag inalterado desde a última importação — o Google não tem
-        // nada de novo pra este evento. Pula o UPDATE por completo: além
-        // de economizar uma escrita à toa a cada ciclo, evita o risco de
-        // sobrescrever um campo editado localmente entre duas leituras
-        // (comparação pedida explicitamente — nunca aceitar uma versão do
-        // Google sem checar se ela é realmente mais nova que a gravada).
-        if (!byTime && shouldSkipGoogleImportOverwrite(existing.data.etag, event.etag)) {
+      for (const event of events) {
+        // Já é uma reunião da plataforma (foi a própria `syncOneMeeting` que
+        // criou esse evento) — nunca reimportar de volta, mas ainda assim
+        // reflete a resposta RSVP dos convidados (Fase 6): é a única chance
+        // de capturar alguém que respondeu direto no Gmail/Google Agenda em
+        // vez de usar os botões Confirmar/Recusar na plataforma.
+        const ownMeetingId = event.extendedProperties?.private?.vnhMeetingId;
+        if (ownMeetingId) {
+          // Relê e aplica sobre a versão fresca (concorrência otimista, retry limitado).
+          await updateMeetingData(adminMeetingStore(supabaseAdmin), ownMeetingId, (fresh) =>
+            applyGoogleAttendeeResponses(
+              fresh as { confirmedBy?: string[]; declinedBy?: string[] },
+              event.attendees,
+              idByEmail,
+            ),
+          );
           continue;
         }
-        // Casou só por criador+data+hora (`byTime`) — esse evento é a
-        // própria reunião da plataforma sincronizada de saída, cujo
-        // marcador não foi reconhecido por algum motivo. Só grava o id
-        // do Google pra nunca mais duplicar; não deixa os campos do
-        // Google (local/notas/participantes) sobrescreverem os da
-        // plataforma, que já são a fonte de verdade aqui.
-        const next: ImportRow = byTime
-          ? { ...existing.data, googleEventId: dedupeKey }
-          : {
-              ...existing.data,
-              titulo: event.summary || existing.data.titulo,
-              data: dataStr,
-              hora,
-              duracao,
-              local: event.location,
-              notas: event.description,
-              participanteIds,
-              convidadosExternos,
-              meetLink: event.hangoutLink,
-              googleHtmlLink: event.htmlLink,
-              // Backfill pra reuniões importadas antes desse campo
-              // existir — nunca troca um seriesId já gravado.
-              seriesId: existing.data.seriesId ?? event.recurringEventId,
-              recurringEventId: event.recurringEventId,
-              googleCalendarId: "primary",
-              etag: event.etag,
-              googleUpdatedAt: event.updated,
-              syncStatus: "synced",
-              lastSyncedAt: new Date().toISOString(),
-              lastSyncError: undefined,
-              status: cancelled ? "Cancelada" : (existing.data.status ?? "Confirmada"),
-            };
-        if (JSON.stringify(next) !== JSON.stringify(existing.data)) {
-          await supabaseAdmin
-            .from("reunioes")
-            .update({ data: next, updated_at: new Date().toISOString() })
-            .eq("id", existing.id);
-          if (cancelled && existing.data.status !== "Cancelada") cancelled_++;
-          else updated++;
+        // Evento de dia inteiro (só `date`, sem `dateTime`) — Reunião
+        // sempre tem hora, fora de escopo aqui. Também é o formato de um
+        // tombstone de exclusão (`showDeleted`) de um evento que nunca
+        // tinha `dateTime` pra começo — nada a fazer aqui de qualquer jeito.
+        if (!event.start?.dateTime || !event.end?.dateTime) continue;
+
+        // `id` é único por OCORRÊNCIA dentro da conta (o que precisamos
+        // aqui) — `iCalUID` parecia mais robusto (mesmo evento, ids
+        // diferentes em cada calendário de cada convidado), mas o Google
+        // usa o MESMO `iCalUID` pra TODA ocorrência de uma recorrência.
+        // Usar só `iCalUID` fazia cada ocorrência nova "atualizar" a
+        // mesma linha em vez de criar uma por dia, sobrando só a última
+        // ocorrência da janela. `id` também é o valor que precisamos pra
+        // apagar o evento certo depois (exclusão espelhada), então vira
+        // a única chave — dedupe entre contas conectadas diferentes pro
+        // mesmo evento fica sem cobertura, uma perda aceitável perto do
+        // bug que isso corrige.
+        const dedupeKey = event.id;
+        const { data: dataStr, hora } = isoToSaoPauloParts(event.start.dateTime);
+        const duracao = Math.max(
+          1,
+          Math.round(
+            (new Date(event.end.dateTime).getTime() - new Date(event.start.dateTime).getTime()) /
+              60_000,
+          ),
+        );
+
+        const participanteIds: string[] = [];
+        const convidadosExternos: { nome: string; email: string }[] = [];
+        for (const a of event.attendees ?? []) {
+          if (!a.email || a.self) continue;
+          const uid = idByEmail.get(a.email.toLowerCase());
+          if (uid) participanteIds.push(uid);
+          else convidadosExternos.push({ nome: a.displayName || a.email, email: a.email });
         }
-        continue;
+
+        const byId = byGoogleEventId.get(dedupeKey);
+        const byTime = byId ? undefined : byCreatorTime.get(`${conn.user_id}|${dataStr}|${hora}`);
+        const existing = byId ?? byTime;
+        const cancelled = event.status === "cancelled";
+
+        if (existing) {
+          // Etag inalterado desde a última importação — o Google não tem
+          // nada de novo pra este evento. Pula o UPDATE por completo: além
+          // de economizar uma escrita à toa a cada ciclo, evita o risco de
+          // sobrescrever um campo editado localmente entre duas leituras
+          // (comparação pedida explicitamente — nunca aceitar uma versão do
+          // Google sem checar se ela é realmente mais nova que a gravada).
+          if (!byTime && shouldSkipGoogleImportOverwrite(existing.data.etag, event.etag)) {
+            continue;
+          }
+          // Casou só por criador+data+hora (`byTime`) — esse evento é a
+          // própria reunião da plataforma sincronizada de saída, cujo
+          // marcador não foi reconhecido por algum motivo. Só grava o id
+          // do Google pra nunca mais duplicar; não deixa os campos do
+          // Google (local/notas/participantes) sobrescreverem os da
+          // plataforma, que já são a fonte de verdade aqui.
+          const buildNext = (base: ImportRow): ImportRow =>
+            byTime
+              ? { ...base, googleEventId: dedupeKey }
+              : {
+                  ...base,
+                  titulo: event.summary || base.titulo,
+                  data: dataStr,
+                  hora,
+                  duracao,
+                  local: event.location,
+                  notas: event.description,
+                  participanteIds,
+                  convidadosExternos,
+                  meetLink: event.hangoutLink,
+                  googleHtmlLink: event.htmlLink,
+                  // Backfill pra reuniões importadas antes desse campo
+                  // existir — nunca troca um seriesId já gravado.
+                  seriesId: base.seriesId ?? event.recurringEventId,
+                  recurringEventId: event.recurringEventId,
+                  googleCalendarId: "primary",
+                  etag: event.etag,
+                  googleUpdatedAt: event.updated,
+                  syncStatus: "synced",
+                  lastSyncedAt: new Date().toISOString(),
+                  lastSyncError: undefined,
+                  status: cancelled ? "Cancelada" : (base.status ?? "Confirmada"),
+                };
+          if (JSON.stringify(buildNext(existing.data)) !== JSON.stringify(existing.data)) {
+            // Aplicado sobre a versão FRESCA da reunião: campos locais (presença, confirmações,
+            // edições do usuário) feitos depois da leitura do ciclo não são perdidos.
+            const result = await updateMeetingData(
+              adminMeetingStore(supabaseAdmin),
+              existing.id,
+              (fresh) => buildNext(fresh as ImportRow) as unknown as Record<string, unknown>,
+            );
+            if (result === "written") {
+              if (cancelled && existing.data.status !== "Cancelada") cancelled_++;
+              else updated++;
+            } else if (result === "conflict" || result === "error") {
+              console.warn("[google-calendar] import: reunião não atualizada neste ciclo", {
+                result,
+              });
+            }
+          }
+          continue;
+        }
+
+        if (cancelled) continue; // nunca vimos esse evento — nada a importar
+        // Fora da janela (além de 45 dias): não importa — entra sozinho quando chegar perto.
+        if (dataStr > importCutoff) continue;
+
+        const meeting = {
+          id: crypto.randomUUID(),
+          seriesId: event.recurringEventId,
+          recurringEventId: event.recurringEventId,
+          titulo: event.summary || "Reunião",
+          data: dataStr,
+          hora,
+          duracao,
+          com: "",
+          criadorId: conn.user_id,
+          participanteIds,
+          convidadosExternos,
+          local: event.location ?? "",
+          notas: event.description,
+          meetLink: event.hangoutLink,
+          googleHtmlLink: event.htmlLink,
+          status: "Confirmada",
+          googleEventId: dedupeKey,
+          googleCalendarId: "primary",
+          etag: event.etag,
+          googleUpdatedAt: event.updated,
+          syncStatus: "synced" as const,
+          lastSyncedAt: new Date().toISOString(),
+          origem: "google",
+        };
+        const { error: insertError } = await supabaseAdmin
+          .from("reunioes")
+          .insert({ id: meeting.id, data: meeting });
+        if (insertError) {
+          // 23505 = violação do índice único em googleEventId — outro
+          // ciclo de sync concorrente (rodando em paralelo, ex: 2 abas
+          // abertas) já importou essa mesma ocorrência entre a checagem
+          // e esse INSERT. Não é falha nenhuma, só perdeu a corrida —
+          // nunca loga como erro nem duplica.
+          if (insertError.code !== "23505") {
+            console.warn("[google-calendar] import insert failed", insertError.message);
+          }
+          continue;
+        }
+        // Evita reimportar de novo no mesmo ciclo se o mesmo evento
+        // aparecer no calendário de outro convidado também conectado.
+        byGoogleEventId.set(dedupeKey, { id: meeting.id, data: meeting });
+        imported++;
       }
 
-      if (cancelled) continue; // nunca vimos esse evento — nada a importar
-      // Fora da janela (além de 45 dias): não importa — entra sozinho quando chegar perto.
-      if (dataStr > importCutoff) continue;
-
-      const meeting = {
-        id: crypto.randomUUID(),
-        seriesId: event.recurringEventId,
-        recurringEventId: event.recurringEventId,
-        titulo: event.summary || "Reunião",
-        data: dataStr,
-        hora,
-        duracao,
-        com: "",
-        criadorId: conn.user_id,
-        participanteIds,
-        convidadosExternos,
-        local: event.location ?? "",
-        notas: event.description,
-        meetLink: event.hangoutLink,
-        googleHtmlLink: event.htmlLink,
-        status: "Confirmada",
-        googleEventId: dedupeKey,
-        googleCalendarId: "primary",
-        etag: event.etag,
-        googleUpdatedAt: event.updated,
-        syncStatus: "synced" as const,
-        lastSyncedAt: new Date().toISOString(),
-        origem: "google",
-      };
-      const { error: insertError } = await supabaseAdmin
-        .from("reunioes")
-        .insert({ id: meeting.id, data: meeting });
-      if (insertError) {
-        // 23505 = violação do índice único em googleEventId — outro
-        // ciclo de sync concorrente (rodando em paralelo, ex: 2 abas
-        // abertas) já importou essa mesma ocorrência entre a checagem
-        // e esse INSERT. Não é falha nenhuma, só perdeu a corrida —
-        // nunca loga como erro nem duplica.
-        if (insertError.code !== "23505") {
-          console.warn("[google-calendar] import insert failed", insertError.message);
-        }
-        continue;
+      // Fase C: com `showDeleted: true` (`listGoogleEvents`), uma exclusão
+      // de verdade no Google já chega aqui como um item comum com
+      // `status: "cancelled"` — tratado pelo `if (existing) {...}` acima
+      // igual a um cancelamento normal. Não precisa mais de um diff manual
+      // "sumiu da lista" separado (o que também dependia da listagem ser
+      // sempre a janela inteira, incompatível com sincronização
+      // incremental por `syncToken`).
+      // Listagem incompleta (erro/rede/410 repetido): não guarda o token incremental e não conta
+      // como sincronização desta conexão — a próxima rodada tenta de novo, sem duplicar.
+      if (failed || tokenInvalid) return "transient";
+      if (nextSyncToken) {
+        await supabaseAdmin
+          .from("google_calendar_connections")
+          .update({ sync_token: encodeSyncToken(nextSyncToken) })
+          .eq("user_id", conn.user_id);
       }
-      // Evita reimportar de novo no mesmo ciclo se o mesmo evento
-      // aparecer no calendário de outro convidado também conectado.
-      byGoogleEventId.set(dedupeKey, { id: meeting.id, data: meeting });
-      imported++;
-    }
-
-    // Fase C: com `showDeleted: true` (`listGoogleEvents`), uma exclusão
-    // de verdade no Google já chega aqui como um item comum com
-    // `status: "cancelled"` — tratado pelo `if (existing) {...}` acima
-    // igual a um cancelamento normal. Não precisa mais de um diff manual
-    // "sumiu da lista" separado (o que também dependia da listagem ser
-    // sempre a janela inteira, incompatível com sincronização
-    // incremental por `syncToken`).
-    if (nextSyncToken) {
-      await supabaseAdmin
-        .from("google_calendar_connections")
-        .update({ sync_token: encodeSyncToken(nextSyncToken) })
-        .eq("user_id", conn.user_id);
-    }
-  }
+      return "ok";
+    },
+    (errorName) => console.warn("[google-calendar] inbound: falha isolada numa conexão", errorName),
+  );
 
   // Limpeza: importados do Google MUITO à frente (de quando a janela era de 120 dias) são só
   // espelhos regeneráveis — apaga para enxugar a tabela. Nunca toca em reunião criada na plataforma.
@@ -982,25 +1189,64 @@ export async function runImportGoogleEventsToMeetings() {
     console.warn("[google-calendar] limpeza de importados distantes falhou", pruneError.message);
 
   return {
-    imported,
-    updated,
-    cancelled: cancelled_,
-    pruned: pruned ?? 0,
-    connected: true as const,
+    result: {
+      imported,
+      updated,
+      cancelled: cancelled_,
+      pruned: pruned ?? 0,
+      connected: true,
+      connections: summarizeOutcomes(outcomes),
+    },
+    outcomes,
   };
+}
+
+export async function runImportGoogleEventsToMeetings() {
+  return (await runInbound()).result;
 }
 
 export const importGoogleEventsToMeetings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(() => runImportGoogleEventsToMeetings());
+  .handler(async ({ context }) => {
+    if (!(await isInternalOrAdmin(context.supabase, context.userId))) return FORBIDDEN_SYNC;
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    return runWithSyncLock(supabaseAdmin, () => runImportGoogleEventsToMeetings());
+  });
 
-const DeleteGoogleEventsInput = z.array(
-  z.object({
-    meetingId: z.string().uuid(),
-    criadorId: z.string().uuid().optional(),
-    googleEventId: z.string().min(1).optional(),
-  }),
-);
+/**
+ * Quais eventos do Google a exclusão de reunião pode apagar. O pedido traz `criadorId` e
+ * `googleEventId` vindos do navegador e a reunião já foi removida do banco (não dá para conferir o
+ * par), então a regra é verificada NO EVENTO, que é a fonte confiável:
+ * - evento criado pela plataforma (`vnhMeetingId` = a reunião excluída) → permitido;
+ * - evento com `vnhMeetingId` de OUTRA reunião → nunca;
+ * - evento sem marcador (importado: nasceu no Google do próprio dono) → só o dono da conta ou admin.
+ */
+export function canDeleteGoogleEvent(input: {
+  eventMarker: string | undefined;
+  meetingId: string;
+  requesterId: string;
+  calendarOwnerId: string;
+  requesterIsAdmin: boolean;
+}): boolean {
+  if (input.eventMarker) return input.eventMarker === input.meetingId;
+  return input.requesterIsAdmin || input.requesterId === input.calendarOwnerId;
+}
+
+const DeleteGoogleEventsInput = z
+  .array(
+    z.object({
+      meetingId: z.string().uuid(),
+      criadorId: z.string().uuid().optional(),
+      // IDs de evento do Google são curtos; o limite evita payloads abusivos.
+      googleEventId: z
+        .string()
+        .min(1)
+        .max(256)
+        .regex(/^[A-Za-z0-9_\-@.]+$/)
+        .optional(),
+    }),
+  )
+  .max(200);
 
 /** Exclusão nos dois sentidos: excluir uma reunião na plataforma também
  * apaga o evento correspondente no Google (se o criador tiver conta
@@ -1040,6 +1286,10 @@ export const deleteGoogleEventsForMeetings = createServerFn({ method: "POST" })
     if (!isAdmin && !hasPerm) {
       throw new Error("Sem permissão para gerenciar eventos de reuniões.");
     }
+    // Além da permissão: só equipe interna (contas do portal do cliente nunca chegam aqui).
+    if (!(await isInternalOrAdmin(context.supabase, context.userId))) {
+      throw new Error("Sem permissão para gerenciar eventos de reuniões.");
+    }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const byCreator = new Map<string, { meetingId: string; googleEventId?: string }[]>();
@@ -1053,21 +1303,48 @@ export const deleteGoogleEventsForMeetings = createServerFn({ method: "POST" })
 
     const { data: connections } = await supabaseAdmin
       .from("google_calendar_connections")
-      .select("user_id, access_token, refresh_token, token_expiry")
+      .select("user_id, access_token, refresh_token, token_expiry, token_invalid")
       .in("user_id", Array.from(byCreator.keys()));
 
     let deleted = 0;
     for (const conn of connections ?? []) {
-      const accessToken = await getValidAccessToken(supabaseAdmin, conn);
-      if (!accessToken) continue;
+      const token = await getValidAccessToken(supabaseAdmin, conn);
+      if (token.kind !== "ok") continue;
+      const accessToken = token.accessToken;
       for (const t of byCreator.get(conn.user_id) ?? []) {
         // Já sabemos o id — apaga direto. Reunião antiga sem o campo
         // gravado ainda cai na busca por `vnhMeetingId` (que já limpa
         // qualquer duplicata que tenha sobrado, então uma exclusão aqui
         // remove todas as cópias de uma vez).
-        const eventId = t.googleEventId ?? (await findGoogleEventId(accessToken, t.meetingId));
+        let eventId: string | null = null;
+        if (t.googleEventId) {
+          // Confere no PRÓPRIO evento (ver `canDeleteGoogleEvent`) antes de apagar o que o
+          // navegador pediu: nada fora da reunião excluída é tocado.
+          const check = await fetch(`${EVENTS_URL}/${encodeURIComponent(t.googleEventId)}`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }).catch(() => null);
+          if (!check || !check.ok) continue;
+          const event = (await check.json().catch(() => null)) as {
+            extendedProperties?: { private?: Record<string, string> };
+          } | null;
+          const allowed = canDeleteGoogleEvent({
+            eventMarker: event?.extendedProperties?.private?.vnhMeetingId,
+            meetingId: t.meetingId,
+            requesterId: context.userId,
+            calendarOwnerId: conn.user_id,
+            requesterIsAdmin: Boolean(isAdmin),
+          });
+          if (!allowed) {
+            console.warn("[google-calendar] exclusão de evento negada", { reason: "not_owned" });
+            continue;
+          }
+          eventId = t.googleEventId;
+        } else {
+          // Busca por `vnhMeetingId`: só encontra eventos criados pela plataforma para essa reunião.
+          eventId = await findGoogleEventId(accessToken, t.meetingId);
+        }
         if (!eventId) continue;
-        await fetch(`${EVENTS_URL}/${eventId}?sendUpdates=all`, {
+        await fetch(`${EVENTS_URL}/${encodeURIComponent(eventId)}?sendUpdates=all`, {
           method: "DELETE",
           headers: { Authorization: `Bearer ${accessToken}` },
         }).catch(() => {});
@@ -1127,41 +1404,58 @@ async function releaseSyncLock(
  * criar/editar/excluir reunião, e pelo polling do navegador. Nunca roda
  * duas vezes ao mesmo tempo; se a trava já estiver ocupada, simplesmente
  * não faz nada nesta chamada (o próximo disparo tenta de novo). */
-export async function runGoogleCalendarSyncCycle(): Promise<{
-  ran: boolean;
-  outbound?: Awaited<ReturnType<typeof runSyncAllMeetingsToGoogle>>;
-  inbound?: Awaited<ReturnType<typeof runImportGoogleEventsToMeetings>>;
-}> {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const acquired = await acquireSyncLock(supabaseAdmin);
+/**
+ * Executa `work` sob a trava singleton existente (`google_calendar_sync_state`): se outra execução
+ * (cron, polling, edição de reunião, botão manual) já a detém, NÃO roda e devolve `{ ran: false }`.
+ * Libera a trava também em caso de erro (que é propagado).
+ */
+export async function runWithSyncLock<T>(
+  admin: AdminClient,
+  work: () => Promise<T>,
+): Promise<{ ran: false } | { ran: true; value: T }> {
+  const acquired = await acquireSyncLock(admin);
   if (!acquired) return { ran: false };
-
   try {
-    const outbound = await runSyncAllMeetingsToGoogle();
-    const inbound = await runImportGoogleEventsToMeetings();
-    // Fase B: marca "quando foi a última vez que isto rodou" pra cada
-    // conexão — a UI usa isso pra mostrar "Última sincronização: há X min"
-    // em vez de nunca informar nada. Não implica mudança nenhuma, só que
-    // o ciclo chegou a checar essa conexão.
-    const { data: allConns } = await supabaseAdmin
-      .from("google_calendar_connections")
-      .select("user_id");
-    if (allConns && allConns.length > 0) {
-      await supabaseAdmin
-        .from("google_calendar_connections")
-        .update({ last_synced_at: new Date().toISOString() })
-        .in(
-          "user_id",
-          allConns.map((c) => c.user_id),
-        );
-    }
-    await releaseSyncLock(supabaseAdmin, { ok: true, result: { outbound, inbound } });
-    return { ran: true, outbound, inbound };
+    const value = await work();
+    await releaseSyncLock(admin, { ok: true, result: value });
+    return { ran: true, value };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await releaseSyncLock(supabaseAdmin, { ok: false, error: message });
+    await releaseSyncLock(admin, { ok: false, error: message });
     throw err;
   }
+}
+
+export async function runGoogleCalendarSyncCycle(): Promise<{
+  ran: boolean;
+  outbound?: OutboundDetail["result"];
+  inbound?: InboundDetail["result"];
+  /** Conexões cujo `last_synced_at` avançou neste ciclo (contagem; sem ids). */
+  markedSynced?: number;
+}> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const locked = await runWithSyncLock(supabaseAdmin, async () => {
+    const outbound = await runOutbound();
+    const inbound = await runInbound();
+    // `last_synced_at` = "esta conexão foi sincronizada com sucesso agora" (token válido, envio e
+    // listagem concluídos). Executar o ciclo NÃO basta: conexões que falharam, estão com falha
+    // temporária ou exigem reautorização mantêm o valor anterior.
+    const syncedIds = connectionsToMarkSynced(outbound.outcomes, inbound.outcomes);
+    if (syncedIds.length > 0) {
+      const { error } = await supabaseAdmin
+        .from("google_calendar_connections")
+        .update({ last_synced_at: new Date().toISOString() })
+        .in("user_id", syncedIds);
+      if (error)
+        console.warn("[google-calendar] last_synced_at não gravado", { dbCode: error.code });
+    }
+    return {
+      outbound: outbound.result,
+      inbound: inbound.result,
+      markedSynced: syncedIds.length,
+    };
+  });
+  return locked.ran ? { ran: true, ...locked.value } : { ran: false };
 }
 
 /** Versão chamável pelo cliente (sessão logada) do ciclo combinado —
@@ -1170,4 +1464,7 @@ export async function runGoogleCalendarSyncCycle(): Promise<{
  * nenhuma trava entre si. */
 export const runGoogleCalendarSync = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(() => runGoogleCalendarSyncCycle());
+  .handler(async ({ context }) => {
+    if (!(await isInternalOrAdmin(context.supabase, context.userId))) return FORBIDDEN_SYNC;
+    return runGoogleCalendarSyncCycle();
+  });

@@ -1,6 +1,30 @@
 {
-  "version": "1.388.1",
+  "version": "1.389.0",
   "releases": [
+    {
+      "version": "1.389.0",
+      "summary": "Google Agenda mais confiável: conexão que não cai por falhas passageiras e mensagens claras ao conectar.",
+      "modules": [
+        {
+          "name": "CONFIGURAÇÕES",
+          "tagline": "Google Agenda",
+          "items": [
+            {
+              "title": "Falha passageira não derruba a conexão",
+              "description": "Instabilidades do Google ou da internet não marcam mais a conta como desconectada; só uma autorização realmente revogada pede reconexão."
+            },
+            {
+              "title": "Mensagens claras ao conectar",
+              "description": "Se algo impedir a conexão, a tela explica o motivo em vez de ficar parada, e após reconectar o estado já aparece como conectado."
+            },
+            {
+              "title": "Sincronização mais segura",
+              "description": "Edições feitas durante a sincronização são preservadas, a data da última sincronização só avança quando deu certo, e o acesso a essas funções ficou restrito à equipe."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.388.1",
       "summary": "Corrige a barra de navegação do celular, que não respondia ao toque.",

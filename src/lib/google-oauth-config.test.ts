@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  OAUTH_RETURN_PATH,
+  canonicalOriginRedirect,
   canonicalRedirectUrl,
+  originOf,
   getAppUrl,
   getGoogleOAuthRedirectUri,
   isOAuthStateExpired,
@@ -81,6 +84,55 @@ describe("canonicalRedirectUrl", () => {
         "https://vocenohype-plataforma.vercel.app/time?section=configuracoes&x=1",
       ),
     ).toBe("https://plataforma.vocenohype.com.br/time?section=configuracoes&x=1");
+  });
+});
+
+describe("originOf", () => {
+  it("extrai a origem de Origin e de Referer", () => {
+    expect(originOf("https://plataforma.vocenohype.com.br")).toBe(
+      "https://plataforma.vocenohype.com.br",
+    );
+    expect(originOf("https://x.vercel.app/time?section=configuracoes")).toBe(
+      "https://x.vercel.app",
+    );
+  });
+
+  it("devolve null para ausente, 'null' (origem opaca) e inválido", () => {
+    expect(originOf(null)).toBeNull();
+    expect(originOf("")).toBeNull();
+    expect(originOf("null")).toBeNull();
+    expect(originOf("não é url")).toBeNull();
+  });
+});
+
+describe("canonicalOriginRedirect (início do OAuth; a request.url de uma server function é /_serverFn/…)", () => {
+  it("segue (null) quando a origem da página já é a canônica", () => {
+    vi.stubEnv("APP_URL", "https://plataforma.vocenohype.com.br");
+    expect(canonicalOriginRedirect("https://plataforma.vocenohype.com.br")).toBeNull();
+  });
+
+  it("segue (null) quando não há cabeçalho confiável para comparar — não bloqueia o usuário", () => {
+    vi.stubEnv("APP_URL", "https://plataforma.vocenohype.com.br");
+    expect(canonicalOriginRedirect(null)).toBeNull();
+  });
+
+  it("fora do domínio canônico, devolve SÓ origem canônica + caminho fixo (nunca algo do navegador)", () => {
+    vi.stubEnv("APP_URL", "https://plataforma.vocenohype.com.br/");
+    const url = canonicalOriginRedirect("https://vocenohype-plataforma.vercel.app");
+    expect(url).toBe(`https://plataforma.vocenohype.com.br${OAUTH_RETURN_PATH}`);
+    expect(url).not.toContain("_serverFn");
+    expect(url).not.toContain("vercel.app");
+  });
+
+  it("uma origem forjada com caminho/credenciais não vaza para a URL de destino", () => {
+    vi.stubEnv("APP_URL", "https://plataforma.vocenohype.com.br");
+    const url = canonicalOriginRedirect(originOf("https://evil.example/a?next=//evil.example"));
+    expect(url).toBe(`https://plataforma.vocenohype.com.br${OAUTH_RETURN_PATH}`);
+  });
+
+  it("lança erro claro quando APP_URL está ausente (quem chama devolve erro controlado)", () => {
+    vi.stubEnv("APP_URL", "");
+    expect(() => canonicalOriginRedirect("https://x.vercel.app")).toThrow(/APP_URL/);
   });
 });
 

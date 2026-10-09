@@ -32,6 +32,7 @@ import {
   deleteOutgoingWebhook,
 } from "@/lib/integrations.functions";
 import { OUTGOING_WEBHOOK_EVENTS } from "@/lib/outgoing-webhooks";
+import { messageForCallbackReason, runGoogleConnect } from "@/lib/google-connect-flow";
 import { timeAgo } from "@/components/metas/metas-ui-utils";
 import {
   startGoogleOAuth,
@@ -76,6 +77,8 @@ function GoogleCalendarIcon({ className }: { className?: string }) {
 
 type GoogleCardStatus =
   | { state: "loading" }
+  /** Não foi possível consultar o estado (rede/servidor): NÃO significa desconectado. */
+  | { state: "unavailable" }
   | { state: "disconnected" }
   | {
       state: "connected" | "attention";
@@ -103,7 +106,11 @@ function useGoogleStatus() {
           lastError: r.lastError,
         });
       })
-      .catch(() => setStatus({ state: "disconnected" }));
+      // Falha ao consultar não é "desconectado": mantém o último estado conhecido e, se ainda não
+      // havia nenhum, mostra "indisponível" com nova tentativa.
+      .catch(() =>
+        setStatus((prev) => (prev.state === "loading" ? { state: "unavailable" } : prev)),
+      );
   }, [statusFn]);
   return { status, setStatus, refresh };
 }
@@ -247,14 +254,17 @@ export function IntegracoesSection() {
 
   // Volta do OAuth do Google (?google=connected|error): atualiza o estado e abre o detalhe.
   const [callbackNotice, setCallbackNotice] = useState<"connected" | "error" | null>(null);
+  const [callbackReason, setCallbackReason] = useState<string | null>(null);
   useEffect(() => {
     google.refresh();
     const params = new URLSearchParams(window.location.search);
     const g = params.get("google");
     if (g === "connected" || g === "error") {
       setCallbackNotice(g);
+      setCallbackReason(params.get("reason"));
       setOpenId("google-agenda");
       params.delete("google");
+      params.delete("reason");
       const qs = params.toString();
       window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : ""));
     }
@@ -264,7 +274,7 @@ export function IntegracoesSection() {
   const stateOf = (id: IntegrationId) =>
     integrationCardState(id, {
       isAdmin,
-      google: google.status.state,
+      google: google.status.state === "unavailable" ? "loading" : google.status.state,
       outgoingActive,
     });
 
@@ -353,7 +363,11 @@ export function IntegracoesSection() {
           }}
         >
           {openDef.id === "google-agenda" && (
-            <GoogleCalendarPanel google={google} callbackNotice={callbackNotice} />
+            <GoogleCalendarPanel
+              google={google}
+              callbackNotice={callbackNotice}
+              callbackReason={callbackReason}
+            />
           )}
           {openDef.id === "webhook-leads" &&
             (isAdmin === false ? (
@@ -376,9 +390,11 @@ export function IntegracoesSection() {
 function GoogleCalendarPanel({
   google,
   callbackNotice,
+  callbackReason,
 }: {
   google: ReturnType<typeof useGoogleStatus>;
   callbackNotice: "connected" | "error" | null;
+  callbackReason: string | null;
 }) {
   const startFn = useServerFn(startGoogleOAuth);
   const disconnectFn = useServerFn(disconnectGoogleCalendar);
@@ -388,15 +404,20 @@ function GoogleCalendarPanel({
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const connect = async () => {
+    setActionError(null);
     setConnecting(true);
-    try {
-      const { url } = await startFn();
-      window.location.href = url;
-    } catch {
+    const outcome = await runGoogleConnect(() => startFn());
+    if (outcome.kind === "error") {
+      // Antes o erro era engolido e o botão só voltava ao normal, sem explicação.
+      setActionError(outcome.message);
       setConnecting(false);
+      return;
     }
+    // Segue para o Google (ou para o domínio canônico); o botão fica em "Redirecionando…".
+    window.location.href = outcome.url;
   };
 
   const disconnect = async () => {
@@ -404,10 +425,13 @@ function GoogleCalendarPanel({
       "Desconectar sua conta do Google Agenda? As reuniões param de sincronizar.",
     );
     if (!ok) return;
+    setActionError(null);
     setDisconnecting(true);
     try {
       await disconnectFn();
       setStatus({ state: "disconnected" });
+    } catch {
+      setActionError("Não foi possível desconectar agora. Tente novamente em instantes.");
     } finally {
       setDisconnecting(false);
     }
@@ -433,7 +457,15 @@ function GoogleCalendarPanel({
           role="alert"
           className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive"
         >
-          Não foi possível conectar sua conta Google. Tente novamente.
+          {messageForCallbackReason(callbackReason)}
+        </p>
+      )}
+      {actionError && (
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+        >
+          {actionError}
         </p>
       )}
       {callbackNotice === "connected" && status.state === "connected" && (
@@ -442,6 +474,17 @@ function GoogleCalendarPanel({
         </p>
       )}
       {status.state === "loading" && <p className="text-sm text-text-secondary">Carregando...</p>}
+      {status.state === "unavailable" && (
+        <div className="space-y-2">
+          <p className="text-sm text-text-secondary">
+            Não foi possível consultar o estado da conexão agora. Isso não significa que ela foi
+            desconectada.
+          </p>
+          <Button type="button" variant="outline" onClick={refresh}>
+            Tentar novamente
+          </Button>
+        </div>
+      )}
       {status.state === "disconnected" && (
         <Button type="button" onClick={() => void connect()} disabled={connecting}>
           {connecting ? "Redirecionando..." : "Conectar Google Agenda"}
@@ -482,6 +525,9 @@ function GoogleCalendarPanel({
               <p className="mt-0.5 text-xs text-text-secondary">
                 Última sincronização: {timeAgo(status.lastSyncedAt)}
               </p>
+            )}
+            {status.lastError && (
+              <p className="mt-1 text-xs text-warning-soft-foreground">{status.lastError}</p>
             )}
           </div>
           <div className="flex items-center gap-2">
