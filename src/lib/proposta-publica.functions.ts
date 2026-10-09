@@ -196,7 +196,7 @@ export const savePropostaPublica = createServerFn({ method: "POST" })
       .select("extra")
       .eq("id", found.leadId)
       .single();
-    if (fetchErr) throw new Error(fetchErr.message);
+    if (fetchErr) throwSafeDbError(fetchErr);
     const extra = ((row as { extra: Record<string, unknown> } | null)?.extra ?? {}) as Record<
       string,
       unknown
