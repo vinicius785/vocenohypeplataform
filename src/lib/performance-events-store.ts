@@ -92,7 +92,8 @@ export function recordPerformanceEvent(input: NewPerformanceEvent): void {
         person_name: input.personName,
         actor_id: input.actorId,
         actor_name: input.actorName,
-        task_id: input.taskId,
+        // `task_id` é UUID: o prefixo "mkt:" das avulsas do Marketing é convenção de link, não id de banco.
+        task_id: input.taskId?.replace(/^mkt:/, "") ?? input.taskId,
         task_origin: input.taskOrigin,
         task_title: input.taskTitle,
         meeting_id: input.meetingId,

@@ -69,3 +69,27 @@ describe("recordPerformanceEvent × Demo", () => {
     expect(h.inserts).toHaveLength(3);
   });
 });
+
+describe("recordPerformanceEvent × id de tarefa avulsa do Marketing", () => {
+  it("grava o uuid sem o prefixo 'mkt:' (task_id é UUID no banco)", async () => {
+    recordPerformanceEvent({
+      ...base,
+      taskId: "mkt:0b6f5a52-1111-4222-8333-444455556666",
+      taskOrigin: "marketing",
+    });
+    await flush();
+    expect((h.inserts[0] as { task_id: string }).task_id).toBe(
+      "0b6f5a52-1111-4222-8333-444455556666",
+    );
+  });
+
+  it("id sem prefixo passa intacto; sem id continua sem id", async () => {
+    recordPerformanceEvent({ ...base, taskId: "0b6f5a52-1111-4222-8333-444455556666" });
+    recordPerformanceEvent({ ...base, taskId: null });
+    await flush();
+    expect((h.inserts[0] as { task_id: string }).task_id).toBe(
+      "0b6f5a52-1111-4222-8333-444455556666",
+    );
+    expect((h.inserts[1] as { task_id: unknown }).task_id).toBeNull();
+  });
+});
