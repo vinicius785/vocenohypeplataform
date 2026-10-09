@@ -28,7 +28,7 @@ const NativeSelect = React.forwardRef<HTMLSelectElement, NativeSelectProps>(
         ref={ref}
         disabled={disabled}
         className={cn(
-          "w-full cursor-pointer appearance-none rounded-md border border-input bg-transparent text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+          "w-full cursor-pointer appearance-none rounded-md border border-input bg-transparent text-foreground shadow-sm [color-scheme:inherit] [&>option]:bg-popover [&>option]:text-popover-foreground [&>optgroup]:bg-popover [&>optgroup]:text-popover-foreground transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
           size === "sm" ? "h-6 pl-1.5 pr-5 text-[11px]" : "h-9 pl-3 pr-8 text-sm",
           selectClassName,
         )}
