@@ -1,52 +1,6 @@
-import type { ReactNode } from "react";
 import { PRIVACY_CONTROLLER, PRIVACY_POLICY_UPDATED_AT } from "@/lib/privacy-policy-config";
-
-/** Marcador visível para dado jurídico ainda não fornecido (nunca um valor inventado). */
-function Pending({ children }: { children: string }) {
-  return (
-    <mark className="rounded bg-amber-500/15 px-1 font-medium text-amber-700 dark:text-amber-300">
-      [A PREENCHER: {children}]
-    </mark>
-  );
-}
-
-const dataLonga = (iso: string) =>
-  new Date(`${iso}T12:00:00Z`).toLocaleDateString("pt-BR", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    timeZone: "America/Sao_Paulo",
-  });
-
-function Section({ id, title, children }: { id: string; title: string; children: ReactNode }) {
-  return (
-    <section id={id} aria-labelledby={`${id}-t`} className="scroll-mt-20 space-y-3">
-      <h2 id={`${id}-t`} className="text-xl font-semibold tracking-tight text-foreground">
-        {title}
-      </h2>
-      {children}
-    </section>
-  );
-}
-
-const P = ({ children }: { children: ReactNode }) => (
-  <p className="text-[15px] leading-relaxed text-foreground/90">{children}</p>
-);
-const UL = ({ children }: { children: ReactNode }) => (
-  <ul className="list-disc space-y-1.5 pl-5 text-[15px] leading-relaxed text-foreground/90">
-    {children}
-  </ul>
-);
-const A = ({ href, children }: { href: string; children: ReactNode }) => (
-  <a
-    href={href}
-    target="_blank"
-    rel="noopener noreferrer"
-    className="font-medium text-foreground underline underline-offset-2 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-  >
-    {children}
-  </a>
-);
+import { A, P, Pending, Section, UL } from "./legal-ui";
+import { dataLonga } from "./format-date";
 
 const SECTIONS: { id: string; title: string }[] = [
   { id: "controlador", title: "1. Quem somos" },

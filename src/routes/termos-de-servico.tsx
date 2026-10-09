@@ -1,15 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { LegalPageShell } from "@/components/legal/LegalPageShell";
-import { PrivacyPolicyContent } from "@/components/legal/PrivacyPolicyContent";
-import { PRIVACY_POLICY_URL_PATH } from "@/lib/privacy-policy-config";
+import { TermsOfServiceContent } from "@/components/legal/TermsOfServiceContent";
+import { TERMS_PATH } from "@/lib/privacy-policy-config";
 
-const TITLE = "Política de Privacidade | Você no Hype";
+const TITLE = "Termos de Serviço | Você no Hype";
 const DESCRIPTION =
-  "Como a Você no Hype trata dados pessoais no site e na Plataforma VNH, incluindo a integração com o Google Agenda, seus direitos e como pedir a exclusão de dados.";
-const CANONICAL = `https://plataforma.vocenohype.com.br${PRIVACY_POLICY_URL_PATH}`;
+  "Condições de uso da Plataforma VNH da Você no Hype: acesso, conta, uso permitido, integrações, responsabilidades e contato.";
+const CANONICAL = `https://plataforma.vocenohype.com.br${TERMS_PATH}`;
 
 /** Página pública (fora de `_authenticated`): renderizada no servidor, sem depender de JS nem de login. */
-export const Route = createFileRoute("/politica-de-privacidade")({
+export const Route = createFileRoute("/termos-de-servico")({
   head: () => ({
     meta: [
       { title: TITLE },
@@ -22,13 +22,13 @@ export const Route = createFileRoute("/politica-de-privacidade")({
     ],
     links: [{ rel: "canonical", href: CANONICAL }],
   }),
-  component: PrivacyPolicyPage,
+  component: TermsPage,
 });
 
-function PrivacyPolicyPage() {
+function TermsPage() {
   return (
     <LegalPageShell>
-      <PrivacyPolicyContent />
+      <TermsOfServiceContent />
     </LegalPageShell>
   );
 }

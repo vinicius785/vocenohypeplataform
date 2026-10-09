@@ -18,6 +18,7 @@ import { Route as PoliticaDePrivacidadeRouteImport } from './routes/politica-de-
 import { Route as PortalV2RouteRouteImport } from './routes/portal-v2/route'
 import { Route as RedefinirSenhaRouteImport } from './routes/redefinir-senha'
 import { Route as SelecionarAmbienteRouteImport } from './routes/selecionar-ambiente'
+import { Route as TermosDeServicoRouteImport } from './routes/termos-de-servico'
 import { Route as AuthenticatedBancoInfluenciadoresV2RouteImport } from './routes/_authenticated/banco-influenciadores-v2'
 import { Route as AuthenticatedChatV2RouteImport } from './routes/_authenticated/chat-v2'
 import { Route as AuthenticatedDesignSystemRouteImport } from './routes/_authenticated/design-system'
@@ -140,6 +141,11 @@ const RedefinirSenhaRoute = RedefinirSenhaRouteImport.update({
 const SelecionarAmbienteRoute = SelecionarAmbienteRouteImport.update({
   id: '/selecionar-ambiente',
   path: '/selecionar-ambiente',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermosDeServicoRoute = TermosDeServicoRouteImport.update({
+  id: '/termos-de-servico',
+  path: '/termos-de-servico',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedBancoInfluenciadoresV2Route =
@@ -582,6 +588,7 @@ export interface FileRoutesByFullPath {
   '/politica-de-privacidade': typeof PoliticaDePrivacidadeRoute
   '/redefinir-senha': typeof RedefinirSenhaRoute
   '/selecionar-ambiente': typeof SelecionarAmbienteRoute
+  '/termos-de-servico': typeof TermosDeServicoRoute
   '/demo/$token': typeof DemoTokenRouteRouteWithChildren
   '/portal/$token': typeof PortalTokenRouteRouteWithChildren
   '/banco-influenciadores-v2': typeof AuthenticatedBancoInfluenciadoresV2Route
@@ -670,6 +677,7 @@ export interface FileRoutesByTo {
   '/politica-de-privacidade': typeof PoliticaDePrivacidadeRoute
   '/redefinir-senha': typeof RedefinirSenhaRoute
   '/selecionar-ambiente': typeof SelecionarAmbienteRoute
+  '/termos-de-servico': typeof TermosDeServicoRoute
   '/banco-influenciadores-v2': typeof AuthenticatedBancoInfluenciadoresV2Route
   '/design-system': typeof AuthenticatedDesignSystemRoute
   '/design-system-finance-concept': typeof AuthenticatedDesignSystemFinanceConceptRoute
@@ -753,6 +761,7 @@ export interface FileRoutesById {
   '/politica-de-privacidade': typeof PoliticaDePrivacidadeRoute
   '/redefinir-senha': typeof RedefinirSenhaRoute
   '/selecionar-ambiente': typeof SelecionarAmbienteRoute
+  '/termos-de-servico': typeof TermosDeServicoRoute
   '/demo/$token': typeof DemoTokenRouteRouteWithChildren
   '/portal/$token': typeof PortalTokenRouteRouteWithChildren
   '/_authenticated/banco-influenciadores-v2': typeof AuthenticatedBancoInfluenciadoresV2Route
@@ -844,6 +853,7 @@ export interface FileRouteTypes {
     | '/politica-de-privacidade'
     | '/redefinir-senha'
     | '/selecionar-ambiente'
+    | '/termos-de-servico'
     | '/demo/$token'
     | '/portal/$token'
     | '/banco-influenciadores-v2'
@@ -932,6 +942,7 @@ export interface FileRouteTypes {
     | '/politica-de-privacidade'
     | '/redefinir-senha'
     | '/selecionar-ambiente'
+    | '/termos-de-servico'
     | '/banco-influenciadores-v2'
     | '/design-system'
     | '/design-system-finance-concept'
@@ -1014,6 +1025,7 @@ export interface FileRouteTypes {
     | '/politica-de-privacidade'
     | '/redefinir-senha'
     | '/selecionar-ambiente'
+    | '/termos-de-servico'
     | '/demo/$token'
     | '/portal/$token'
     | '/_authenticated/banco-influenciadores-v2'
@@ -1105,6 +1117,7 @@ export interface RootRouteChildren {
   PoliticaDePrivacidadeRoute: typeof PoliticaDePrivacidadeRoute
   RedefinirSenhaRoute: typeof RedefinirSenhaRoute
   SelecionarAmbienteRoute: typeof SelecionarAmbienteRoute
+  TermosDeServicoRoute: typeof TermosDeServicoRoute
   DemoTokenRouteRoute: typeof DemoTokenRouteRouteWithChildren
   PortalTokenRouteRoute: typeof PortalTokenRouteRouteWithChildren
   BugsTokenRoute: typeof BugsTokenRoute
@@ -1184,6 +1197,13 @@ declare module '@tanstack/react-router' {
       path: '/selecionar-ambiente'
       fullPath: '/selecionar-ambiente'
       preLoaderRoute: typeof SelecionarAmbienteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/termos-de-servico': {
+      id: '/termos-de-servico'
+      path: '/termos-de-servico'
+      fullPath: '/termos-de-servico'
+      preLoaderRoute: typeof TermosDeServicoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/banco-influenciadores-v2': {
@@ -2027,6 +2047,7 @@ const rootRouteChildren: RootRouteChildren = {
   PoliticaDePrivacidadeRoute: PoliticaDePrivacidadeRoute,
   RedefinirSenhaRoute: RedefinirSenhaRoute,
   SelecionarAmbienteRoute: SelecionarAmbienteRoute,
+  TermosDeServicoRoute: TermosDeServicoRoute,
   DemoTokenRouteRoute: DemoTokenRouteRouteWithChildren,
   PortalTokenRouteRoute: PortalTokenRouteRouteWithChildren,
   BugsTokenRoute: BugsTokenRoute,
