@@ -1,4 +1,5 @@
 import { CalendarDays } from "lucide-react";
+import { formatIsoDate, parseIsoDateLocal } from "@/lib/utils";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { CampaignSection } from "./CampaignSection";
 import type { PublicCronogramaItem } from "@/lib/portal-types";
@@ -20,7 +21,7 @@ export function ClientCampaignTimeline({ items }: { items: PublicCronogramaItem[
       ) : (
         <ol className="surface-card space-y-2 p-2">
           {sorted.map((item) => {
-            const isPast = new Date(item.date).getTime() < now;
+            const isPast = parseIsoDateLocal(item.date).getTime() < now;
             return (
               <li key={item.id} className="flex items-start gap-3 rounded-xl px-3 py-2.5">
                 <span
@@ -41,7 +42,7 @@ export function ClientCampaignTimeline({ items }: { items: PublicCronogramaItem[
                     </span>
                   </div>
                   <p className="mt-0.5 text-xs text-text-secondary">
-                    {new Date(item.date).toLocaleDateString("pt-BR")}
+                    {formatIsoDate(item.date)}
                     {item.dataFim && item.dataFim > item.date
                       ? ` → ${new Date(item.dataFim).toLocaleDateString("pt-BR")}`
                       : ""}

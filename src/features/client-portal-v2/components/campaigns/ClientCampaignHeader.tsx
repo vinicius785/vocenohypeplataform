@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { formatIsoDate } from "@/lib/utils";
 import { ArrowLeft, Calendar } from "lucide-react";
 import { usePortalNavigate } from "../../runtime/portal-runtime";
 import { ClienteLogo } from "@/components/clientes/ClienteLogo";
@@ -33,7 +34,7 @@ export function ClientCampaignHeader({
   const navigate = usePortalNavigate();
   const status = getClientFacingStatus(campaign);
   const periodLabel = campaign.prazo
-    ? `Prazo ${new Date(campaign.prazo).toLocaleDateString("pt-BR")}`
+    ? `Prazo ${formatIsoDate(campaign.prazo)}`
     : "Sem prazo definido";
 
   return (

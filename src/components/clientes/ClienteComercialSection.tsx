@@ -1,4 +1,5 @@
 import type { Cliente } from "@/lib/clientes-store";
+import { formatIsoDate } from "@/lib/utils";
 import { ClienteSection } from "./ClienteSection";
 
 function Field({ label, value }: { label: string; value: string }) {
@@ -21,10 +22,7 @@ export function ClienteComercialSection({ cliente }: { cliente: Cliente }) {
           <Field label="Próximo passo" value={cliente.proximoPasso} />
         )}
         {cliente.previsaoFechamento?.trim() && (
-          <Field
-            label="Previsão de fechamento"
-            value={new Date(cliente.previsaoFechamento).toLocaleDateString("pt-BR")}
-          />
+          <Field label="Previsão de fechamento" value={formatIsoDate(cliente.previsaoFechamento)} />
         )}
         {cliente.observacaoNegociacao?.trim() && (
           <Field label="Observação" value={cliente.observacaoNegociacao} />

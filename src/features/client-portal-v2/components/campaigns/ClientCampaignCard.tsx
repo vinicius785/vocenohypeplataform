@@ -1,4 +1,5 @@
 import { CalendarClock, Users } from "lucide-react";
+import { formatIsoDate } from "@/lib/utils";
 import { ClienteLogo } from "@/components/clientes/ClienteLogo";
 import { Badge } from "@/components/ui/badge";
 import type { CampaignSummary } from "../../types/attention";
@@ -26,7 +27,7 @@ export function ClientCampaignCard({
 }) {
   const status = getClientFacingStatus(campaign);
   const periodLabel = campaign.prazo
-    ? `Prazo ${new Date(campaign.prazo).toLocaleDateString("pt-BR")}`
+    ? `Prazo ${formatIsoDate(campaign.prazo)}`
     : "Sem prazo definido";
 
   return (

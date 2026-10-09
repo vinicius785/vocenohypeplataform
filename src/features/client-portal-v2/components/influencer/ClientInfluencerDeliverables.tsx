@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatIsoDate } from "@/lib/utils";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Check, ChevronDown, Download, Eye, Film, Paperclip, X } from "lucide-react";
@@ -227,7 +228,7 @@ export function ClientInfluencerDeliverables({
               <p className="mt-0.5 text-xs text-text-secondary">
                 {entrega.statusCliente}
                 {entrega.dataPostagem && !entrega.publicadoEm
-                  ? ` · Prazo ${new Date(entrega.dataPostagem).toLocaleDateString("pt-BR")}`
+                  ? ` · Prazo ${formatIsoDate(entrega.dataPostagem)}`
                   : ""}
               </p>
               {!expanded && ajuste && (

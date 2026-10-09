@@ -1,4 +1,5 @@
 import type { ClienteLinkData, PublicCampanha } from "@/lib/portal-types";
+import { formatIsoDate, parseIsoDateLocal } from "@/lib/utils";
 import type {
   ActivityEntry,
   AttentionItem,
@@ -36,7 +37,10 @@ function competenceContext(
 
 function daysUntil(dateIso: string | undefined, now: number): number | null {
   if (!dateIso) return null;
-  const t = new Date(dateIso).getTime();
+  // Data-only ("2026-10-20") é meia-noite LOCAL, nunca UTC (senão o prazo "vira" um dia antes no Brasil).
+  const t = /^d{4}-d{2}-d{2}$/.test(dateIso)
+    ? parseIsoDateLocal(dateIso).getTime()
+    : new Date(dateIso).getTime();
   if (Number.isNaN(t)) return null;
   return Math.ceil((t - now) / (1000 * 60 * 60 * 24));
 }
@@ -50,7 +54,7 @@ function dueLabelFrom(days: number | null, prazoIso: string | undefined): string
   if (days === 0) return "Prazo hoje";
   if (days === 1) return "Prazo amanhã";
   if (days > 1) return `Prazo em ${days} dias`;
-  return `Prazo era em ${new Date(prazoIso).toLocaleDateString("pt-BR")}`;
+  return `Prazo era em ${formatIsoDate(prazoIso)}`;
 }
 
 /**
@@ -171,7 +175,7 @@ export function summarizeCampaign(
     entregas.filter((e) => e.stage === "ROTEIRO_APROVACAO" || e.stage === "CONTEUDO_APROVACAO")
       .length;
   const nextMilestone = [...campanha.cronograma]
-    .filter((c) => new Date(c.date).getTime() >= now)
+    .filter((c) => parseIsoDateLocal(c.date).getTime() >= now)
     .sort((a, b) => a.date.localeCompare(b.date))[0];
   const progressPercent =
     contentPlanned > 0 ? Math.round((contentPublished / contentPlanned) * 100) : 0;

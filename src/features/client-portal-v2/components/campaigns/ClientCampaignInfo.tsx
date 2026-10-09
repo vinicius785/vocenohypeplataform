@@ -1,4 +1,5 @@
 import { Info } from "lucide-react";
+import { formatIsoDate } from "@/lib/utils";
 import { CampaignSection } from "./CampaignSection";
 import type { PublicCampanha } from "@/lib/portal-types";
 
@@ -23,7 +24,7 @@ export function ClientCampaignInfo({ campaign }: { campaign: PublicCampanha }) {
         : "Mensal",
     });
   } else if (campaign.prazo) {
-    items.push({ label: "Prazo", value: new Date(campaign.prazo).toLocaleDateString("pt-BR") });
+    items.push({ label: "Prazo", value: formatIsoDate(campaign.prazo) });
   }
 
   if (items.length === 0) return null;

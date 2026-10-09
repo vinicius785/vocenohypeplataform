@@ -11,14 +11,14 @@ export function cn(...inputs: ClassValue[]) {
  * ISO strings as local time instead.
  */
 export function formatIsoDate(iso: string): string {
-  const [y, m, d] = iso.split("-").map(Number);
+  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
   return new Date(y, (m || 1) - 1, d || 1).toLocaleDateString("pt-BR");
 }
 
 /** Mesmo cuidado de fuso de `formatIsoDate`, na direção contrária: parseia
  * uma data-only ISO string como meia-noite local (nunca UTC). */
 export function parseIsoDateLocal(iso: string): Date {
-  const [y, m, d] = iso.split("-").map(Number);
+  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
   return new Date(y, (m || 1) - 1, d || 1);
 }
 
