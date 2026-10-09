@@ -1,13 +1,13 @@
-import { Filter, ArrowUpDown } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   FilterChips,
+  FilterGroup,
+  FilterPill,
+  FilterPopover,
   FilterRow,
   FilterSearch,
   FilterToolbar,
+  SortMenu,
 } from "@/components/shared/FilterToolbar";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   type CampanhaFiltersState,
   CAMPANHA_SORT_LABEL,
@@ -16,13 +16,6 @@ import {
   countActiveCampanhaFilters,
   type CampanhaStatus,
 } from "./campanha-ui";
-
-const pillCls = (active: boolean) =>
-  `rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
-    active
-      ? "border-foreground bg-foreground text-background"
-      : "border-border text-text-secondary hover:bg-muted"
-  }`;
 
 function toggleIn<T>(list: T[], value: T): T[] {
   return list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
@@ -58,132 +51,76 @@ export function CampanhaFiltersBar({
           placeholder="Buscar por campanha, cliente ou influenciador..."
         />
 
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-1.5">
-              <Filter className="h-3.5 w-3.5" />
-              Filtros
-              {activeCount > 0 && (
-                <Badge variant="secondary" className="px-1.5 py-0 text-[11px] leading-4">
-                  {activeCount}
-                </Badge>
-              )}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-72 space-y-3 p-3">
-            <div className="flex items-center justify-between">
-              <p className="text-[11px] font-semibold text-foreground">Filtrar campanhas</p>
-              <button
-                type="button"
-                disabled={activeCount === 0}
-                onClick={() => onFiltersChange(DEFAULT_CAMPANHA_FILTERS)}
-                className="text-[11px] text-text-secondary hover:text-foreground disabled:opacity-40"
+        <FilterPopover
+          title="Filtrar campanhas"
+          activeCount={activeCount}
+          onClear={() => onFiltersChange(DEFAULT_CAMPANHA_FILTERS)}
+        >
+          <FilterGroup label="Status">
+            {(["todos", "planning", "active", "completed", "archived"] as const).map((v) => (
+              <FilterPill
+                key={v}
+                active={filters.status === v}
+                onClick={() => onFiltersChange({ ...filters, status: v })}
               >
-                Limpar
-              </button>
-            </div>
-
-            <div>
-              <p className="mb-1.5 text-[11px] font-medium text-text-secondary">Status</p>
-              <div className="flex flex-wrap gap-1">
-                {(["todos", "planning", "active", "completed", "archived"] as const).map((v) => (
-                  <button
-                    key={v}
-                    type="button"
-                    onClick={() => onFiltersChange({ ...filters, status: v })}
-                    className={pillCls(filters.status === v)}
-                  >
-                    {v === "todos" ? "Todos" : CAMPANHA_STATUS_LABEL[v as CampanhaStatus]}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <p className="mb-1.5 text-[11px] font-medium text-text-secondary">Recorrência</p>
-              <div className="flex flex-wrap gap-1">
-                {(["todos", "sim", "nao"] as const).map((v) => (
-                  <button
-                    key={v}
-                    type="button"
-                    onClick={() => onFiltersChange({ ...filters, recorrente: v })}
-                    className={pillCls(filters.recorrente === v)}
-                  >
-                    {v === "todos" ? "Todas" : v === "sim" ? "Recorrentes" : "Não recorrentes"}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <p className="mb-1.5 text-[11px] font-medium text-text-secondary">Influenciadores</p>
-              <div className="flex flex-wrap gap-1">
-                {(["todos", "com", "sem"] as const).map((v) => (
-                  <button
-                    key={v}
-                    type="button"
-                    onClick={() => onFiltersChange({ ...filters, influenciadores: v })}
-                    className={pillCls(filters.influenciadores === v)}
-                  >
-                    {v === "todos"
-                      ? "Todas"
-                      : v === "com"
-                        ? "Com influenciadores"
-                        : "Sem influenciadores"}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {clientes.length > 0 && (
-              <div>
-                <p className="mb-1.5 text-[11px] font-medium text-text-secondary">Cliente</p>
-                <div className="flex max-h-40 flex-wrap gap-1 overflow-y-auto">
-                  {clientes.map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() =>
-                        onFiltersChange({
-                          ...filters,
-                          clienteIds: toggleIn(filters.clienteIds, c.id),
-                        })
-                      }
-                      className={pillCls(filters.clienteIds.includes(c.id))}
-                    >
-                      {c.empresa}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </PopoverContent>
-        </Popover>
-
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-1.5">
-              <ArrowUpDown className="h-3.5 w-3.5" />
-              {CAMPANHA_SORT_LABEL[filters.sort]}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-56 space-y-1 p-2">
-            {(Object.keys(CAMPANHA_SORT_LABEL) as (keyof typeof CAMPANHA_SORT_LABEL)[]).map((k) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => onFiltersChange({ ...filters, sort: k })}
-                className={`block w-full rounded-md px-2 py-1.5 text-left text-xs ${
-                  filters.sort === k
-                    ? "bg-muted font-medium text-foreground"
-                    : "text-text-secondary hover:bg-muted/60"
-                }`}
-              >
-                {CAMPANHA_SORT_LABEL[k]}
-              </button>
+                {v === "todos" ? "Todos" : CAMPANHA_STATUS_LABEL[v as CampanhaStatus]}
+              </FilterPill>
             ))}
-          </PopoverContent>
-        </Popover>
+          </FilterGroup>
+
+          <FilterGroup label="Recorrência">
+            {(["todos", "sim", "nao"] as const).map((v) => (
+              <FilterPill
+                key={v}
+                active={filters.recorrente === v}
+                onClick={() => onFiltersChange({ ...filters, recorrente: v })}
+              >
+                {v === "todos" ? "Todas" : v === "sim" ? "Recorrentes" : "Não recorrentes"}
+              </FilterPill>
+            ))}
+          </FilterGroup>
+
+          <FilterGroup label="Influenciadores">
+            {(["todos", "com", "sem"] as const).map((v) => (
+              <FilterPill
+                key={v}
+                active={filters.influenciadores === v}
+                onClick={() => onFiltersChange({ ...filters, influenciadores: v })}
+              >
+                {v === "todos"
+                  ? "Todas"
+                  : v === "com"
+                    ? "Com influenciadores"
+                    : "Sem influenciadores"}
+              </FilterPill>
+            ))}
+          </FilterGroup>
+
+          {clientes.length > 0 && (
+            <FilterGroup label="Cliente">
+              {clientes.map((c) => (
+                <FilterPill
+                  key={c.id}
+                  active={filters.clienteIds.includes(c.id)}
+                  onClick={() =>
+                    onFiltersChange({
+                      ...filters,
+                      clienteIds: toggleIn(filters.clienteIds, c.id),
+                    })
+                  }
+                >
+                  {c.empresa}
+                </FilterPill>
+              ))}
+            </FilterGroup>
+          )}
+        </FilterPopover>
+
+        <SortMenu
+          value={filters.sort}
+          options={CAMPANHA_SORT_LABEL}
+          onChange={(k) => onFiltersChange({ ...filters, sort: k })}
+        />
       </FilterRow>
 
       <CampanhaFilterChips filters={filters} onChange={onFiltersChange} clientes={clientes} />

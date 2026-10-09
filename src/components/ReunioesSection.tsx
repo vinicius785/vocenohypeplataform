@@ -329,7 +329,7 @@ export function ReunioesSection() {
 
   return (
     <>
-      <PageContainer className="space-y-6">
+      <PageContainer className="space-y-4 md:space-y-6">
         <PageHeader
           title="Reuniões"
           description="Organize seus compromissos e acompanhe sua agenda."
@@ -350,7 +350,7 @@ export function ReunioesSection() {
          * parte, por isso vira um botão separado, com badge só quando há
          * pendência real (mesma contagem deduplicada por série de
          * `pendentes`, nunca a contagem crua de ocorrências). */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-2 md:gap-3">
           <SegmentedControl
             aria-label="Alternar entre Agenda e Calendário"
             value={view === "calendar" ? "calendar" : "agenda"}

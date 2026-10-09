@@ -127,7 +127,7 @@ export function KpiCell({
     </>
   );
   const cellClass =
-    "flex min-w-0 flex-col items-stretch justify-start border-l border-t border-border/60 px-4 py-3 text-left md:px-5";
+    "flex min-w-0 flex-col items-stretch justify-start border-l border-t border-border/60 px-3 py-2.5 text-left md:px-5 md:py-3";
   if (!onClick) return <div className={cellClass}>{body}</div>;
   return (
     <button

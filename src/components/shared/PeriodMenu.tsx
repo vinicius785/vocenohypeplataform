@@ -1,7 +1,6 @@
-import { useState } from "react";
 import { CalendarDays, Check, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ResponsivePopover } from "@/components/ui/responsive-popover";
 
 /**
  * Contexto de período para módulos com poucos atalhos fixos (Comercial…):
@@ -20,14 +19,16 @@ export function PeriodMenu<T extends string>({
   options: readonly { value: T; label: string }[];
   onChange: (value: T) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const current = options.find((o) => o.value === value) ?? options[0];
 
   return (
     <div className="flex min-w-0 items-center gap-2" role="group" aria-label="Período">
-      <span className="text-sm text-text-secondary">Período</span>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
+      <span className="hidden text-sm text-text-secondary sm:inline">Período</span>
+      <ResponsivePopover
+        title="Período"
+        align="end"
+        contentClassName="w-52 p-1.5"
+        trigger={
           <button
             type="button"
             aria-label={`Período: ${current.label}. Alterar`}
@@ -37,8 +38,9 @@ export function PeriodMenu<T extends string>({
             <span className="truncate">{current.label}</span>
             <ChevronDown className="h-3.5 w-3.5 shrink-0 text-text-secondary" aria-hidden="true" />
           </button>
-        </PopoverTrigger>
-        <PopoverContent align="end" className="w-52 p-1.5">
+        }
+      >
+        {(close) => (
           <div role="listbox" aria-label="Atalhos de período">
             {options.map((o) => {
               const active = o.value === value;
@@ -50,10 +52,10 @@ export function PeriodMenu<T extends string>({
                   aria-selected={active}
                   onClick={() => {
                     onChange(o.value);
-                    setOpen(false);
+                    close();
                   }}
                   className={cn(
-                    "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    "flex w-full items-center justify-between rounded-md min-h-11 px-2.5 text-left text-sm hover:bg-muted md:min-h-0 md:py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     active ? "font-medium text-foreground" : "text-text-secondary",
                   )}
                 >
@@ -63,8 +65,8 @@ export function PeriodMenu<T extends string>({
               );
             })}
           </div>
-        </PopoverContent>
-      </Popover>
+        )}
+      </ResponsivePopover>
     </div>
   );
 }

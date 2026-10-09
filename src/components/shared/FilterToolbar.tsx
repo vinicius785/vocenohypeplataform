@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ResponsivePopover } from "@/components/ui/responsive-popover";
 
 /**
  * Barra de busca + filtros — o padrão ÚNICO das listagens (Clientes,
@@ -32,7 +32,7 @@ export function FilterSearch({
   placeholder: string;
 }) {
   return (
-    <div className="relative w-full min-w-[200px] sm:w-auto sm:flex-1">
+    <div className="relative w-full min-w-0 sm:w-auto sm:min-w-[200px] sm:flex-1">
       <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-secondary" />
       <Input
         value={value}
@@ -107,8 +107,10 @@ export function FilterPopover({
   children: ReactNode;
 }) {
   return (
-    <Popover>
-      <PopoverTrigger asChild>
+    <ResponsivePopover
+      title={title}
+      contentClassName="max-h-[min(70vh,28rem)] w-72 space-y-3 overflow-y-auto p-3"
+      trigger={
         <Button variant="outline" size="sm" className="gap-1.5">
           <Filter className="h-3.5 w-3.5" />
           Filtros
@@ -118,13 +120,11 @@ export function FilterPopover({
             </Badge>
           )}
         </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        className="max-h-[min(70vh,28rem)] w-72 space-y-3 overflow-y-auto p-3"
-      >
+      }
+    >
+      <>
         <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold text-foreground">{title}</p>
+          <p className="hidden text-sm font-semibold text-foreground md:block">{title}</p>
           <button
             type="button"
             disabled={activeCount === 0}
@@ -135,8 +135,8 @@ export function FilterPopover({
           </button>
         </div>
         {children}
-      </PopoverContent>
-    </Popover>
+      </>
+    </ResponsivePopover>
   );
 }
 
@@ -167,7 +167,7 @@ export function FilterPill({
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        "rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "min-h-9 rounded-full border px-3 py-1 text-xs font-medium transition-colors md:min-h-0 md:px-2.5 md:text-[11px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         active
           ? "border-foreground bg-foreground text-background"
           : "border-border text-text-secondary hover:bg-muted",
@@ -189,22 +189,28 @@ export function SortMenu<K extends string>({
   onChange: (k: K) => void;
 }) {
   return (
-    <Popover>
-      <PopoverTrigger asChild>
+    <ResponsivePopover
+      title="Ordenar por"
+      contentClassName="w-56 space-y-1 p-2"
+      trigger={
         <Button variant="outline" size="sm" className="gap-1.5" aria-label="Ordenar">
           <ArrowUpDown className="h-3.5 w-3.5" />
           {options[value]}
         </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-56 space-y-1 p-2">
-        {(Object.keys(options) as K[]).map((k) => (
+      }
+    >
+      {(close) =>
+        (Object.keys(options) as K[]).map((k) => (
           <button
             key={k}
             type="button"
             aria-pressed={value === k}
-            onClick={() => onChange(k)}
+            onClick={() => {
+              onChange(k);
+              close();
+            }}
             className={cn(
-              "block w-full rounded-md px-2 py-1.5 text-left text-xs",
+              "flex min-h-11 w-full items-center rounded-md px-2 text-left text-sm md:min-h-0 md:py-1.5 md:text-xs",
               value === k
                 ? "bg-muted font-medium text-foreground"
                 : "text-text-secondary hover:bg-muted/60",
@@ -212,8 +218,8 @@ export function SortMenu<K extends string>({
           >
             {options[k]}
           </button>
-        ))}
-      </PopoverContent>
-    </Popover>
+        ))
+      }
+    </ResponsivePopover>
   );
 }

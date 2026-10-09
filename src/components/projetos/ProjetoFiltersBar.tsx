@@ -1,13 +1,13 @@
-import { Filter, ArrowUpDown } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   FilterChips,
+  FilterGroup,
+  FilterPill,
+  FilterPopover,
   FilterRow,
   FilterSearch,
   FilterToolbar,
+  SortMenu,
 } from "@/components/shared/FilterToolbar";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { FEATURES } from "@/lib/projetos";
 import {
   type ProjectFiltersState,
@@ -19,13 +19,6 @@ import {
   DEFAULT_PROJECT_FILTERS,
   countActiveProjectFilters,
 } from "./projeto-ui";
-
-const pillCls = (active: boolean) =>
-  `rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
-    active
-      ? "border-foreground bg-foreground text-background"
-      : "border-border text-text-secondary hover:bg-muted"
-  }`;
 
 const STATUS_OPTIONS: ProjectStatusFilter[] = [
   "todos",
@@ -66,137 +59,79 @@ export function ProjetoFiltersBar({
           placeholder="Buscar por projeto, descrição ou responsável..."
         />
 
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-1.5">
-              <Filter className="h-3.5 w-3.5" />
-              Filtros
-              {activeCount > 0 && (
-                <Badge variant="secondary" className="px-1.5 py-0 text-[11px] leading-4">
-                  {activeCount}
-                </Badge>
-              )}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-72 space-y-3 p-3">
-            <div className="flex items-center justify-between">
-              <p className="text-[11px] font-semibold text-foreground">Filtrar projetos</p>
-              <button
-                type="button"
-                disabled={activeCount === 0}
-                onClick={() => onFiltersChange(DEFAULT_PROJECT_FILTERS)}
-                className="text-[11px] text-text-secondary hover:text-foreground disabled:opacity-40"
+        <FilterPopover
+          title="Filtrar projetos"
+          activeCount={activeCount}
+          onClear={() => onFiltersChange(DEFAULT_PROJECT_FILTERS)}
+        >
+          <FilterGroup label="Status">
+            {STATUS_OPTIONS.map((v) => (
+              <FilterPill
+                key={v}
+                active={filters.status === v}
+                onClick={() => onFiltersChange({ ...filters, status: v })}
               >
-                Limpar
-              </button>
-            </div>
-
-            <div>
-              <p className="mb-1.5 text-[11px] font-medium text-text-secondary">Status</p>
-              <div className="flex flex-wrap gap-1">
-                {STATUS_OPTIONS.map((v) => (
-                  <button
-                    key={v}
-                    type="button"
-                    onClick={() => onFiltersChange({ ...filters, status: v })}
-                    className={pillCls(filters.status === v)}
-                  >
-                    {PROJECT_STATUS_FILTER_LABEL[v]}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <p className="mb-1.5 text-[11px] font-medium text-text-secondary">Saúde</p>
-              <div className="flex flex-wrap gap-1">
-                {HEALTH_OPTIONS.map((v) => (
-                  <button
-                    key={v}
-                    type="button"
-                    onClick={() => onFiltersChange({ ...filters, health: v })}
-                    className={pillCls(filters.health === v)}
-                  >
-                    {PROJECT_HEALTH_FILTER_LABEL[v]}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <p className="mb-1.5 text-[11px] font-medium text-text-secondary">Funcionalidade</p>
-              <div className="flex max-h-32 flex-wrap gap-1 overflow-y-auto">
-                <button
-                  type="button"
-                  onClick={() => onFiltersChange({ ...filters, feature: "todas" })}
-                  className={pillCls(filters.feature === "todas")}
-                >
-                  Todas
-                </button>
-                {FEATURES.map((f) => (
-                  <button
-                    key={f.key}
-                    type="button"
-                    onClick={() => onFiltersChange({ ...filters, feature: f.key })}
-                    className={pillCls(filters.feature === f.key)}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {responsaveis.length > 0 && (
-              <div>
-                <p className="mb-1.5 text-[11px] font-medium text-text-secondary">Responsável</p>
-                <div className="flex max-h-32 flex-wrap gap-1 overflow-y-auto">
-                  <button
-                    type="button"
-                    onClick={() => onFiltersChange({ ...filters, responsavel: "todos" })}
-                    className={pillCls(filters.responsavel === "todos")}
-                  >
-                    Todos
-                  </button>
-                  {responsaveis.map((r) => (
-                    <button
-                      key={r}
-                      type="button"
-                      onClick={() => onFiltersChange({ ...filters, responsavel: r })}
-                      className={pillCls(filters.responsavel === r)}
-                    >
-                      {r}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </PopoverContent>
-        </Popover>
-
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-1.5">
-              <ArrowUpDown className="h-3.5 w-3.5" />
-              {PROJECT_SORT_LABEL[filters.sort]}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-56 space-y-1 p-2">
-            {(Object.keys(PROJECT_SORT_LABEL) as (keyof typeof PROJECT_SORT_LABEL)[]).map((k) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => onFiltersChange({ ...filters, sort: k })}
-                className={`block w-full rounded-md px-2 py-1.5 text-left text-xs ${
-                  filters.sort === k
-                    ? "bg-muted font-medium text-foreground"
-                    : "text-text-secondary hover:bg-muted/60"
-                }`}
-              >
-                {PROJECT_SORT_LABEL[k]}
-              </button>
+                {PROJECT_STATUS_FILTER_LABEL[v]}
+              </FilterPill>
             ))}
-          </PopoverContent>
-        </Popover>
+          </FilterGroup>
+
+          <FilterGroup label="Saúde">
+            {HEALTH_OPTIONS.map((v) => (
+              <FilterPill
+                key={v}
+                active={filters.health === v}
+                onClick={() => onFiltersChange({ ...filters, health: v })}
+              >
+                {PROJECT_HEALTH_FILTER_LABEL[v]}
+              </FilterPill>
+            ))}
+          </FilterGroup>
+
+          <FilterGroup label="Funcionalidade">
+            <FilterPill
+              active={filters.feature === "todas"}
+              onClick={() => onFiltersChange({ ...filters, feature: "todas" })}
+            >
+              Todas
+            </FilterPill>
+            {FEATURES.map((f) => (
+              <FilterPill
+                key={f.key}
+                active={filters.feature === f.key}
+                onClick={() => onFiltersChange({ ...filters, feature: f.key })}
+              >
+                {f.label}
+              </FilterPill>
+            ))}
+          </FilterGroup>
+
+          {responsaveis.length > 0 && (
+            <FilterGroup label="Responsável">
+              <FilterPill
+                active={filters.responsavel === "todos"}
+                onClick={() => onFiltersChange({ ...filters, responsavel: "todos" })}
+              >
+                Todos
+              </FilterPill>
+              {responsaveis.map((r) => (
+                <FilterPill
+                  key={r}
+                  active={filters.responsavel === r}
+                  onClick={() => onFiltersChange({ ...filters, responsavel: r })}
+                >
+                  {r}
+                </FilterPill>
+              ))}
+            </FilterGroup>
+          )}
+        </FilterPopover>
+
+        <SortMenu
+          value={filters.sort}
+          options={PROJECT_SORT_LABEL}
+          onChange={(k) => onFiltersChange({ ...filters, sort: k })}
+        />
       </FilterRow>
 
       <ProjetoFilterChips filters={filters} onChange={onFiltersChange} />

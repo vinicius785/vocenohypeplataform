@@ -53,7 +53,7 @@ function useEditableFocus(): boolean {
 }
 
 const itemBase =
-  "relative flex min-w-0 flex-col rounded-xl items-center justify-center gap-0.5 transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand";
+  "relative flex min-w-0 flex-col items-center justify-center gap-0.5 transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand";
 
 /** Barra de navegação inferior (só mobile, < md). Os 4 destinos prioritários + "Mais". O estado
  * ativo vem de `active` (a rota real), nunca do último clique. */
@@ -73,11 +73,11 @@ export function MobileBottomNav(props: MobileNavState) {
     <>
       <nav
         aria-label="Navegação principal"
-        className={`fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-[max(0.75rem,env(safe-area-inset-left))] right-[max(0.75rem,env(safe-area-inset-right))] z-40 rounded-2xl border border-border bg-background p-1 shadow-lg shadow-black/10 md:hidden ${
+        className={`shrink-0 border-t border-border bg-background pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] md:hidden ${
           keyboard ? "hidden" : ""
         }`}
       >
-        <ul className="grid grid-cols-5 gap-1">
+        <ul className="grid grid-cols-5">
           {MOBILE_PRIMARY_KEYS.map((key) => {
             const item = itemByKey(key)!;
             const Icon = item.icon;
@@ -101,17 +101,23 @@ export function MobileBottomNav(props: MobileNavState) {
                           ? `${item.label}, há novidades`
                           : undefined
                   }
-                  className={`${itemBase} h-14 w-full ${
+                  className={`${itemBase} h-12 w-full ${
                     !ok
                       ? "cursor-not-allowed text-text-secondary"
                       : isActive
-                        ? "bg-muted text-foreground"
+                        ? "text-foreground"
                         : "text-muted-foreground active:bg-muted/60"
                   }`}
                 >
+                  {isActive && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-x-6 top-0 h-0.5 rounded-full bg-brand"
+                    />
+                  )}
                   <span className="relative">
                     <Icon
-                      className="h-[22px] w-[22px]"
+                      className="h-5 w-5"
                       strokeWidth={isActive ? 2.25 : 1.75}
                       aria-hidden="true"
                     />
@@ -137,7 +143,7 @@ export function MobileBottomNav(props: MobileNavState) {
                     )}
                   </span>
                   <span
-                    className={`text-[11px] leading-none ${isActive ? "font-semibold" : "font-medium"}`}
+                    className={`text-[10px] leading-none ${isActive ? "font-semibold" : "font-medium"}`}
                   >
                     {item.label}
                   </span>
@@ -154,13 +160,19 @@ export function MobileBottomNav(props: MobileNavState) {
               aria-expanded={moreOpen}
               aria-current={moreActive ? "page" : undefined}
               aria-label={moreHasDot ? "Mais, há novidades" : undefined}
-              className={`${itemBase} h-14 w-full ${
-                moreActive ? "bg-muted text-foreground" : "text-muted-foreground active:bg-muted/60"
+              className={`${itemBase} h-12 w-full ${
+                moreActive ? "text-foreground" : "text-muted-foreground active:bg-muted/60"
               }`}
             >
+              {moreActive && (
+                <span
+                  aria-hidden="true"
+                  className="absolute inset-x-6 top-0 h-0.5 rounded-full bg-brand"
+                />
+              )}
               <span className="relative">
                 <Menu
-                  className="h-[22px] w-[22px]"
+                  className="h-5 w-5"
                   strokeWidth={moreActive ? 2.25 : 1.75}
                   aria-hidden="true"
                 />
@@ -172,7 +184,7 @@ export function MobileBottomNav(props: MobileNavState) {
                 )}
               </span>
               <span
-                className={`text-[11px] leading-none ${moreActive ? "font-semibold" : "font-medium"}`}
+                className={`text-[10px] leading-none ${moreActive ? "font-semibold" : "font-medium"}`}
               >
                 Mais
               </span>

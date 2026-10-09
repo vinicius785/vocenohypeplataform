@@ -181,7 +181,7 @@ export function AgendaView({
   const isEmpty = !hero && todayMeetings.length === 0 && upcomingByDate.size === 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       {/* Resumo operacional — faixa compacta de apoio, nunca 3 cards
        * grandes equivalentes. "Pendentes" só ganha destaque amarelo
        * quando há de fato solicitações aguardando resposta. */}
@@ -223,7 +223,7 @@ export function AgendaView({
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") onOpen(hero);
               }}
-              className="cursor-pointer rounded-2xl border-l-[3px] border-l-brand bg-card px-5 py-4 dark:shadow-none"
+              className="cursor-pointer rounded-2xl border-l-[3px] border-l-brand bg-card px-4 py-3.5 dark:shadow-none md:px-5 md:py-4"
             >
               <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide">
                 {acontecendoAgora ? (

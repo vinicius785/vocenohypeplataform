@@ -484,7 +484,7 @@ export function AppShell({
       </TooltipProvider>
 
       <div className="flex h-dvh min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex h-16 items-center gap-3 border-b border-border px-4 md:px-6">
+        <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3 md:h-16 md:gap-3 md:px-6">
           <GlobalSearch onSelect={onSelect} />
           <div className="ml-auto flex items-center gap-1">
             <ActiveTimerIndicator onSelect={onSelect} />
@@ -500,23 +500,23 @@ export function AppShell({
           </div>
         </header>
 
-        <main className="min-h-0 min-w-0 flex-1 overflow-auto p-4 pb-[calc(6.5rem+env(safe-area-inset-bottom))] md:p-8">
-          {children}
-        </main>
+        <main className="min-h-0 min-w-0 flex-1 overflow-auto p-4 md:p-8">{children}</main>
+        {/* Dentro da coluna, depois do <main>: ocupa espaço REAL no layout (o conteúdo rola acima dela),
+         * em vez de flutuar por cima e depender de um padding "reserva" no <main>. */}
+        <MobileBottomNav
+          active={active}
+          allowed={(key) => hasPermission(access, SECTION_PERMISSION[key])}
+          onSelect={(key) => {
+            onSelect(key);
+            if (key === "comercial") void markLeadsSeen();
+          }}
+          chatUnread={unreadChatCount}
+          dot={(key) =>
+            (key === "comercial" && unseenLeads > 0) || (key === "reunioes" && hasPendingMeetings)
+          }
+          overdueDespesas={hasOverdueDespesas}
+        />
       </div>
-      <MobileBottomNav
-        active={active}
-        allowed={(key) => hasPermission(access, SECTION_PERMISSION[key])}
-        onSelect={(key) => {
-          onSelect(key);
-          if (key === "comercial") void markLeadsSeen();
-        }}
-        chatUnread={unreadChatCount}
-        dot={(key) =>
-          (key === "comercial" && unseenLeads > 0) || (key === "reunioes" && hasPendingMeetings)
-        }
-        overdueDespesas={hasOverdueDespesas}
-      />
       <TaskModalStack />
     </div>
   );

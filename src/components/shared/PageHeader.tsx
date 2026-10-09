@@ -51,7 +51,7 @@ export function PageHeader({
   }[];
 }) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 md:space-y-4">
       {breadcrumb && breadcrumb.length > 0 && (
         <nav className="flex items-center gap-1 text-xs text-text-secondary">
           {breadcrumb.map((crumb, i) => (
@@ -65,8 +65,9 @@ export function PageHeader({
         </nav>
       )}
 
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
+      {/* Mobile: título e ações na MESMA linha (título à esquerda, ações à direita) em vez de empilhar. */}
+      <div className="flex items-start justify-between gap-3 md:gap-4">
+        <div className="min-w-0 flex-1">
           <p
             role="heading"
             aria-level={1}
@@ -74,9 +75,11 @@ export function PageHeader({
           >
             {title}
           </p>
-          {description && <p className={cn(TYPOGRAPHY.bodySecondary, "mt-1.5")}>{description}</p>}
+          {description && (
+            <p className={cn(TYPOGRAPHY.bodySecondary, "mt-1.5 hidden md:block")}>{description}</p>
+          )}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           {actionsSlot}
           {secondaryActions?.map((action) => (
             <Button
@@ -96,6 +99,10 @@ export function PageHeader({
         </div>
       </div>
 
+      {description && (
+        <p className={cn(TYPOGRAPHY.bodySecondary, "line-clamp-2 md:hidden")}>{description}</p>
+      )}
+
       {(searchPlaceholder || filters) && (
         <div className="flex flex-wrap items-center gap-2">
           {searchPlaceholder && (
@@ -112,7 +119,7 @@ export function PageHeader({
       )}
 
       {indicators && indicators.length > 0 && (
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
           {indicators.map((indicator) => (
             <MetricCard
               key={indicator.label}

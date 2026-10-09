@@ -274,7 +274,7 @@ export function ComercialSection() {
 
   return (
     <>
-      <PageContainer variant="wide" className="space-y-5 md:space-y-6">
+      <PageContainer variant="wide" className="space-y-4 md:space-y-6">
         <div className="space-y-4">
           <PageHeader
             title="Comercial"

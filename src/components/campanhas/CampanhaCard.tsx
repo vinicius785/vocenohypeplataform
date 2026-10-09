@@ -54,7 +54,7 @@ export function CampanhaCard({
       : "Sem prazo definido";
 
   return (
-    <div className="group relative cursor-pointer rounded-2xl border border-transparent bg-card p-4 text-left transition-colors duration-150 hover:border-border hover:bg-accent/40 dark:shadow-none">
+    <div className="group relative cursor-pointer rounded-2xl border border-transparent bg-card p-3.5 text-left transition-colors md:p-4 duration-150 hover:border-border hover:bg-accent/40 dark:shadow-none">
       <button
         type="button"
         onClick={onOpen}
@@ -76,7 +76,7 @@ export function CampanhaCard({
             <button
               type="button"
               aria-label={`Mais ações para ${c.nome}`}
-              className="relative z-10 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-text-secondary opacity-60 pointer-events-auto transition-opacity hover:bg-muted hover:text-foreground hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand group-hover:opacity-100 sm:h-8 sm:w-8"
+              className="relative z-10 -mr-2 -mt-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-text-secondary opacity-60 pointer-events-auto transition-opacity hover:bg-muted hover:text-foreground hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand group-hover:opacity-100 sm:mr-0 sm:mt-0 sm:h-8 sm:w-8"
             >
               <MoreVertical className="h-4 w-4" />
             </button>
@@ -97,7 +97,7 @@ export function CampanhaCard({
         </DropdownMenu>
       </div>
 
-      <div className="relative mt-3 flex flex-wrap items-center gap-1.5 pointer-events-none">
+      <div className="relative mt-2 flex flex-wrap items-center gap-1.5 pointer-events-none md:mt-3">
         <Badge variant={STATUS_BADGE_VARIANT[status]}>{CAMPANHA_STATUS_LABEL[status]}</Badge>
         {isRecorrente && (
           <Badge variant="brand" className="gap-1">
@@ -106,7 +106,7 @@ export function CampanhaCard({
         )}
       </div>
 
-      <div className="relative mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border/60 pt-3 text-xs text-text-secondary pointer-events-none">
+      <div className="relative mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border/60 pt-2.5 text-xs md:mt-3 md:gap-y-1.5 md:pt-3 text-text-secondary pointer-events-none">
         <span className="inline-flex items-center gap-1.5">
           <CalendarClock className="h-3.5 w-3.5" />
           {prazoLabel}

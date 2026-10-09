@@ -208,7 +208,7 @@ export function ProjetosSection() {
     // (--background e --card são idênticos no tema claro, então sem isso
     // os cards não se distinguiam do fundo).
     <>
-      <PageContainer className="space-y-6 md:space-y-8">
+      <PageContainer className="space-y-4 md:space-y-8">
         <PageHeader
           title="Projetos"
           description="Organize tarefas e entregas do time."

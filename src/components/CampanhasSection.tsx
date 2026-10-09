@@ -337,7 +337,7 @@ export function CampanhasSection() {
     // --background e --card são idênticos no claro, então sem isso os
     // cards de Campanhas não se distinguiam do fundo.
     <>
-      <PageContainer className="space-y-6 md:space-y-8">
+      <PageContainer className="space-y-4 md:space-y-8">
         <PageHeader title="Campanhas" description="Todas as campanhas vinculadas aos clientes." />
 
         {hasAnyCampanha && (

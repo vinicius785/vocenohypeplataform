@@ -20,7 +20,7 @@ const html = (o: Partial<MobileNavState> = {}) =>
 describe("navegação mobile — definição única", () => {
   it("os 4 destinos prioritários, nesta ordem, e depois Mais", () => {
     expect([...MOBILE_PRIMARY_KEYS]).toEqual(["campanhas", "projetos", "comercial", "chat"]);
-    const labels = [...html().matchAll(/<span class="text-\[11px\][^"]*">([^<]+)<\/span>/g)].map(
+    const labels = [...html().matchAll(/<span class="text-\[10px\][^"]*">([^<]+)<\/span>/g)].map(
       (m) => m[1],
     );
     expect(labels).toEqual(["Campanhas", "Projetos", "Comercial", "Chat", "Mais"]);
@@ -88,8 +88,11 @@ describe("acessibilidade e permissões", () => {
 
   it("respeita a safe area e some do desktop", () => {
     const out = html();
-    expect(out).toContain("bottom-[calc(0.75rem+env(safe-area-inset-bottom))]");
-    expect(out).toContain("rounded-2xl");
+    // Barra rasa e colada na borda, NO fluxo do layout (nada de flutuar por cima do conteúdo).
+    expect(out).toContain("pb-[env(safe-area-inset-bottom)]");
+    expect(out).toContain("border-t");
+    expect(out).not.toContain("fixed");
+    expect(out).not.toContain("rounded-2xl");
     expect(out).toContain("md:hidden");
   });
 });
