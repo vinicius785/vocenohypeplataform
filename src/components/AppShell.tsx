@@ -6,12 +6,7 @@ import {
   Users,
   Megaphone,
   Briefcase,
-  Calendar,
-  TrendingUp,
-  Wallet,
   UserCog,
-  Star,
-  Target,
   MessageSquare,
   Settings,
   Search,
@@ -21,7 +16,6 @@ import {
   Sun,
   PanelLeft,
   PanelLeftClose,
-  Menu,
   Lock,
   X,
   AtSign,
@@ -100,6 +94,8 @@ import { toast } from "sonner";
 import { idbAuthStorage } from "@/lib/idb-auth-storage";
 import { TaskModalStack } from "@/components/tasks/TaskModalStack";
 import { type SectionKey } from "@/lib/section-nav";
+import { NAV_GROUPS } from "./app-shell-nav";
+import { MobileBottomNav } from "./MobileNav";
 
 export type { SectionKey };
 
@@ -123,41 +119,7 @@ export const OPEN_CLIENTE_EVENT = "clientes:openCliente:event";
 export const OPEN_MEMBER_KEY = "time:openMember";
 export const OPEN_MEMBER_EVENT = "time:openMember:event";
 
-type NavItem = { key: SectionKey; label: string; icon: typeof LayoutGrid };
-type NavGroup = { title: string; items: NavItem[] };
-
-/** Sidebar = navegação GLOBAL. Funcionalidades internas de cada módulo
- * (abas do Financeiro, Objetivos/Indicadores de Metas, Kanban/Blog/Arquivos
- * de um projeto...) vivem dentro do próprio módulo, nunca como item aqui. */
-const groups: NavGroup[] = [
-  {
-    title: "Geral",
-    items: [{ key: "inicio", label: "Início", icon: LayoutGrid }],
-  },
-  {
-    title: "Operação",
-    items: [
-      { key: "clientes", label: "Clientes", icon: Users },
-      { key: "campanhas", label: "Campanhas", icon: Megaphone },
-      { key: "projetos", label: "Projetos", icon: Briefcase },
-      { key: "reunioes", label: "Reuniões", icon: Calendar },
-    ],
-  },
-  {
-    title: "Gestão",
-    items: [
-      { key: "comercial", label: "Comercial", icon: TrendingUp },
-      { key: "financeiro", label: "Financeiro", icon: Wallet },
-      { key: "time", label: "Time", icon: UserCog },
-      { key: "influenciadores", label: "Influenciadores", icon: Star },
-      { key: "metas", label: "Metas", icon: Target },
-    ],
-  },
-  {
-    title: "Comunicação",
-    items: [{ key: "chat", label: "Chat", icon: MessageSquare }],
-  },
-];
+const groups = NAV_GROUPS;
 
 /** Total de mensagens não lidas em qualquer canal/DM (exceto a conversa que
  * está sendo vista agora, com a aba em primeiro plano) — badge do item "Chat"
@@ -321,35 +283,8 @@ export function AppShell({
       return next;
     });
   };
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const showFull = !collapsed || mobileOpen;
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [active]);
-
-  // Foco/Escape do menu mobile: ao abrir, entra no primeiro item de
-  // navegação (leitor de tela já sabe que um novo painel apareceu); ao
-  // fechar (Escape, backdrop, navegação), devolve o foco pro botão que
-  // abriu — sem isso o foco fica "perdido" num elemento que já saiu da
-  // tela. `inert` no conteúdo atrás faz o papel de focus trap: impede
-  // Tab/leitor de tela de escapar pro conteúdo escondido sob o backdrop,
-  // sem precisar interceptar cada tecla manualmente.
-  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
-  const mobileNavRef = useRef<HTMLElement>(null);
-  useEffect(() => {
-    if (!mobileOpen) return;
-    const first = mobileNavRef.current?.querySelector<HTMLElement>("button:not(:disabled)");
-    first?.focus();
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMobileOpen(false);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    const menuButton = mobileMenuButtonRef.current;
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      menuButton?.focus();
-    };
-  }, [mobileOpen]);
+  // Mobile (< md): sem sidebar; navegação pela barra inferior (`MobileBottomNav`).
+  const showFull = !collapsed;
   const [theme, setThemeState] = useState<"light" | "dark">(() =>
     typeof window !== "undefined" ? getTheme() : "light",
   );
@@ -360,23 +295,16 @@ export function AppShell({
   };
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
+    <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
       <BomDiaDialog />
       <VersionWatcher />
       <MeetingReminderToast />
       <ReportProblemSheet />
-      {mobileOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/40 md:hidden"
-          onClick={() => setMobileOpen(false)}
-          aria-hidden="true"
-        />
-      )}
       <TooltipProvider delayDuration={150} skipDelayDuration={300}>
         <aside
-          className={`fixed inset-y-0 left-0 z-50 flex h-screen w-64 shrink-0 flex-col overflow-hidden border-r border-border bg-background transition-transform duration-200 md:sticky md:top-0 md:z-auto md:translate-x-0 md:transition-[width] md:duration-200 md:ease-out ${
-            mobileOpen ? "translate-x-0" : "-translate-x-full"
-          } ${collapsed ? "md:w-[72px]" : "md:w-64"}`}
+          className={`hidden h-dvh shrink-0 flex-col overflow-hidden border-r border-border bg-background md:sticky md:top-0 md:flex md:transition-[width] md:duration-200 md:ease-out motion-reduce:md:transition-none ${
+            collapsed ? "md:w-[72px]" : "md:w-64"
+          }`}
         >
           <div
             className={`flex shrink-0 ${
@@ -419,7 +347,7 @@ export function AppShell({
             />
           </div>
 
-          <nav ref={mobileNavRef} className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
+          <nav className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
             {groups.map((group, gi) => (
               <div key={group.title} className={showFull ? "mb-3" : "mb-1"}>
                 {/* Recolhido: o título do grupo some, fica só um traço curto e discreto. */}
@@ -545,21 +473,8 @@ export function AppShell({
         </aside>
       </TooltipProvider>
 
-      <div
-        className="flex h-screen min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
-        inert={mobileOpen ? true : undefined}
-      >
-        <header className="flex h-16 items-center gap-3 border-b border-border px-6">
-          <button
-            ref={mobileMenuButtonRef}
-            type="button"
-            onClick={() => setMobileOpen((v) => !v)}
-            className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground md:hidden"
-            aria-label={mobileOpen ? "Fechar menu" : "Abrir menu"}
-            aria-expanded={mobileOpen}
-          >
-            <Menu className="h-4 w-4" />
-          </button>
+      <div className="flex h-dvh min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="flex h-16 items-center gap-3 border-b border-border px-4 md:px-6">
           <GlobalSearch onSelect={onSelect} />
           <div className="ml-auto flex items-center gap-1">
             <ActiveTimerIndicator onSelect={onSelect} />
@@ -575,8 +490,23 @@ export function AppShell({
           </div>
         </header>
 
-        <main className="min-h-0 min-w-0 flex-1 overflow-auto p-4 md:p-8">{children}</main>
+        <main className="min-h-0 min-w-0 flex-1 overflow-auto p-4 pb-[calc(6.5rem+env(safe-area-inset-bottom))] md:p-8">
+          {children}
+        </main>
       </div>
+      <MobileBottomNav
+        active={active}
+        allowed={(key) => hasPermission(access, SECTION_PERMISSION[key])}
+        onSelect={(key) => {
+          onSelect(key);
+          if (key === "comercial") void markLeadsSeen();
+        }}
+        chatUnread={unreadChatCount}
+        dot={(key) =>
+          (key === "comercial" && unseenLeads > 0) || (key === "reunioes" && hasPendingMeetings)
+        }
+        overdueDespesas={hasOverdueDespesas}
+      />
       <TaskModalStack />
     </div>
   );
