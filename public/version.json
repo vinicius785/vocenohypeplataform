@@ -1,6 +1,26 @@
 {
-  "version": "1.389.0",
+  "version": "1.390.0",
   "releases": [
+    {
+      "version": "1.390.0",
+      "summary": "Nova animação de carregamento da marca ao entrar na plataforma.",
+      "modules": [
+        {
+          "name": "PLATAFORMA",
+          "tagline": "Entrada",
+          "items": [
+            {
+              "title": "Animação da marca no carregamento",
+              "description": "A tela \"Preparando seu ambiente\" agora mostra a animação da Você no Hype, na versão horizontal no computador e vertical no celular."
+            },
+            {
+              "title": "Acessível",
+              "description": "Quem usa \"reduzir movimento\" no aparelho continua vendo o indicador simples, sem animação."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.389.0",
       "summary": "Google Agenda mais confiável: conexão que não cai por falhas passageiras e mensagens claras ao conectar.",
