@@ -1,6 +1,26 @@
 {
-  "version": "1.390.0",
+  "version": "1.390.1",
   "releases": [
+    {
+      "version": "1.390.1",
+      "summary": "A animação de carregamento agora toca inteira antes de abrir a plataforma.",
+      "modules": [
+        {
+          "name": "PLATAFORMA",
+          "tagline": "Entrada",
+          "items": [
+            {
+              "title": "Animação completa",
+              "description": "A animação da marca toca até o fim, uma vez, antes de a tela trocar, e segura o último quadro se o carregamento demorar mais."
+            },
+            {
+              "title": "Sem espera para quem reduz movimento",
+              "description": "Quem usa \"reduzir movimento\" continua vendo o indicador simples, sem esperar a animação."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.390.0",
       "summary": "Nova animação de carregamento da marca ao entrar na plataforma.",

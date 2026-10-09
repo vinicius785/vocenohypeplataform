@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { pickLoadingVideo, type LoadingVideoChoice } from "@/lib/loading-video";
 
@@ -12,7 +12,9 @@ import { pickLoadingVideo, type LoadingVideoChoice } from "@/lib/loading-video";
  *  - src/routes/portal-app/route.tsx: implicitly via the same pattern if a
  *    pendingComponent is added there.
  *
- * Mostra a animação da marca (vídeo em loop, sem áudio): horizontal em telas largas, vertical em
+ * Mostra a animação da marca (vídeo tocado UMA vez, sem áudio, que segura o último quadro até a tela
+ * trocar; o roteador mantém a tela por tempo suficiente para o vídeo terminar — ver `pendingMinMs` em
+ * `_authenticated/route.tsx`): horizontal em telas largas, vertical em
  * retrato. As bordas do vídeo são pretas, então o fundo preto o funde à tela sem emendas. Com
  * "reduzir movimento" ou se o vídeo falhar, volta ao indicador estático anterior. O vídeo é
  * decorativo; o estado "carregando" é anunciado por texto para leitores de tela.
@@ -22,6 +24,7 @@ export function PreparingEnvironmentScreen() {
   // piscar a tela clara do indicador antigo.
   const [choice, setChoice] = useState<LoadingVideoChoice | "pending">("pending");
   const [failed, setFailed] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -37,6 +40,13 @@ export function PreparingEnvironmentScreen() {
     };
   }, []);
 
+  // Autoplay bloqueado pelo navegador: mostraria um quadro preto parado; usa o indicador estático.
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    el.play().catch(() => setFailed(true));
+  }, [choice]);
+
   if (choice !== "pending" && (choice.kind === "static" || failed)) return <StaticPreparing />;
 
   return (
@@ -51,11 +61,11 @@ export function PreparingEnvironmentScreen() {
         <video
           // `key`: ao girar o aparelho troca de arquivo (remonta o elemento).
           key={choice.src}
+          ref={videoRef}
           src={choice.src}
           className="h-[100dvh] w-full object-contain"
           autoPlay
           muted
-          loop
           playsInline
           preload="auto"
           disablePictureInPicture

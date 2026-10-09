@@ -27,6 +27,7 @@ import { initCallController, shutdownCallController } from "@/lib/call-controlle
 import { runGoogleCalendarSync } from "@/lib/google-calendar.functions";
 import { CallOverlay } from "@/components/CallOverlay";
 import { PreparingEnvironmentScreen } from "@/components/auth/PreparingEnvironmentScreen";
+import { pendingMinMsForLoadingVideo } from "@/lib/loading-video";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -117,6 +118,11 @@ export const Route = createFileRoute("/_authenticated")({
     return { userId };
   },
   pendingComponent: () => <PreparingEnvironmentScreen />,
+  // A animação da marca toca até o fim antes de a tela trocar (6 s contados a partir de quando ela
+  // aparece; só aparece se o carregamento passar de `pendingMs`, 1 s por padrão do roteador).
+  pendingMinMs: pendingMinMsForLoadingVideo(
+    typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  ),
   component: AuthenticatedLayout,
 });
 
