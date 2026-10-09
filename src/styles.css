@@ -420,3 +420,18 @@
   background-color: color-mix(in oklab, var(--color-brand) 8%, transparent);
   box-shadow: inset 2px 0 0 var(--color-brand);
 }
+
+/* iOS Safari dá ZOOM automático ao focar um campo com fonte menor que 16px e não desfaz ao sair: a tela
+ * fica ampliada e "desorganizada" depois de digitar. Só no iOS (`-webkit-touch-callout`) e só no mobile;
+ * `!important` porque as classes de utilitário (`text-sm`) teriam especificidade maior. */
+@supports (-webkit-touch-callout: none) {
+  @media (max-width: 767px) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not(
+        [type="color"]
+      ),
+    textarea,
+    select {
+      font-size: 16px !important;
+    }
+  }
+}

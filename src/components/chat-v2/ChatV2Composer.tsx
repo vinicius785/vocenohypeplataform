@@ -186,8 +186,11 @@ export function ChatV2Composer({
     setText("");
     setError(null);
     let cancelled = false;
+    savedTextRef.current = "";
     void loadDraftFromDb(convoId).then((dbDraft) => {
-      if (!cancelled) setText(dbDraft);
+      if (cancelled) return;
+      savedTextRef.current = dbDraft;
+      setText(dbDraft);
     });
     return () => {
       cancelled = true;
@@ -195,12 +198,25 @@ export function ChatV2Composer({
   }, [convoId]);
 
   // Debounce de ~1s antes de persistir o rascunho — evita gravar a cada tecla.
+  const textRef = useRef(text);
+  textRef.current = text;
+  const savedTextRef = useRef("");
   useEffect(() => {
     const t = window.setTimeout(() => {
+      savedTextRef.current = text;
       void saveDraftToDb(convoId, text);
     }, 1000);
     return () => window.clearTimeout(t);
   }, [convoId, text]);
+  // Sair da conversa (ou desmontar o composer) dentro do 1s do debounce NÃO perde o que foi digitado:
+  // grava na hora o que ainda não foi salvo. Roda só ao trocar de conversa/desmontar.
+  useEffect(() => {
+    return () => {
+      if (textRef.current !== savedTextRef.current) {
+        void saveDraftToDb(convoId, textRef.current);
+      }
+    };
+  }, [convoId]);
 
   const handleSend = async () => {
     const trimmed = text.trim();
@@ -260,7 +276,9 @@ export function ChatV2Composer({
     // largura/alinhamento (item 1+11 do pedido), em vez de o composer se
     // esticar por todo o painel enquanto a timeline fica numa coluna.
     <div ref={rootRef} className="min-w-0 shrink-0 border-t border-border bg-muted/20">
-      <div className={`pb-3 pt-2.5 ${CHAT_V2_READING_COLUMN_CLASS}`}>
+      <div
+        className={`pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 md:pb-3 md:pt-2.5 ${CHAT_V2_READING_COLUMN_CLASS}`}
+      >
         {replyPreview && (
           <div className="mb-1.5 flex items-start gap-2 rounded-md border border-border bg-background/60 px-2.5 py-1.5">
             <Reply className="mt-0.5 h-3.5 w-3.5 shrink-0 text-text-brand" />
@@ -304,9 +322,11 @@ export function ChatV2Composer({
           // da MESMA linha flex do textarea, que era o que forçava a área
           // digitável a dividir espaço com 3 botões e nunca ocupar a largura
           // real disponível.
-          <div className="flex min-h-[92px] flex-col rounded-lg border border-border bg-background transition-shadow focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/25">
+          // Mobile: UMA linha compacta [anexo][campo que cresce][voz][enviar] (a toolbar usa `contents` para os
+          // botões virarem itens da mesma linha). Desktop: campo em cima e toolbar embaixo, como antes.
+          <div className="flex flex-wrap items-end gap-x-0.5 rounded-lg border border-border bg-background px-1 transition-shadow focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/25 md:min-h-[92px] md:flex-col md:flex-nowrap md:items-stretch md:gap-x-0 md:px-0">
             {pendingFiles.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 border-b border-border/70 px-3 pt-2.5">
+              <div className="flex basis-full flex-wrap gap-1.5 border-b border-border/70 px-2 py-2 md:px-3 md:pb-0 md:pt-2.5">
                 {pendingFiles.map((pf, i) => (
                   <div
                     key={i}
@@ -328,7 +348,10 @@ export function ChatV2Composer({
               </div>
             )}
             {usedTasks.length > 0 && (
-              <div className="flex flex-wrap gap-1 px-3 pt-2" aria-label="Tarefas referenciadas">
+              <div
+                className="flex basis-full flex-wrap gap-1 px-2 pt-2 md:px-3"
+                aria-label="Tarefas referenciadas"
+              >
                 {usedTasks.map((o) => (
                   <TaskRefChip
                     key={o.id}
@@ -357,10 +380,14 @@ export function ChatV2Composer({
               onEnterSubmit={() => void handleSend()}
               placeholder={placeholder}
               rows={1}
-              className="block max-h-[240px] min-h-[44px] w-full resize-none overflow-y-auto bg-transparent px-3 py-2.5 text-left text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
+              wrapperClassName="relative order-2 min-w-0 flex-1 md:order-none"
+              className="block max-h-[min(calc(var(--app-h,100dvh)*0.4),240px)] min-h-[44px] w-full resize-none overflow-y-auto bg-transparent px-2 py-2.5 text-left text-base leading-relaxed text-foreground outline-none placeholder:text-muted-foreground md:px-3 md:text-sm"
             />
-            <div className="flex shrink-0 items-center gap-0.5 px-1.5 pb-1.5">
-              <label className={`cursor-pointer ${iconButtonClass}`} title="Anexar arquivo">
+            <div className="contents md:flex md:shrink-0 md:items-center md:gap-0.5 md:px-1.5 md:pb-1.5">
+              <label
+                className={`order-1 mb-1 cursor-pointer md:order-none md:mb-0 ${iconButtonClass} max-md:h-10 max-md:w-10`}
+                title="Anexar arquivo"
+              >
                 <Paperclip className="h-4 w-4" />
                 <input
                   type="file"
@@ -378,7 +405,11 @@ export function ChatV2Composer({
               </label>
               <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
                 <PopoverTrigger asChild>
-                  <button type="button" aria-label="Inserir emoji" className={iconButtonClass}>
+                  <button
+                    type="button"
+                    aria-label="Inserir emoji"
+                    className={`hidden md:flex ${iconButtonClass}`}
+                  >
                     <SmilePlus className="h-4 w-4" />
                   </button>
                 </PopoverTrigger>
@@ -405,13 +436,15 @@ export function ChatV2Composer({
                 onClick={() => setVoiceMode(true)}
                 aria-label="Gravar mensagem de voz"
                 title="Gravar mensagem de voz"
-                className={iconButtonClass}
+                className={`order-3 mb-1 md:order-none md:mb-0 ${iconButtonClass} max-md:h-10 max-md:w-10`}
               >
                 <Mic className="h-4 w-4" />
               </button>
               <Button
                 size="icon"
-                className="ml-auto h-8 w-8 shrink-0"
+                className="order-4 mb-1 h-10 w-10 shrink-0 md:order-none md:mb-0 md:ml-auto md:h-8 md:w-8"
+                // Não tira o foco do campo: o teclado fica aberto após enviar (padrão de apps de mensagem).
+                onPointerDown={(e) => e.preventDefault()}
                 disabled={sending || (!text.trim() && pendingFiles.length === 0)}
                 onClick={() => void handleSend()}
                 aria-label="Enviar mensagem"

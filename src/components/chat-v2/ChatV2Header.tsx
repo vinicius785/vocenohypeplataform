@@ -168,7 +168,7 @@ export function ChatV2Header({
     // "avatar + nome + Offline" e espaço vazio embaixo. `min-h` garante que
     // a segunda linha sempre reserva espaço (mesmo vazia em "Selecione uma
     // conversa"), pra não pular de altura ao trocar de conversa.
-    <header className="sticky top-0 z-10 flex min-w-0 shrink-0 flex-col justify-center gap-0.5 border-b border-border bg-background px-4 py-3 md:px-6">
+    <header className="sticky top-0 z-10 flex min-w-0 shrink-0 flex-col justify-center gap-0.5 border-b border-border bg-background px-4 py-2 md:px-6 md:py-3">
       <div className="flex items-center gap-2.5">
         {onBack && (
           <button

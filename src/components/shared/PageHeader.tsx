@@ -65,9 +65,10 @@ export function PageHeader({
         </nav>
       )}
 
-      {/* Mobile: título e ações na MESMA linha (título à esquerda, ações à direita) em vez de empilhar. */}
-      <div className="flex items-start justify-between gap-3 md:gap-4">
-        <div className="min-w-0 flex-1">
+      {/* Mobile: título (largura total, nunca disputa espaço com botões) → descrição → linha de ações.
+       * A partir de `md`: título à esquerda, ações à direita. */}
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
+        <div className="min-w-0 md:flex-1">
           <p
             role="heading"
             aria-level={1}
@@ -76,10 +77,17 @@ export function PageHeader({
             {title}
           </p>
           {description && (
-            <p className={cn(TYPOGRAPHY.bodySecondary, "mt-1.5 hidden md:block")}>{description}</p>
+            <p
+              className={cn(
+                TYPOGRAPHY.bodySecondary,
+                "mt-1 line-clamp-2 md:mt-1.5 md:line-clamp-none",
+              )}
+            >
+              {description}
+            </p>
           )}
         </div>
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+        <div className="flex flex-wrap items-center gap-2 md:shrink-0 md:justify-end">
           {actionsSlot}
           {secondaryActions?.map((action) => (
             <Button
@@ -98,10 +106,6 @@ export function PageHeader({
           )}
         </div>
       </div>
-
-      {description && (
-        <p className={cn(TYPOGRAPHY.bodySecondary, "line-clamp-2 md:hidden")}>{description}</p>
-      )}
 
       {(searchPlaceholder || filters) && (
         <div className="flex flex-wrap items-center gap-2">

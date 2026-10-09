@@ -90,6 +90,8 @@ export const MentionTextarea = forwardRef<
     onEnterSubmit?: () => void;
     placeholder?: string;
     className?: string;
+    /** Classes do contêiner do campo (padrão `relative flex-1`); o composer mobile usa para ordenar na linha. */
+    wrapperClassName?: string;
   }
 >(function MentionTextarea(
   {
@@ -104,6 +106,7 @@ export const MentionTextarea = forwardRef<
     onEnterSubmit,
     placeholder,
     className,
+    wrapperClassName,
   },
   forwardedRef,
 ) {
@@ -245,7 +248,7 @@ export const MentionTextarea = forwardRef<
   };
 
   return (
-    <div className="relative flex-1">
+    <div className={wrapperClassName ?? "relative flex-1"}>
       <textarea
         ref={taRef}
         value={value}

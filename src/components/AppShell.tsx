@@ -51,6 +51,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { ListRow } from "@/components/shared/ListRow";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useVisualViewportFit } from "@/hooks/use-visual-viewport-fit";
 import { SURFACE, type SemanticTone } from "@/lib/design-tokens";
 import { cn } from "@/lib/utils";
 import { loadWorkspace, subscribeWorkspace, type Workspace } from "@/lib/workspace-store";
@@ -265,6 +266,7 @@ export function AppShell({
   );
   useEffect(() => subscribeWorkspace(() => setWs(loadWorkspace())), []);
   useIncomingMessageNotifier();
+  useVisualViewportFit();
   const unreadChatCount = useUnreadChatCount();
   const hasPendingMeetings = useHasPendingMeetingRequests();
   const hasOverdueDespesas = useHasOverdueDespesas();
@@ -305,7 +307,7 @@ export function AppShell({
   };
 
   return (
-    <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
+    <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground max-md:h-[var(--app-h,100dvh)] max-md:translate-y-[var(--app-top,0px)]">
       <BomDiaDialog />
       <VersionWatcher />
       <MeetingReminderToast />
@@ -483,7 +485,7 @@ export function AppShell({
         </aside>
       </TooltipProvider>
 
-      <div className="flex h-dvh min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden md:h-dvh">
         <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3 md:h-16 md:gap-3 md:px-6">
           <GlobalSearch onSelect={onSelect} />
           <div className="ml-auto flex items-center gap-1">

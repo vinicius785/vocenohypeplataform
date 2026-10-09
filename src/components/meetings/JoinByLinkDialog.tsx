@@ -44,15 +44,8 @@ export function JoinByLinkDialog() {
       }}
     >
       <DialogTrigger asChild>
-        {/* Estreito: só o ícone (o nome fica no aria-label) — libera a linha para o título e "Nova reunião". */}
-        <Button
-          variant="outline"
-          size="sm"
-          aria-label="Entrar com link"
-          className="max-sm:h-10 max-sm:w-10 max-sm:px-0"
-        >
-          <LogIn className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">Entrar com link</span>
+        <Button variant="outline" size="sm">
+          <LogIn className="h-3.5 w-3.5" /> Entrar com link
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-sm">

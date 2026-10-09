@@ -155,7 +155,7 @@ export function ChatV2ConversationPane({
       {rootMessage && (
         // Celular: tela cheia. Pane estreito: camada sobre o chat (nunca espremida).
         // Pane largo (≥ 900px): coluna própria de 440px ao lado do chat.
-        <div className="fixed inset-0 z-20 bg-background md:absolute md:inset-auto md:inset-y-0 md:right-0 md:w-[min(100%,480px)] md:shadow-xl @[900px]:static @[900px]:z-auto @[900px]:w-[440px] @[900px]:shrink-0 @[900px]:shadow-none">
+        <div className="fixed inset-x-0 top-[var(--app-top,0px)] z-20 h-[var(--app-h,100dvh)] bg-background md:absolute md:inset-auto md:inset-y-0 md:right-0 md:h-auto md:w-[min(100%,480px)] md:shadow-xl @[900px]:static @[900px]:z-auto @[900px]:w-[440px] @[900px]:shrink-0 @[900px]:shadow-none">
           <ChatV2ThreadPanel
             rootMessage={rootMessage}
             messages={convoMessages}
